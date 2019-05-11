@@ -1,17 +1,18 @@
-{ stdenv, fetchFromGitHub, python3, gettext, gobject-introspection, wrapGAppsHook, glibcLocales
+{ stdenv, fetchFromGitHub, python3, gettext, gobject-introspection, wrapGAppsHook, 
+glibcLocales
 , gtk3, keybinder3, libnotify, libutempter, vte }:
 
 let
-  version = "3.5.0";
+  version = "3.6.2";
 in python3.pkgs.buildPythonApplication rec {
   name = "guake-${version}";
   format = "other";
 
   src = fetchFromGitHub {
-    owner = "Guake";
+    owner = "shinedog";
     repo = "guake";
     rev = version;
-    sha256 = "0fz0gciw5fpxrp6yyji27l7q8c0r9ljsq6vw584mr70bcl1gzjqx";
+    sha256 = "654b89715dafe4d0398f5f6e7e1c080a0f6bacf3";
   };
 
   # Strict deps breaks guake
