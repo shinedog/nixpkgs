@@ -1,6 +1,6 @@
 { stdenv, fetchFromGitHub, python3, gettext, gobject-introspection, wrapGAppsHook, 
 glibcLocales
-, gtk3, keybinder3, libnotify, libutempter, vte }:
+, gtk3, keybinder3, libnotify, libutempter, vte, libwnck3 }:
 
 let
   version = "3.6.2";
@@ -12,7 +12,7 @@ in python3.pkgs.buildPythonApplication rec {
     owner = "shinedog";
     repo = "guake";
     rev = version;
-    sha256 = "654b89715dafe4d0398f5f6e7e1c080a0f6bacf3";
+    sha256 = "1zaa507ckn9mffkjkq6g05nfsk8b125xilmdlpbvdwvjdd2vvphs";
   };
 
   # Strict deps breaks guake
@@ -20,7 +20,8 @@ in python3.pkgs.buildPythonApplication rec {
   # and https://github.com/NixOS/nixpkgs/issues/56943
   strictDeps = false;
 
-  nativeBuildInputs = [ gettext gobject-introspection wrapGAppsHook python3.pkgs.pip glibcLocales ];
+  nativeBuildInputs = [ gettext gobjectIntrospection wrapGAppsHook python3.pkgs.pip glibcLocales 
+];
 
   buildInputs = [ gtk3 keybinder3 libnotify python3 vte ];
 
