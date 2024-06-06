@@ -1,37 +1,61 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, gtkmm3, libxml2, libgtop, libwnck3, librsvg, systemd, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, gtkmm3
+, libxml2
+, libgtop
+, librsvg
+, polkit
+, systemd
+, wrapGAppsHook3
+, mate-desktop
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-system-monitor-${version}";
-  version = "1.22.1";
+  pname = "mate-system-monitor";
+  version = "1.28.1";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "0yh1sh5snd7ivchh6l9rbn1s7ia4j5ihhzhqkyjnhr8ln59dvcbm";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "QtZj1rkPtTYevBP2VHmD1vHirHXcKuTxysbqYymWWiU=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     itstool
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
     gtkmm3
     libxml2
     libgtop
-    libwnck3
     librsvg
+    polkit
     systemd
   ];
 
-  configureFlags = [ "--enable-systemd" ];
+  postPatch = ''
+    # This package does not provide mate-version.xml.
+    substituteInPlace src/sysinfo.cpp \
+      --replace-fail 'DATADIR "/mate-about/mate-version.xml"' '"${mate-desktop}/share/mate-about/mate-version.xml"'
+  '';
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "System monitor for the MATE desktop";
-    homepage = https://mate-desktop.org;
+    mainProgram = "mate-system-monitor";
+    homepage = "https://mate-desktop.org";
     license = [ licenses.gpl2Plus ];
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

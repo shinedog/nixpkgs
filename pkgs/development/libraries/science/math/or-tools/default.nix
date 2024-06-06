@@ -1,70 +1,127 @@
-{ stdenv, fetchFromGitHub, cmake, abseil-cpp, google-gflags, which
-, lsb-release, glog, protobuf, cbc, zlib
-, ensureNewerSourcesForZipFilesHook, python, swig
-, pythonProtobuf }:
+{ abseil-cpp
+, bzip2
+, cbc
+, cmake
+, eigen
+, ensureNewerSourcesForZipFilesHook
+, fetchFromGitHub
+, fetchpatch
+, glpk
+, lib
+, pkg-config
+, protobuf
+, python
+, re2
+, stdenv
+, swig4
+, unzip
+, zlib
+}:
 
 stdenv.mkDerivation rec {
-  name = "or-tools-${version}";
-  version = "v7.0";
+  pname = "or-tools";
+  version = "9.4";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "or-tools";
-    rev = version;
-    sha256 = "09rs2j3w4ljw9qhhnsjlvfii297njjszwvkbgj1i6kns3wnlr7cp";
+    rev = "v${version}";
+    sha256 = "sha256-joWonJGuxlgHhXLznRhC1MDltQulXzpo4Do9dec1bLY=";
   };
-
-  # The original build system uses cmake which does things like pull
-  # in dependencies through git and Makefile creation time. We
-  # obviously don't want to do this so instead we provide the
-  # dependencies straight from nixpkgs and use the make build method.
-  configurePhase = ''
-    cat <<EOF > Makefile.local
-    UNIX_ABSL_DIR=${abseil-cpp}
-    UNIX_GFLAGS_DIR=${google-gflags}
-    UNIX_GLOG_DIR=${glog}
-    UNIX_PROTOBUF_DIR=${protobuf}
-    UNIX_CBC_DIR=${cbc}
-    EOF
-  '';
-
-  makeFlags = [
-    "prefix=${placeholder "out"}"
-    "PROTOBUF_PYTHON_DESC=${pythonProtobuf}/${python.sitePackages}/google/protobuf/descriptor_pb2.py"
+  patches = [
+    # Disable test that requires external input: https://github.com/google/or-tools/issues/3429
+    (fetchpatch {
+      url = "https://github.com/google/or-tools/commit/7072ae92ec204afcbfce17d5360a5884c136ce90.patch";
+      hash = "sha256-iWE+atp308q7pC1L1FD6sK8LvWchZ3ofxvXssguozbM=";
+    })
+    # Fix test that broke in parallel builds: https://github.com/google/or-tools/issues/3461
+    (fetchpatch {
+      url = "https://github.com/google/or-tools/commit/a26602f24781e7bfcc39612568aa9f4010bb9736.patch";
+      hash = "sha256-gM0rW0xRXMYaCwltPK0ih5mdo3HtX6mKltJDHe4gbLc=";
+    })
+    # Backport fix in cmake test configuration where pip installs newer version from PyPi over local build,
+    #  breaking checkPhase: https://github.com/google/or-tools/issues/3260
+    (fetchpatch {
+      url = "https://github.com/google/or-tools/commit/edd1544375bd55f79168db315151a48faa548fa0.patch";
+      hash = "sha256-S//1YM3IoRCp3Ghg8zMF0XXgIpVmaw4gH8cVb9eUbqM=";
+    })
+    # Don't use non-existent member of string_view. Partial patch from commit
+    # https://github.com/google/or-tools/commit/c5a2fa1eb673bf652cb9ad4f5049d054b8166e17.patch
+    ./fix-stringview-compile.patch
   ];
-  buildFlags = [ "cc" "pypi_archive" ];
 
-  checkTarget = "test_cc";
-  doCheck = true;
-
-  installTargets = [ "install_cc" ];
-  # The upstream install_python target installs to $HOME.
-  postInstall = ''
-    mkdir -p "$python/${python.sitePackages}"
-    (cd temp_python/ortools; PYTHONPATH="$python/${python.sitePackages}:$PYTHONPATH" python setup.py install '--prefix=$python')
+  # or-tools normally attempts to build Protobuf for the build platform when
+  # cross-compiling. Instead, just tell it where to find protoc.
+  postPatch = ''
+    echo "set(PROTOC_PRG $(type -p protoc))" > cmake/host.cmake
   '';
 
+  cmakeFlags = [
+    "-DBUILD_DEPS=OFF"
+    "-DBUILD_PYTHON=ON"
+    "-DBUILD_pybind11=OFF"
+    "-DFETCH_PYTHON_DEPS=OFF"
+    "-DUSE_GLPK=ON"
+    "-DUSE_SCIP=OFF"
+    "-DPython3_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
+  ] ++ lib.optionals stdenv.isDarwin [ "-DCMAKE_MACOSX_RPATH=OFF" ];
   nativeBuildInputs = [
-    cmake lsb-release swig which zlib python
+    cmake
     ensureNewerSourcesForZipFilesHook
-    python.pkgs.setuptools python.pkgs.wheel
+    pkg-config
+    python.pythonOnBuildForHost
+    swig4
+    unzip
+  ] ++ (with python.pythonOnBuildForHost.pkgs; [
+    pip
+    mypy-protobuf
+  ]);
+  buildInputs = [
+    bzip2
+    cbc
+    eigen
+    glpk
+    python.pkgs.absl-py
+    python.pkgs.pybind11
+    python.pkgs.setuptools
+    python.pkgs.wheel
+    re2
+    zlib
   ];
   propagatedBuildInputs = [
-    abseil-cpp google-gflags glog protobuf cbc
-    pythonProtobuf python.pkgs.six
+    abseil-cpp
+    protobuf
+    (python.pkgs.protobuf.override { protobuf = protobuf; })
+    python.pkgs.numpy
+  ];
+  nativeCheckInputs = [
+    python.pkgs.matplotlib
+    python.pkgs.pandas
+    python.pkgs.virtualenv
   ];
 
-  enableParallelBuilding = true;
+  doCheck = true;
+
+  # This extra configure step prevents the installer from littering
+  # $out/bin with sample programs that only really function as tests,
+  # and disables the upstream installation of a zipped Python egg that
+  # can’t be imported with our Python setup.
+  installPhase = ''
+    cmake . -DBUILD_EXAMPLES=OFF -DBUILD_PYTHON=OFF -DBUILD_SAMPLES=OFF
+    cmake --install .
+    pip install --prefix="$python" python/
+  '';
 
   outputs = [ "out" "python" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/google/or-tools;
+  meta = with lib; {
+    homepage = "https://github.com/google/or-tools";
     license = licenses.asl20;
     description = ''
       Google's software suite for combinatorial optimization.
     '';
-    maintainers = with maintainers; [ fuuzetsu ];
-    platforms = with platforms; linux;
+    mainProgram = "fzn-ortools";
+    maintainers = with maintainers; [ andersk ];
+    platforms = with platforms; linux ++ darwin;
   };
 }

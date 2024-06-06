@@ -1,49 +1,99 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig, glib, gettext, python3, gnutls, p11-kit, libproxy, gnome3
-, gsettings-desktop-schemas }:
+{ stdenv
+, lib
+, fetchurl
+, substituteAll
+, meson
+, ninja
+, nixosTests
+, pkg-config
+, glib
+, gettext
+, makeWrapper
+, gnutls
+, p11-kit
+, libproxy
+, gnome
+, gsettings-desktop-schemas
+, bash
+}:
 
-let
-  pname = "glib-networking";
-  version = "2.60.1";
-in
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
+  pname = "glib-networking";
+  version = "2.80.0";
+
+  outputs = [ "out" "installedTests" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "14jx8ca7plgh196629ghj41gsaha0aza222g64093hjsm8pnn76p";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-2PTxqrITF5rjNRYXtZ2rXea8yeeFAh7uF4mY69S7Os8=";
   };
 
-  outputs = [ "out" "dev" ]; # to deal with propagatedBuildInputs
+  patches = [
+    (substituteAll {
+      src = ./hardcode-gsettings.patch;
+      gds_gsettings_path = glib.getSchemaPath gsettings-desktop-schemas;
+    })
 
-  PKG_CONFIG_GIO_2_0_GIOMODULEDIR = "${placeholder "out"}/lib/gio/modules";
+    ./installed-tests-path.patch
 
-  postPatch = ''
-    chmod +x meson_post_install.py # patchShebangs requires executable file
-    patchShebangs meson_post_install.py
-  '';
+    # pkcs11 tests provide a relative path that gnutls of course isn't able to
+    # load, resulting in test failures
+    # https://gitlab.gnome.org/GNOME/glib-networking/-/blob/2.78.1/tls/tests/certificate.c#L926
+    # https://gitlab.gnome.org/GNOME/glib-networking/-/blob/2.78.1/tls/tests/connection.c#L3380
+    ./disable-pkcs11-tests.patch
+  ];
+
+  strictDeps = true;
 
   nativeBuildInputs = [
-    meson ninja pkgconfig gettext
-    python3 # install_script
+    meson
+    ninja
+    pkg-config
+    gettext
+    makeWrapper
+    glib # for gio-querymodules
   ];
-  propagatedBuildInputs = [ glib gnutls p11-kit libproxy gsettings-desktop-schemas ];
 
-  mesonFlags = [
-    # Default auto detection doesn't work
-    "-Dgnutls=enabled"
+  buildInputs = [
+    glib
+    gnutls
+    p11-kit
+    libproxy
+    gsettings-desktop-schemas
+    bash # installed-tests shebangs
   ];
 
   doCheck = false; # tests need to access the certificates (among other things)
 
+  mesonFlags = [
+    "-Dinstalled_tests=true"
+    "-Dinstalled_test_prefix=${placeholder "installedTests"}"
+  ];
+
+  postFixup = ''
+    find "$installedTests/libexec" "$out/libexec" -type f -executable -print0 \
+      | while IFS= read -r -d "" file; do
+      echo "Wrapping program '$file'"
+      wrapProgram "$file" --prefix GIO_EXTRA_MODULES : "$out/lib/gio/modules"
+    done
+  '';
+
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = pname;
+      versionPolicy = "odd-unstable";
+    };
+
+    tests = {
+      installedTests = nixosTests.installed-tests.glib-networking;
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Network-related giomodules for glib";
-    license = licenses.lgpl2Plus;
+    homepage = "https://gitlab.gnome.org/GNOME/glib-networking";
+    license = licenses.lgpl21Plus;
+    maintainers = teams.gnome.members;
     platforms = platforms.unix;
   };
 }

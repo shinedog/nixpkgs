@@ -1,40 +1,65 @@
-{ stdenv, buildPythonPackage, isPy3k, fetchPypi,
-  paramiko, pycurl, ajpy, pyopenssl, cx_oracle, mysqlclient,
-  psycopg2, pycrypto, dnspython, ipy, pysnmp, pyasn1 }:
-
+{
+  lib,
+  ajpy,
+  buildPythonPackage,
+  cx-oracle,
+  dnspython,
+  fetchPypi,
+  impacket,
+  ipy,
+  mysqlclient,
+  paramiko,
+  psycopg2,
+  pyasn1,
+  pycrypto,
+  pycurl,
+  pyopenssl,
+  pysnmp,
+  pysqlcipher3,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "patator";
-  version = "0.7";
-  disabled = !(isPy3k);
+  version = "1.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "335e432e6cc591437e316ba8c1da935484ca39fc79e595ccf60ccd9166e965f1";
+    hash = "sha256-VQ7JPyQOY9X/7LVAvTwftoOegt4KyfERgu38HfmsYDM=";
   };
 
+  postPatch = ''
+    substituteInPlace requirements.txt \
+      --replace psycopg2-binary psycopg2
+  '';
+
   propagatedBuildInputs = [
-    paramiko
-    pycurl
     ajpy
-    pyopenssl
-    cx_oracle
-    mysqlclient
-    psycopg2
-    pycrypto
+    cx-oracle
     dnspython
+    impacket
     ipy
-    pysnmp
+    mysqlclient
+    paramiko
+    psycopg2
     pyasn1
+    pycrypto
+    pycurl
+    pyopenssl
+    pysnmp
+    pysqlcipher3
   ];
 
-  # No tests provided by patator
+  # tests require docker-compose and vagrant
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "multi-purpose brute-forcer";
+  meta = with lib; {
+    description = "Multi-purpose brute-forcer";
     homepage = "https://github.com/lanjelot/patator";
-    license = licenses.gpl2;
+    license = licenses.gpl2Only;
     maintainers = with maintainers; [ y0no ];
   };
 }

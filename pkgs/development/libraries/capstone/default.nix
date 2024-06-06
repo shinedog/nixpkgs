@@ -1,29 +1,37 @@
-{ stdenv, fetchurl, pkgconfig }:
+{ lib
+, stdenv
+, cmake
+, fetchFromGitHub
+, fixDarwinDylibNames
+}:
 
 stdenv.mkDerivation rec {
-  name    = "capstone-${version}";
-  version = "4.0.1";
+  pname = "capstone";
+  version = "5.0.1";
 
-  src = fetchurl {
-    url    = "https://github.com/aquynh/capstone/archive/${version}.tar.gz";
-    sha256 = "1isxw2qwy1fi3m3w7igsr5klzczxc5cxndz0a78dfss6ps6ymfvr";
+  src = fetchFromGitHub {
+    owner = "capstone-engine";
+    repo = "capstone";
+    rev = version;
+    sha256 = "sha256-kKmL5sae9ruWGu1gas1mel9qM52qQOD+zLj8cRE3isg=";
   };
 
-  configurePhase = '' patchShebangs make.sh '';
-  buildPhase = '' ./make.sh '';
-  installPhase = '' env PREFIX=$out ./make.sh install '';
-  
+  cmakeFlags = [ "-DBUILD_SHARED_LIBS=ON" ];
+
   nativeBuildInputs = [
-    pkgconfig
+    cmake
+  ] ++ lib.optionals stdenv.isDarwin [
+    fixDarwinDylibNames
   ];
 
-  enableParallelBuilding = true;
+  doCheck = true;
 
   meta = {
     description = "Advanced disassembly library";
     homepage    = "http://www.capstone-engine.org";
-    license     = stdenv.lib.licenses.bsd3;
-    platforms   = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    license     = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ thoughtpolice ris ];
+    mainProgram = "cstool";
+    platforms   = lib.platforms.unix;
   };
 }

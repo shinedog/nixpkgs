@@ -1,14 +1,42 @@
-# This file defines the options that can be used both for the Apache
+# This file defines the options that can be used both for the Nginx
 # main server configuration, and for the virtual hosts.  (The latter
 # has additional options that affect the web server as a whole, like
 # the user/group to run under.)
 
-{ lib }:
+{ lib, config }:
 
 with lib;
 
 {
   options = {
+    basicAuth = mkOption {
+      type = types.attrsOf types.str;
+      default = {};
+      example = literalExpression ''
+        {
+          user = "password";
+        };
+      '';
+      description = ''
+        Basic Auth protection for a vhost.
+
+        WARNING: This is implemented to store the password in plain text in the
+        Nix store.
+      '';
+    };
+
+    basicAuthFile = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      description = ''
+        Basic Auth password file for a vhost.
+        Can be created via: {command}`htpasswd -c <filename> <username>`.
+
+        WARNING: The generate file contains the users' passwords in a
+        non-cryptographically-securely hashed way.
+      '';
+    };
+
     proxyPass = mkOption {
       type = types.nullOr types.str;
       default = null;
@@ -24,7 +52,7 @@ with lib;
       default = false;
       example = true;
       description = ''
-        Whether to supporty proxying websocket connections with HTTP/1.1.
+        Whether to support proxying websocket connections with HTTP/1.1.
       '';
     };
 
@@ -65,11 +93,21 @@ with lib;
     };
 
     return = mkOption {
-      type = types.nullOr types.str;
+      type = with types; nullOr (oneOf [ str int ]);
       default = null;
-      example = "301 http://example.com$request_uri;";
+      example = "301 http://example.com$request_uri";
       description = ''
         Adds a return directive, for e.g. redirections.
+      '';
+    };
+
+    fastcgiParams = mkOption {
+      type = types.attrsOf (types.either types.str types.path);
+      default = {};
+      description = ''
+        FastCGI parameters to override.  Unlike in the Nginx
+        configuration file, overriding only some default parameters
+        won't unset the default values for other parameters.
       '';
     };
 
@@ -90,6 +128,14 @@ with lib;
         a greater priority.
       '';
     };
+
+    recommendedProxySettings = mkOption {
+      type = types.bool;
+      default = config.services.nginx.recommendedProxySettings;
+      defaultText = literalExpression "config.services.nginx.recommendedProxySettings";
+      description = ''
+        Enable recommended proxy settings.
+      '';
+    };
   };
 }
-

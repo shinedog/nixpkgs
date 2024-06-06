@@ -1,17 +1,47 @@
-{ stdenv, fetchurl }:
+{ stdenv
+, lib
+, fetchgit
+, buildPackages
+, docbook_xml_dtd_44
+, docbook_xsl
+, withLibcap ? stdenv.isLinux, libcap
+, pkg-config
+, meson
+, ninja
+, xmlto
+, python3
+
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-  name = "pax-utils-${version}";
-  version = "1.2.2";
+  pname = "pax-utils";
+  version = "1.3.7";
 
-  src = fetchurl {
-    url = "https://dev.gentoo.org/~vapier/dist/${name}.tar.xz";
-    sha512 = "26f7lqr1s2iywj8qfbf24sm18bl6f7cwsf77nxwwvgij1z88gvh6yx3gp65zap92l0xjdp8kwq9y96xld39p86zd9dmkm447czykbvb";
+  src = fetchgit {
+    url = "https://anongit.gentoo.org/git/proj/pax-utils.git";
+    rev = "v${version}";
+    hash = "sha256-WyNng+UtfRz1+Eu4gwXLxUvBAg+m3mdrc8GdEPYRKVE=";
   };
 
-  makeFlags = [ "PREFIX=$(out)" ];
+  strictDeps = true;
 
-  meta = with stdenv.lib; {
+  mesonFlags = [
+    (lib.mesonEnable "use_libcap" withLibcap)
+  ];
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ docbook_xml_dtd_44 docbook_xsl meson ninja pkg-config xmlto ];
+  buildInputs = lib.optionals withLibcap [ libcap ];
+  # Needed for lddtree
+  propagatedBuildInputs = [ (python3.withPackages (p: with p; [ pyelftools ])) ];
+
+  passthru.updateScript = gitUpdater {
+    url = "https://anongit.gentoo.org/git/proj/pax-utils.git";
+    rev-prefix = "v";
+  };
+
+  meta = with lib; {
     description = "ELF utils that can check files for security relevant properties";
     longDescription = ''
       A suite of ELF tools to aid auditing systems. Contains
@@ -19,8 +49,8 @@ stdenv.mkDerivation rec {
       for displaying PaX and security info on a large groups of
       binary files.
     '';
-    homepage = https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities;
-    license = licenses.gpl2;
+    homepage = "https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities";
+    license = licenses.gpl2Only;
     platforms = platforms.unix;
     maintainers = with maintainers; [ thoughtpolice joachifm ];
   };

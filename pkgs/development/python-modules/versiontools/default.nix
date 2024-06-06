@@ -1,12 +1,14 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPy3k,
 }:
 
 buildPythonPackage rec {
   pname = "versiontools";
   version = "1.9.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,10 +17,9 @@ buildPythonPackage rec {
 
   doCheck = (!isPy3k);
 
-  meta = with stdenv.lib; {
-    homepage = https://launchpad.net/versiontools;
+  meta = with lib; {
+    homepage = "https://launchpad.net/versiontools";
     description = "Smart replacement for plain tuple used in __version__";
     license = licenses.lgpl2;
   };
-
 }

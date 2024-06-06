@@ -1,8 +1,7 @@
-{ stdenv, lib, fetchFromGitHub, fetchurl, cmake, makeWrapper, pkgconfig
-, curl, ffmpeg, glib, libjpeg, libselinux, libsepol, mp4v2, mysql, nettools, pcre, perl, perlPackages
-, polkit, utillinuxMinimal, x264, zlib
-, avahi, dbus, gettext, git, gnutar, gzip, bzip2, libiconv, openssl, python
-, coreutils, procps, psmisc }:
+{ stdenv, lib, fetchFromGitHub, fetchurl, cmake, makeWrapper, pkg-config
+, curl, ffmpeg, glib, libjpeg, libselinux, libsepol, mp4v2, libmysqlclient, mariadb, pcre, perl, perlPackages
+, polkit, util-linuxMinimal, x264, zlib
+, coreutils, procps, psmisc, nixosTests }:
 
 # NOTES:
 #
@@ -42,27 +41,6 @@
 # around it.
 
 let
-  modules = [
-    {
-      path = "web/api/app/Plugin/Crud";
-      src = fetchFromGitHub {
-        owner = "ZoneMinder";
-        repo = "crud";
-        rev = "3.1.0-zm";
-        sha256 = "061avzyml7mla4hlx057fm8a9yjh6m6qslgyzn74cv5p2y7f463l";
-      };
-    }
-    {
-      path = "web/api/app/Plugin/CakePHP-Enum-Behavior";
-      src = fetchFromGitHub {
-        owner = "ZoneMinder";
-        repo = "CakePHP-Enum-Behavior";
-        rev = "1.0-zm";
-        sha256 = "0zsi6s8xymb183kx3szspbrwfjqcgga7786zqvydy6hc8c909cgx";
-      };
-    }
-  ];
-
   addons = [
     {
       path = "scripts/ZoneMinder/lib/ZoneMinder/Control/Xiaomi.pm";
@@ -78,26 +56,23 @@ let
   perlBin = "${perl}/bin/perl";
 
 in stdenv.mkDerivation rec {
-  name = "zoneminder-${version}";
-  version = "1.32.3";
+  pname = "zoneminder";
+  version = "1.36.33";
 
   src = fetchFromGitHub {
     owner  = "ZoneMinder";
     repo   = "zoneminder";
     rev    = version;
-    sha256 = "1sx2fn99861zh0gp8g53ynr1q6yfmymxamn82y54jqj6nv475njz";
+    sha256 = "sha256-KUhFZrF7BuLB2Z3LnTcHEEZVA6iosam6YsOd8KWvx7E=";
+    fetchSubmodules = true;
   };
 
   patches = [
     ./default-to-http-1dot1.patch
+    ./0001-Don-t-use-file-timestamp-in-cache-filename.patch
   ];
 
   postPatch = ''
-    ${lib.concatStringsSep "\n" (map (e: ''
-      rm -rf ${e.path}/*
-      cp -r ${e.src}/* ${e.path}/
-    '') modules)}
-
     rm -rf web/api/lib/Cake/Test
 
     ${lib.concatStringsSep "\n" (map (e: ''
@@ -122,35 +97,48 @@ in stdenv.mkDerivation rec {
     done
 
     substituteInPlace scripts/zmdbbackup.in \
-      --replace /usr/bin/mysqldump ${mysql}/bin/mysqldump
+      --replace /usr/bin/mysqldump ${mariadb.client}/bin/mysqldump
+
+    substituteInPlace scripts/zmupdate.pl.in \
+      --replace "'mysql'" "'${mariadb.client}/bin/mysql'" \
+      --replace "'mysqldump'" "'${mariadb.client}/bin/mysqldump'"
 
     for f in scripts/ZoneMinder/lib/ZoneMinder/Config.pm.in \
              scripts/zmupdate.pl.in \
-             src/zm_config.h.in \
+             src/zm_config_data.h.in \
              web/api/app/Config/bootstrap.php.in \
              web/includes/config.php.in ; do
       substituteInPlace $f --replace @ZM_CONFIG_SUBDIR@ /etc/zoneminder
     done
 
-   for f in includes/Event.php views/image.php skins/classic/views/image-ffmpeg.php ; do
-     substituteInPlace web/$f \
-       --replace "'ffmpeg " "'${ffmpeg}/bin/ffmpeg "
-   done
+    for f in includes/Event.php views/image.php ; do
+      substituteInPlace web/$f \
+        --replace "'ffmpeg " "'${ffmpeg}/bin/ffmpeg "
+    done
+
+    for f in scripts/ZoneMinder/lib/ZoneMinder/Event.pm \
+             scripts/ZoneMinder/lib/ZoneMinder/Storage.pm ; do
+      substituteInPlace $f \
+        --replace '/bin/rm' "${coreutils}/bin/rm"
+    done
+
+    substituteInPlace web/includes/functions.php \
+      --replace "'date " "'${coreutils}/bin/date " \
+      --subst-var-by srcHash "`basename $out`"
   '';
 
   buildInputs = [
-    curl ffmpeg glib libjpeg libselinux libsepol mp4v2 mysql pcre perl polkit x264 zlib
-    utillinuxMinimal # for libmount
+    curl ffmpeg glib libjpeg libselinux libsepol mp4v2 libmysqlclient mariadb pcre perl polkit x264 zlib
+    util-linuxMinimal # for libmount
   ] ++ (with perlPackages; [
     # build-time dependencies
     DateManip DBI DBDmysql LWP SysMmap
     # run-time dependencies not checked at build-time
-    ClassStdFast DataDump JSONMaybeXS LWPProtocolHttps NumberBytesHuman SysCPU SysMemInfo TimeDate
+    ClassStdFast DataDump DeviceSerialPort JSONMaybeXS LWPProtocolHttps NumberBytesHuman SysCPU SysMemInfo TimeDate
+    CryptEksblowfish DataEntropy # zmupdate.pl
   ]);
 
-  nativeBuildInputs = [ cmake makeWrapper pkgconfig ];
-
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ cmake makeWrapper pkg-config ];
 
   cmakeFlags = [
     "-DWITH_SYSTEMD=ON"
@@ -163,7 +151,10 @@ in stdenv.mkDerivation rec {
     "-DZM_WEB_GROUP=${user}"
   ];
 
-  passthru = { inherit dirName; };
+  passthru = {
+    inherit dirName;
+    tests = nixosTests.zoneminder;
+  };
 
   postInstall = ''
     PERL5LIB="$PERL5LIB''${PERL5LIB:+:}$out/${perl.libPrefix}"
@@ -173,6 +164,7 @@ in stdenv.mkDerivation rec {
       perlFlags="$perlFlags -I$i"
     done
 
+    mkdir -p $out/libexec
     for f in $out/bin/*.pl ; do
       mv $f $out/libexec/
       makeWrapper ${perlBin} $f \
@@ -183,11 +175,11 @@ in stdenv.mkDerivation rec {
     ln -s $out/share/zoneminder/www $out/share/zoneminder/www/zm
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Video surveillance software system";
-    homepage = https://zoneminder.com;
+    homepage = "https://zoneminder.com";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ peterhoeg ];
+    maintainers = [ ];
     platforms = platforms.unix;
   };
 }

@@ -1,31 +1,66 @@
-{ stdenv, fetchurl, pkgconfig, libvirt, glib, libxml2, intltool, libtool, yajl
-, nettle, libgcrypt, pythonPackages, gobject-introspection, libcap_ng, numactl
-, xen, libapparmor, vala
+{ lib
+, stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, gettext
+, vala
+, libcap_ng
+, libvirt
+, libxml2
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, gobject-introspection
+, withDocs ? stdenv.hostPlatform == stdenv.buildPlatform
+, gtk-doc
+, docbook-xsl-nons
 }:
 
-let
-  inherit (pythonPackages) python pygobject2;
-in stdenv.mkDerivation rec {
-  name = "libvirt-glib-2.0.0";
+stdenv.mkDerivation rec {
+  pname = "libvirt-glib";
+  version = "5.0.0";
 
-  outputs = [ "out" "dev" ];
+  outputs = [ "out" "dev" ] ++ lib.optional withDocs "devdoc";
 
   src = fetchurl {
-    url = "https://libvirt.org/sources/glib/${name}.tar.gz";
-    sha256 = "0six9ckmvlwwyavyjkgc262qkpvfqgi8rjij7cyk00bmqq8c9s4l";
+    url = "https://libvirt.org/sources/glib/${pname}-${version}.tar.xz";
+    sha256 = "m/7DRjgkFqNXXYcpm8ZBsqRkqlGf2bEofjGKpDovO4s=";
   };
 
-  nativeBuildInputs = [ pkgconfig vala ];
-  buildInputs = [
-    libvirt glib libxml2 intltool libtool yajl nettle libgcrypt
-    python pygobject2 gobject-introspection libcap_ng numactl libapparmor
-  ] ++ stdenv.lib.optionals stdenv.isx86_64 [
-    xen
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    vala
+    gobject-introspection
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+  ] ++ lib.optionals withDocs [
+    gtk-doc
+    docbook-xsl-nons
   ];
 
-  enableParallelBuilding = true;
+  buildInputs = [
+    libvirt
+    libxml2
+  ] ++ lib.optionals stdenv.isLinux [
+    libcap_ng
+  ];
 
-  meta = with stdenv.lib; {
+  strictDeps = true;
+
+  # The build system won't let us build with docs or introspection
+  # unless we're building natively, but will still do a mandatory
+  # check for the dependencies for those things unless we explicitly
+  # disable the options.
+  mesonFlags = [
+    (lib.mesonEnable "docs" withDocs)
+    (lib.mesonEnable "introspection" withIntrospection)
+  ];
+
+  meta = with lib; {
     description = "Library for working with virtual machines";
     longDescription = ''
       libvirt-glib wraps libvirt to provide a high-level object-oriented API better
@@ -35,8 +70,8 @@ in stdenv.mkDerivation rec {
       - libvirt-gconfig - GObjects for manipulating libvirt XML documents
       - libvirt-gobject - GObjects for managing libvirt objects
     '';
-    homepage = http://libvirt.org/;
+    homepage = "https://libvirt.org/";
     license = licenses.lgpl2Plus;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

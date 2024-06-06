@@ -1,8 +1,12 @@
-{ qtModule, qtbase, qtdeclarative }:
+{ lib
+, stdenv
+, qtModule
+, qtbase
+, qtdeclarative
+}:
 
 qtModule {
-  name = "qtwebchannel";
-  qtInputs = [ qtbase qtdeclarative ];
-  outputs = [ "out" "dev" "bin" ];
+  pname = "qtwebchannel";
+  propagatedBuildInputs = [ qtbase qtdeclarative ];
+  outputs = [ "out" "dev" ] ++ lib.optionals (stdenv.hostPlatform == stdenv.buildPlatform) [ "bin" ];
 }
-

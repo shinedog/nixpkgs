@@ -1,25 +1,25 @@
 {
   mkDerivation, fetchurl, lib,
-  extra-cmake-modules, kdoctools, wrapGAppsHook,
+  extra-cmake-modules, kdoctools,
   kconfig, kcrash, kinit
 }:
 
-let
-  pname = "kronometer";
-  version = "2.2.1";
-in
 mkDerivation rec {
-  name = "${pname}-${version}";
+  pname = "kronometer";
+  version = "2.3.0";
 
   src = fetchurl {
-    url = "mirror://kde/stable/${pname}/${version}/src/${name}.tar.xz";
-    sha256 = "18b2qi5b9hn8jy3yhav72n14z5l9w3p5fv5kslhbxc7rfvjr4h3x";
+    url = "mirror://kde/stable/${pname}/${version}/src/${pname}-${version}.tar.xz";
+    sha256 = "sha256-dbnhom8PRo0Bay3DzS2P0xQSrJaMXD51UadQL3z6xHY=";
   };
 
   meta = with lib; {
-    license = licenses.gpl2;
+    homepage = "https://kde.org/applications/utilities/kronometer/";
+    description = "A stopwatch application";
+    license = licenses.gpl2Only;
     maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "kronometer";
   };
-  nativeBuildInputs = [ extra-cmake-modules kdoctools wrapGAppsHook ];
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
   propagatedBuildInputs = [ kconfig kcrash kinit ];
 }

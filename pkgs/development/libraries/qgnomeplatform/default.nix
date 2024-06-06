@@ -1,37 +1,79 @@
-{ stdenv, fetchFromGitHub, pkgconfig, gtk3, qtbase, qmake }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, nix-update-script
+, cmake
+, pkg-config
+, adwaita-qt
+, adwaita-qt6
+, glib
+, gtk3
+, qtbase
+, qtwayland
+, pantheon
+, substituteAll
+, gsettings-desktop-schemas
+, useQt6 ? false
+}:
 
 stdenv.mkDerivation rec {
-  name = "qgnomeplatform-${version}";
-  version = "0.5";
+  pname = "qgnomeplatform";
+  version = "0.8.4";
 
   src = fetchFromGitHub {
     owner = "FedoraQt";
     repo = "QGnomePlatform";
     rev = version;
-    sha256 = "01ncj21cxd5p7pch6p3zbhv5wp0dgn9vy5hrw54g49fmqnbb1ymz";
+    sha256 = "sha256-DaIBtWmce+58OOhqFG5802c3EprBAtDXhjiSPIImoOM=";
   };
 
+  patches = [
+    # Hardcode GSettings schema path to avoid crashes from missing schemas
+    (substituteAll {
+      src = ./hardcode-gsettings.patch;
+      gds_gsettings_path = glib.getSchemaPath gsettings-desktop-schemas;
+    })
+
+    # Backport cursor fix for Qt6 apps
+    # Ajusted from https://github.com/FedoraQt/QGnomePlatform/pull/138
+    ./qt6-cursor-fix.patch
+  ];
+
   nativeBuildInputs = [
-    pkgconfig
-    qmake
+    cmake
+    pkg-config
   ];
 
   buildInputs = [
+    glib
     gtk3
     qtbase
+    qtwayland
+  ] ++ lib.optionals (!useQt6) [
+    adwaita-qt
+  ] ++ lib.optionals useQt6 [
+    adwaita-qt6
   ];
 
-  postPatch = ''
-    # Fix plugin dir
-    substituteInPlace qgnomeplatform.pro \
-      --replace "\$\$[QT_INSTALL_PLUGINS]" "$out/$qtPluginPrefix"
-  '';
+  # Qt setup hook complains about missing `wrapQtAppsHook` otherwise.
+  dontWrapQtApps = true;
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    "-DGLIB_SCHEMAS_DIR=${glib.getSchemaPath gsettings-desktop-schemas}"
+    "-DQT_PLUGINS_DIR=${placeholder "out"}/${qtbase.qtPluginPrefix}"
+  ] ++ lib.optionals useQt6 [
+    "-DUSE_QT6=true"
+  ];
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "QPlatformTheme for a better Qt application inclusion in GNOME";
-    homepage = https://github.com/FedoraQt/QGnomePlatform;
+    homepage = "https://github.com/FedoraQt/QGnomePlatform";
     license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [ worldofpeace ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.linux;
   };
 }

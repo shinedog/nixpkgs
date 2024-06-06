@@ -1,33 +1,66 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, geopandas, descartes, matplotlib, networkx, numpy
-, pandas, requests, Rtree, shapely, pytest, coverage, coveralls, folium, scikitlearn, scipy}:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  folium,
+  gdal,
+  geopandas,
+  hatchling,
+  matplotlib,
+  networkx,
+  numpy,
+  pandas,
+  pythonOlder,
+  rasterio,
+  requests,
+  rtree,
+  scikit-learn,
+  scipy,
+  shapely,
+}:
 
 buildPythonPackage rec {
   pname = "osmnx";
-  version = "0.9";
+  version = "1.9.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchFromGitHub {
-    owner  = "gboeing";
-    repo   = pname;
-    rev    = "v${version}";
-    sha256 = "1k3y5kl4k93vxaxyanc040x44s2fyyc3m1ndy2j3kg0037z8ad4z";
+    owner = "gboeing";
+    repo = "osmnx";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-od/0IuiK2CvrD0lfcTzkImK/5hcm6m61ULYzEtv/YeA=";
   };
 
-  propagatedBuildInputs = [ geopandas descartes matplotlib networkx numpy pandas requests Rtree shapely folium scikitlearn scipy ];
+  nativeBuildInputs = [ hatchling ];
 
-  checkInputs = [ coverage pytest coveralls ];
-  #Fails when using sandboxing as it requires internet connection, works fine without it
+  propagatedBuildInputs = [
+    geopandas
+    matplotlib
+    networkx
+    numpy
+    pandas
+    requests
+    rtree
+    shapely
+    folium
+    scikit-learn
+    scipy
+    gdal
+    rasterio
+  ];
+
+  # Tests require network
   doCheck = false;
 
-  #Check phase for the record
-  #checkPhase = ''
-  #  coverage run --source osmnx -m pytest --verbose
-  #'';
+  pythonImportsCheck = [ "osmnx" ];
 
-  meta = with stdenv.lib; {
-    description = "A package to easily download, construct, project, visualize, and analyze complex street networks from OpenStreetMap with NetworkX.";
-    homepage = https://github.com/gboeing/osmnx;
+  meta = with lib; {
+    description = "Package to easily download, construct, project, visualize, and analyze complex street networks from OpenStreetMap with NetworkX";
+    homepage = "https://github.com/gboeing/osmnx";
+    changelog = "https://github.com/gboeing/osmnx/blob/v${version}/CHANGELOG.md";
     license = licenses.mit;
     maintainers = with maintainers; [ psyanticy ];
   };
 }
-

@@ -1,39 +1,59 @@
-{
-  stdenv, makeWrapper, fetchFromGitHub, substituteAll,
-  imagemagick, i3lock-color, xdpyinfo, xrandr, bc, feh
+{ fetchFromGitHub
+, lib
+, makeWrapper
+, stdenv
+
+  # Dependencies (@see https://github.com/pavanjadhaw/betterlockscreen/blob/master/shell.nix)
+, bc
+, coreutils
+, dbus
+, withDunst ? true
+, dunst
+, i3lock-color
+, gawk
+, gnugrep
+, gnused
+, imagemagick
+, procps
+, xorg
 }:
 
+let
+  runtimeDeps =
+    [ bc coreutils dbus i3lock-color gawk gnugrep gnused imagemagick procps xorg.xdpyinfo xorg.xrandr xorg.xset ]
+    ++ lib.optionals withDunst [ dunst ];
+in
+
 stdenv.mkDerivation rec {
-  name = "betterlockscreen-${version}";
-  version = "3.0.1";
+  pname = "betterlockscreen";
+  version = "4.2.0";
 
   src = fetchFromGitHub {
     owner = "pavanjadhaw";
     repo = "betterlockscreen";
-    rev = version;
-    sha256 = "0jc8ifb69shmd0avx6vny4m1w5dfxkkf5vnm7qcrmc8yflb0s3z6";
+    rev = "v${version}";
+    sha256 = "sha256-e/NyUxrN18+x2zt+JzqVA00P8VdHo8oj9Bx09XKI+Eg=";
   };
 
   nativeBuildInputs = [ makeWrapper ];
 
-  patches = [ ./replace-i3lock.patch ];
+  installPhase = ''
+    runHook preInstall
 
-  installPhase = 
-    let 
-      PATH = 
-        stdenv.lib.makeBinPath
-        [imagemagick i3lock-color xdpyinfo xrandr bc feh];
-    in ''
-      mkdir -p $out/bin
-      cp betterlockscreen $out/bin/betterlockscreen
-      wrapProgram "$out/bin/betterlockscreen" --prefix PATH : "$out/bin:${PATH}"
-    '';
+    mkdir -p $out/bin
+    cp betterlockscreen $out/bin/betterlockscreen
+    wrapProgram "$out/bin/betterlockscreen" \
+      --prefix PATH : "$out/bin:${lib.makeBinPath runtimeDeps}"
 
-  meta = with stdenv.lib; {
-    description = "Betterlockscreen is a simple minimal lock screen which allows you to cache images with different filters and lockscreen with blazing speed.";
-    homepage = https://github.com/pavanjadhaw/betterlockscreen;
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    description = "Fast and sweet looking lockscreen for linux systems with effects!";
+    homepage = "https://github.com/pavanjadhaw/betterlockscreen";
+    mainProgram = "betterlockscreen";
     license = licenses.mit;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ eyjhb ];
+    maintainers = with maintainers; [ eyjhb sebtm ];
   };
 }

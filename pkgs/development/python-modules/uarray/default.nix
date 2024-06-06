@@ -1,44 +1,63 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, matchpy
-, numpy
-, astunparse
-, typing-extensions
-, black
-, pytest
-, pytestcov
-, numba
-, nbval
-, python
-, isPy37
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  setuptools-scm,
+  matchpy,
+  numpy,
+  astunparse,
+  typing-extensions,
+  pytest7CheckHook,
+  pytest-cov,
 }:
 
 buildPythonPackage rec {
   pname = "uarray";
-  version = "0.4";
-  format = "flit";
-  # will have support soon see
-  # https://github.com/Quansight-Labs/uarray/pull/64
-  disabled = isPy37;
+  version = "0.8.8";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "4ec88f477d803a914d58fdf83aeedfb1986305355775cf55525348c62cce9aa4";
+  src = fetchFromGitHub {
+    owner = "Quansight-Labs";
+    repo = pname;
+    rev = version;
+    hash = "sha256-wTKqOw64b+/kdZpSYLwCJATOuo807BWCtVHB4pH58fY=";
   };
 
-  checkInputs = [ pytest nbval pytestcov numba ];
-  propagatedBuildInputs = [ matchpy numpy astunparse typing-extensions black ];
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    ${python.interpreter} extract_readme_tests.py
-    pytest
+  dependencies = [
+    astunparse
+    matchpy
+    numpy
+    typing-extensions
+  ];
+
+  nativeCheckInputs = [
+    pytest7CheckHook
+    pytest-cov
+  ];
+
+  # Tests must be run from outside the source directory
+  preCheck = ''
+    cd $TMP
   '';
+
+  pytestFlagsArray = [
+    "--pyargs"
+    "uarray"
+  ];
+
+  pythonImportsCheck = [ "uarray" ];
 
   meta = with lib; {
     description = "Universal array library";
-    homepage = https://github.com/Quansight-Labs/uarray;
+    homepage = "https://github.com/Quansight-Labs/uarray";
     license = licenses.bsd0;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = [ ];
   };
 }

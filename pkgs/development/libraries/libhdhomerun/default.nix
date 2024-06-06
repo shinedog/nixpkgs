@@ -1,32 +1,43 @@
-{ stdenv, fetchgit }:
+{ lib, stdenv, fetchurl }:
 
-stdenv.mkDerivation {
-  name = "libhdhomerun-1efbcb";
+# libhdhomerun requires UDP port 65001 to be open in order to detect and communicate with tuners.
+# If your firewall is enabled, make sure to have something like:
+#   networking.firewall.allowedUDPPorts = [ 65001 ];
 
-  src = fetchgit {
-    url = "git://github.com/Silicondust/libhdhomerun.git";
-    rev = "1efbcb2b87b17a82f2b3d873d1c9cc1c6a3a9b77";
-    sha256 = "11iyrfs98xb50n9iqnwfphmmnn5w3mq2l9cjjpf8qp29cvs33cgy";
+stdenv.mkDerivation rec {
+  pname = "libhdhomerun";
+  version = "20231214";
+
+  src = fetchurl {
+    url = "https://download.silicondust.com/hdhomerun/libhdhomerun_${version}.tgz";
+    hash = "sha256-VSoQLoqiq8xBYJDewvb4DaWfl/kfV5aOnp17PcAF268=";
   };
 
-  patchPhase = stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace Makefile --replace "gcc" "cc"
-    substituteInPlace Makefile --replace "-arch i386" ""
-  '';
+  patches = [
+    ./nixos-darwin-no-fat-dylib.patch
+  ];
+
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+  ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/{bin,lib,include/hdhomerun}
     install -Dm444 libhdhomerun${stdenv.hostPlatform.extensions.sharedLibrary} $out/lib
     install -Dm555 hdhomerun_config $out/bin
     cp *.h $out/include/hdhomerun
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Implements the libhdhomerun protocol for use with Silicondust HDHomeRun TV tuners";
-    homepage = https://github.com/Silicondust/libhdhomerun;
-    repositories.git = "https://github.com/Silicondust/libhdhomerun.git";
-    license = stdenv.lib.licenses.lgpl2;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ maintainers.titanous ];
+    mainProgram = "hdhomerun_config";
+    homepage = "https://www.silicondust.com/support/linux";
+    license = licenses.lgpl21Only;
+    maintainers = with maintainers; [ sielicki ];
+    platforms = platforms.unix;
   };
 }

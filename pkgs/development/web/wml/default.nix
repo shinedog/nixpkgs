@@ -1,10 +1,11 @@
-{ stdenv, fetchurl, perlPackages, ncurses, lynx, makeWrapper }:
+{ lib, fetchurl, perlPackages, ncurses, lynx, makeWrapper }:
 
-perlPackages.buildPerlPackage rec {
-  name = "wml-2.0.11";
+perlPackages.buildPerlPackage {
+  pname = "wml";
+  version = "2.0.11";
 
   src = fetchurl {
-    url = "http://thewml.org/distrib/${name}.tar.gz";
+    url = "http://thewml.org/distrib/wml-2.0.11.tar.gz";
     sha256 = "0jjxpq91x7y2mgixz7ghqp01m24qa37wl3zz515rrzv7x8cyy4cf";
   };
 
@@ -22,10 +23,15 @@ perlPackages.buildPerlPackage rec {
     sed -i '/p2_mp4h\/doc/d' Makefile.in
   '';
 
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = with perlPackages;
-    [ perl TermReadKey GD BitVector ncurses lynx makeWrapper ImageSize ];
+    [ perl TermReadKey GD BitVector ncurses lynx ImageSize ];
 
   patches = [ ./redhat-with-thr.patch ./dynaloader.patch ./no_bitvector.patch ];
+
+  # Workaround build failure on -fno-common toolchains:
+  #   ld: iselect_browse.o:(.bss+0x2020): multiple definition of `Line'; iselect_main.o:(.bss+0x100000): first defined here
+  env.NIX_CFLAGS_COMPILE = "-fcommon";
 
   hardeningDisable = [ "format" ];
 
@@ -52,10 +58,10 @@ perlPackages.buildPerlPackage rec {
 
   enableParallelBuilding = false;
 
-  installTargets = "install";
+  installTargets = [ "install" ];
 
-  meta = with stdenv.lib; {
-    homepage = http://thewml.org/;
+  meta = with lib; {
+    homepage = "https://www.shlomifish.org/open-source/projects/website-meta-language/";
     description = "Off-line HTML generation toolkit for Unix";
     license = licenses.gpl2;
     platforms = platforms.linux;

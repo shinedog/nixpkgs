@@ -1,44 +1,69 @@
-{ stdenv, fetchurl, fetchpatch, flex, bison }:
+{ lib
+, stdenv
+, fetchurl
+, flex
+, bison
+, bluez
+, libnl
+, libxcrypt
+, pkg-config
+, withBluez ? false
+, withRemote ? false
+
+# for passthru.tests
+, ettercap
+, nmap
+, ostinato
+, tcpreplay
+, vde2
+, wireshark
+, python3
+, haskellPackages
+}:
 
 stdenv.mkDerivation rec {
-  name = "libpcap-1.9.0";
+  pname = "libpcap";
+  version = "1.10.4";
 
   src = fetchurl {
-    url = "https://www.tcpdump.org/release/${name}.tar.gz";
-    sha256 = "06bhydl4vr4z9c3vahl76f2j96z1fbrcl7wwismgs4sris08inrf";
+    url = "https://www.tcpdump.org/release/${pname}-${version}.tar.gz";
+    hash = "sha256-7RmgOD+tcuOtQ1/SOdfNgNZJFrhyaVUBWdIORxYOvl8=";
   };
 
-  nativeBuildInputs = [ flex bison ];
+  buildInputs = lib.optionals stdenv.isLinux [ libnl ]
+    ++ lib.optionals withRemote [ libxcrypt ];
+
+  nativeBuildInputs = [ flex bison ]
+    ++ lib.optionals stdenv.isLinux [ pkg-config ]
+    ++ lib.optionals withBluez [ bluez.dev ];
 
   # We need to force the autodetection because detection doesn't
-  # work in pure build enviroments.
+  # work in pure build environments.
   configureFlags = [
-    ("--with-pcap=" + {
-      linux = "linux";
-      darwin = "bpf";
-    }.${stdenv.hostPlatform.parsed.kernel.name})
-  ] ++ stdenv.lib.optionals (stdenv.hostPlatform == stdenv.buildPlatform) [
-    "ac_cv_linux_vers=2"
-  ];
+    "--with-pcap=${if stdenv.isLinux then "linux" else "bpf"}"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "--disable-universal"
+  ] ++ lib.optionals withRemote [
+    "--enable-remote"
+  ] ++ lib.optionals (stdenv.hostPlatform == stdenv.buildPlatform)
+    [ "ac_cv_linux_vers=2" ];
 
-  dontStrip = stdenv.hostPlatform != stdenv.buildPlatform;
-
-  prePatch = stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace configure --replace " -arch i386" ""
+  postInstall = ''
+    if [ "$dontDisableStatic" -ne "1" ]; then
+      rm -f $out/lib/libpcap.a
+    fi
   '';
 
-  patches = [
-    # https://github.com/the-tcpdump-group/libpcap/pull/735
-    (fetchpatch {
-      name = "add-missing-limits-h-include-pr735.patch";
-      url = https://github.com/the-tcpdump-group/libpcap/commit/aafa3512b7b742f5e66a5543e41974cc5e7eebfa.patch;
-      sha256 = "05zb4hx9g24gx07bi02rprk2rn7fdc1ss3249dv5x36qkasnfhvf";
-    })
-  ];
+  passthru.tests = {
+    inherit ettercap nmap ostinato tcpreplay vde2 wireshark;
+    inherit (python3.pkgs) pcapy-ng scapy;
+    haskell-pcap = haskellPackages.pcap;
+  };
 
-  meta = with stdenv.lib; {
-    homepage = https://www.tcpdump.org;
+  meta = with lib; {
+    homepage = "https://www.tcpdump.org";
     description = "Packet Capture Library";
+    mainProgram = "pcap-config";
     platforms = platforms.unix;
     maintainers = with maintainers; [ fpletz ];
     license = licenses.bsd3;

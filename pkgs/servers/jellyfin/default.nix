@@ -1,42 +1,67 @@
-{ stdenv, fetchurl, unzip, sqlite, makeWrapper, dotnet-sdk, ffmpeg }:
+{
+  lib,
+  fetchFromGitHub,
+  nixosTests,
+  stdenv,
+  dotnetCorePackages,
+  buildDotnetModule,
+  ffmpeg,
+  fontconfig,
+  freetype,
+  jellyfin-web,
+  sqlite,
+}:
 
-stdenv.mkDerivation rec {
+buildDotnetModule rec {
   pname = "jellyfin";
-  version = "10.3.2";
+  version = "10.9.3"; # ensure that jellyfin-web has matching version
 
-  # Impossible to build anything offline with dotnet
-  src = fetchurl {
-    url = "https://github.com/jellyfin/jellyfin/releases/download/v${version}/jellyfin_${version}_portable.tar.gz";
-    sha256 = "0cwmaq61xhdb34f53m2vhnw8v4zrj266vjzfdm106gyychpr46vz";
+  src = fetchFromGitHub {
+    owner = "jellyfin";
+    repo = "jellyfin";
+    rev = "v${version}";
+    sha256 = "sha256-gJMz2LfxC0JXqGYNKNz1zRbWZOH1UxbcoGtmdymZ/Oo=";
   };
 
-  buildInputs = [
-    unzip
-    makeWrapper
+  propagatedBuildInputs = [ sqlite ];
+
+  projectFile = "Jellyfin.Server/Jellyfin.Server.csproj";
+  executables = [ "jellyfin" ];
+  nugetDeps = ./nuget-deps.nix;
+  runtimeDeps = [
+    ffmpeg
+    fontconfig
+    freetype
   ];
+  dotnet-sdk = dotnetCorePackages.sdk_8_0;
+  dotnet-runtime = dotnetCorePackages.aspnetcore_8_0;
+  dotnetBuildFlags = [ "--no-self-contained" ];
 
-  propagatedBuildInputs = [
-    dotnet-sdk
-    sqlite
-  ];
-
-  preferLocalBuild = true;
-
-  installPhase = ''
-    install -dm 755 "$out/opt/jellyfin"
-    cp -r * "$out/opt/jellyfin"
-
-    makeWrapper "${dotnet-sdk}/bin/dotnet" $out/bin/jellyfin \
-      --prefix LD_LIBRARY_PATH : "${stdenv.lib.makeLibraryPath [
-        sqlite
-      ]}" \
-      --add-flags "$out/opt/jellyfin/jellyfin.dll --ffmpeg ${ffmpeg}/bin/ffmpeg"
+  preInstall = ''
+    makeWrapperArgs+=(
+      --add-flags "--ffmpeg ${ffmpeg}/bin/ffmpeg"
+      --add-flags "--webdir ${jellyfin-web}/share/jellyfin-web"
+    )
   '';
 
-  meta =  with stdenv.lib; {
+  passthru.tests = {
+    smoke-test = nixosTests.jellyfin;
+  };
+
+  passthru.updateScript = ./update.sh;
+
+  meta = with lib; {
     description = "The Free Software Media System";
-    homepage = https://jellyfin.github.io/;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ nyanloutre minijackson ];
+    homepage = "https://jellyfin.org/";
+    # https://github.com/jellyfin/jellyfin/issues/610#issuecomment-537625510
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [
+      nyanloutre
+      minijackson
+      purcell
+      jojosch
+    ];
+    mainProgram = "jellyfin";
+    platforms = dotnet-runtime.meta.platforms;
   };
 }

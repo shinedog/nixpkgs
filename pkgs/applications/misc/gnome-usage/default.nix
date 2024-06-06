@@ -1,27 +1,30 @@
 { stdenv
+, lib
 , fetchurl
 , meson
 , ninja
-, pkgconfig
+, pkg-config
 , vala
 , gettext
 , libxml2
 , desktop-file-utils
-, wrapGAppsHook
+, wrapGAppsHook4
 , glib
-, gtk3
+, gtk4
+, libadwaita
+, libgee
 , libgtop
-, libdazzle
-, gnome3
+, gnome
+, tracker
 }:
 
 stdenv.mkDerivation rec {
   pname = "gnome-usage";
-  version = "3.32.0";
+  version = "46.0";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "0bgszckddfpd3czyb9fddx4pgv5yv44sxc45dfk2kgqyy169gjih";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.major version}/${pname}-${version}.tar.xz";
+    hash = "sha256-GGrajgAYjIn4yrVPNZmO2XpG6rb9shiRAoNhvzhqybI=";
   };
 
   nativeBuildInputs = [
@@ -30,17 +33,18 @@ stdenv.mkDerivation rec {
     libxml2
     meson
     ninja
-    pkgconfig
+    pkg-config
     vala
-    wrapGAppsHook
+    wrapGAppsHook4
   ];
 
   buildInputs = [
     glib
-    gnome3.adwaita-icon-theme
-    gtk3
-    libdazzle
+    gtk4
+    libadwaita
+    libgee
     libgtop
+    tracker
   ];
 
   postPatch = ''
@@ -49,15 +53,17 @@ stdenv.mkDerivation rec {
   '';
 
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = pname;
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A nice way to view information about use of system resources, like memory and disk space";
-    license = licenses.gpl3;
+    mainProgram = "gnome-usage";
+    homepage = "https://gitlab.gnome.org/GNOME/gnome-usage";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = gnome3.maintainers;
+    maintainers = teams.gnome.members;
   };
 }

@@ -1,17 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  hatch-vcs,
+  hatchling,
+  pytest-mock,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "filelock";
-  version = "3.0.10";
+  version = "3.13.4";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1rjv7g85smh6hrq6n9h721kh83qjv8mfp0ksdnbqbbsd82xw246n";
+    hash = "sha256-0T9GZhi/3nK9LBglXiafclQsbnDnusg6AjLWscxcjPQ=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/benediktschmitt/py-filelock;
+  nativeBuildInputs = [
+    hatch-vcs
+    hatchling
+  ];
+
+  nativeCheckInputs = [
+    pytest-mock
+    pytestCheckHook
+  ];
+
+  meta = with lib; {
+    changelog = "https://github.com/tox-dev/py-filelock/releases/tag/${version}";
     description = "A platform independent file lock for Python";
+    homepage = "https://github.com/benediktschmitt/py-filelock";
     license = licenses.unlicense;
     maintainers = with maintainers; [ hyphon81 ];
   };

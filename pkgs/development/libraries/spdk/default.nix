@@ -1,33 +1,95 @@
-{ stdenv, fetchFromGitHub, python, cunit, dpdk, libaio, libuuid, numactl, openssl }:
+{ lib, stdenv
+, fetchFromGitHub
+, ncurses
+, python3
+, cunit
+, dpdk
+, fuse3
+, libaio
+, libbsd
+, libuuid
+, numactl
+, openssl
+, pkg-config
+, zlib
+, zstd
+, libpcap
+, libnl
+, elfutils
+, jansson
+, ensureNewerSourcesForZipFilesHook
+}:
 
 stdenv.mkDerivation rec {
-  name = "spdk-${version}";
-  version = "18.04";
+  pname = "spdk";
+
+  version = "24.01";
 
   src = fetchFromGitHub {
     owner = "spdk";
     repo = "spdk";
     rev = "v${version}";
-    sha256 = "07i13jkf63h5ld9djksxl445v1mj6m5cbq4xydix9y5qcxwlss3n";
+    sha256 = "sha256-5znYELR6WvVXbfFKAcRtJnSwAE5WHmA8v1rvZUtszS4=";
+    fetchSubmodules = true;
   };
 
-  nativeBuildInputs = [ python ];
+  nativeBuildInputs = [
+    python3
+    python3.pkgs.pip
+    python3.pkgs.setuptools
+    python3.pkgs.wheel
+    python3.pkgs.wrapPython
+    pkg-config
+    ensureNewerSourcesForZipFilesHook
+  ];
 
-  buildInputs = [ cunit dpdk libaio libuuid numactl openssl ];
+  buildInputs = [
+    cunit
+    dpdk
+    fuse3
+    jansson
+    libaio
+    libbsd
+    elfutils
+    libuuid
+    libpcap
+    libnl
+    numactl
+    openssl
+    ncurses
+    zlib
+    zstd
+  ];
+
+  propagatedBuildInputs = [
+    python3.pkgs.configshell
+  ];
 
   postPatch = ''
     patchShebangs .
   '';
 
-  configureFlags = [ "--with-dpdk=${dpdk}" ];
-
-  NIX_CFLAGS_COMPILE = [ "-mssse3" ]; # Necessary to compile.
-
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--with-dpdk=${dpdk}"
+  ];
+
+  postCheck = ''
+    python3 -m spdk
+  '';
+
+  postFixup = ''
+    wrapPythonPrograms
+  '';
+
+  env.NIX_CFLAGS_COMPILE = "-mssse3"; # Necessary to compile.
+  # otherwise does not find strncpy when compiling
+  env.NIX_LDFLAGS = "-lbsd";
+
+  meta = with lib; {
     description = "Set of libraries for fast user-mode storage";
-    homepage = http://www.spdk.io;
+    homepage = "https://spdk.io/";
     license = licenses.bsd3;
     platforms =  [ "x86_64-linux" ];
     maintainers = with maintainers; [ orivej ];

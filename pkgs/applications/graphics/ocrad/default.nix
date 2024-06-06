@@ -1,4 +1,4 @@
-{ fetchurl, stdenv, lzip, texinfo }:
+{ fetchurl, lib, stdenv, lzip, texinfo }:
 
 stdenv.mkDerivation rec {
   pname = "ocrad";
@@ -14,7 +14,7 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Optical character recognition (OCR) program & library";
     longDescription =
       '' GNU Ocrad is an OCR (Optical Character Recognition) program based on
@@ -32,5 +32,6 @@ stdenv.mkDerivation rec {
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.unix;
+    mainProgram = "ocrad";
   };
 }

@@ -1,32 +1,43 @@
-{ stdenv, pythonPackages, nix, ronn }:
+{ lib
+, python3Packages
+, fetchFromGitHub
+, nix
+, ronn
+}:
 
-pythonPackages.buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   pname = "vulnix";
-  version = "1.8.1";
+  version = "1.10.1-unstable-2024-04-02";
 
-  src = pythonPackages.fetchPypi {
-    inherit pname version;
-    sha256 = "1kpwqsnz7jisi622halzl4s5q42d76nbq6ra800gscnfx48hqw9r";
+  src = fetchFromGitHub {
+    owner = "nix-community";
+    repo = "vulnix";
+    rev = "ebd8ea84553c0fd95bc3042584b495560821500f";
+    hash = "sha256-huC520cLPjcmnbh+qOamyVfiIJNrCUpwK+orEp+X2LQ=";
   };
+
+  postPatch = ''
+    substituteInPlace setup.cfg \
+      --replace "--flake8" ""
+  '';
 
   outputs = [ "out" "doc" "man" ];
   nativeBuildInputs = [ ronn ];
 
-  checkInputs = with pythonPackages; [
+  nativeCheckInputs = with python3Packages; [
     freezegun
     pytest
-    pytestcov
-    pytest-flake8
+    pytest-cov
   ];
 
   propagatedBuildInputs = [
     nix
-  ] ++ (with pythonPackages; [
+  ] ++ (with python3Packages; [
     click
     colorama
-    lxml
     pyyaml
     requests
+    setuptools
     toml
     zodb
   ]);
@@ -44,10 +55,11 @@ pythonPackages.buildPythonApplication rec {
 
   dontStrip = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "NixOS vulnerability scanner";
-    homepage = https://github.com/flyingcircusio/vulnix;
+    mainProgram = "vulnix";
+    homepage = "https://github.com/nix-community/vulnix";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ ckauhaus plumps ];
+    maintainers = with maintainers; [ ckauhaus ];
   };
 }

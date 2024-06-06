@@ -1,7 +1,7 @@
 { lib, fetchFromGitHub, stdenv }:
 
-stdenv.mkDerivation rec {
-  name = "kwakd-${version}";
+stdenv.mkDerivation {
+  pname = "kwakd";
   version = "0.5";
 
   src = fetchFromGitHub {
@@ -21,7 +21,8 @@ stdenv.mkDerivation rec {
 
   meta = with lib; {
     description = "A super small webserver that serves blank pages";
-    license = licenses.gpl2;
+    mainProgram = "kwakd";
+    license = licenses.gpl2Only;
     maintainers = [ maintainers.nicknovitski ];
     platforms = platforms.unix;
   };

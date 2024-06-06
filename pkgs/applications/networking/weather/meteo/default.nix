@@ -1,17 +1,33 @@
-{ stdenv, fetchFromGitLab, vala, python3, pkgconfig, meson, ninja, gtk3
-, json-glib, libsoup, clutter, clutter-gtk, libchamplain, webkitgtk, geocode-glib
-, libappindicator, desktop-file-utils, appstream, gobject-introspection, wrapGAppsHook
-, hicolor-icon-theme }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, nix-update-script
+, appstream
+, desktop-file-utils
+, meson
+, ninja
+, pkg-config
+, python3
+, vala
+, wrapGAppsHook3
+, glib
+, glib-networking
+, gtk3
+, json-glib
+, libappindicator
+, libsoup
+, webkitgtk
+}:
 
 stdenv.mkDerivation rec {
   pname = "meteo";
-  version = "0.9.6";
+  version = "0.9.9.3";
 
   src = fetchFromGitLab {
     owner = "bitseater";
     repo = pname;
     rev = version;
-    sha256 = "1786s5637hc3dnnkf5vr2ngfiq73dyvx8187gx7qkh7cr8xrl50w";
+    sha256 = "sha256-hubKusrs0Hh8RryoEI29pnhTSNsIbtGMltlH4qoM6gE=";
   };
 
   nativeBuildInputs = [
@@ -19,16 +35,16 @@ stdenv.mkDerivation rec {
     desktop-file-utils
     meson
     ninja
-    pkgconfig
+    pkg-config
     python3
     vala
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
-    geocode-glib
+    glib
+    glib-networking # see #311066
     gtk3
-    hicolor-icon-theme
     json-glib
     libappindicator
     libsoup
@@ -40,11 +56,16 @@ stdenv.mkDerivation rec {
     patchShebangs meson/post_install.py
   '';
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "Know the forecast of the next hours & days";
-    homepage    = https://gitlab.com/bitseater/meteo;
-    license     = licenses.gpl3Plus;
-    maintainers = with maintainers; [ worldofpeace ];
-    platforms   = platforms.linux;
+    homepage = "https://gitlab.com/bitseater/meteo";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ bobby285271 ];
+    platforms = platforms.linux;
+    mainProgram = "com.gitlab.bitseater.meteo";
   };
 }

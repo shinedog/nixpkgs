@@ -1,53 +1,110 @@
-{ stdenv, fetchurl, fetchpatch, cmake, nasm }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, nasm
+, openjdk
+, enableJava ? false # whether to build the java wrapper
+, enableJpeg7 ? false # whether to build libjpeg with v7 compatibility
+, enableJpeg8 ? false # whether to build libjpeg with v8 compatibility
+, enableStatic ? stdenv.hostPlatform.isStatic
+, enableShared ? !stdenv.hostPlatform.isStatic
 
-stdenv.mkDerivation rec {
-  name = "libjpeg-turbo-${version}";
-  version = "2.0.1";
+# for passthru.tests
+, dvgrab
+, epeg
+, freeimage
+, gd
+, graphicsmagick
+, imagemagick
+, imlib2
+, jhead
+, libjxl
+, mjpegtools
+, opencv
+, python3
+, vips
+, testers
+}:
 
-  src = fetchurl {
-    url = "mirror://sourceforge/libjpeg-turbo/${name}.tar.gz";
-    sha256 = "1zv6z093l3x3jzygvni7b819j7xhn6d63jhcdrckj7fz67n6ry75";
+assert !(enableJpeg7 && enableJpeg8);  # pick only one or none, not both
+
+stdenv.mkDerivation (finalAttrs: {
+
+  pname = "libjpeg-turbo";
+  version = "3.0.3";
+
+  src = fetchFromGitHub {
+    owner = "libjpeg-turbo";
+    repo = "libjpeg-turbo";
+    rev = finalAttrs.version;
+    hash = "sha256-w2wJaVf4sjJ9pPPqc9R4TE6Q6Yl0U6+fI5KLpQKwEXI=";
   };
 
-  patches =
-    stdenv.lib.optional (stdenv.hostPlatform.libc or null == "msvcrt")
-      ./mingw-boolean.patch
-  ++ [
-    ./djpeg-rgb-islow-icc-cmp.patch # https://github.com/libjpeg-turbo/libjpeg-turbo/pull/321
-    (fetchpatch {
-      name = "cve-2018-19664.diff";
-      url = "https://github.com/libjpeg-turbo/libjpeg-turbo/commit/f8cca819a4fb.diff";
-      sha256 = "1kgfag62qmphlrq0mz15g17zw7zrg9nzaz7d2vg50m6m7m5aw4y5";
-    })
-    (fetchpatch {
-      name = "CVE-2018-20330.patch";
-      url = "https://github.com/libjpeg-turbo/libjpeg-turbo/commit/3d9c64e9f8aa1ee954d1d0bb3390fc894bb84da3.diff";
-      sha256 = "1jai8izw6xl05ihx24rpc96d1jcr9rp421cb02pbz3v53cxdasji";
-    })
+  patches = [
+    # This is needed by freeimage
+    ./0001-Compile-transupp.c-as-part-of-the-library.patch
+  ] ++ lib.optionals (!stdenv.hostPlatform.isMinGW) [
+    ./0002-Make-exported-symbols-in-transupp.c-weak.patch
+  ] ++ lib.optionals stdenv.hostPlatform.isMinGW [
+    ./mingw-boolean.patch
   ];
 
-  outputs = [ "bin" "dev" "out" "man" "doc" ];
+  outputs = [ "bin" "dev" "dev_private" "out" "man" "doc" ];
 
-  nativeBuildInputs = [ cmake nasm ];
-
-  preConfigure = ''
-    cmakeFlagsArray+=(
-      "-DCMAKE_INSTALL_BINDIR=$bin/bin"
-      "-DENABLE_STATIC=0"
-    )
+  postFixup = ''
+    moveToOutput include/transupp.h $dev_private
   '';
 
-  doCheck = true; # not cross;
-  checkTarget = "test";
-  preCheck = ''
-    export LD_LIBRARY_PATH="$NIX_BUILD_TOP/${name}:$LD_LIBRARY_PATH"
-  '';
+  nativeBuildInputs = [
+    cmake
+    nasm
+  ] ++ lib.optionals enableJava [
+    openjdk
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://libjpeg-turbo.virtualgl.org/;
+  cmakeFlags = [
+    "-DENABLE_STATIC=${if enableStatic then "1" else "0"}"
+    "-DENABLE_SHARED=${if enableShared then "1" else "0"}"
+  ] ++ lib.optionals enableJava [
+    "-DWITH_JAVA=1"
+  ] ++ lib.optionals enableJpeg7 [
+    "-DWITH_JPEG7=1"
+  ] ++ lib.optionals enableJpeg8 [
+    "-DWITH_JPEG8=1"
+  ] ++ lib.optionals stdenv.hostPlatform.isRiscV [
+    # https://github.com/libjpeg-turbo/libjpeg-turbo/issues/428
+    # https://github.com/libjpeg-turbo/libjpeg-turbo/commit/88bf1d16786c74f76f2e4f6ec2873d092f577c75
+    "-DFLOATTEST=fp-contract"
+  ];
+
+  doInstallCheck = true;
+  installCheckTarget = "test";
+
+  passthru.tests = {
+    inherit
+      dvgrab
+      epeg
+      freeimage
+      gd
+      graphicsmagick
+      imagemagick
+      imlib2
+      jhead
+      libjxl
+      mjpegtools
+      opencv
+      vips;
+    inherit (python3.pkgs) pillow imread pyturbojpeg;
+    pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+  };
+
+  meta = with lib; {
+    homepage = "https://libjpeg-turbo.org/";
     description = "A faster (using SIMD) libjpeg implementation";
     license = licenses.ijg; # and some parts under other BSD-style licenses
-    maintainers = [ maintainers.vcunat ];
+    pkgConfigModules = [ "libjpeg" "libturbojpeg" ];
+    maintainers = with maintainers; [ vcunat colemickens kamadorueda ];
     platforms = platforms.all;
   };
-}
+})

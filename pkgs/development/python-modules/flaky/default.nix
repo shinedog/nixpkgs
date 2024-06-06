@@ -1,28 +1,41 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, mock
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  mock,
+  pytest,
 }:
 
 buildPythonPackage rec {
   pname = "flaky";
-  version = "3.5.3";
+  version = "3.8.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "12bd5e41f372b2190e8d754b6e5829c2f11dbc764e10b30f57e59f829c9ca1da";
+    hash = "sha256-RyBKgeyQXz1az71h2uq8raj51AMWFtm8sGGEYXKWmfU=";
   };
 
-  buildInputs = [ mock pytest ];
+  build-system = [ setuptools ];
 
-  # waiting for feedback https://github.com/box/flaky/issues/97
-  doCheck = false;
+  nativeCheckInputs = [
+    mock
+    pytest
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/box/flaky;
+  checkPhase = ''
+    # based on tox.ini
+    pytest -k 'example and not options' --doctest-modules test/test_pytest/
+    pytest -k 'example and not options' test/test_pytest/
+    pytest -p no:flaky test/test_pytest/test_flaky_pytest_plugin.py
+    pytest --force-flaky --max-runs 2  test/test_pytest/test_pytest_options_example.py
+  '';
+
+  meta = with lib; {
+    changelog = "https://github.com/box/flaky/blob/v${version}/HISTORY.rst";
+    homepage = "https://github.com/box/flaky";
     description = "Plugin for nose or py.test that automatically reruns flaky tests";
     license = licenses.asl20;
   };
-
 }

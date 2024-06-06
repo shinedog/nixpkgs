@@ -1,29 +1,50 @@
-{ buildPythonPackage, fetchPypi, isPy3k
-, six, jaraco_logging, jaraco_text, jaraco_stream, pytz, jaraco_itertools
-, setuptools_scm, jaraco_collections
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  jaraco-collections,
+  jaraco-itertools,
+  jaraco-logging,
+  jaraco-stream,
+  jaraco-text,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
   pname = "irc";
-  version = "17.0";
+  version = "20.4.0";
+  format = "pyproject";
 
-  disabled = !isPy3k;
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "f9c5fcb72dd230e1387fd4a0114a1935605e0f59ac09dec962313baed74e1365";
+    hash = "sha256-fSUX9VZta/Oqhdf5jHdYth8NY+6RW/2fb1ZxOXNmRPk=";
   };
 
-  doCheck = false;
+  nativeBuildInputs = [ setuptools-scm ];
 
-  buildInputs = [ setuptools_scm ];
   propagatedBuildInputs = [
-    six
-    jaraco_logging
-    jaraco_text
-    jaraco_stream
+    jaraco-collections
+    jaraco-itertools
+    jaraco-logging
+    jaraco-stream
+    jaraco-text
     pytz
-    jaraco_itertools
-    jaraco_collections
   ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "irc" ];
+
+  meta = with lib; {
+    description = "IRC (Internet Relay Chat) protocol library for Python";
+    homepage = "https://github.com/jaraco/irc";
+    changelog = "https://github.com/jaraco/irc/blob/v${version}/NEWS.rst";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
+  };
 }

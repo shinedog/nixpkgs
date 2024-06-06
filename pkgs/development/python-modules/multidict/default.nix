@@ -1,26 +1,49 @@
-{ lib
-, fetchPypi
-, buildPythonPackage
-, pytest, pytestrunner, pytestcov
-, isPy3k
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "multidict";
-  version = "4.5.2";
+  version = "6.0.5";
+
+  disabled = pythonOlder "3.7";
+
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "024b8129695a952ebd93373e45b5d341dbb87c17ce49637b34000093f243dd4f";
+    hash = "sha256-9+MBB17a9QUA8LNBVDxBGU2N865cr0cC8glfPKc92No=";
   };
 
-  checkInputs = [ pytest pytestrunner pytestcov ];
+  postPatch = ''
+    substituteInPlace pytest.ini \
+      --replace-fail "-p pytest_cov" ""
+    sed -i '/--cov/d' pytest.ini
+    # `python3 -I -c "import multidict"` fails with ModuleNotFoundError
+    substituteInPlace tests/test_circular_imports.py \
+      --replace-fail '"-I",' ""
+  '';
 
-  disabled = !isPy3k;
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  preCheck = ''
+    # import from $out
+    rm -r multidict
+  '';
+
+  pythonImportsCheck = [ "multidict" ];
 
   meta = with lib; {
+    changelog = "https://github.com/aio-libs/multidict/blob/v${version}/CHANGES.rst";
     description = "Multidict implementation";
-    homepage = https://github.com/aio-libs/multidict/;
+    homepage = "https://github.com/aio-libs/multidict/";
     license = licenses.asl20;
     maintainers = with maintainers; [ dotlambda ];
   };

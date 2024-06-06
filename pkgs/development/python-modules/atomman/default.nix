@@ -1,40 +1,91 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, xmltodict
-, datamodeldict
-, numpy
-, matplotlib
-, scipy
-, pandas
-, cython
-, numericalunits
-, pytest
+{
+  lib,
+  ase,
+  buildPythonPackage,
+  cython,
+  datamodeldict,
+  fetchFromGitHub,
+  matplotlib,
+  numericalunits,
+  numpy,
+  pandas,
+  phonopy,
+  potentials,
+  pymatgen,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  scipy,
+  setuptools,
+  toolz,
+  wheel,
+  xmltodict,
+  pythonRelaxDepsHook,
 }:
 
-buildPythonPackage rec {
-  version = "1.2.6";
+buildPythonPackage {
   pname = "atomman";
+  version = "1.4.6-unstable-2023-07-28";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "19501bfdf7e66090764a0ccbecf85a128b46333ea232c2137fa4345512b8b502";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "usnistgov";
+    repo = "atomman";
+    rev = "b8af21a9285959d38ee26173081db1b4488401bc";
+    hash = "sha256-WfB+OY61IPprT6OCVHl8VA60p7lLVkRGuyYX+nm7bbA=";
   };
 
-  checkInputs = [ pytest ];
-  propagatedBuildInputs = [ xmltodict datamodeldict numpy matplotlib scipy pandas cython numericalunits ];
+  nativeBuildInputs = [ pythonRelaxDepsHook ];
 
-  # tests not included with Pypi release
-  doCheck = false;
+  build-system = [
+    setuptools
+    wheel
+    numpy
+    cython
+  ];
 
-  checkPhase = ''
-    py.test tests
+  dependencies = [
+    datamodeldict
+    matplotlib
+    numericalunits
+    numpy
+    pandas
+    potentials
+    requests
+    scipy
+    toolz
+    xmltodict
+  ];
+
+  pythonRelaxDeps = [ "potentials" ];
+
+  preCheck = ''
+    # By default, pytestCheckHook imports atomman from the current directory
+    # instead of from where `pip` installs it and fails due to missing Cython
+    # modules. Fix this by removing atomman from the current directory.
+    #
+    rm -r atomman
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/usnistgov/atomman/;
+  nativeCheckInputs = [
+    ase
+    phonopy
+    pymatgen
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    "test_unique_shifts_prototype" # needs network access to download database files
+  ];
+
+  pythonImportsCheck = [ "atomman" ];
+
+  meta = with lib; {
     description = "Atomistic Manipulation Toolkit";
+    homepage = "https://github.com/usnistgov/atomman/";
     license = licenses.mit;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

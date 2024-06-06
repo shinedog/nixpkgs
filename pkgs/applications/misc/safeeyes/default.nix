@@ -1,71 +1,78 @@
-{ lib, python3Packages, gobject-introspection, libappindicator-gtk3, libnotify, gtk3, gnome3, xprintidle-ng, wrapGAppsHook, gdk_pixbuf, shared-mime-info, librsvg
+{ lib
+, python3
+, fetchPypi
+, alsa-utils
+, gobject-introspection
+, libappindicator-gtk3
+, libnotify
+, wlrctl
+, gtk3
+, safeeyes
+, testers
+, xprintidle
+, xprop
+, wrapGAppsHook3
 }:
 
-let inherit (python3Packages) python buildPythonApplication fetchPypi;
+with python3.pkgs;
 
-in buildPythonApplication rec {
-  name = "${pname}-${version}";
+buildPythonApplication rec {
   pname = "safeeyes";
-  version = "2.0.9";
-  namePrefix = "";
+  version = "2.1.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "13q06jv8hm0dynmr3g5pf1m4j3w9iabrpz1nhpl02f7x0d90whg2";
+    hash = "sha256-tvsBTf6+zKBzB5aL+LUcEvE4jmVHnnoY0L4xoKMJ0vM=";
   };
+
+  postPatch = ''
+    substituteInPlace setup.py --replace "root_dir = sys.prefix" "root_dir = '/'"
+  '';
+
+  nativeBuildInputs = [
+    wrapGAppsHook3
+    gobject-introspection
+  ];
 
   buildInputs = [
     gtk3
-    gobject-introspection
-    gnome3.adwaita-icon-theme
-    gnome3.adwaita-icon-theme
+    libappindicator-gtk3
+    libnotify
   ];
 
-  nativeBuildInputs = [
-    wrapGAppsHook
-  ];
-
-  propagatedBuildInputs = with python3Packages; [
-    Babel
+  propagatedBuildInputs = [
+    babel
     psutil
     xlib
     pygobject3
     dbus-python
-
-    libappindicator-gtk3
-    libnotify
-    xprintidle-ng
+    croniter
   ];
 
-  # patch smartpause plugin
-  postPatch = ''
-    sed -i \
-      -e 's!xprintidle!xprintidle-ng!g' \
-      safeeyes/plugins/smartpause/plugin.py
+  # Prevent double wrapping, let the Python wrapper use the args in preFixup.
+  dontWrapGApps = true;
 
-    sed -i \
-      -e 's!xprintidle!xprintidle-ng!g' \
-      safeeyes/plugins/smartpause/config.json
+  postInstall = ''
+    mv $out/lib/python*/site-packages/share $out/share
   '';
 
   preFixup = ''
-    gappsWrapperArgs+=(
-      --prefix XDG_DATA_DIRS : "${gdk_pixbuf}/share"
-      --prefix XDG_DATA_DIRS : "${shared-mime-info}/share"
-      --prefix XDG_DATA_DIRS : "${librsvg}/share"
-
-      # safeeyes images
-      --prefix XDG_DATA_DIRS : "$out/lib/${python.libPrefix}/site-packages/usr/share"
+    makeWrapperArgs+=(
+      "''${gappsWrapperArgs[@]}"
+      --prefix PATH : ${lib.makeBinPath [ alsa-utils wlrctl xprintidle xprop ]}
     )
   '';
 
   doCheck = false; # no tests
 
-  meta = {
-    homepage = http://slgobinath.github.io/SafeEyes;
+  passthru.tests.version = testers.testVersion { package = safeeyes; };
+
+  meta = with lib; {
+    homepage = "http://slgobinath.github.io/SafeEyes";
     description = "Protect your eyes from eye strain using this simple and beautiful, yet extensible break reminder. A Free and Open Source Linux alternative to EyeLeo";
-    license = lib.licenses.gpl3;
-    maintainers = with lib.maintainers; [ srghma ];
-    platforms = lib.platforms.all;
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ srghma ];
+    platforms = platforms.linux;
+    mainProgram = "safeeyes";
   };
 }

@@ -1,22 +1,35 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, gtk3, libxml2, libxslt, libatasmart, libnotify, lm_sensors, mate, hicolor-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, gtk3
+, libxml2
+, libxslt
+, libatasmart
+, libnotify
+, lm_sensors
+, mate-panel
+, hicolor-icon-theme
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-sensors-applet-${version}";
-  version = "1.22.1";
+  pname = "mate-sensors-applet";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "0rv19jxxviqqwk2wlhxlm98jsxa26scvs7ilp2i6plhn3ap2alq3";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "1GU2ZoKvj+uGGCg8l4notw22/RfKj6lQrG9xAQIxWoE=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     itstool
-    wrapGAppsHook
   ];
 
-  # maybe add nvidia-settings later on
   buildInputs = [
     gtk3
     libxml2
@@ -24,15 +37,21 @@ stdenv.mkDerivation rec {
     libatasmart
     libnotify
     lm_sensors
-    mate.mate-panel
+    mate-panel
     hicolor-icon-theme
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mate-desktop/mate-sensors-applet;
+  configureFlags = [ "--enable-in-process" ];
+
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
+    homepage = "https://github.com/mate-desktop/mate-sensors-applet";
     description = "MATE panel applet for hardware sensors";
     license = with licenses; [ gpl2Plus ];
     platforms = platforms.linux;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

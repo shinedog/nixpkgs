@@ -1,24 +1,33 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, flex, libtool }:
+{ lib, fetchFromGitHub, buildGoModule }:
 
-stdenv.mkDerivation rec {
-  name = "miller-${version}";
-
-  version = "5.4.0";
+buildGoModule rec {
+  pname = "miller";
+  version = "6.12.0";
 
   src = fetchFromGitHub {
     owner = "johnkerl";
     repo = "miller";
-    rev = "${version}";
-    sha256 = "0158by642frh9x6rrgqxwmk4766wb36kp0rrjg5swdbs9w3is3xg";
+    rev = "v${version}";
+    sha256 = "sha256-0M9wdKn6SdqNAcEcIb4mkkDCUBYQ/mW+0OYt35vq9yw=";
   };
 
-  nativeBuildInputs = [ autoreconfHook flex libtool ];
+  outputs = [ "out" "man" ];
 
-  meta = with stdenv.lib; {
-    description = "Miller is like awk, sed, cut, join, and sort for name-indexed data such as CSV, TSV, and tabular JSON.";
-    homepage    = "http://johnkerl.org/miller/";
+  vendorHash = "sha256-WelwnwsdOhAq4jdmFAYvh4lDMsmaAItdrbC//MfWHjU=";
+
+  postInstall = ''
+    mkdir -p $man/share/man/man1
+    mv ./man/mlr.1 $man/share/man/man1
+  '';
+
+  subPackages = [ "cmd/mlr" ];
+
+  meta = with lib; {
+    description = "Like awk, sed, cut, join, and sort for data formats such as CSV, TSV, JSON, JSON Lines, and positionally-indexed";
+    homepage    = "https://github.com/johnkerl/miller";
     license     = licenses.bsd2;
     maintainers = with maintainers; [ mstarzyk ];
+    mainProgram = "mlr";
     platforms   = platforms.all;
   };
 }

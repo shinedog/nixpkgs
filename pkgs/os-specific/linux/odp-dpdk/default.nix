@@ -1,34 +1,63 @@
-{ stdenv, fetchurl, autoreconfHook, pkgconfig
-, dpdk, libconfig, libpcap, numactl, openssl
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, dpdk
+, libbpf
+, libconfig
+, libpcap
+, numactl
+, openssl
+, zlib
+, zstd
+, libbsd
+, elfutils
+, jansson
+, libnl
 }:
 
 stdenv.mkDerivation rec {
-  name = "odp-dpdk-${version}";
-  version = "1.19.0.0_DPDK_17.11";
+  pname = "odp-dpdk";
+  version = "1.44.0.0_DPDK_22.11";
 
-  src = fetchurl {
-    url = "https://git.linaro.org/lng/odp-dpdk.git/snapshot/${name}.tar.gz";
-    sha256 = "05bwjaxl9hqc6fbkp95nniq11g3kvzmlxw0bq55i7p2v35nv38px";
+  src = fetchFromGitHub {
+    owner = "OpenDataPlane";
+    repo = "odp-dpdk";
+    rev = "v${version}";
+    hash = "sha256-hYtQ7kKB08BImkTYXqtnv1Ny1SUPCs6GX7WOYks8iKA=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ dpdk libconfig libpcap numactl openssl ];
-
-  RTE_SDK = "${dpdk}/share/dpdk";
-  RTE_TARGET = "x86_64-native-linuxapp-gcc";
-
-  dontDisableStatic = true;
-
-  configureFlags = [
-    "--disable-shared"
-    "--with-dpdk-path=${dpdk}"
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
   ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    dpdk
+    libconfig
+    libpcap
+    numactl
+    openssl
+    zlib
+    zstd
+    libbsd
+    elfutils
+    jansson
+    libbpf
+    libnl
+  ];
+
+  # binaries will segfault otherwise
+  dontStrip = true;
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Open Data Plane optimized for DPDK";
-    homepage = https://www.opendataplane.org;
+    homepage = "https://www.opendataplane.org";
     license = licenses.bsd3;
-    platforms =  [ "x86_64-linux" ];
+    platforms = platforms.linux;
     maintainers = [ maintainers.abuibrahim ];
   };
 }

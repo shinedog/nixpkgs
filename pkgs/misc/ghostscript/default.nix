@@ -1,18 +1,42 @@
-{ config, stdenv, lib, fetchurl, pkgconfig, zlib, expat, openssl, autoconf
-, libjpeg, libpng, libtiff, freetype, fontconfig, libpaper, jbig2dec
-, libiconv, ijs, lcms2, fetchpatch
-, cupsSupport ? config.ghostscript.cups or (!stdenv.isDarwin), cups ? null
-, x11Support ? cupsSupport, xlibsWrapper ? null # with CUPS, X11 only adds very little
+{ config
+, stdenv
+, lib
+, fetchurl
+, pkg-config
+, zlib
+, expat
+, openssl
+, autoconf
+, libjpeg
+, libpng
+, libtiff
+, freetype
+, fontconfig
+, libpaper
+, jbig2dec
+, libiconv
+, ijs
+, lcms2
+, callPackage
+, bash
+, buildPackages
+, openjpeg
+, cupsSupport ? config.ghostscript.cups or (!stdenv.isDarwin)
+, cups
+, x11Support ? cupsSupport
+, xorg # with CUPS, X11 only adds very little
+, dynamicDrivers ? true
+
+# for passthru.tests
+, graphicsmagick
+, imagemagick
+, libspectre
+, lilypond
+, pstoedit
+, python3
 }:
 
-assert x11Support -> xlibsWrapper != null;
-assert cupsSupport -> cups != null;
-
 let
-  version = "9.${ver_min}";
-  ver_min = "26";
-  sha512 = "0z2mvsh06qgnxl7p9isw7swg8jp8xcx3rnbqk727avw7ammvfh8785d2bn5i4fhz8y45ka3cpgp7b598m06yq5zawijhcnzkq187nrx";
-
   fonts = stdenv.mkDerivation {
     name = "ghostscript-fonts";
 
@@ -36,59 +60,72 @@ let
 
 in
 stdenv.mkDerivation rec {
-  name = "ghostscript-${version}";
+  pname = "ghostscript${lib.optionalString x11Support "-with-X"}";
+  version = "10.02.1";
 
   src = fetchurl {
-    url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs9${ver_min}/${name}.tar.xz";
-    inherit sha512;
+    url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs${lib.replaceStrings ["."] [""] version}/ghostscript-${version}.tar.xz";
+    hash = "sha512-7g91TBvYoYQorRTqo+rYD/i5YnWvUBLnqDhPHxBJDaBW7smuPMeRp6E6JOFuVN9bzN0QnH1ToUU0u9c2CjALEQ=";
   };
 
   patches = [
     ./urw-font-files.patch
     ./doc-no-ref.diff
-    (fetchpatch {
-      name = "CVE-2019-6116";
-      url = "http://git.ghostscript.com/?p=ghostpdl.git;a=patch;h=d3537a54740d78c5895ec83694a07b3e4f616f61";
-      sha256 = "1hr8bpi87bbg1kvv28kflmfh1dhzxw66p9q0ddvbrj72qd86p3kx";
-    })
   ];
 
   outputs = [ "out" "man" "doc" ];
 
   enableParallelBuilding = true;
 
-  nativeBuildInputs = [ pkgconfig autoconf ];
-  buildInputs =
-    [ zlib expat openssl
-      libjpeg libpng libtiff freetype fontconfig libpaper jbig2dec
-      libiconv ijs lcms2
-    ]
-    ++ lib.optional x11Support xlibsWrapper
-    ++ lib.optional cupsSupport cups
-    ;
+  depsBuildBuild = [
+    buildPackages.stdenv.cc
+  ];
+
+  nativeBuildInputs = [ pkg-config autoconf zlib ]
+    ++ lib.optional cupsSupport cups;
+
+  buildInputs = [
+    zlib expat openssl
+    libjpeg libpng libtiff freetype fontconfig libpaper jbig2dec
+    libiconv ijs lcms2 bash openjpeg
+  ]
+  ++ lib.optionals x11Support [ xorg.libICE xorg.libX11 xorg.libXext xorg.libXt ]
+  ++ lib.optional cupsSupport cups
+  ;
 
   preConfigure = ''
-    # requires in-tree (heavily patched) openjpeg
-    rm -rf jpeg libpng zlib jasper expat tiff lcms2mt jbig2dec freetype cups/libs ijs
+    # https://ghostscript.com/doc/current/Make.htm
+    export CCAUX=$CC_FOR_BUILD
+    ${lib.optionalString cupsSupport ''export CUPSCONFIG="${cups.dev}/bin/cups-config"''}
+
+    rm -rf jpeg libpng zlib jasper expat tiff lcms2mt jbig2dec freetype cups/libs ijs openjpeg
 
     sed "s@if ( test -f \$(INCLUDE)[^ ]* )@if ( true )@; s@INCLUDE=/usr/include@INCLUDE=/no-such-path@" -i base/unix-aux.mak
     sed "s@^ZLIBDIR=.*@ZLIBDIR=${zlib.dev}/include@" -i configure.ac
 
     autoconf
-  '' + lib.optionalString cupsSupport ''
-    configureFlags="$configureFlags --with-cups-serverbin=$out/lib/cups --with-cups-serverroot=$out/etc/cups --with-cups-datadir=$out/share/cups"
   '';
 
-  configureFlags =
-    [ "--with-system-libtiff"
-      "--enable-dynamic"
-    ] ++ lib.optional x11Support "--with-x"
-      ++ lib.optional cupsSupport "--enable-cups";
+  configureFlags = [
+    "--with-system-libtiff"
+    "--without-tesseract"
+  ] ++ lib.optionals dynamicDrivers [
+    "--enable-dynamic"
+    "--disable-hidden-visibility"
+  ] ++ lib.optionals x11Support [
+    "--with-x"
+  ] ++ lib.optionals cupsSupport [
+    "--enable-cups"
+  ];
 
-  doCheck = true;
+  # make check does nothing useful
+  doCheck = false;
 
   # don't build/install statically linked bin/gs
-  buildFlags = [ "so" ];
+  buildFlags = [ "so" ]
+    # without -headerpad, the following error occurs on Darwin when compiling with X11 support (as of 10.02.0)
+    # error: install_name_tool: changing install names or rpaths can't be redone for: [...]libgs.dylib.10 (the program must be relinked, and you may need to use -headerpad or -headerpad_max_install_names)
+    ++ lib.optional (x11Support && stdenv.isDarwin) "LDFLAGS=-headerpad_max_install_names";
   installTargets = [ "soinstall" ];
 
   postInstall = ''
@@ -96,26 +133,53 @@ stdenv.mkDerivation rec {
 
     cp -r Resource "$out/share/ghostscript/${version}"
 
-    mkdir -p "$doc/share/doc/ghostscript"
-    mv "$doc/share/doc/${version}" "$doc/share/doc/ghostscript/"
-
     ln -s "${fonts}" "$out/share/ghostscript/fonts"
-  '' + stdenv.lib.optionalString stdenv.isDarwin ''
+  '' + lib.optionalString stdenv.isDarwin ''
     for file in $out/lib/*.dylib* ; do
       install_name_tool -id "$file" $file
     done
   '';
 
+  # dynamic library name only contains maj.min, eg. '9.53'
+  dylib_version = lib.versions.majorMinor version;
   preFixup = lib.optionalString stdenv.isDarwin ''
-    install_name_tool -change libgs.dylib.${version} $out/lib/libgs.dylib.${version} $out/bin/gs
+    install_name_tool -change libgs.dylib.$dylib_version $out/lib/libgs.dylib.$dylib_version $out/bin/gs
+    install_name_tool -change libgs.dylib.$dylib_version $out/lib/libgs.dylib.$dylib_version $out/bin/gsx
   '';
 
-  passthru = { inherit version; };
+  # validate dynamic linkage
+  doInstallCheck = true;
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    $out/bin/gs --version
+    $out/bin/gsx --version
+    pushd examples
+    for f in *.{ps,eps,pdf}; do
+      echo "Rendering $f"
+      $out/bin/gs \
+        -dNOPAUSE \
+        -dBATCH \
+        -sDEVICE=bitcmyk \
+        -sOutputFile=/dev/null \
+        -r600 \
+        -dBufferSpace=100000 \
+        $f
+    done
+    popd # examples
+
+    runHook postInstallCheck
+  '';
+
+  passthru.tests = {
+    test-corpus-render = callPackage ./test-corpus-render.nix {};
+    inherit graphicsmagick imagemagick libspectre lilypond pstoedit;
+    inherit (python3.pkgs) matplotlib;
+  };
 
   meta = {
-    homepage = https://www.ghostscript.com/;
+    homepage = "https://www.ghostscript.com/";
     description = "PostScript interpreter (mainline version)";
-
     longDescription = ''
       Ghostscript is the name of a set of tools that provides (i) an
       interpreter for the PostScript language and the PDF file format,
@@ -124,10 +188,9 @@ stdenv.mkDerivation rec {
       operations in the PostScript language, and (iii) a wide variety
       of output drivers for various file formats and printers.
     '';
-
-    license = stdenv.lib.licenses.agpl3;
-
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.viric ];
+    license = lib.licenses.agpl3Plus;
+    platforms = lib.platforms.all;
+    maintainers = [ lib.maintainers.viric ];
+    mainProgram = "gs";
   };
 }

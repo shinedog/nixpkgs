@@ -1,60 +1,84 @@
 { stdenv
+, lib
 , fetchFromGitHub
-, cmake
-, pkgconfig
-, pantheon
+, nix-update-script
+, desktop-file-utils
+, meson
+, ninja
+, pkg-config
+, python3
+, vala
+, wrapGAppsHook4
 , curl
+, dht
 , glib
-, gtk3
-, hicolor-icon-theme
+, gtk4
 , libb64
 , libevent
 , libgee
 , libnatpmp
-, libunity
+, libtransmission
+, libutp
 , miniupnpc
 , openssl
-, wrapGAppsHook }:
+, pantheon
+}:
 
 stdenv.mkDerivation rec {
   pname = "torrential";
-  version = "1.1.0";
+  version = "3.0.0";
 
   src = fetchFromGitHub {
     owner = "davidmhewitt";
     repo = "torrential";
     rev = version;
-    fetchSubmodules = true;
-    sha256 = "17aby0c17ybyzyzyc1cg1j6q1a186801fy84avlaxahqp7vdammx";
+    sha256 = "sha256-uHc/VNtbhetmGyuhynZH1TvxJscVX17eWO6dzX6Ft3A=";
   };
 
   nativeBuildInputs = [
-    cmake
-    pantheon.vala
-    pkgconfig
-    wrapGAppsHook
+    desktop-file-utils
+    meson
+    ninja
+    pkg-config
+    python3
+    vala
+    wrapGAppsHook4
   ];
 
   buildInputs = [
     curl
+    dht
     glib
-    gtk3
-    hicolor-icon-theme
+    gtk4
     libb64
     libevent
     libgee
     libnatpmp
-    libunity
+    libtransmission
+    libutp
     miniupnpc
     openssl
-    pantheon.granite
+    pantheon.granite7
   ];
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    chmod +x meson/post_install.py
+    patchShebangs meson/post_install.py
+
+    substituteInPlace meson/post_install.py \
+      --replace "gtk-update-icon-cache" "gtk4-update-icon-cache"
+  '';
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "Download torrents in style with this speedy, minimalist torrent client for elementary OS";
-    homepage = https://github.com/davidmhewitt/torrential;
-    maintainers = with maintainers; [ kjuvi ] ++ pantheon.maintainers;
+    homepage = "https://github.com/davidmhewitt/torrential";
+    maintainers = with maintainers; [ xiorcale ] ++ teams.pantheon.members;
     platforms = platforms.linux;
-    license = licenses.gpl3;
+    license = licenses.gpl2Plus;
+    mainProgram = "com.github.davidmhewitt.torrential";
   };
 }

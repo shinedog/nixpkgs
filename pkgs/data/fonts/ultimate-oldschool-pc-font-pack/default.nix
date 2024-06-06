@@ -1,22 +1,28 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  version = "1.0";
-in
-fetchzip rec {
-  name = "ultimate-oldschool-pc-font-pack-${version}";
-  url = "http://int10h.org/oldschool-pc-fonts/download/ultimate_oldschool_pc_font_pack_v${version}.zip";
-  sha256 = "0hid4dgqfy2w26734vcw2rxmpacd9vd1r2qpdr9ww1n3kgc92k9y";
+stdenvNoCC.mkDerivation rec {
+  pname = "ultimate-oldschool-pc-font-pack";
+  version = "2.2";
 
-  postFetch= ''
+  src = fetchzip {
+    url = "https://int10h.org/oldschool-pc-fonts/download/oldschool_pc_font_pack_v${version}_linux.zip";
+    stripRoot = false;
+    hash = "sha256-54U8tZzvivTSOgmGesj9QbIgkSTm9w4quMhsuEc0Xy4=";
+  };
+
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
-    unzip -j $downloadedFile \*.ttf -d $out/share/fonts/truetype
+    cp */*.ttf $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The Ultimate Oldschool PC Font Pack (TTF Fonts)";
-    homepage = "http://int10h.org/oldschool-pc-fonts/";
-    platforms = platforms.unix;
+    homepage = "https://int10h.org/oldschool-pc-fonts/";
+    changelog = "https://int10h.org/oldschool-pc-fonts/readme/#history";
     license = licenses.cc-by-sa-40;
     maintainers = [ maintainers.endgame ];
   };

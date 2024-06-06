@@ -1,22 +1,27 @@
-{ lib, fetchFromGitHub, buildGoPackage }:
+{ lib, fetchFromGitHub, buildGoModule }:
 
-buildGoPackage rec {
-  name = "envsubst-${version}";
-  version = "1.1.0";
+buildGoModule rec {
+  pname = "envsubst";
+  version = "1.4.2";
 
-  goPackagePath = "github.com/a8m/envsubst";
   src = fetchFromGitHub {
     owner = "a8m";
     repo = "envsubst";
     rev = "v${version}";
-    sha256 = "1d6nipagjn40n6iw1p3r489l2km5xjd5db9gbh1vc5sxc617l7yk";
+    sha256 = "sha256-gfzqf/CXSwGXBK5VHJnepFZ1wB3WElpEp6ra9JI4WtY=";
   };
+
+  vendorHash = "sha256-L0MbABgUniuI5NXc4ffBUsQRI716W/FiH38bGthpXzI=";
+
+  postInstall = ''
+    install -Dm444 -t $out/share/doc/${pname} LICENSE *.md
+  '';
 
   meta = with lib; {
     description = "Environment variables substitution for Go";
-    homepage = https://github.com/a8m/envsubst;
+    homepage = "https://github.com/a8m/envsubst";
     license = licenses.mit;
-    platforms = platforms.all;
     maintainers = with maintainers; [ nicknovitski ];
+    mainProgram = "envsubst";
   };
 }

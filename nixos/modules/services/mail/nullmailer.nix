@@ -14,7 +14,7 @@ with lib;
       };
 
       user = mkOption {
-        type = types.string;
+        type = types.str;
         default = "nullmailer";
         description = ''
           User to use to run nullmailer-send.
@@ -22,7 +22,7 @@ with lib;
       };
 
       group = mkOption {
-        type = types.string;
+        type = types.str;
         default = "nullmailer";
         description = ''
           Group to use to run nullmailer-send.
@@ -39,10 +39,10 @@ with lib;
         type = types.nullOr types.str;
         default = null;
         description = ''
-          Path to the <code>remotes</code> control file. This file contains a
+          Path to the `remotes` control file. This file contains a
           list of remote servers to which to send each message.
 
-          See <code>man 8 nullmailer-send</code> for syntax and available
+          See `man 8 nullmailer-send` for syntax and available
           options.
         '';
       };
@@ -120,7 +120,7 @@ with lib;
         };
 
         maxpause = mkOption {
-          type = types.nullOr types.str;
+          type = with types; nullOr (oneOf [ str int ]);
           default = null;
           description = ''
              The maximum time to pause between successive queue runs, in seconds.
@@ -138,7 +138,7 @@ with lib;
         };
 
         pausetime = mkOption {
-          type = types.nullOr types.str;
+          type = with types; nullOr (oneOf [ str int ]);
           default = null;
           description = ''
             The minimum time to pause between successive queue runs when there
@@ -158,17 +158,17 @@ with lib;
             contains a remote host name or address followed by an optional
             protocol string, separated by white space.
 
-            See <code>man 8 nullmailer-send</code> for syntax and available
+            See `man 8 nullmailer-send` for syntax and available
             options.
 
             WARNING: This is stored world-readable in the nix store. If you need
             to specify any secret credentials here, consider using the
-            <code>remotesFile</code> option instead.
+            `remotesFile` option instead.
           '';
         };
 
         sendtimeout = mkOption {
-          type = types.nullOr types.str;
+          type = with types; nullOr (oneOf [ str int ]);
           default = null;
           description = ''
             The  time to wait for a remote module listed above to complete sending
@@ -194,26 +194,27 @@ with lib;
     environment = {
       systemPackages = [ pkgs.nullmailer ];
       etc = let
-        validAttrs = filterAttrs (name: value: value != null) cfg.config;
+        validAttrs = lib.mapAttrs (_: toString) (filterAttrs (_: value: value != null) cfg.config);
       in
         (foldl' (as: name: as // { "nullmailer/${name}".text = validAttrs.${name}; }) {} (attrNames validAttrs))
           // optionalAttrs (cfg.remotesFile != null) { "nullmailer/remotes".source = cfg.remotesFile; };
     };
 
     users = {
-      users = singleton {
-        name = cfg.user;
+      users.${cfg.user} = {
         description = "Nullmailer relay-only mta user";
-        group = cfg.group;
+        inherit (cfg) group;
+        isSystemUser = true;
       };
 
-      groups = singleton {
-        name = cfg.group;
-      };
+      groups.${cfg.group} = { };
     };
 
     systemd.tmpfiles.rules = [
-      "d /var/spool/nullmailer - ${cfg.user} - - -"
+      "d /var/spool/nullmailer - ${cfg.user} ${cfg.group} - -"
+      "d /var/spool/nullmailer/failed 770 ${cfg.user} ${cfg.group} - -"
+      "d /var/spool/nullmailer/queue 770 ${cfg.user} ${cfg.group} - -"
+      "d /var/spool/nullmailer/tmp 770 ${cfg.user} ${cfg.group} - -"
     ];
 
     systemd.services.nullmailer = {
@@ -222,7 +223,6 @@ with lib;
       after = [ "network.target" ];
 
       preStart = ''
-        mkdir -p /var/spool/nullmailer/{queue,tmp}
         rm -f /var/spool/nullmailer/trigger && mkfifo -m 660 /var/spool/nullmailer/trigger
       '';
 
@@ -238,7 +238,7 @@ with lib;
       program = "sendmail";
       source = "${pkgs.nullmailer}/bin/sendmail";
       owner = cfg.user;
-      group = cfg.group;
+      inherit (cfg) group;
       setuid = true;
       setgid = true;
     };

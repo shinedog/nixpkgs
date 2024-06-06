@@ -1,50 +1,87 @@
-{ stdenv, lib, runCommand, patchelf
-, fetchFromGitHub, rustPlatform
-, pkgconfig, curl, Security, CoreServices }:
+{ stdenv
+, lib
+, runCommand
+, patchelf
+, fetchFromGitHub
+, rustPlatform
+, makeBinaryWrapper
+, pkg-config
+, openssl
+, curl
+, zlib
+, Security
+, CoreServices
+, libiconv
+, xz
+}:
+
+let
+  libPath = lib.makeLibraryPath [
+    zlib # libz.so.1
+  ];
+in
 
 rustPlatform.buildRustPackage rec {
   pname = "rustup";
-  version = "1.18.2";
+  version = "1.26.0";
 
   src = fetchFromGitHub {
     owner = "rust-lang";
-    repo = "rustup.rs";
+    repo = "rustup";
     rev = version;
-    sha256 = "0lyn06vzp5406sjng7msifigkal2lafppqjbdnigx8yvgxqgd06f";
+    sha256 = "sha256-rdhG9MdjWyvoaMGdjgFyCfQaoV48QtAZE7buA5TkDKg=";
   };
 
-  cargoSha256 = "0yxjy1kls80fcpwskklmihkqva16s6mawa8rdxc3zz8g588am03c";
+  cargoLock = {
+    lockFile = ./Cargo.lock;
+  };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ makeBinaryWrapper pkg-config ];
 
   buildInputs = [
-    curl
-  ] ++ stdenv.lib.optionals stdenv.isDarwin [ CoreServices Security ];
+    (curl.override { inherit openssl; })
+    zlib
+  ] ++ lib.optionals stdenv.isDarwin [ CoreServices Security libiconv xz ];
 
-  cargoBuildFlags = [ "--features no-self-update" ];
+  buildFeatures = [ "no-self-update" ];
+
+  checkFeatures = [ ];
 
   patches = lib.optionals stdenv.isLinux [
-    (runCommand "0001-dynamically-patchelf-binaries.patch" { CC=stdenv.cc; patchelf = patchelf; } ''
-       export dynamicLinker=$(cat $CC/nix-support/dynamic-linker)
-       substitute ${./0001-dynamically-patchelf-binaries.patch} $out \
-         --subst-var patchelf \
-         --subst-var dynamicLinker
+    (runCommand "0001-dynamically-patchelf-binaries.patch" { CC = stdenv.cc; patchelf = patchelf; libPath = "$ORIGIN/../lib:${libPath}"; } ''
+      export dynamicLinker=$(cat $CC/nix-support/dynamic-linker)
+      substitute ${./0001-dynamically-patchelf-binaries.patch} $out \
+        --subst-var patchelf \
+        --subst-var dynamicLinker \
+        --subst-var libPath
     '')
   ];
 
-  doCheck = !stdenv.isAarch64;
+  doCheck = !stdenv.isAarch64 && !stdenv.isDarwin;
+
+  # skip failing tests
+  checkFlags = [
+    # auto-self-update mode is set to 'disable' for nix rustup
+    "--skip=suite::cli_exact::check_updates_none"
+    "--skip=suite::cli_exact::check_updates_some"
+    "--skip=suite::cli_exact::check_updates_with_update"
+    # rustup-init is not used in nix rustup
+    "--skip=suite::cli_ui::rustup_init_ui_doc_text_tests"
+  ];
 
   postInstall = ''
     pushd $out/bin
     mv rustup-init rustup
     binlinks=(
       cargo rustc rustdoc rust-gdb rust-lldb rls rustfmt cargo-fmt
-      cargo-clippy clippy-driver cargo-miri
+      cargo-clippy clippy-driver cargo-miri rust-gdbgui rust-analyzer
     )
     for link in ''${binlinks[@]}; do
       ln -s rustup $link
     done
     popd
+
+    wrapProgram $out/bin/rustup --prefix "LD_LIBRARY_PATH" : "${libPath}"
 
     # tries to create .rustup
     export HOME=$(mktemp -d)
@@ -61,9 +98,9 @@ rustPlatform.buildRustPackage rec {
     $out/bin/rustup completions zsh cargo >  "$out/share/zsh/site-functions/_cargo"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The Rust toolchain installer";
-    homepage = https://www.rustup.rs/;
+    homepage = "https://www.rustup.rs/";
     license = with licenses; [ asl20 /* or */ mit ];
     maintainers = [ maintainers.mic92 ];
   };

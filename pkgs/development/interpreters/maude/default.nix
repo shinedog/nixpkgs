@@ -1,60 +1,65 @@
-{ stdenv, fetchurl, unzip, makeWrapper , flex, bison, ncurses, buddy, tecla
-, libsigsegv, gmpxx, cln
+{ lib, stdenv, fetchurl, unzip, makeWrapper, flex, bison, ncurses, buddy, tecla
+, libsigsegv, gmpxx, cln, yices
+# passthru.tests
+, tamarin-prover
 }:
 
 let
-
-  version = "2.7.1";
-
-  fullMaude = fetchurl {
-    url = "http://maude.cs.illinois.edu/w/images/c/ca/Full-Maude-${version}.zip";
-    sha256 = "0y4gn7n8vh24r24vckhpkd46hb5hqsbrm4w9zr6dz4paafq12fjc";
-  };
-
+  version = "3.3.1";
 in
 
-stdenv.mkDerivation rec {
-  name = "maude-${version}";
+stdenv.mkDerivation {
+  pname = "maude";
+  inherit version;
 
   src = fetchurl {
-    url = "http://maude.cs.illinois.edu/w/images/d/d8/Maude-${version}.tar.gz";
-    sha256 = "0jskn5dm8vvbd3mlryjxdb6wfpkvyx174wk7ci9a31aylxzpr25i";
+    url = "https://github.com/SRI-CSL/Maude/archive/refs/tags/Maude${version}.tar.gz";
+    sha256 = "ueM8qi3fLogWT8bA+ZyBnd9Zr9oOKuoiu2YpG6o5J1E=";
   };
 
+  nativeBuildInputs = [ flex bison unzip makeWrapper ];
   buildInputs = [
-    flex bison ncurses buddy tecla gmpxx libsigsegv makeWrapper unzip cln
+    ncurses buddy tecla gmpxx libsigsegv cln yices
   ];
 
   hardeningDisable = [ "stackprotector" ] ++
-    stdenv.lib.optionals stdenv.isi686 [ "pic" "fortify" ];
+    lib.optionals stdenv.isi686 [ "pic" "fortify" ];
 
+  # Fix for glibc-2.34, see
+  # https://gitweb.gentoo.org/repo/gentoo.git/commit/dev-lang/maude/maude-3.1-r1.ebuild?id=f021cc6cfa1e35eb9c59955830f1fd89bfcb26b4
+  configureFlags = [ "--without-libsigsegv" ];
+
+  # Certain tests (in particular, Misc/fileTest) expect us to build in a subdirectory
+  # We'll use the directory Opt/ as suggested in INSTALL
   preConfigure = ''
+    mkdir Opt; cd Opt
     configureFlagsArray=(
       --datadir="$out/share/maude"
       TECLA_LIBS="-ltecla -lncursesw"
       LIBS="-lcln"
       CFLAGS="-O3" CXXFLAGS="-O3"
-      --without-cvc4    # Our version is too new for Maude to cope.
     )
   '';
+  configureScript = "../configure";
 
   doCheck = true;
 
   postInstall = ''
     for n in "$out/bin/"*; do wrapProgram "$n" --suffix MAUDE_LIB ':' "$out/share/maude"; done
-    unzip ${fullMaude}
-    install -D -m 444 full-maude.maude $out/share/maude/full-maude.maude
   '';
 
-  # bison -dv surface.yy -o surface.c
-  # mv surface.c surface.cc
-  # mv: cannot stat 'surface.c': No such file or directory
-  enableParallelBuilding = false;
+  passthru.tests = {
+    # tamarin-prover only supports specific versions of maude explicitly
+    inherit tamarin-prover;
+  };
+
+  enableParallelBuilding = true;
 
   meta = {
-    homepage = http://maude.cs.illinois.edu/;
+    homepage = "http://maude.cs.illinois.edu/";
     description = "High-level specification language";
-    license = stdenv.lib.licenses.gpl2;
+    mainProgram = "maude";
+    license = lib.licenses.gpl2Plus;
 
     longDescription = ''
       Maude is a high-performance reflective language and system
@@ -66,7 +71,7 @@ stdenv.mkDerivation rec {
       rewriting logic computation.
     '';
 
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.peti ];
+    platforms = lib.platforms.unix;
+    maintainers = [ lib.maintainers.peti ];
   };
 }

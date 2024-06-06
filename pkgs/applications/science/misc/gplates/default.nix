@@ -1,29 +1,76 @@
-{ stdenv, fetchurl, qt4, qwt6_qt4, libGLU_combined, glew, gdal_1_11, cgal
-, proj, boost, cmake, python2, doxygen, graphviz, gmp }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, doxygen
+, graphviz
+, boost
+, cgal_5
+, gdal
+, glew
+, gmp
+, libGL
+, libGLU
+, libSM
+, mpfr
+, proj
+, python3
+, qtxmlpatterns
+, qwt
+, wrapQtAppsHook
+}:
 
-stdenv.mkDerivation rec {
-  name = "gplates-${version}";
-  version = "2.0.0";
+let
+  python = python3.withPackages (ps: with ps; [
+    numpy
+  ]);
+  boost' = boost.override {
+    enablePython = true;
+    inherit python;
+  };
+  cgal = cgal_5.override {
+    boost = boost';
+  };
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "gplates";
+  version = "2.5";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/gplates/${name}-unixsrc.tar.bz2";
-    sha256 = "02scnjj5nlc2d2c8lbx0xvj8gg1bgkjliv3wxsx564c55a9x69qw";
+  src = fetchFromGitHub {
+    owner = "GPlates";
+    repo = "GPlates";
+    rev = "GPlates-${finalAttrs.version}";
+    hash = "sha256-3fEwm5EKK9RcRbnyUejgwfjdsXaujjZjoMbq/BbVMeM=";
   };
 
-  patches = [
-    ./boostfix.patch
+  nativeBuildInputs = [
+    cmake
+    doxygen
+    graphviz
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qt4 qwt6_qt4 libGLU_combined glew gdal_1_11 cgal proj boost cmake python2
-    doxygen graphviz gmp
+    boost'
+    cgal
+    gdal
+    glew
+    gmp
+    libGL
+    libGLU
+    libSM
+    mpfr
+    proj
+    python
+    qtxmlpatterns
+    qwt
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Desktop software for the interactive visualisation of plate-tectonics";
-    homepage = https://www.gplates.org;
-    license = licenses.gpl2;
+    mainProgram = "gplates";
+    homepage = "https://www.gplates.org";
+    license = licenses.gpl2Only;
     platforms = platforms.all;
-    broken = true;
+    broken = stdenv.isDarwin; # FIX: this check: https://github.com/GPlates/GPlates/blob/gplates/cmake/modules/Config_h.cmake#L72
   };
-}
+})

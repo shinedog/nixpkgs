@@ -1,26 +1,38 @@
-{ stdenv, fetchFromGitHub, pantheon, pkgconfig, meson, ninja, vala, substituteAll
-, python3, desktop-file-utils, gtk3, granite, libgee, elementary-icon-theme
-, appstream, libpeas, editorconfig-core-c, gtksourceview3, gtkspell3, libsoup
-, vte, webkitgtk, zeitgeist, ctags, libgit2-glib, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, nix-update-script
+, appstream
+, desktop-file-utils
+, meson
+, ninja
+, pkg-config
+, polkit
+, vala
+, wrapGAppsHook3
+, editorconfig-core-c
+, granite
+, gtk3
+, gtksourceview4
+, gtkspell3
+, libgee
+, libgit2-glib
+, libhandy
+, libpeas
+, libsoup
+, vte
+, ctags
+}:
 
 stdenv.mkDerivation rec {
-  pname = "code";
-  version = "3.1.1";
-
-  name = "elementary-${pname}-${version}";
+  pname = "elementary-code";
+  version = "7.2.0";
 
   src = fetchFromGitHub {
     owner = "elementary";
-    repo = pname;
+    repo = "code";
     rev = version;
-    sha256 = "0l469fi5vbcazwfhy320nr8wrzz96jbrqn4hag0kdm16wvf5x1yc";
-  };
-
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-      attrPath = "elementary-${pname}";
-    };
+    sha256 = "sha256-6lvn8c+JfbtZQf5dtViosVqtt/RWL6B/MvksXqmCfFs=";
   };
 
   nativeBuildInputs = [
@@ -28,49 +40,43 @@ stdenv.mkDerivation rec {
     desktop-file-utils
     meson
     ninja
-    pkgconfig
-    python3
+    pkg-config
+    polkit # needed for ITS rules
     vala
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
-    ctags
-    elementary-icon-theme
     editorconfig-core-c
     granite
     gtk3
-    gtksourceview3
+    gtksourceview4
     gtkspell3
     libgee
     libgit2-glib
+    libhandy
     libpeas
     libsoup
     vte
-    webkitgtk
-    zeitgeist
   ];
-
-  # install script fails with UnicodeDecodeError because of printing a fancy elipsis character
-  LC_ALL = "C.UTF-8";
 
   # ctags needed in path by outline plugin
   preFixup = ''
     gappsWrapperArgs+=(
-      --prefix PATH : "${stdenv.lib.makeBinPath [ ctags ]}"
+      --prefix PATH : "${lib.makeBinPath [ ctags ]}"
     )
   '';
 
-  postPatch = ''
-    chmod +x meson/post_install.py
-    patchShebangs meson/post_install.py
-  '';
+  passthru = {
+    updateScript = nix-update-script { };
+  };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Code editor designed for elementary OS";
-    homepage = https://github.com/elementary/code;
+    homepage = "https://github.com/elementary/code";
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+    maintainers = teams.pantheon.members;
+    mainProgram = "io.elementary.code";
   };
 }

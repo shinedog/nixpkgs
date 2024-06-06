@@ -1,37 +1,61 @@
-{ stdenv, fetchFromGitHub, cmake, makeWrapper, pkgconfig, vala, gtk3, libgee
-, poppler, libpthreadstubs, gstreamer, gst-plugins-base, librsvg, pcre, gobject-introspection }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, vala, gtk3, libgee
+, poppler, libpthreadstubs, gstreamer, gst-plugins-base, gst-plugins-good, gst-libav, gobject-introspection, wrapGAppsHook3
+, qrencode, webkitgtk, discount, json-glib, fetchpatch }:
 
 stdenv.mkDerivation rec {
-  name = "${product}-${version}";
-  product = "pdfpc";
-  version = "4.3.2";
+  pname = "pdfpc";
+  version = "4.6.0";
 
   src = fetchFromGitHub {
-    repo = product;
-    owner = product;
+    repo = "pdfpc";
+    owner = "pdfpc";
     rev = "v${version}";
-    sha256 = "15y6g92fp6x6dwwhrhkfny5z20w7pq9c8w19fh2vzff9aa6m2h9z";
+    hash = "sha256-5HFmbVsNajMwo+lBe9kJcJyQGe61N6Oy2CI/WJwmSE4=";
   };
 
   nativeBuildInputs = [
-    cmake pkgconfig vala
+    cmake pkg-config vala
     # For setup hook
     gobject-introspection
+    wrapGAppsHook3
   ];
-  buildInputs = [ gstreamer gst-plugins-base gtk3 libgee poppler
-    libpthreadstubs makeWrapper librsvg pcre ];
 
-  cmakeFlags = stdenv.lib.optionalString stdenv.isDarwin "-DMOVIES=OFF";
+  buildInputs = [
+    gtk3 libgee poppler
+    libpthreadstubs
+    gstreamer
+    gst-plugins-base
+    (gst-plugins-good.override { gtkSupport = true; })
+    gst-libav
+    qrencode
+    webkitgtk
+    discount
+    json-glib
+  ];
 
-  postInstall = ''
-    wrapProgram $out/bin/pdfpc \
-      --set GDK_PIXBUF_MODULE_FILE "$GDK_PIXBUF_MODULE_FILE"
-  '';
+  patches = [
+    # needed for compiling pdfpc 4.6.0 with vala 0.56.7, see
+    # https://github.com/pdfpc/pdfpc/issues/686
+    # https://github.com/pdfpc/pdfpc/pull/687
+    (fetchpatch {
+      url = "https://github.com/pdfpc/pdfpc/commit/d38edfac63bec54173b4b31eae5c7fb46cd8f714.diff";
+      hash = "sha256-KC2oyzcwU2fUmxaed8qAsKcePwR5KcXgpVdstJg8KmU=";
+    })
+    # Allow compiling with markdown3
+    # https://github.com/pdfpc/pdfpc/pull/716
+    (fetchpatch {
+      url = "https://github.com/pdfpc/pdfpc/commit/08e66b9d432e9598c1ee9a78b2355728036ae1a1.patch";
+      hash = "sha256-SKH2GQ5/6Is36xOFmSs89Yw/w7Fnma3FrNqwjOlUQKM=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = lib.optional stdenv.isDarwin (lib.cmakeBool "MOVIES" false);
+
+  meta = with lib; {
     description = "A presenter console with multi-monitor support for PDF files";
-    homepage = https://pdfpc.github.io/;
-    license = licenses.gpl2Plus;
+    mainProgram = "pdfpc";
+    homepage = "https://pdfpc.github.io/";
+    license = licenses.gpl3Plus;
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.unix;
   };

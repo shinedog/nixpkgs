@@ -1,30 +1,51 @@
-{ stdenv, fetchgit, pkgconfig, writeText, libX11, conf ? null }:
-
-with stdenv.lib;
+{ lib
+, stdenv
+, fetchgit
+, pkg-config
+, writeText
+, libX11
+, libXau
+, libXdmcp
+, conf ? null
+, patches ? [ ]
+# update script dependencies
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-  name = "slstatus-${version}";
-  version = "unstable-2018-04-16";
+  pname = "slstatus";
+  version = "1.0";
 
   src = fetchgit {
-    url = https://git.suckless.org/slstatus;
-    rev = "97ef7c2a1d67bb2c9c379e657fbc8e35acd6aafb";
-    sha256 = "1777hgl10imk0l2sgnqgbkfchv1mpxrd82ninzwp7f1rgwchz36v";
+    url = "https://git.suckless.org/slstatus";
+    rev = version;
+    hash = "sha256-cFah6EgApslLSlJaOy/5W9ZV9Z1lzfKye/rRh9Om3T4=";
   };
 
-  configFile = optionalString (conf!=null) (writeText "config.def.h" conf);
-  preBuild = optionalString (conf!=null) "cp ${configFile} config.def.h";
+  preBuild =
+    let
+      configFile = if lib.isDerivation conf || builtins.isPath conf then conf else writeText "config.def.h" conf;
+    in
+    ''
+      ${lib.optionalString (conf!=null) "cp ${configFile} config.def.h"}
+      makeFlagsArray+=(LDLIBS="-lX11 -lxcb -lXau -lXdmcp" CC=$CC)
+    '';
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libX11 ];
+  inherit patches;
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libX11 libXau libXdmcp ];
 
   installFlags = [ "PREFIX=$(out)" ];
 
-  meta = {
-    homepage = https://tools.suckless.org/slstatus/;
+  passthru.updateScript = gitUpdater {};
+
+  meta = with lib; {
+    homepage = "https://tools.suckless.org/slstatus/";
     description = "status monitor for window managers that use WM_NAME like dwm";
     license = licenses.isc;
-    maintainers = with maintainers; [ geistesk ];
+    maintainers = with maintainers; [ oxzi qusic ];
     platforms = platforms.linux;
+    mainProgram = "slstatus";
   };
 }

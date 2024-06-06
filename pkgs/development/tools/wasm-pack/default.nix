@@ -1,36 +1,34 @@
-{ stdenv
+{ lib
+, stdenv
 , fetchFromGitHub
 , rustPlatform
-, pkgconfig
-, openssl
+, darwin
 }:
 
 rustPlatform.buildRustPackage rec {
-  name = "wasm-pack-${version}";
-  version = "0.8.1";
+  pname = "wasm-pack";
+  version = "0.12.1";
 
   src = fetchFromGitHub {
     owner = "rustwasm";
     repo = "wasm-pack";
-    rev = "v${version}";
-    sha256 = "1z66m16n4r16zqmnv84a5jndr5x6mdqdq4b1wq929sablwqd2rl4";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-L4mCgUPG4cgTUpCoaIUOTONBOggXn5vMyPKj48B3MMk=";
   };
 
-  cargoSha256 = "0hp68w5mvk725gzbmlgl8j6wa1dv2fydil7jvq0f09mzxxaqrwcs";
+  cargoHash = "sha256-mqQRQXaUW6mreE7UUEA0zhhaaGGKLRUngH9QLxcaIdY=";
 
-  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.Security;
 
-  buildInputs = [ openssl ];
-
-  # Tests fetch external resources and build artifacts.
-  # Disabled to work with sandboxing
+  # Most tests rely on external resources and build artifacts.
+  # Disabling check here to work with build sandboxing.
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A utility that builds rust-generated WebAssembly package";
-    homepage = https://github.com/rustwasm/wasm-pack;
+    mainProgram = "wasm-pack";
+    homepage = "https://github.com/rustwasm/wasm-pack";
     license = with licenses; [ asl20 /* or */ mit ];
     maintainers = [ maintainers.dhkl ];
-    platforms = platforms.all;
   };
 }

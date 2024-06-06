@@ -1,27 +1,42 @@
-{ stdenv, fetchFromRepoOrCz, autoreconfHook, perl, asciidoc, xmlto, docbook_xml_dtd_45, docbook_xsl }:
+{ lib
+, stdenv
+, fetchurl
+, perl
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-  name = "nasm-${version}";
-  version = "2.14.02";
+  pname = "nasm";
+  version = "2.16.03";
 
-  src = fetchFromRepoOrCz {
-    repo = "nasm";
-    rev = name;
-    sha256 = "15z6ybnzlsrqs2964h6czqhpmr7vc3ln4y4h0z9vrznk4mqcwbsa";
+  src = fetchurl {
+    url = "https://www.nasm.us/pub/nasm/releasebuilds/${version}/${pname}-${version}.tar.xz";
+    hash = "sha256-FBKhx2C70F2wJrbA0WV6/9ZjHNCmPN229zzG1KphYUg=";
   };
 
-  nativeBuildInputs = [ autoreconfHook perl asciidoc xmlto docbook_xml_dtd_45 docbook_xsl ];
+  nativeBuildInputs = [ perl ];
 
-  postBuild = "make manpages";
+  enableParallelBuilding = true;
 
   doCheck = true;
 
   checkPhase = ''
-    make golden && make test
+    runHook preCheck
+
+    make golden
+    make test
+
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://www.nasm.us/;
+  passthru.updateScript = gitUpdater {
+    url = "https://github.com/netwide-assembler/nasm.git";
+    rev-prefix = "nasm-";
+    ignoredVersions = "rc.*";
+  };
+
+  meta = with lib; {
+    homepage = "https://www.nasm.us/";
     description = "An 80x86 and x86-64 assembler designed for portability and modularity";
     platforms = platforms.unix;
     maintainers = with maintainers; [ pSub willibutz ];

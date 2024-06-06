@@ -1,42 +1,61 @@
-{ buildPythonPackage, fetchPypi, stdenv, sip, qtbase, pyqt5, poppler, pkgconfig, fetchpatch
-, substituteAll
+{
+  lib,
+  buildPythonPackage,
+  isPy3k,
+  fetchPypi,
+  sip,
+  qtbase,
+  qmake,
+  pyqt5,
+  pyqt-builder,
+  poppler,
+  pkg-config,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "python-poppler-qt5";
-  version = "0.24.2";
+  version = "21.3.0";
+
+  disabled = !isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0l69llw1fzwz8y90q0qp9q5pifbrqjjbwii7di54dwghw5fc6w1r";
+    sha256 = "sha256-tHfohB8OoOCf2rby8wXPON+XfZ4ULlaTo3RgXXXdb+A=";
   };
 
-  patches = [
-    (substituteAll {
-      src = ./poppler-include-dir.patch;
-      poppler_include_dir = "${poppler.dev}/include/poppler";
-    })
-    (fetchpatch {
-      url = "https://github.com/wbsoft/python-poppler-qt5/commit/faf4d1308f89560b0d849671226e3080dfc72e79.patch";
-      sha256 = "18krhh6wzsnpxzlzv02nginb1vralla8ai24zqk10nc4mj6fkj86";
-    })
+  buildInputs = [
+    qtbase.dev
+    poppler
+    pyqt-builder
   ];
-
-  setupPyBuildFlags = [
-    "--pyqt-sip-dir ${pyqt5}/share/sip/PyQt5"
-    "--qt-include-dir ${qtbase.dev}/include"
+  nativeBuildInputs = [
+    pkg-config
+    qmake
+    sip
+    setuptools
   ];
+  propagatedBuildInputs = [ pyqt5.dev ];
 
-  buildInputs = [ qtbase.dev poppler ];
-  nativeBuildInputs = [ pkgconfig ];
-  propagatedBuildInputs = [ sip pyqt5.dev ];
+  format = "pyproject";
+  dontConfigure = true;
+
+  postPatch = ''
+    cat <<EOF >> pyproject.toml
+    [tool.sip.bindings.Poppler-Qt5]
+    include-dirs = ["${poppler.dev}/include/poppler"]
+    EOF
+  '';
 
   # no tests, just bindings for `poppler_qt5`
   doCheck = false;
+  pythonImportsCheck = [ "popplerqt5" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/wbsoft/python-poppler-qt5;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ ma27 ];
+  dontWrapQtApps = true;
+
+  meta = with lib; {
+    homepage = "https://github.com/frescobaldi/python-poppler-qt5";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ ];
   };
 }

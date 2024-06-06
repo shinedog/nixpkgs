@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, texinfo }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, texinfo }:
 
 stdenv.mkDerivation rec {
-  name = "netmask-${version}";
+  pname = "netmask";
   version = "2.4.4";
 
   src = fetchFromGitHub {
@@ -14,11 +14,12 @@ stdenv.mkDerivation rec {
   buildInputs = [ texinfo ];
   nativeBuildInputs = [ autoreconfHook ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/tlby/netmask;
+  meta = with lib; {
+    homepage = "https://github.com/tlby/netmask";
     description = "An IP address formatting tool ";
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
     maintainers = [ maintainers.jensbin ];
+    mainProgram = "netmask";
   };
 }

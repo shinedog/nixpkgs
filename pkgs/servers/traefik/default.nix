@@ -1,39 +1,41 @@
-{ stdenv, buildGoPackage, fetchFromGitHub, bash, go-bindata}:
+{ lib, fetchzip, buildGoModule, nixosTests }:
 
-buildGoPackage rec {
-  name = "traefik-${version}";
-  version = "1.7.10";
+buildGoModule rec {
+  pname = "traefik";
+  version = "3.0.1";
 
-  goPackagePath = "github.com/containous/traefik";
-
-  src = fetchFromGitHub {
-    owner = "containous";
-    repo = "traefik";
-    rev = "v${version}";
-    sha256 = "1bfnwrwr27hywlv09a4z8ma70af6p6l3jcdpf8wg3aw5brznv9cq";
+  # Archive with static assets for webui
+  src = fetchzip {
+    url = "https://github.com/traefik/traefik/releases/download/v${version}/traefik-v${version}.src.tar.gz";
+    hash = "sha256-FoKmoestbPu95E4dzBdG2rB0zEYocD/16yt9Je4M3GU=";
+    stripRoot = false;
   };
 
-  buildInputs = [ go-bindata bash ];
+  vendorHash = "sha256-nEPcq4lUvs/hTobciIZAQKQ13MgKMLjYUkyYMd3EHms=";
 
-  buildPhase = ''
-    runHook preBuild
-    (
-      cd go/src/github.com/containous/traefik
-      bash ./script/make.sh generate
+  subPackages = [ "cmd/traefik" ];
 
-      CODENAME=$(awk -F "=" '/CODENAME=/ { print $2}' script/binary)
-      go build -ldflags "\
-        -X github.com/containous/traefik/version.Version=${version} \
-        -X github.com/containous/traefik/version.Codename=$CODENAME \
-      " -a -o $bin/bin/traefik ./cmd/traefik
-    )
-    runHook postBuild
+  preBuild = ''
+    GOOS= GOARCH= CGO_ENABLED=0 go generate
+
+    CODENAME=$(grep -Po "CODENAME \?=\s\K.+$" Makefile)
+
+    ldflags="-s"
+    ldflags+=" -w"
+    ldflags+=" -X github.com/traefik/traefik/v${lib.versions.major version}/pkg/version.Version=${version}"
+    ldflags+=" -X github.com/traefik/traefik/v${lib.versions.major version}/pkg/version.Codename=$CODENAME"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://traefik.io;
+  doCheck = false;
+
+  passthru.tests = { inherit (nixosTests) traefik; };
+
+  meta = with lib; {
+    homepage = "https://traefik.io";
     description = "A modern reverse proxy";
+    changelog = "https://github.com/traefik/traefik/raw/v${version}/CHANGELOG.md";
     license = licenses.mit;
-    maintainers = with maintainers; [ hamhut1066 vdemeester ];
+    maintainers = with maintainers; [ vdemeester ];
+    mainProgram = "traefik";
   };
 }

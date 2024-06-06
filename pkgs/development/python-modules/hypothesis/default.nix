@@ -1,40 +1,123 @@
-{ lib, buildPythonPackage, fetchFromGitHub
-, isPy3k, attrs, coverage, enum34
-, doCheck ? true, pytest, pytest_xdist, flaky, mock
+{
+  lib,
+  buildPythonPackage,
+  isPyPy,
+  fetchFromGitHub,
+  setuptools,
+  attrs,
+  exceptiongroup,
+  pexpect,
+  doCheck ? true,
+  pytestCheckHook,
+  pytest-xdist,
+  python,
+  sortedcontainers,
+  stdenv,
+  pythonOlder,
+  sphinxHook,
+  sphinx-rtd-theme,
+  sphinx-hoverxref,
+  sphinx-codeautolink,
+  tzdata,
 }:
+
 buildPythonPackage rec {
-  # https://hypothesis.readthedocs.org/en/latest/packaging.html
-
-  # Hypothesis has optional dependencies on the following libraries
-  # pytz fake_factory django numpy pytest
-  # If you need these, you can just add them to your environment.
-
-  version = "4.7.3";
   pname = "hypothesis";
+  version = "6.100.1";
+  pyproject = true;
 
-  # Use github tarballs that includes tests
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "HypothesisWorks";
-    repo = "hypothesis-python";
+    repo = "hypothesis";
     rev = "hypothesis-python-${version}";
-    sha256 = "03l4hp0p7i2k04arnqkav0ygc23ml46dy3cfrlwviasrj7yzk5hc";
+    hash = "sha256-3Mwa1nS6rvFBcU5QXLH4/wa38qCvDX9sRina1aJS1Rs=";
   };
+
+  # I tried to package sphinx-selective-exclude, but it throws
+  # error about "module 'sphinx' has no attribute 'directives'".
+  #
+  # It probably has to do with monkey-patching internals of Sphinx.
+  # On bright side, this extension does not introduces new commands,
+  # only changes "::only" command, so we probably okay with stock
+  # implementation.
+  #
+  # I wonder how upstream of "hypothesis" builds documentation.
+  postPatch = ''
+    sed -i -e '/sphinx_selective_exclude.eager_only/ d' docs/conf.py
+  '';
 
   postUnpack = "sourceRoot=$sourceRoot/hypothesis-python";
 
-  propagatedBuildInputs = [ attrs coverage ] ++ lib.optional (!isPy3k) [ enum34 ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ pytest pytest_xdist flaky mock ];
+  propagatedBuildInputs = [
+    attrs
+    sortedcontainers
+  ] ++ lib.optionals (pythonOlder "3.11") [ exceptiongroup ];
+
+  nativeCheckInputs = [
+    pexpect
+    pytest-xdist
+    pytestCheckHook
+  ] ++ lib.optionals isPyPy [ tzdata ];
+
   inherit doCheck;
 
-  checkPhase = ''
-    rm tox.ini # This file changes how py.test runs and breaks it
-    py.test tests/cover
+  # This file changes how pytest runs and breaks it
+  preCheck = ''
+    rm tox.ini
   '';
 
+  pytestFlagsArray = [ "tests/cover" ];
+
+  disabledTests =
+    if (pythonOlder "3.10") then
+      [
+        # not sure why these tests fail with only 3.9
+        # FileNotFoundError: [Errno 2] No such file or directory: 'git'
+        "test_observability"
+        "test_assume_has_status_reason"
+        "test_observability_captures_stateful_reprs"
+      ]
+    else
+      null;
+
+  pythonImportsCheck = [ "hypothesis" ];
+
+  passthru = {
+    doc = stdenv.mkDerivation {
+      # Forge look and feel of multi-output derivation as best as we can.
+      #
+      # Using 'outputs = [ "doc" ];' breaks a lot of assumptions.
+      name = "${pname}-${version}-doc";
+      inherit src pname version;
+
+      postInstallSphinx = ''
+        mv $out/share/doc/* $out/share/doc/python$pythonVersion-$pname-$version
+      '';
+
+      nativeBuildInputs = [
+        sphinxHook
+        sphinx-rtd-theme
+        sphinx-hoverxref
+        sphinx-codeautolink
+      ];
+
+      inherit (python) pythonVersion;
+      inherit meta;
+    };
+  };
+
   meta = with lib; {
-    description = "A Python library for property based testing";
-    homepage = https://github.com/HypothesisWorks/hypothesis;
+    description = "Library for property based testing";
+    mainProgram = "hypothesis";
+    homepage = "https://github.com/HypothesisWorks/hypothesis";
+    changelog = "https://hypothesis.readthedocs.io/en/latest/changes.html#v${
+      lib.replaceStrings [ "." ] [ "-" ] version
+    }";
     license = licenses.mpl20;
+    maintainers = with maintainers; [ ];
   };
 }

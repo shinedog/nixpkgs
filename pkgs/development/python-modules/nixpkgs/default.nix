@@ -1,30 +1,34 @@
-{ stdenv
-, buildPythonPackage
-, fetchpatch
-, fetchPypi
-, pbr
-, pythonix
-, pythonAtLeast
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pbr,
+  pythonix,
+  pythonAtLeast,
 }:
 
 buildPythonPackage rec {
   pname = "nixpkgs";
-  version = "0.2.3";
-  disabled = ! pythonAtLeast "3.5";
+  version = "0.2.4";
+  format = "setuptools";
+  disabled = !pythonAtLeast "3.5";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "12ycbv31g4qv14aq6hfb85hhx026lgvzqfsrkpzb64na0c1yjcvn";
+    sha256 = "0dlvq4bpamhlva86042wlc0xxfsxlpdgm2adfb1c6y3vjgbm0nvd";
   };
 
   buildInputs = [ pbr ];
   propagatedBuildInputs = [ pythonix ];
 
-  meta = with stdenv.lib; {
+  # does not have any tests
+  doCheck = false;
+  pythonImportsCheck = [ "nixpkgs" ];
+
+  meta = with lib; {
     description = "Allows to `from nixpkgs import` stuff in interactive Python sessions";
-    homepage = https://github.com/t184256/nixpkgs-python-importer;
+    homepage = "https://github.com/t184256/nixpkgs-python-importer";
     license = licenses.mit;
     maintainers = with maintainers; [ t184256 ];
   };
-
 }

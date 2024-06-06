@@ -1,21 +1,53 @@
-{ stdenv, fetchurl, pkgconfig, curl, gpgme, libarchive, bzip2, lzma, attr, acl, libxml2
-, autoreconfHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, curl
+, gpgme
+, libarchive
+, bzip2
+, xz
+, attr
+, acl
+, libxml2
+, autoreconfHook
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.4.0";
-  name = "opkg-${version}";
+  pname = "opkg";
+  version = "0.6.3";
+
   src = fetchurl {
     url = "https://downloads.yoctoproject.org/releases/opkg/opkg-${version}.tar.gz";
-    sha256 = "1zp6gyggqv359myagjsr0knq66ax64q3irx889kqzbd2v0ahbh7n";
+    hash = "sha256-85OONZZGtAbEDV1EKhRnx+cjV/kauCLkQml1KWQeBt4=";
   };
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
-  buildInputs = [ curl gpgme libarchive bzip2 lzma attr acl libxml2 ];
+  nativeBuildInputs = [
+    pkg-config
+    autoreconfHook
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    curl
+    gpgme
+    libarchive
+    bzip2
+    xz
+    attr
+    acl
+    libxml2
+  ];
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
+
+  meta = with lib; {
     description = "A lightweight package management system based upon ipkg";
-    homepage = https://git.yoctoproject.org/cgit/cgit.cgi/opkg/;
-    license = licenses.gpl2;
+    homepage = "https://git.yoctoproject.org/cgit/cgit.cgi/opkg/";
+    changelog = "https://git.yoctoproject.org/opkg/tree/NEWS?h=v${version}";
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
     maintainers = with maintainers; [ pSub ];
   };

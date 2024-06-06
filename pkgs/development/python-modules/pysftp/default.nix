@@ -1,13 +1,15 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPyPy
-, paramiko
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPyPy,
+  paramiko,
 }:
 
 buildPythonPackage rec {
   pname = "pysftp";
   version = "0.2.9";
+  format = "setuptools";
   disabled = isPyPy;
 
   src = fetchPypi {
@@ -17,8 +19,8 @@ buildPythonPackage rec {
 
   propagatedBuildInputs = [ paramiko ];
 
-  meta = with stdenv.lib; {
-    homepage = https://bitbucket.org/dundeemt/pysftp;
+  meta = with lib; {
+    homepage = "https://bitbucket.org/dundeemt/pysftp";
     description = "A friendly face on SFTP";
     license = licenses.mit;
     longDescription = ''
@@ -27,5 +29,4 @@ buildPythonPackage rec {
       Book, in the docs, to see what pysftp can do for you.
     '';
   };
-
 }

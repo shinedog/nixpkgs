@@ -1,18 +1,22 @@
-{stdenv, pkgconfig, fetchurl}:
+{lib, stdenv, pkg-config, autoreconfHook, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "libspiro-${version}";
-  version = "0.5.20150702";
-  src = fetchurl {
-    url = "https://github.com/fontforge/libspiro/releases/download/${version}/${name}.tar.gz";
-    sha256 = "0z4zpxd3nwwchqdsbmmjbp13aw5jg8v5p1993190bpykkrjlh6nv";
+  pname = "libspiro";
+  version = "20221101";
+
+  src = fetchFromGitHub {
+    owner = "fontforge";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-/9UCrdq69RO22593qiA8pZ4qfY9UVGqlGYB9zatsOgw=";
   };
 
-  nativeBuildInputs = [pkgconfig];
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library that simplifies the drawing of beautiful curves";
-    homepage = https://github.com/fontforge/libspiro;
+    homepage = "https://github.com/fontforge/libspiro";
     license = licenses.gpl3Plus;
+    maintainers = [ maintainers.erictapen ];
   };
 }

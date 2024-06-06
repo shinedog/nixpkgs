@@ -1,32 +1,21 @@
-import ./make-test.nix ({ pkgs, ...} :
+import ./make-test-python.nix ({ pkgs, lib, ...} :
 
 let
 
   # Build Quake with coverage instrumentation.
   overrides = pkgs:
-    rec {
+    {
       quake3game = pkgs.quake3game.override (args: {
         stdenv = pkgs.stdenvAdapters.addCoverageInstrumentation args.stdenv;
       });
     };
 
   # Only allow the demo data to be used (only if it's unfreeRedistributable).
-  unfreePredicate = pkg: with pkgs.lib; let
-    allowDrvPredicates = [ "quake3-demo" "quake3-pointrelease" ];
-    allowLicenses = [ pkgs.lib.licenses.unfreeRedistributable ];
-  in any (flip hasPrefix pkg.name) allowDrvPredicates &&
-     elem (pkg.meta.license or null) allowLicenses;
-
-in
-
-rec {
-  name = "quake3";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ domenkozar eelco ];
-  };
-
-  # TODO: lcov doesn't work atm
-  #makeCoverageReport = true;
+  unfreePredicate = pkg: let
+    allowPackageNames = [ "quake3-demodata" "quake3-pointrelease" ];
+    allowLicenses = [ lib.licenses.unfreeRedistributable ];
+  in lib.elem pkg.pname allowPackageNames &&
+     lib.elem (pkg.meta.license or null) allowLicenses;
 
   client =
     { pkgs, ... }:
@@ -38,11 +27,22 @@ rec {
       nixpkgs.config.allowUnfreePredicate = unfreePredicate;
     };
 
+in
+
+rec {
+  name = "quake3";
+  meta = with lib.maintainers; {
+    maintainers = [ domenkozar ];
+  };
+
+  # TODO: lcov doesn't work atm
+  #makeCoverageReport = true;
+
   nodes =
     { server =
         { pkgs, ... }:
 
-        { systemd.services."quake3-server" =
+        { systemd.services.quake3-server =
             { wantedBy = [ "multi-user.target" ];
               script =
                 "${pkgs.quake3demo}/bin/quake3-server +set g_gametype 0 " +
@@ -59,37 +59,37 @@ rec {
 
   testScript =
     ''
-      startAll;
+      start_all()
 
-      $server->waitForUnit("quake3-server");
-      $client1->waitForX;
-      $client2->waitForX;
+      server.wait_for_unit("quake3-server")
+      client1.wait_for_x()
+      client2.wait_for_x()
 
-      $client1->execute("quake3 +set r_fullscreen 0 +set name Foo +connect server &");
-      $client2->execute("quake3 +set r_fullscreen 0 +set name Bar +connect server &");
+      client1.execute("quake3 +set r_fullscreen 0 +set name Foo +connect server &")
+      client2.execute("quake3 +set r_fullscreen 0 +set name Bar +connect server &")
 
-      $server->waitUntilSucceeds("grep -q 'Foo.*entered the game' /tmp/log");
-      $server->waitUntilSucceeds("grep -q 'Bar.*entered the game' /tmp/log");
+      server.wait_until_succeeds("grep -q 'Foo.*entered the game' /tmp/log")
+      server.wait_until_succeeds("grep -q 'Bar.*entered the game' /tmp/log")
 
-      $server->sleep(10); # wait for a while to get a nice screenshot
+      server.sleep(10)  # wait for a while to get a nice screenshot
 
-      $client1->block();
+      client1.block()
 
-      $server->sleep(20);
+      server.sleep(20)
 
-      $client1->screenshot("screen1");
-      $client2->screenshot("screen2");
+      client1.screenshot("screen1")
+      client2.screenshot("screen2")
 
-      $client1->unblock();
+      client1.unblock()
 
-      $server->sleep(10);
+      server.sleep(10)
 
-      $client1->screenshot("screen3");
-      $client2->screenshot("screen4");
+      client1.screenshot("screen3")
+      client2.screenshot("screen4")
 
-      $client1->shutdown();
-      $client2->shutdown();
-      $server->stopJob("quake3-server");
+      client1.shutdown()
+      client2.shutdown()
+      server.stop_job("quake3-server")
     '';
 
 })

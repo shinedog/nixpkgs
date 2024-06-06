@@ -1,72 +1,157 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig, gettext, gnome3, dbus
-, glib, libgudev, udisks2, libgcrypt, libcap, polkit
-, libgphoto2, avahi, libarchive, fuse, libcdio
-, libxml2, libxslt, docbook_xsl, docbook_xml_dtd_42, samba, libmtp
-, gnomeSupport ? false, gnome, gcr, wrapGAppsHook
-, libimobiledevice, libbluray, libcdio-paranoia, libnfs, openssh
-, libsecret, libgdata, python3
+{ stdenv
+, lib
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, substituteAll
+, gettext
+, dbus
+, glib
+, udevSupport ? stdenv.isLinux
+, libgudev
+, udisks2
+, libgcrypt
+, libcap
+, polkit
+, libgphoto2
+, avahi
+, libarchive
+, fuse3
+, libcdio
+, libxml2
+, libsoup_3
+, libxslt
+, docbook_xsl
+, docbook_xml_dtd_42
+, samba
+, libmtp
+, gnomeSupport ? false
+, gnome
+, gcr_4
+, glib-networking
+, gnome-online-accounts
+, wrapGAppsHook3
+, libimobiledevice
+, libbluray
+, libcdio-paranoia
+, libnfs
+, openssh
+, libsecret
+, libgdata
+, libmsgraph
+, python3
+, python3Packages
+, gsettings-desktop-schemas
 }:
 
-let
+stdenv.mkDerivation (finalAttrs: {
   pname = "gvfs";
-  version = "1.40.1";
-in stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
+  version = "1.54.1";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1cfnzamr4mvgpf6yhm28lh9cafy9z6842s8jpbqnfizfxybg8ylj";
+    url = "mirror://gnome/sources/gvfs/${lib.versions.majorMinor finalAttrs.version}/gvfs-${finalAttrs.version}.tar.xz";
+    hash = "sha256-rEo7zLf+FQIVjvD95cl5q0RxJVfQKKjk8wop8PvZ0Z8=";
   };
 
+  patches = [
+    (substituteAll {
+      src = ./hardcode-ssh-path.patch;
+      ssh_program = "${lib.getBin openssh}/bin/ssh";
+    })
+  ];
+
   postPatch = ''
-    # patchShebangs requires executable file
-    chmod +x meson_post_install.py
-    patchShebangs meson_post_install.py
-    patchShebangs test test-driver
+    patchShebangs test
   '';
 
   nativeBuildInputs = [
-    meson ninja python3
-    pkgconfig gettext wrapGAppsHook
-    libxml2 libxslt docbook_xsl docbook_xml_dtd_42
+    meson
+    ninja
+    python3
+    pkg-config
+    gettext
+    wrapGAppsHook3
+    libxslt
+    docbook_xsl
+    docbook_xml_dtd_42
   ];
 
   buildInputs = [
-    glib libgudev udisks2 libgcrypt dbus
-    libgphoto2 avahi libarchive fuse libcdio
-    samba libmtp libcap polkit libimobiledevice libbluray
-    libcdio-paranoia libnfs openssh
-    # ToDo: a ligther version of libsoup to have FTP/HTTP support?
-  ] ++ stdenv.lib.optionals gnomeSupport (with gnome; [
-    libsoup gcr
+    glib
+    libgcrypt
+    dbus
+    libgphoto2
+    avahi
+    libarchive
+    libimobiledevice
+    libbluray
+    libnfs
+    libxml2
+    gsettings-desktop-schemas
+    libsoup_3
+  ] ++ lib.optionals udevSupport [
+    libgudev
+    udisks2
+    fuse3
+    libcdio
+    samba
+    libmtp
+    libcap
+    polkit
+    libcdio-paranoia
+  ] ++ lib.optionals gnomeSupport [
+    gcr_4
     glib-networking # TLS support
-    gnome-online-accounts libsecret libgdata
-  ]);
+    gnome-online-accounts
+    libsecret
+    libgdata
+    libmsgraph
+  ];
 
   mesonFlags = [
     "-Dsystemduserunitdir=${placeholder "out"}/lib/systemd/user"
     "-Dtmpfilesdir=no"
-  ] ++ stdenv.lib.optionals (!gnomeSupport) [
-    "-Dgcr=false" "-Dgoa=false" "-Dkeyring=false" "-Dhttp=false"
+  ] ++ lib.optionals (!udevSupport) [
+    "-Dgudev=false"
+    "-Dudisks2=false"
+    "-Dfuse=false"
+    "-Dcdda=false"
+    "-Dsmb=false"
+    "-Dmtp=false"
+    "-Dadmin=false"
+    "-Dgphoto2=false"
+    "-Dlibusb=false"
+    "-Dlogind=false"
+  ] ++ lib.optionals (!gnomeSupport) [
+    "-Dgcr=false"
+    "-Dgoa=false"
+    "-Dkeyring=false"
     "-Dgoogle=false"
-  ] ++ stdenv.lib.optionals (samba == null) [
+    "-Donedrive=false"
+  ] ++ lib.optionals (avahi == null) [
+    "-Ddnssd=false"
+  ] ++ lib.optionals (samba == null) [
     # Xfce don't want samba
     "-Dsmb=false"
   ];
 
   doCheck = false; # fails with "ModuleNotFoundError: No module named 'gi'"
-  doInstallCheck = doCheck;
+  doInstallCheck = finalAttrs.doCheck;
+
+  separateDebugInfo = true;
 
   passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = pname;
+    updateScript = gnome.updateScript {
+      packageName = "gvfs";
+      versionPolicy = "odd-unstable";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Virtual Filesystem support library" + optionalString gnomeSupport " (full GNOME support)";
     license = licenses.lgpl2Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.lethalman ] ++ gnome3.maintainers;
+    platforms = platforms.unix;
+    maintainers = teams.gnome.members;
   };
-}
+})

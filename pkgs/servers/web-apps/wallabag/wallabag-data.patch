@@ -1,8 +1,8 @@
 diff --git a/app/AppKernel.php b/app/AppKernel.php
-index 40726f05..7d44e600 100644
+index 61b734e06..d25d1aaa3 100644
 --- a/app/AppKernel.php
 +++ b/app/AppKernel.php
-@@ -58,14 +58,19 @@ class AppKernel extends Kernel
+@@ -62,14 +62,19 @@ class AppKernel extends Kernel
          return $bundles;
      }
  

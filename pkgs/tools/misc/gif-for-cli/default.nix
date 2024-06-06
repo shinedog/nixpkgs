@@ -1,26 +1,56 @@
-{ stdenv, fetchFromGitHub, python3Packages, ffmpeg, zlib, libjpeg }:
+{ lib
+, fetchFromGitHub
+, fetchpatch
+, python3Packages
+, ffmpeg
+, zlib
+, libjpeg
+}:
 
-python3Packages.buildPythonApplication rec {
+python3Packages.buildPythonApplication {
   pname = "gif-for-cli";
-  version = "unstable-2018-08-14";
+  version = "1.1.2";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "gif-for-cli";
-    rev = "9696f25fea2e38499b7c248a3151030c3c68bb00";
-    sha256 = "1rj8wjfsabn27k1ds7a5fdqgf2r28zpz4lvhbzssjfj1yf0mfh7s";
+    rev = "31f8aa2d617d6d6e941154f60e287c38dd9a74d5";
+    hash = "sha256-Bl5o492BUAn1KsscnlMIXCzJuy7xWUsdnxIKZKaRM3M=";
   };
 
-  checkInputs = [ python3Packages.coverage ];
-  buildInputs = [ ffmpeg zlib libjpeg ];
-  propagatedBuildInputs = with python3Packages; [ pillow requests x256 ];
+  patches = [
+    # https://github.com/google/gif-for-cli/pull/36
+    (fetchpatch {
+      name = "pillow-10-compatibility.patch";
+      url = "https://github.com/google/gif-for-cli/commit/49b13ec981e197cbc10f920b7b25a97c4cc6a61c.patch";
+      hash = "sha256-B8wfkdhSUY++St6DzgaJ1xF1mZKvi8oxLXbo63yemDM=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  # coverage is not needed to build and test this package
+  postPatch = ''
+    sed -i '/coverage>=/d' setup.py
+  '';
+
+  buildInputs = [
+    zlib
+    libjpeg
+  ];
+
+  propagatedBuildInputs = with python3Packages; [
+    ffmpeg
+    pillow
+    requests
+    x256
+  ];
+
+  meta = with lib; {
     description = "Render gifs as ASCII art in your cli";
     longDescription = "Takes in a GIF, short video, or a query to the Tenor GIF API and converts it to animated ASCII art.";
-    homepage = https://github.com/google/gif-for-cli;
+    homepage = "https://github.com/google/gif-for-cli";
     license = licenses.asl20;
     maintainers = with maintainers; [ Scriptkiddi ];
+    mainProgram = "gif-for-cli";
   };
-
 }

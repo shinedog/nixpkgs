@@ -1,16 +1,22 @@
-{ stdenv, fetchurl, python3, runtimeShell }:
+{ lib
+, stdenv
+, fetchurl
+, python3
+, runtimeShell
+}:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "mozlz4a";
-  version = "2018-08-23";
-  # or fetchFromGitHub(owner,repo,rev) or fetchgit(rev)
+  version = "2022-03-19";
+
   src = fetchurl {
-    url = "https://gist.githubusercontent.com/kaefer3000/73febe1eec898cd50ce4de1af79a332a/raw/a266410033455d6b4af515d7a9d34f5afd35beec/mozlz4a.py";
-    sha256 = "1d1ai062kdms34bya9dlykkx011rj8d8nh5l7d76xj8k9kv4ssq6";
+    url = "https://gist.githubusercontent.com/Tblue/62ff47bef7f894e92ed5/raw/c12fce199a97ecb214eb913cc5d762eac2e92c57/mozlz4a.py";
+    hash = "sha256-Igj9u6TmV+nIuSg8gI8zD4hTb/Iiog/3aB3DDk0Lqkg=";
   };
 
-  unpackPhase = "true;";
+  dontUnpack = true;
+
+  buildInputs = [ python3 python3.pkgs.lz4 ];
 
   installPhase = ''
     mkdir -p "$out/bin" "$out/${python3.sitePackages}/"
@@ -22,14 +28,12 @@ stdenv.mkDerivation rec {
     chmod a+x "$out/bin/mozlz4a"
   '';
 
-  buildInputs = [ python3 python3.pkgs.python-lz4 ];
-
-  meta = {
-    inherit version;
-    description = "A script to handle Mozilla's mozlz4 files";
-    license = stdenv.lib.licenses.bsd2;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = https://gist.githubusercontent.com/Tblue/62ff47bef7f894e92ed5;
+  meta = with lib; {
+    description = "MozLz4a compression/decompression utility";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ kira-bruneau pshirshov raskin ];
+    platforms = python3.meta.platforms;
+    homepage = "https://gist.github.com/Tblue/62ff47bef7f894e92ed5";
+    mainProgram = "mozlz4a";
   };
 }

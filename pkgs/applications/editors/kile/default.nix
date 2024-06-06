@@ -1,61 +1,48 @@
-{ mkDerivation
-, lib
+{ lib
+, stdenv
 , fetchurl
-, extra-cmake-modules
-, kdoctools
-, wrapGAppsHook
-, qtscript
-, kconfig
-, kcrash
-, kdbusaddons
-, kdelibs4support
-, kguiaddons
-, kiconthemes
-, kinit
-, khtml
-, konsole
-, kparts
-, ktexteditor
-, kwindowsystem
-, okular
-, poppler
+, cmake
+, kdePackages
+, qt6
 }:
 
-mkDerivation rec {
-  name = "kile-2.9.92";
+stdenv.mkDerivation rec {
+  pname = "kile";
+  version = "2.9.94";
 
   src = fetchurl {
-    url = "mirror://sourceforge/kile/${name}.tar.bz2";
-    sha256 = "177372dc25b1d109e037a7dbfc64b5dab2efe538320c87f4a8ceada21e9097f2";
-
+    url = "mirror://sourceforge/kile/kile-${version}.tar.bz2";
+    sha256 = "U8Z0K9g/sJXL3ImLA/344Vq2gKgWk8yvnFB2uTrRo8o=";
   };
 
-  nativeBuildInputs = [ extra-cmake-modules wrapGAppsHook ];
-
-  propagatedBuildInputs = [
-    kconfig
-    kcrash
-    kdbusaddons
-    kdelibs4support
-    kdoctools
-    kguiaddons
-    kiconthemes
-    kinit
-    khtml
-    kparts
-    ktexteditor
-    kwindowsystem
-    okular
-    poppler
-    qtscript
+  nativeBuildInputs = [
+    cmake
+    kdePackages.extra-cmake-modules
+    qt6.wrapQtAppsHook
+    kdePackages.kdoctools
   ];
 
-  propagatedUserEnvPkgs = [ konsole ];
+  buildInputs = [
+    qt6.qtbase
+    qt6.qtdeclarative
+    qt6.qt5compat
+    kdePackages.kconfig
+    kdePackages.kcrash
+    kdePackages.kdbusaddons
+    kdePackages.kguiaddons
+    kdePackages.kiconthemes
+    kdePackages.konsole
+    kdePackages.kparts
+    kdePackages.ktexteditor
+    kdePackages.kwindowsystem
+    kdePackages.okular
+    kdePackages.poppler
+  ];
 
   meta = {
-    description = "Kile is a user friendly TeX/LaTeX authoring tool for the KDE desktop environment";
-    homepage = https://www.kde.org/applications/office/kile/;
-    maintainers = with lib.maintainers; [ fridh ];
+    description = "User-friendly TeX/LaTeX authoring tool for the KDE desktop environment";
+    homepage = "https://www.kde.org/applications/office/kile/";
     license = lib.licenses.gpl2Plus;
+    mainProgram = "kile";
   };
 }

@@ -1,30 +1,70 @@
-{ stdenv, fetchPypi, buildPythonPackage, execnet, pytest, setuptools_scm, pytest-forked, filelock, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools-scm,
+  pytestCheckHook,
+  filelock,
+  execnet,
+  pytest,
+  psutil,
+  setproctitle,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-xdist";
-  version = "1.26.1";
+  version = "3.5.0";
+  disabled = pythonOlder "3.7";
+
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d03d1ff1b008458ed04fa73e642d840ac69b4107c168e06b71037c62d7813dd4";
+    hash = "sha256-y7NvPWfgxHi6pX+k7ciEOIfg9s/ELWd1MKNtdHKzLYo=";
   };
 
-  nativeBuildInputs = [ setuptools_scm pytest ];
-  checkInputs = [ pytest filelock ];
-  propagatedBuildInputs = [ execnet pytest-forked six ];
+  nativeBuildInputs = [ setuptools-scm ];
 
-  checkPhase = ''
-    # Excluded tests access file system
-    py.test testing -k "not test_distribution_rsyncdirs_example \
-                    and not test_rsync_popen_with_path \
-                    and not test_popen_rsync_subdir \
-                    and not test_init_rsync_roots \
-                    and not test_rsyncignore"
-  '';
+  buildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
-    description = "py.test xdist plugin for distributed testing and loop-on-failing modes";
-    homepage = https://github.com/pytest-dev/pytest-xdist;
+  propagatedBuildInputs = [ execnet ];
+
+  nativeCheckInputs = [
+    filelock
+    pytestCheckHook
+  ];
+
+  passthru.optional-dependencies = {
+    psutil = [ psutil ];
+    setproctitle = [ setproctitle ];
+  };
+
+  pytestFlagsArray = [
+    # pytest can already use xdist at this point
+    "--numprocesses=$NIX_BUILD_CORES"
+  ];
+
+  # access file system
+  disabledTests = [
+    "test_distribution_rsyncdirs_example"
+    "test_rsync_popen_with_path"
+    "test_popen_rsync_subdir"
+    "test_rsync_report"
+    "test_init_rsync_roots"
+    "test_rsyncignore"
+    # flakey
+    "test_internal_errors_propagate_to_controller"
+    # https://github.com/pytest-dev/pytest-xdist/issues/985
+    "test_workqueue_ordered_by_size"
+  ];
+
+  setupHook = ./setup-hook.sh;
+
+  meta = with lib; {
+    changelog = "https://github.com/pytest-dev/pytest-xdist/blob/v${version}/CHANGELOG.rst";
+    description = "Pytest xdist plugin for distributed testing and loop-on-failing modes";
+    homepage = "https://github.com/pytest-dev/pytest-xdist";
     license = licenses.mit;
     maintainers = with maintainers; [ dotlambda ];
   };

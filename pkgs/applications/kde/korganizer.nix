@@ -5,15 +5,20 @@
   phonon,
   knewstuff,
   akonadi-calendar, akonadi-contacts, akonadi-notes, akonadi-search,
-  calendarsupport, eventviews, incidenceeditor, kcalutils, kdepim-apps-libs,
+  calendarsupport, eventviews, incidenceeditor, kcalutils,
   kholidays, kidentitymanagement, kldap, kmailtransport, kontactinterface,
-  kpimtextedit, pimcommon,
+  kparts, kpimtextedit,
+  kuserfeedback,
+  pimcommon,
 }:
 
 mkDerivation {
-  name = "korganizer";
+  pname = "korganizer";
   meta = {
-    license = with lib.licenses; [ gpl2 lgpl21 fdl12 ];
+    homepage = "https://apps.kde.org/korganizer/";
+    description = "Personal organizer";
+    mainProgram = "korganizer";
+    license = with lib.licenses; [ gpl2Plus lgpl21Plus fdl12Plus ];
     maintainers = kdepimTeam;
   };
   nativeBuildInputs = [ extra-cmake-modules kdoctools ];
@@ -22,8 +27,10 @@ mkDerivation {
     phonon
     knewstuff
     akonadi-calendar akonadi-contacts akonadi-notes akonadi-search
-    calendarsupport eventviews incidenceeditor kcalutils kdepim-apps-libs
+    calendarsupport eventviews incidenceeditor kcalutils
     kholidays kidentitymanagement kldap kmailtransport kontactinterface
-    kpimtextedit pimcommon
+    kparts kpimtextedit
+    kuserfeedback
+    pimcommon
   ];
 }

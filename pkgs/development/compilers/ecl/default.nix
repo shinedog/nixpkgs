@@ -1,66 +1,92 @@
-{stdenv, fetchurl
-, libtool, autoconf, automake
-, gmp, mpfr, libffi, makeWrapper
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, libtool
+, autoconf
+, automake
+, texinfo
+, gmp
+, mpfr
+, libffi
+, makeWrapper
 , noUnicode ? false
 , gcc
 , threadSupport ? true
-, useBoehmgc ? false, boehmgc
+, useBoehmgc ? false
+, boehmgc
 }:
-let
-  s = # Generated upstream information
-  rec {
-    baseName="ecl";
-    version="16.1.3";
-    name="${baseName}-${version}";
-    hash="0m0j24w5d5a9dwwqyrg0d35c0nys16ijb4r0nyk87yp82v38b9bn";
-    url="https://common-lisp.net/project/ecl/static/files/release/ecl-16.1.3.tgz";
-    sha256="0m0j24w5d5a9dwwqyrg0d35c0nys16ijb4r0nyk87yp82v38b9bn";
+
+stdenv.mkDerivation rec {
+  pname = "ecl";
+  version = "24.5.10";
+
+  src = fetchurl {
+    url = "https://common-lisp.net/project/ecl/static/files/release/ecl-${version}.tgz";
+    hash = "sha256-5Opluxhh4OSVOGv6i8ZzvQFOltPPnZHpA4+RQ1y+Yis=";
   };
-  buildInputs = [
-    libtool autoconf automake makeWrapper
+
+  nativeBuildInputs = [
+    libtool
+    autoconf
+    automake
+    texinfo
+    makeWrapper
   ];
   propagatedBuildInputs = [
-    libffi gmp mpfr gcc
+    libffi
+    gmp
+    mpfr
+    gcc
     # replaces ecl's own gc which other packages can depend on, thus propagated
-  ] ++ stdenv.lib.optionals useBoehmgc [
+  ] ++ lib.optionals useBoehmgc [
     # replaces ecl's own gc which other packages can depend on, thus propagated
     boehmgc
   ];
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
-  inherit buildInputs propagatedBuildInputs;
 
-  src = fetchurl {
-    inherit (s) url sha256;
-  };
+  patches = [
+    # https://gitlab.com/embeddable-common-lisp/ecl/-/merge_requests/1
+    (fetchpatch {
+      url = "https://raw.githubusercontent.com/sagemath/sage/9.2/build/pkgs/ecl/patches/write_error.patch";
+      sha256 = "0hfxacpgn4919hg0mn4wf4m8r7y592r4gw7aqfnva7sckxi6w089";
+    })
+  ];
 
   configureFlags = [
     (if threadSupport then "--enable-threads" else "--disable-threads")
-    "--with-gmp-prefix=${gmp.dev}"
-    "--with-libffi-prefix=${libffi.dev}"
-    ]
-    ++
-    (stdenv.lib.optional (! noUnicode)
-      "--enable-unicode")
-    ;
+    "--with-gmp-incdir=${lib.getDev gmp}/include"
+    "--with-gmp-libdir=${lib.getLib gmp}/lib"
+    "--with-libffi-incdir=${lib.getDev libffi}/include"
+    "--with-libffi-libdir=${lib.getLib libffi}/lib"
+  ] ++ lib.optionals useBoehmgc [
+    "--with-libgc-incdir=${lib.getDev boehmgc}/include"
+    "--with-libgc-libdir=${lib.getLib boehmgc}/lib"
+  ] ++ lib.optional (!noUnicode) "--enable-unicode";
 
   hardeningDisable = [ "format" ];
 
+  # ECL’s ‘make check’ only works after install, making it a de-facto
+  # installCheck.
+  doInstallCheck = true;
+  installCheckTarget = "check";
+
   postInstall = ''
     sed -e 's/@[-a-zA-Z_]*@//g' -i $out/bin/ecl-config
-    wrapProgram "$out/bin/ecl" \
-      --prefix PATH ':' "${gcc}/bin" \
-      --prefix NIX_LDFLAGS ' ' "-L${gmp.lib or gmp.out or gmp}/lib" \
-      --prefix NIX_LDFLAGS ' ' "-L${libffi.lib or libffi.out or libffi}/lib"
+    wrapProgram "$out/bin/ecl" --prefix PATH ':' "${
+      lib.makeBinPath [
+        gcc                   # for the C compiler
+        gcc.bintools.bintools # for ar
+      ]
+    }"
   '';
 
-  meta = {
-    inherit (s) version;
+  meta = with lib; {
     description = "Lisp implementation aiming to be small, fast and easy to embed";
-    homepage = https://common-lisp.net/project/ecl/;
-    license = stdenv.lib.licenses.mit ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://common-lisp.net/project/ecl/";
+    license = licenses.mit;
+    mainProgram = "ecl";
+    maintainers = lib.teams.lisp.members;
+    platforms = platforms.unix;
+    changelog = "https://gitlab.com/embeddable-common-lisp/ecl/-/raw/${version}/CHANGELOG";
   };
 }

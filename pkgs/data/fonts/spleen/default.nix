@@ -1,25 +1,35 @@
-{ stdenv, fetchurl, mkfontdir, mkfontscale }:
+{ lib, stdenvNoCC, fetchurl, xorg }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "spleen";
-  version = "1.0.4";
+  version = "2.1.0";
 
   src = fetchurl {
     url = "https://github.com/fcambus/spleen/releases/download/${version}/spleen-${version}.tar.gz";
-    sha256 = "1x62a5ygn3rpgzbaacz64rp8mn7saymdnxci4l3xasvsjjp60s3g";
+    hash = "sha256-i0fFbxpuuFj7z540UwVXQEsC+7NFXjjmT7hEc/0MNy8=";
   };
 
-  buildPhase = "gzip -n9 *.pcf";
+  nativeBuildInputs = [ xorg.mkfontscale ];
+
+  dontBuild = true;
+
   installPhase = ''
-    d="$out/share/fonts/X11/misc/spleen"
-    install -Dm644 *.pcf.gz  -t $d
-    install -Dm644 *.bdf -t $d
+    runHook preInstall
+
+    d="$out/share/fonts/misc"
+    install -D -m 644 *.{pcf,bdf,otf} -t "$d"
+    install -D -m 644 *.psfu -t "$out/share/consolefonts"
     install -m644 fonts.alias-spleen $d/fonts.alias
+
+    # create fonts.dir so NixOS xorg module adds to fp
+    mkfontdir "$d"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Monospaced bitmap fonts";
-    homepage = https://www.cambus.net/spleen-monospaced-bitmap-fonts;
+    homepage = "https://www.cambus.net/spleen-monospaced-bitmap-fonts";
     license = licenses.bsd2;
     maintainers = with maintainers; [ dtzWill ];
   };

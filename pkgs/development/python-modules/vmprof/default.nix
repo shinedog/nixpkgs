@@ -1,28 +1,58 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, requests
-, six
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  pythonAtLeast,
+  fetchFromGitHub,
+  setuptools,
+  colorama,
+  pytz,
+  requests,
+  six,
+  libunwind,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  version = "0.4.12";
   pname = "vmprof";
+  version = "0.4.17";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "d6fa566512de1e17c9b585feae6e6997119e0d43c41c8461a9a2e8a8276618a4";
+  disabled = pythonOlder "3.6" || pythonAtLeast "3.12";
+
+  src = fetchFromGitHub {
+    owner = "vmprof";
+    repo = "vmprof-python";
+    rev = "refs/tags/${version}";
+    hash = "sha256-7k6mtEdPmp1eNzB4l/k/ExSYtRJVmRxcx50ql8zR36k=";
   };
 
-  propagatedBuildInputs = [ requests six];
+  build-system = [ setuptools ];
 
-  # No tests included
-  doCheck = false;
+  dependencies = [
+    colorama
+    requests
+    six
+    pytz
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ libunwind ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    "test_gzip_call"
+    "test_is_enabled"
+    "test_get_profile_path"
+    "test_get_runtime"
+  ];
+
+  pythonImportsCheck = [ "vmprof" ];
+
+  meta = with lib; {
     description = "A vmprof client";
+    mainProgram = "vmprofshow";
     license = licenses.mit;
-    homepage = https://vmprof.readthedocs.org/;
+    homepage = "https://vmprof.readthedocs.org/";
   };
-
 }

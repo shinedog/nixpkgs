@@ -1,46 +1,62 @@
-{ stdenv, fetchFromGitHub, unzip, cmake, openexr, hdf5-threadsafe }:
+{ lib, stdenv, fetchFromGitHub, cmake, openexr, hdf5-threadsafe }:
 
 stdenv.mkDerivation rec
 {
-  name = "alembic-${version}";
-  version = "1.7.10";
+  pname = "alembic";
+  version = "1.8.6";
 
   src = fetchFromGitHub {
     owner = "alembic";
     repo = "alembic";
-    rev = "${version}";
-    sha256 = "186wwlbz90gmzr4vsykk4z8bgkd45yhbyfpn8bqwidf9fcimcr2a";
+    rev = version;
+    sha256 = "sha256-MND1GtnIGUtRrtyUX1eR9UoGGtuTPtVEIIET3QQ6blA=";
   };
 
+  # note: out is unused (but required for outputDoc anyway)
   outputs = [ "bin" "dev" "out" "lib" ];
 
-  nativeBuildInputs = [ unzip cmake ];
+  # Prevent cycle between bin and dev (only occurs on Darwin for some reason)
+  propagatedBuildOutputs = [ "lib" ];
+
+  nativeBuildInputs = [ cmake ];
+
   buildInputs = [ openexr hdf5-threadsafe ];
 
-  enableParallelBuilding = true;
+  # These flags along with the postPatch step ensure that all artifacts end up
+  # in the correct output without needing to move anything
+  #
+  # - bin: Uses CMAKE_INSTALL_BINDIR (set via CMake setup hooK)
+  # - lib (contains shared libraries): Uses ALEMBIC_LIB_INSTALL_DIR
+  # - dev (headers): Uses CMAKE_INSTALL_PREFIX
+  #   (this works because every other install rule uses an absolute DESTINATION)
+  # - dev (CMake files): Uses ConfigPackageLocation
 
-  buildPhase = ''
-    cmake -DUSE_HDF5=ON -DCMAKE_INSTALL_PREFIX=$out/ -DUSE_TESTS=OFF .
+  cmakeFlags = [
+    "-DUSE_HDF5=ON"
+    "-DUSE_TESTS=ON"
+    "-DALEMBIC_LIB_INSTALL_DIR=${placeholder "lib"}/lib"
+    "-DConfigPackageLocation=${placeholder "dev"}/lib/cmake/Alembic"
+    "-DCMAKE_INSTALL_PREFIX=${placeholder "dev"}"
+    "-DQUIET=ON"
+  ];
 
-    mkdir $out
-    mkdir -p $bin/bin
-    mkdir -p $dev/include
-    mkdir -p $lib/lib
+  postPatch = ''
+    find bin/ -type f -name CMakeLists.txt -print -exec \
+      sed -i 's/INSTALL(TARGETS \([a-zA-Z ]*\) DESTINATION bin)/INSTALL(TARGETS \1)/' {} \;
   '';
 
-  installPhase = ''
-    make install
-
-    mv $out/bin $bin/
-    mv $out/lib $lib/
-    mv $out/include $dev/
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+    ctest -j 1
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An open framework for storing and sharing scene data";
     homepage = "http://alembic.io/";
     license = licenses.bsd3;
     platforms = platforms.all;
-    maintainers = [ maintainers.guibou ];
+    maintainers = with maintainers; [ guibou tmarkus ];
   };
 }

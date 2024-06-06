@@ -1,23 +1,47 @@
-{ stdenv, python, systemd }:
+{
+  stdenv,
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  systemd,
+  lxml,
+  psutil,
+  pytest,
+  mock,
+  pkg-config,
+}:
 
-python.pkgs.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "pystemd";
-  version = "0.6.0";
-  src = python.pkgs.fetchPypi {
+  version = "0.13.2";
+  format = "setuptools";
+  src = fetchPypi {
     inherit pname version;
-    sha256 = "054a3ni71paqa1xa786840z3kjixcgyqdbscyq8nfxp3hwn0gz5i";
+    hash = "sha256-Tc+ksTpVaFxJ09F8EGMeyhjDN3D2Yxb47yM3uJUcwUQ=";
   };
-
-  disabled = !python.pkgs.isPy3k;
 
   buildInputs = [ systemd ];
 
-  checkInputs = with python.pkgs; [ pytest mock ];
+  nativeBuildInputs = [ pkg-config ];
+
+  propagatedBuildInputs = [
+    lxml
+    psutil
+  ];
+
+  nativeCheckInputs = [
+    mock
+    pytest
+  ];
+
   checkPhase = "pytest tests";
 
-  meta = with stdenv.lib; {
-    description = "A thin Cython-based wrapper on top of libsystemd, focused on exposing the dbus API via sd-bus in an automated and easy to consume way.";
-    homepage = https://github.com/facebookincubator/pystemd/;
+  meta = with lib; {
+    description = ''
+      Thin Cython-based wrapper on top of libsystemd, focused on exposing the
+      dbus API via sd-bus in an automated and easy to consume way
+    '';
+    homepage = "https://github.com/facebookincubator/pystemd/";
     license = licenses.lgpl21Plus;
     maintainers = with maintainers; [ flokli ];
   };

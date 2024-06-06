@@ -1,18 +1,49 @@
-{ stdenv, fetchurl, gtk2, pkgconfig }:
+{ lib, stdenv, fetchurl, gtk2, pkg-config, fftw, file,
+  gnome2,
+  openexrSupport ? true, openexr,
+  libzipSupport ? true, libzip,
+  libxml2Support ? true, libxml2,
+  libwebpSupport ? true, libwebp,
+  # libXmu is not used if libunique is.
+  libXmuSupport ? false, xorg,
+  libxsltSupport ? true, libxslt,
+  fitsSupport ? true, cfitsio,
+  zlibSupport ? true, zlib,
+  libuniqueSupport ? true, libunique,
+  libpngSupport ? true, libpng,
+  openglSupport ? !stdenv.isDarwin, libGL
+}:
 
-with stdenv.lib;
-
-let version = "2.48"; in
-stdenv.mkDerivation {
-  name = "gwyddion-${version}";
+stdenv.mkDerivation rec {
+  pname = "gwyddion";
+   version = "2.65";
   src = fetchurl {
-    url = "mirror://sourceforge/gwyddion/files/gwyddion/${version}/gwyddion-${version}.tar.xz";
-    sha256 = "119iw58ac2wn4cas6js8m7r1n4gmmkga6b1y711xzcyjp9hshgwx";
+    url = "mirror://sourceforge/gwyddion/gwyddion-${version}.tar.xz";
+    sha256 = "sha256-kRX7CoPJY8YkYNode5g0OCyWmL+5sM8puCmk9ZE2nqM=";
   };
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ gtk2 ];
+
+  nativeBuildInputs = [ pkg-config file ];
+
+  buildInputs = with lib;
+    [ gtk2 fftw ] ++
+    optionals openglSupport [ gnome2.gtkglext libGL ] ++
+    optional openexrSupport openexr ++
+    optional libXmuSupport xorg.libXmu ++
+    optional fitsSupport cfitsio ++
+    optional libpngSupport libpng ++
+    optional libxsltSupport libxslt ++
+    optional libxml2Support libxml2 ++
+    optional libwebpSupport libwebp ++
+    optional zlibSupport zlib ++
+    optional libuniqueSupport libunique ++
+    optional libzipSupport libzip;
+
+  # This patch corrects problems with python support, but should apply cleanly
+  # regardless of whether python support is enabled, and have no effects if
+  # it is disabled.
+  patches = [ ./codegen.patch ];
   meta = {
-    homepage = http://gwyddion.net/;
+    homepage = "http://gwyddion.net/";
 
     description = "Scanning probe microscopy data visualization and analysis";
 
@@ -26,7 +57,10 @@ stdenv.mkDerivation {
       analysis of profilometry data or thickness maps from imaging
       spectrophotometry.
     '';
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2;
+    platforms = with lib.platforms; linux ++ darwin;
+    maintainers = [ lib.maintainers.cge ];
+    # never built on aarch64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin && stdenv.isAarch64;
   };
 }

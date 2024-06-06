@@ -1,31 +1,29 @@
-{ stdenv, fetchFromGitHub, cmake, postgresql, openssl }:
-
-# # To enable on NixOS:
-# config.services.postgresql = {
-#   extraPlugins = [ pkgs.timescaledb ];
-#   extraConfig = "shared_preload_libraries = 'timescaledb'";
-# }
+{ lib, stdenv, fetchFromGitHub, cmake, postgresql, openssl, libkrb5, enableUnfree ? true }:
 
 stdenv.mkDerivation rec {
-  name = "timescaledb-${version}";
-  version = "1.3.0";
+  pname = "timescaledb${lib.optionalString (!enableUnfree) "-apache"}";
+  version = "2.14.2";
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ postgresql openssl ];
+  buildInputs = [ postgresql openssl libkrb5 ];
 
   src = fetchFromGitHub {
-    owner  = "timescale";
-    repo   = "timescaledb";
-    rev    = "refs/tags/${version}";
-    sha256 = "1wg95ryr5z55aghlqaz0jhz6rliinvfin2i4xpqwg7ir6nz773qm";
+    owner = "timescale";
+    repo = "timescaledb";
+    rev = version;
+    hash = "sha256-gJViEWHtIczvIiQKuvvuwCfWJMxAYoBhCHhD75no6r0=";
   };
+
+  cmakeFlags = [ "-DSEND_TELEMETRY_DEFAULT=OFF" "-DREGRESS_CHECKS=OFF" "-DTAP_CHECKS=OFF" ]
+    ++ lib.optionals (!enableUnfree) [ "-DAPACHE_ONLY=ON" ]
+    ++ lib.optionals stdenv.isDarwin [ "-DLINTER=OFF" ];
 
   # Fix the install phase which tries to install into the pgsql extension dir,
   # and cannot be manually overridden. This is rather fragile but works OK.
-  patchPhase = ''
+  postPatch = ''
     for x in CMakeLists.txt sql/CMakeLists.txt; do
       substituteInPlace "$x" \
-        --replace 'DESTINATION "''${PG_SHAREDIR}/extension"' "DESTINATION \"$out/share/extension\""
+        --replace 'DESTINATION "''${PG_SHAREDIR}/extension"' "DESTINATION \"$out/share/postgresql/extension\""
     done
 
     for x in src/CMakeLists.txt src/loader/CMakeLists.txt tsl/src/CMakeLists.txt; do
@@ -34,18 +32,13 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  postInstall = ''
-    # work around an annoying bug, by creating $out/bin, so buildEnv doesn't freak out later
-    # see https://github.com/NixOS/nixpkgs/issues/22653
-
-    mkdir -p $out/bin
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Scales PostgreSQL for time-series data via automatic partitioning across time and space";
-    homepage    = https://www.timescale.com/;
-    maintainers = with maintainers; [ volth ];
-    platforms   = postgresql.meta.platforms;
-    license     = licenses.asl20;
+    homepage = "https://www.timescale.com/";
+    changelog = "https://github.com/timescale/timescaledb/blob/${version}/CHANGELOG.md";
+    maintainers = with maintainers; [ ];
+    platforms = postgresql.meta.platforms;
+    license = with licenses; if enableUnfree then tsl else asl20;
+    broken = versionOlder postgresql.version "13";
   };
 }

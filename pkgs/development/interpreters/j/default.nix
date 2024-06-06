@@ -1,93 +1,87 @@
-{ stdenv, fetchFromGitHub, readline, libedit, bc }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, which
+, gmp
+, avx2Support ? stdenv.hostPlatform.avx2Support
+}:
 
 stdenv.mkDerivation rec {
-  name = "j-${version}";
-  version = "807";
-  jtype = "release";
+  pname = "j";
+  version = "9.5.1";
+
   src = fetchFromGitHub {
     owner = "jsoftware";
     repo = "jsource";
-    rev = "j${version}-${jtype}";
-    sha256 = "1qciw2yg9x996zglvj2461qby038x89xcmfb3qyrh3myn8m1nq2n";
+    rev = "${version}";
+    hash = "sha256-QRQhE8138+zaGQOdq9xUOrifkVIprzbJWbmMK+WhEOU=";
   };
 
-  buildInputs = [ readline libedit bc ];
-  bits = if stdenv.is64bit then "64" else "32";
-  platform =
-    if (stdenv.isAarch32 || stdenv.isAarch64) then "raspberry" else
-    if stdenv.isLinux then "linux" else
-    if stdenv.isDarwin then "darwin" else
-    "unknown";
+  nativeBuildInputs = [ which ];
+  buildInputs = [ gmp ];
 
-  doCheck = true;
+  patches = [
+    ./fix-install-path.patch
+  ];
+
+  enableParallelBuilding = true;
+
+  dontConfigure = true;
+
+  # Emulate jplatform64.sh configuration variables
+  jplatform =
+    if stdenv.isDarwin then "darwin"
+    else if stdenv.hostPlatform.isAarch then "raspberry"
+    else if stdenv.isLinux then "linux"
+    else "unsupported";
+
+  j64x =
+    if stdenv.is32bit then "j32"
+    else if stdenv.isx86_64 then
+      if stdenv.isLinux && avx2Support then "j64avx2" else "j64"
+    else if stdenv.isAarch64 then
+      if stdenv.isDarwin then "j64arm" else "j64"
+    else "unsupported";
+
+  env.NIX_LDFLAGS = "-lgmp";
 
   buildPhase = ''
-    export SOURCE_DIR=$(pwd)
-    export HOME=$TMPDIR
-    export JLIB=$SOURCE_DIR/jlibrary
-
-    export jbld=$HOME/bld
-    export jplatform=${platform}
-    export jmake=$SOURCE_DIR/make
-    export jgit=$SOURCE_DIR
-    export JBIN=$jbld/j${bits}/bin
-    mkdir -p $JBIN
-
-    echo $OUT_DIR
-
-    cd make
-
-    patchShebangs .
-    sed -i jvars.sh -e "
-      s@~/git/jsource@$SOURCE_DIR@;
-      s@~/jbld@$HOME@;
-      "
-
-    sed -i $JLIB/bin/profile.ijs -e "s@'/usr/share/j/.*'@'$out/share/j'@;"
-
-    # For future versions, watch
-    # https://github.com/jsoftware/jsource/pull/4
-    cp ./jvars.sh $HOME
-
-    echo '
-      #define jversion   "${version}"
-      #define jplatform  "${platform}"
-      #define jtype      "${jtype}"         // release,beta,...
-      #define jlicense   "GPL3"
-      #define jbuilder   "nixpkgs"  // website or email
-      ' > ../jsrc/jversion.h
-
-    ./build_jconsole.sh j${bits}
-    ./build_libj.sh j${bits}
-  '';
-
-  checkPhase = ''
-    echo 'i. 5' | $JBIN/jconsole | fgrep "0 1 2 3 4"
-
-    # Now run the real tests
-    cd $SOURCE_DIR/test
-    for f in *.ijs
-    do
-      echo $f
-      $JBIN/jconsole < $f > /dev/null || echo FAIL && echo PASS
-    done
+    runHook preBuild
+    MAKEFLAGS+=" ''${enableParallelBuilding:+-j$NIX_BUILD_CORES}" \
+      jplatform=${jplatform} j64x=${j64x} make2/build_all.sh
+    cp -v bin/${jplatform}/${j64x}/* jlibrary/bin/
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p "$out"
-    cp -r $JBIN "$out/bin"
-    rm $out/bin/*.txt # Remove logs from the bin folder
-
-    mkdir -p "$out/share/j"
-    cp -r $JLIB/{addons,system} "$out/share/j"
-    cp -r $JLIB/bin "$out"
+    runHook preInstall
+    mkdir -p $out/share/j
+    cp -r jlibrary/{addons,system} $out/share/j/
+    cp -r jlibrary/bin $out/
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  doInstallCheck = false; # The "gregex" test fails due to not finding PCRE2
+
+  installCheckPhase = ''
+    runHook preInstallCheck
+    HOME="$TMPDIR" $out/bin/jconsole -lib $out/bin/libj* script/testga.ijs
+    runHook postInstallCheck
+  '';
+
+  meta = with lib; {
+    homepage = "https://jsoftware.com/";
     description = "J programming language, an ASCII-based APL successor";
-    maintainers = with maintainers; [ raskin synthetica ];
-    platforms = with platforms; linux ++ darwin;
-    license = licenses.gpl3Plus;
-    homepage = http://jsoftware.com/;
+    longDescription = ''
+      J is a high-level, general-purpose programming language that is
+      particularly suited to the mathematical, statistical, and logical analysis
+      of data. It is a powerful tool for developing algorithms and exploring
+      problems that are not already well understood.
+    '';
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ raskin synthetica AndersonTorres ];
+    broken = stdenv.isDarwin;
+    platforms = platforms.all;
+    mainProgram = "jconsole";
   };
 }

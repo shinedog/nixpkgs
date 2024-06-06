@@ -1,27 +1,44 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  pbr,
+  setuptools,
+
+  # tests
+  pytestCheckHook,
+  pyyaml,
 }:
 
 buildPythonPackage rec {
   pname = "munch";
-  version = "2.3.2";
+  version = "4.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "6ae3d26b837feacf732fb8aa5b842130da1daf221f5af9f9d4b2a0a6414b0d51";
+  src = fetchFromGitHub {
+    owner = "Infinidat";
+    repo = "munch";
+    rev = "refs/tags/${version}";
+    hash = "sha256-p7DvOGRhkCmtJ32EfttyKXGGmO5kfb2bQGqok/RJtU8=";
   };
 
-  propagatedBuildInputs = [ six ];
+  env.PBR_VERSION = version;
 
-  # No tests in archive
-  doCheck = false;
+  nativeBuildInputs = [
+    pbr
+    setuptools
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+    pyyaml
+  ];
+
+  meta = with lib; {
     description = "A dot-accessible dictionary (a la JavaScript objects)";
     license = licenses.mit;
-    homepage = https://github.com/Infinidat/munch;
+    homepage = "https://github.com/Infinidat/munch";
   };
-
 }

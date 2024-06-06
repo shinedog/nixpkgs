@@ -1,55 +1,105 @@
-{ stdenv, fetchurl, makeWrapper, electron_3, dpkg, gtk3, glib, gsettings-desktop-schemas, wrapGAppsHook }:
+{ stdenv
+, fetchurl
+, dpkg
+, lib
+, glib
+, nss
+, nspr
+, at-spi2-atk
+, cups
+, dbus
+, libdrm
+, gtk3
+, pango
+, cairo
+, xorg
+, libxkbcommon
+, mesa
+, expat
+, alsa-lib
+, buildFHSEnv
+}:
 
-stdenv.mkDerivation rec {
+let
   pname = "typora";
-  version = "0.9.70";
-
+  version = "1.8.10";
   src = fetchurl {
-    url = "https://www.typora.io/linux/typora_${version}_amd64.deb";
-    sha256 = "08bgllbvgrpdkk9bryj4s16n274ps4igwrzdvsdbyw8wpp44vcy2";
+    url = "https://download.typora.io/linux/typora_${version}_amd64.deb";
+    hash = "sha256-5ZLSzDUcF0OZUuWVX/iG+4ccTlCPdYxy7zl0wDHlxNQ=";
   };
 
-  nativeBuildInputs = [
-    dpkg
-    makeWrapper
-    wrapGAppsHook
-  ];
+  typoraBase = stdenv.mkDerivation {
+    inherit pname version src;
 
-  buildInputs = [
-    glib
-    gsettings-desktop-schemas
-    gtk3
-  ];
+    nativeBuildInputs = [ dpkg ];
 
-  unpackPhase = "dpkg-deb -x $src .";
+    dontConfigure = true;
+    dontBuild = true;
 
-  dontWrapGApps = true;
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/bin $out/share
+      mv usr/share $out
+      ln -s $out/share/typora/Typora $out/bin/Typora
+      runHook postInstall
+    '';
+  };
+
+  typoraFHS = buildFHSEnv {
+    name = "typora-fhs";
+    targetPkgs = pkgs: (with pkgs; [
+      typoraBase
+      udev
+      alsa-lib
+      glib
+      nss
+      nspr
+      atk
+      cups
+      dbus
+      gtk3
+      libdrm
+      pango
+      cairo
+      mesa
+      expat
+      libxkbcommon
+    ]) ++ (with pkgs.xorg; [
+      libX11
+      libXcursor
+      libXrandr
+      libXcomposite
+      libXdamage
+      libXext
+      libXfixes
+      libxcb
+    ]);
+    runScript = ''
+      Typora $*
+    '';
+  };
+
+in stdenv.mkDerivation {
+  inherit pname version;
+
+  dontUnpack = true;
+  dontConfigure = true;
+  dontBuild = true;
 
   installPhase = ''
     runHook preInstall
-
-    mkdir -p $out/bin $out/share
-    {
-      cd usr
-      mv share/typora/resources/app $out/share/typora
-      mv share/{applications,icons,doc} $out/share/
-    }
-
+    mkdir -p $out/bin
+    ln -s ${typoraFHS}/bin/typora-fhs $out/bin/typora
+    ln -s ${typoraBase}/share/ $out
     runHook postInstall
   '';
 
-  postFixup = ''
-    makeWrapper ${electron_3}/bin/electron $out/bin/typora \
-      --add-flags $out/share/typora \
-      "''${gappsWrapperArgs[@]}" \
-      --prefix LD_LIBRARY_PATH : "${stdenv.lib.makeLibraryPath [ stdenv.cc.cc ]}"
-  '';
-
-  meta = with stdenv.lib; {
-    description = "A minimal Markdown reading & writing app";
-    homepage = https://typora.io;
+  meta = with lib; {
+    description = "A markdown editor, a markdown reader";
+    homepage = "https://typora.io/";
     license = licenses.unfree;
-    maintainers = with maintainers; [ jensbin worldofpeace ];
-    inherit (electron_3.meta) platforms;
+    maintainers = with maintainers; [ npulidomateo ];
+    platforms = [ "x86_64-linux" ];
+    mainProgram = "typora";
   };
 }

@@ -1,42 +1,48 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
-, cython
-, cymem
-, python
+{
+  lib,
+  buildPythonPackage,
+  cymem,
+  cython,
+  python,
+  fetchPypi,
+  murmurhash,
+  pytestCheckHook,
+  pythonOlder,
 }:
+
 buildPythonPackage rec {
   pname = "preshed";
-  version = "2.0.1";
+  version = "3.0.9";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1rd943zp4gyspajqm5qxzndxziyh51grx0zcw23w8r9r65s1rq6s";
+    hash = "sha256-chhjxSRP/NJlGtCSiVGix8d7EC9OEaJRrYXTfudiFmA=";
   };
 
+  nativeBuildInputs = [ cython ];
+
   propagatedBuildInputs = [
-   cython
-   cymem
+    cymem
+    murmurhash
   ];
 
-  buildInputs = [
-    pytest
-  ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  prePatch = ''
-    substituteInPlace setup.py \
-      --replace "wheel>=0.32.0,<0.33.0" "wheel>=0.31.0"
-  '';
+  # Tests have import issues with 3.0.8
+  doCheck = false;
 
-  checkPhase = ''
-    ${python.interpreter} setup.py test
-  '';
-  
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "preshed" ];
+
+  # don't update to 4.0.0, version was yanked
+  passthru.skipBulkUpdate = true;
+
+  meta = with lib; {
     description = "Cython hash tables that assume keys are pre-hashed";
-    homepage = https://github.com/explosion/preshed;
+    homepage = "https://github.com/explosion/preshed";
     license = licenses.mit;
-    maintainers = with maintainers; [ sdll ];
-    };
+    maintainers = with maintainers; [ ];
+  };
 }

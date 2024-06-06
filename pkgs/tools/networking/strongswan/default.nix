@@ -1,52 +1,47 @@
-{ stdenv, fetchurl, substituteAll
-, pkgconfig, autoreconfHook
-, gmp, python, iptables, ldns, unbound, openssl, pcsclite
+{ lib, stdenv, fetchFromGitHub
+, pkg-config, autoreconfHook, perl, gperf, bison, flex
+, gmp, python3, iptables, ldns, unbound, openssl, pcsclite, glib
 , openresolv
 , systemd, pam
 , curl
-, kmod
 , enableTNC            ? false, trousers, sqlite, libxml2
 , enableNetworkManager ? false, networkmanager
-, libpcap
 , darwin
+, nixosTests
 }:
 
 # Note on curl support: If curl is built with gnutls as its backend, the
 # strongswan curl plugin may break.
 # See https://wiki.strongswan.org/projects/strongswan/wiki/Curl for more info.
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "strongswan-${version}";
-  version = "5.7.2";
+  pname = "strongswan";
+  version = "5.9.14"; # Make sure to also update <nixpkgs/nixos/modules/services/networking/strongswan-swanctl/swanctl-params.nix> when upgrading!
 
-  src = fetchurl {
-    url = "https://download.strongswan.org/${name}.tar.bz2";
-    sha256 = "0w6cks42lvvyj5ivyhqyqxya48x93yzfpz281q3xmqicdskkp3ih";
+  src = fetchFromGitHub {
+    owner = "strongswan";
+    repo = "strongswan";
+    rev = version;
+    hash = "sha256-qFM7ErfqiDlUsZdGXJQVW3nJoh+I6tEdKRwzrKteRVY=";
   };
 
   dontPatchELF = true;
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+  nativeBuildInputs = [ pkg-config autoreconfHook perl gperf bison flex ];
   buildInputs =
-    [ curl gmp python ldns unbound openssl pcsclite ]
-    ++ optionals enableTNC [ trousers sqlite libxml2 ]
-    ++ optionals stdenv.isLinux [ systemd.dev pam iptables ]
-    ++ optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ SystemConfiguration ])
-    ++ optionals enableNetworkManager [ networkmanager ];
+    [ curl gmp python3 ldns unbound openssl pcsclite ]
+    ++ lib.optionals enableTNC [ trousers sqlite libxml2 ]
+    ++ lib.optionals stdenv.isLinux [ systemd.dev pam iptables ]
+    ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ SystemConfiguration ])
+    ++ lib.optionals enableNetworkManager [ networkmanager glib ];
 
   patches = [
     ./ext_auth-path.patch
     ./firewall_defaults.patch
     ./updown-path.patch
-    (optional stdenv.isLinux (substituteAll {
-      src = ./modprobe-path.patch;
-      inherit kmod;
-    }))
   ];
 
-  postPatch = optionalString stdenv.isLinux ''
+  postPatch = lib.optionalString stdenv.isLinux ''
     # glibc-2.26 reorganized internal includes
     sed '1i#include <stdint.h>' -i src/libstrongswan/utils/utils/memory.h
 
@@ -65,16 +60,16 @@ stdenv.mkDerivation rec {
       "--enable-pkcs11" "--enable-eap-sim-pcsc" "--enable-dnscert" "--enable-unbound"
       "--enable-chapoly"
       "--enable-curl" ]
-    ++ optionals stdenv.isLinux [
+    ++ lib.optionals stdenv.isLinux [
       "--enable-farp" "--enable-dhcp"
       "--enable-systemd" "--with-systemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
       "--enable-xauth-pam"
       "--enable-forecast"
       "--enable-connmark"
       "--enable-af-alg" ]
-    ++ optionals stdenv.isx86_64 [ "--enable-aesni" "--enable-rdrand" ]
-    ++ optional (stdenv.hostPlatform.system == "i686-linux") "--enable-padlock"
-    ++ optionals enableTNC [
+    ++ lib.optionals stdenv.isx86_64 [ "--enable-aesni" "--enable-rdrand" ]
+    ++ lib.optional (stdenv.hostPlatform.system == "i686-linux") "--enable-padlock"
+    ++ lib.optionals enableTNC [
          "--disable-gmp" "--disable-aes" "--disable-md5" "--disable-sha1" "--disable-sha2" "--disable-fips-prf"
          "--enable-eap-tnc" "--enable-eap-ttls" "--enable-eap-dynamic" "--enable-tnccs-20"
          "--enable-tnc-imc" "--enable-imc-os" "--enable-imc-attestation"
@@ -83,11 +78,11 @@ stdenv.mkDerivation rec {
          "--with-tss=trousers"
          "--enable-aikgen"
          "--enable-sqlite" ]
-    ++ optionals enableNetworkManager [
+    ++ lib.optionals enableNetworkManager [
          "--enable-nm"
          "--with-nm-ca-dir=/etc/ssl/certs" ]
     # Taken from: https://wiki.strongswan.org/projects/strongswan/wiki/MacOSX
-    ++ optionals stdenv.isDarwin [
+    ++ lib.optionals stdenv.isDarwin [
       "--disable-systemd"
       "--disable-xauth-pam"
       "--disable-kernel-netlink"
@@ -103,11 +98,13 @@ stdenv.mkDerivation rec {
     echo "include /etc/ipsec.secrets" >> $out/etc/ipsec.secrets
   '';
 
-  NIX_LDFLAGS = optionalString stdenv.cc.isGNU "-lgcc_s" ;
+  NIX_LDFLAGS = lib.optionalString stdenv.cc.isGNU "-lgcc_s" ;
 
-  meta = {
+  passthru.tests = { inherit (nixosTests) strongswan-swanctl; };
+
+  meta = with lib; {
     description = "OpenSource IPsec-based VPN Solution";
-    homepage = https://www.strongswan.org;
+    homepage = "https://www.strongswan.org";
     license = licenses.gpl2Plus;
     platforms = platforms.all;
   };

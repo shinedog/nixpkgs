@@ -1,25 +1,27 @@
-{ lib, buildGoPackage, fetchFromGitHub }:
-buildGoPackage rec {
-  name = "${pname}-${version}";
+{ lib, buildGoModule, fetchFromGitHub, go_1_21 }:
+buildGoModule rec {
   pname = "terraform-docs";
-  version = "0.6.0";
+  version = "0.17.0";
 
-  goPackagePath = "github.com/segmentio/${pname}";
+  go = go_1_21;
 
   src = fetchFromGitHub {
-    owner  = "segmentio";
-    repo   = pname;
-    rev    = "v${version}";
-    sha256 = "1p6prhjf82qnhf1zwl9h92j4ds5g383a6g9pwwnqbc3wdwy5zx7d";
+    owner = "terraform-docs";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-HkkW6JX5wcGElmr6CiSukyeS/8rz4CUThy8rZfx4hbo=";
   };
 
-  preBuild = ''
-    buildFlagsArray+=("-ldflags" "-X main.version=${version}")
-  '';
+  patches = [ ./update-to-go-1.21.patch ];
+
+  vendorHash = "sha256-ZHWAiXJG8vCmUkf6GNxoIJbIEjEWukLdrmdIb64QleI=";
+
+  subPackages = [ "." ];
 
   meta = with lib; {
     description = "A utility to generate documentation from Terraform modules in various output formats";
-    homepage = "https://github.com/segmentio/terraform-docs/";
+    mainProgram = "terraform-docs";
+    homepage = "https://github.com/terraform-docs/terraform-docs/";
     license = licenses.mit;
     maintainers = with maintainers; [ zimbatm ];
   };

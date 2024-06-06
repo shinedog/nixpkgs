@@ -1,24 +1,70 @@
-{ stdenv, fetchFromGitHub, python3, openssl }:
+{ lib
+, fetchFromGitHub
+, python3
+, softhsm
+}:
 
 python3.pkgs.buildPythonApplication rec {
   pname = "esptool";
-  version = "2.6";
+  version = "4.7.0";
+
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "espressif";
     repo = "esptool";
     rev = "v${version}";
-    sha256 = "1hxgzqh5z81dq1k2xd6329h8idk9y8q29izrwm1vhn0m9v1pxa22";
+    hash = "sha256-yrEwCg0e+8jZorL6jcqeuKUCFoV0oP9HVFh1n/ezjPg=";
   };
 
-  checkInputs = with python3.pkgs; [ flake8 flake8-future-import flake8-import-order openssl ];
-  propagatedBuildInputs = with python3.pkgs; [ pyserial pyaes ecdsa ];
+  postPatch = ''
+    patchShebangs ci
 
-  meta = with stdenv.lib; {
+    substituteInPlace test/test_espsecure_hsm.py \
+      --replace "/usr/lib/softhsm" "${lib.getLib softhsm}/lib/softhsm"
+  '';
+
+  propagatedBuildInputs = with python3.pkgs; [
+    bitstring
+    cryptography
+    ecdsa
+    intelhex
+    pyserial
+    reedsolo
+    pyyaml
+    python-pkcs11
+  ];
+
+  nativeCheckInputs = with python3.pkgs; [
+    pyelftools
+    pytestCheckHook
+    softhsm
+  ];
+
+  # tests mentioned in `.github/workflows/test_esptool.yml`
+  checkPhase = ''
+    runHook preCheck
+
+    export SOFTHSM2_CONF=$(mktemp)
+    echo "directories.tokendir = $(mktemp -d)" > "$SOFTHSM2_CONF"
+    ./ci/setup_softhsm2.sh
+
+    pytest test/test_imagegen.py
+    pytest test/test_espsecure.py
+    pytest test/test_espsecure_hsm.py
+    pytest test/test_merge_bin.py
+    pytest test/test_image_info.py
+    pytest test/test_modules.py
+
+    runHook postCheck
+  '';
+
+  meta = with lib; {
     description = "ESP8266 and ESP32 serial bootloader utility";
-    homepage = https://github.com/espressif/esptool;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ dezgeg dotlambda ];
-    platforms = platforms.linux;
+    homepage = "https://github.com/espressif/esptool";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ dezgeg dotlambda ] ++ teams.lumiguide.members;
+    platforms = with platforms; linux ++ darwin;
+    mainProgram = "esptool.py";
   };
 }

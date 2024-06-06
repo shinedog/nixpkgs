@@ -1,22 +1,27 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, nose
-, cython
-, numpy
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  nose,
+  cython,
+  numpy,
 }:
 
 buildPythonPackage rec {
-  version = "0.13";
+  version = "0.14.2";
+  format = "setuptools";
   pname = "hdmedians";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "230f80e064d905c49a1941af1b7e806e2f22b3c9a90ad5c21fd17d72636ea277";
+    sha256 = "b47aecb16771e1ba0736557255d80ae0240b09156bff434321de559b359ac2d6";
   };
 
   # nose was specified in setup.py as a build dependency...
-  buildInputs = [ cython nose ];
+  buildInputs = [
+    cython
+    nose
+  ];
   propagatedBuildInputs = [ numpy ];
 
   # cannot resolve path for packages in tests
@@ -26,10 +31,10 @@ buildPythonPackage rec {
     nosetests
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/daleroberts/hdmedians;
+  meta = with lib; {
+    homepage = "https://github.com/daleroberts/hdmedians";
     description = "High-dimensional medians";
     license = licenses.gpl3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = [ ];
   };
 }

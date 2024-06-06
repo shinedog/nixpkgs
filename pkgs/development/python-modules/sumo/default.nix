@@ -1,24 +1,60 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, numpy, scipy, spglib, pymatgen, h5py, matplotlib, seekpath, phonopy }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+  cython,
+  h5py,
+  matplotlib,
+  numpy,
+  phonopy,
+  pymatgen,
+  scipy,
+  seekpath,
+  spglib,
+  castepxbin,
+  pytestCheckHook,
+  colormath,
+}:
 
 buildPythonPackage rec {
   pname = "sumo";
-  version = "1.0.9";
+  version = "2.3.8";
+  format = "setuptools";
 
-  # No tests in Pypi tarball
+  disabled = pythonOlder "3.8";
+
   src = fetchFromGitHub {
     owner = "SMTG-UCL";
     repo = "sumo";
-    rev = "v${version}";
-    sha256 = "1zw86qp9ycw2k0anw6pzvwgd3zds0z2cwy0s663zhiv9mnb5hx1n";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-nQ5US7maFcOJCqFYeokGiBFp3jhiOPSfCBeclLdHdkk=";
   };
 
-  propagatedBuildInputs = [ numpy scipy spglib pymatgen h5py matplotlib seekpath phonopy ];
-  
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ cython ];
+
+  propagatedBuildInputs = [
+    castepxbin
+    colormath
+    h5py
+    matplotlib
+    numpy
+    phonopy
+    pymatgen
+    scipy
+    seekpath
+    spglib
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "sumo" ];
+
+  meta = with lib; {
     description = "Toolkit for plotting and analysis of ab initio solid-state calculation data";
-    homepage = https://github.com/SMTG-UCL/sumo;
+    homepage = "https://github.com/SMTG-UCL/sumo";
+    changelog = "https://github.com/SMTG-Bham/sumo/releases/tag/v${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ psyanticy ];
   };
 }
-

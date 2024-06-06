@@ -1,57 +1,66 @@
-{ stdenv, fetchFromGitHub, pantheon, pkgconfig, meson, ninja
-, substituteAll, vala, gtk3, granite, libxml2, wingpanel, libgee
-, xorg, libgnomekbd, gobject-introspection, elementary-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, nix-update-script
+, pkg-config
+, meson
+, ninja
+, substituteAll
+, vala
+, gtk3
+, granite
+, libxml2
+, wingpanel
+, libgee
+, xorg
+, libgnomekbd
+, ibus
+}:
 
 stdenv.mkDerivation rec {
   pname = "wingpanel-indicator-keyboard";
-  version = "2.1.2";
+  version = "2.4.1";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "0lrd474m6p8di73hqjilqnnl7qg72ky5narkgcvm4lk8dyi78mz0";
+    sha256 = "sha256-AmTAl7N+2zYRUgmnuP+S+m0n6nUIihcB5kisWoPPlTQ=";
   };
-
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-    };
-  };
-
-  nativeBuildInputs = [
-    gobject-introspection
-    meson
-    ninja
-    libxml2
-    pkgconfig
-    vala
-    wrapGAppsHook
-  ];
-
-  buildInputs = [
-    elementary-icon-theme
-    granite
-    gtk3
-    libgee
-    wingpanel
-  ];
 
   patches = [
     (substituteAll {
       src = ./fix-paths.patch;
-      libgnomekbd_path = "${libgnomekbd}/bin/";
-      config = "${xorg.xkeyboardconfig}/share/X11/xkb/rules/evdev.xml";
+      gkbd_keyboard_display = "${libgnomekbd}/bin/gkbd-keyboard-display";
     })
   ];
 
-  PKG_CONFIG_WINGPANEL_2_0_INDICATORSDIR = "${placeholder ''out''}/lib/wingpanel";
+  nativeBuildInputs = [
+    meson
+    ninja
+    libxml2
+    pkg-config
+    vala
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    granite
+    gtk3
+    ibus
+    libgee
+    wingpanel
+    xorg.xkeyboardconfig
+  ];
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "Keyboard Indicator for Wingpanel";
-    homepage = https://github.com/elementary/wingpanel-indicator-keyboard;
-    license = licenses.lgpl21Plus;
+    homepage = "https://github.com/elementary/wingpanel-indicator-keyboard";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+    maintainers = teams.pantheon.members;
   };
 }

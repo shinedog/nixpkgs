@@ -1,58 +1,74 @@
-{ stdenv, fetchurl, pkgconfig, gettext
-, guile, guile-reader, guile-lib
-, ploticus, imagemagick
-, ghostscript, transfig
-, enableEmacs ? false, emacs ? null
-, enableLout ? true, lout ? null
-, enableTex ? true, tex ? null
-, makeWrapper }:
+{ lib
+, stdenv
+, fetchurl
+, fig2dev
+, gettext
+, ghostscript
+, guile
+, guile-lib
+, guile-reader
+, imagemagick
+, makeWrapper
+, pkg-config
+, enableEmacs ? false, emacs
+, enableLout ? stdenv.isLinux, lout
+, enablePloticus ? stdenv.isLinux, ploticus
+, enableTex ? true, texliveSmall
+}:
 
-with stdenv.lib;
-stdenv.mkDerivation rec {
-
-  name = "skribilo-${version}";
-  version = "0.9.4";
+let
+  inherit (lib) optional;
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "skribilo";
+  version = "0.10.0";
 
   src = fetchurl {
-    url = "http://download.savannah.nongnu.org/releases/skribilo/${name}.tar.gz";
-    sha256 = "06ywnfjfa9sxrzdszb5sryzg266380g519cm64kq62sskzl7zmnf";
+    url = "http://download.savannah.nongnu.org/releases/skribilo/skribilo-${finalAttrs.version}.tar.gz";
+    hash = "sha256-jP9I7hds7f1QMmSaNJpGlSvqUOwGcg+CnBzMopIS9Q4=";
   };
 
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
+  nativeBuildInputs = [
+    makeWrapper
+    pkg-config
+  ];
 
-  buildInputs = [ gettext guile ploticus imagemagick ghostscript transfig ]
+  buildInputs = [
+    fig2dev
+    gettext
+    ghostscript
+    guile
+    guile-lib
+    guile-reader
+    imagemagick
+  ]
   ++ optional enableEmacs emacs
   ++ optional enableLout lout
-  ++ optional enableTex tex;
-
-  propagatedBuildInputs = [ guile-reader guile-lib ];
+  ++ optional enablePloticus ploticus
+  ++ optional enableTex texliveSmall;
 
   postInstall = ''
     wrapProgram $out/bin/skribilo \
-      --prefix GUILE_LOAD_PATH : "$out/share/guile/site:${guile-lib}/share/guile/site:${guile-reader}/share/guile/site" \
-      --prefix GUILE_LOAD_COMPILED_PATH : "$out/share/guile/site:${guile-lib}/share/guile/site:${guile-reader}/share/guile/site"
+      --prefix GUILE_LOAD_PATH : "$out/${guile.siteDir}:$GUILE_LOAD_PATH" \
+      --prefix GUILE_LOAD_COMPILED_PATH : "$out/${guile.siteCcacheDir}:$GUILE_LOAD_COMPILED_PATH"
   '';
 
   meta = {
+    homepage = "https://www.nongnu.org/skribilo/";
     description = "The Ultimate Document Programming Framework";
     longDescription = ''
-      Skribilo is a free document production tool that takes a
-      structured document representation as its input and renders that
-      document in a variety of output formats: HTML and Info for
-      on-line browsing, and Lout and LaTeX for high-quality hard
-      copies.
+      Skribilo is a free document production tool that takes a structured
+      document representation as its input and renders that document in a
+      variety of output formats: HTML and Info for on-line browsing, and Lout
+      and LaTeX for high-quality hard copies.
 
       The input document can use Skribilo's markup language to provide
-      information about the document's structure, which is similar to
-      HTML or LaTeX and does not require expertise. Alternatively, it
-      can use a simpler, "markup-less" format that borrows from Emacs'
-      outline mode and from other conventions used in emails, Usenet
-      and text.
+      information about the document's structure, which is similar to HTML or
+      LaTeX and does not require expertise. Alternatively, it can use a simpler,
+      "markup-less" format that borrows from Emacs' outline mode and from other
+      conventions used in emails, Usenet and text.
     '';
-    homepage = https://www.nongnu.org/skribilo/;
-    license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ AndersonTorres ];
-    platforms = platforms.unix;
+    license = lib.licenses.gpl3Plus;
+    maintainers = with lib.maintainers; [ AndersonTorres ];
+    platforms = lib.platforms.unix;
   };
-}
-# TODO: Better Emacs and TeX integration
+})

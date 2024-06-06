@@ -1,39 +1,47 @@
-{ lib, writeText, buildPythonPackage, fetchPypi, libpcap, dpkt }:
+{
+  lib,
+  buildPythonPackage,
+  dpkt,
+  fetchFromGitHub,
+  libpcap,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pypcap";
-  version = "1.2.2";
+  version = "1.3.0";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "07ww25z4xydp11hb38halh1940gmp5lca11hwfb63zv3bps248x3";
+  src = fetchFromGitHub {
+    owner = "pynetwork";
+    repo = pname;
+    # No release was tagged and PyPI doesn't contain tests.
+    rev = "968859f0ffb5b7c990506dffe82457b7de23a026";
+    hash = "sha256-NfyEC3qEBm6TjebcDIsoz8tJWaJ625ZFPfx7AMyynWE=";
   };
 
-  patches = [
-    # The default setup.py searchs for pcap.h in a static list of default
-    # folders. So we have to add the path to libpcap in the nix-store.
-    (writeText "libpcap-path.patch"
-      ''
-      --- a/setup.py
-      +++ b/setup.py
-      @@ -28,6 +28,7 @@ def recursive_search(path, target_files):
-
-       def find_prefix_and_pcap_h():
-           prefixes = chain.from_iterable((
-      +        '${libpcap}',
-               ('/usr', sys.prefix),
-               glob.glob('/opt/libpcap*'),
-               glob.glob('../libpcap*'),
-      '')
-  ];
+  postPatch = ''
+    # Add the path to libpcap in the nix-store
+    substituteInPlace setup.py --replace "('/usr', sys.prefix)" "'${libpcap}'"
+    # Remove coverage from test run
+    sed -i "/--cov/d" setup.cfg
+  '';
 
   buildInputs = [ libpcap ];
-  checkInputs = [ dpkt ];
+
+  nativeCheckInputs = [
+    dpkt
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [ "tests" ];
+
+  pythonImportsCheck = [ "pcap" ];
 
   meta = with lib; {
-    homepage = https://github.com/pynetwork/pypcap;
+    homepage = "https://github.com/pynetwork/pypcap";
     description = "Simplified object-oriented Python wrapper for libpcap";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ geistesk ];
+    maintainers = with maintainers; [ oxzi ];
   };
 }

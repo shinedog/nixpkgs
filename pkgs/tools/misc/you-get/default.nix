@@ -1,8 +1,15 @@
-{ stdenv, buildPythonApplication, fetchPypi }:
+{ lib
+, python3
+, fetchPypi
+, substituteAll
+, ffmpeg
+, installShellFiles
+}:
 
-buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "you-get";
-  version = "0.4.1295";
+  version = "0.4.1700";
+  format = "setuptools";
 
   # Tests aren't packaged, but they all hit the real network so
   # probably aren't suitable for a build environment anyway.
@@ -10,14 +17,37 @@ buildPythonApplication rec {
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "15p9ngscrn20shkg909hcnsizqpbl038zbnmxwbprj88lnn8xz9m";
+    sha256 = "sha256-XNIUkgEqRGrBtSxvfkSUSqxltZ6ZdkWoTc9kz4BD6Zw=";
   };
 
-  meta = with stdenv.lib; {
+  patches = [
+    (substituteAll {
+      src = ./ffmpeg-path.patch;
+      ffmpeg = "${lib.getBin ffmpeg}/bin/ffmpeg";
+      ffprobe = "${lib.getBin ffmpeg}/bin/ffmpeg";
+      version = lib.getVersion ffmpeg;
+    })
+  ];
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  postInstall = ''
+    installShellCompletion --cmd you-get \
+      --zsh contrib/completion/_you-get \
+      --fish contrib/completion/you-get.fish \
+      --bash contrib/completion/you-get-completion.bash
+  '';
+
+  pythonImportsCheck = [
+    "you_get"
+  ];
+
+  meta = with lib; {
     description = "A tiny command line utility to download media contents from the web";
-    homepage = https://you-get.org;
+    homepage = "https://you-get.org";
+    changelog = "https://github.com/soimort/you-get/raw/v${version}/CHANGELOG.rst";
     license = licenses.mit;
     maintainers = with maintainers; [ ryneeverett ];
-    platforms = platforms.all;
+    mainProgram = "you-get";
   };
 }

@@ -1,21 +1,43 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  mock,
+  pytestCheckHook,
+  pyyaml,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
-  pname = "ConfigArgParse";
-  version = "0.14.0";
+  pname = "configargparse";
+  version = "1.7";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "149fy4zya0rsnlkvxbbq43cyr8lscb5k4pj1m6n7f1grwcmzwbif";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "bw2";
+    repo = "ConfigArgParse";
+    rev = "refs/tags/${version}";
+    hash = "sha256-m77MY0IZ1AJkd4/Y7ltApvdF9y17Lgn92WZPYTCU9tA=";
   };
 
-  # no tests in tarball
-  doCheck = false;
+  passthru.optional-dependencies = {
+    yaml = [ pyyaml ];
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  pythonImportsCheck = [ "configargparse" ];
 
   meta = with lib; {
     description = "A drop-in replacement for argparse";
-    homepage = https://github.com/zorro3/ConfigArgParse;
+    homepage = "https://github.com/bw2/ConfigArgParse";
+    changelog = "https://github.com/bw2/ConfigArgParse/releases/tag/${version}";
     license = licenses.mit;
-    maintainers = [ maintainers.willibutz ];
+    maintainers = with maintainers; [ willibutz ];
   };
 }

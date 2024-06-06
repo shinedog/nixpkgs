@@ -1,34 +1,42 @@
-{ stdenv
-, buildPythonPackage
-, fetchurl
-, simplejson
-, pytz
-, requests
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  simplejson,
+  pytz,
+  requests,
 }:
 
 buildPythonPackage rec {
   pname = "etcd";
   version = "2.0.8";
+  format = "setuptools";
 
   # PyPI package is incomplete
-  src = fetchurl {
-    url = "https://github.com/dsoprea/PythonEtcdClient/archive/${version}.tar.gz";
-    sha256 = "0fi6rxa1yxvz7nwrc7dw6fax3041d6bj3iyhywjgbkg7nadi9i8v";
+  src = fetchFromGitHub {
+    owner = "dsoprea";
+    repo = "PythonEtcdClient";
+    rev = version;
+    hash = "sha256-h+jYIRSNdrGkW3tBV1ifIDEXU46EQGyeJoz/Mxym4pI=";
   };
 
-  patchPhase = ''
+  postPatch = ''
     sed -i -e '13,14d;37d' setup.py
   '';
 
-  propagatedBuildInputs = [ simplejson pytz requests ];
+  propagatedBuildInputs = [
+    simplejson
+    pytz
+    requests
+  ];
 
   # No proper tests are available
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Python etcd client that just works";
-    homepage = https://github.com/dsoprea/PythonEtcdClient;
+    homepage = "https://github.com/dsoprea/PythonEtcdClient";
     license = licenses.gpl2;
+    maintainers = with maintainers; [ ];
   };
-
 }

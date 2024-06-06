@@ -1,32 +1,54 @@
-{ stdenv, buildPythonPackage, fetchPypi, fetchpatch
-, pep8, nose, unittest2, docutils, blockdiag, reportlab }:
+{
+  lib,
+  blockdiag,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pynose,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "actdiag";
-  version = "0.5.4";
+  version = "3.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "983071777d9941093aaef3be1f67c198a8ac8d2bba264cdd1f337ca415ab46af";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "blockdiag";
+    repo = "actdiag";
+    rev = "refs/tags/${version}";
+    hash = "sha256-WmprkHOgvlsOIg8H77P7fzEqxGnj6xaL7Df7urRkg3o=";
   };
 
-  patches = fetchpatch {
-    name = "drop_test_pep8.py.patch";
-    url = https://bitbucket.org/blockdiag/actdiag/commits/c1f2ed5947a1e93291f5860e4e30cee098bd635d/raw;
-    sha256 = "1zxzwb0fvwlc8xgs45fx65341sjhb3h6l2p6rdj6i127vg1hsxb4";
-  };
-
-  buildInputs = [ pep8 nose unittest2 docutils ];
+  build-system = [ setuptools ];
 
   propagatedBuildInputs = [ blockdiag ];
 
-  checkInputs = [ reportlab ];
+  nativeCheckInputs = [
+    pynose
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
+  pytestFlagsArray = [ "src/actdiag/tests/" ];
+
+  disabledTests = [
+    # AttributeError: 'TestRstDirectives' object has no attribute 'assertRegexpMatches'
+    "svg"
+    "noviewbox"
+  ];
+
+  pythonImportsCheck = [ "actdiag" ];
+
+  meta = with lib; {
     description = "Generate activity-diagram image from spec-text file (similar to Graphviz)";
-    homepage = http://blockdiag.com/;
+    homepage = "http://blockdiag.com/";
+    changelog = "https://github.com/blockdiag/actdiag/blob/${version}/CHANGES.rst";
     license = licenses.asl20;
-    platforms = platforms.unix;
     maintainers = with maintainers; [ bjornfor ];
+    mainProgram = "actdiag";
+    platforms = platforms.unix;
   };
 }

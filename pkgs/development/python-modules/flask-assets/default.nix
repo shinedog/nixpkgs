@@ -1,22 +1,42 @@
-{ lib, buildPythonPackage, fetchPypi, flask, webassets, flask_script, nose }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  flask,
+  webassets,
+  flask-script,
+  nose,
+}:
 
 buildPythonPackage rec {
-  pname = "Flask-Assets";
-  version = "0.12";
+  pname = "flask-assets";
+  version = "2.1.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0ivqsihk994rxw58vdgzrx4d77d7lpzjm4qxb38hjdgvi5xm4cb0";
+    pname = "Flask-Assets";
+    inherit version;
+    hash = "sha256-+E1lMv/lnJ/zUoheh0D/TaJcC8+s2AXwqAaBXkQ1SBM=";
   };
 
   patchPhase = ''
     substituteInPlace tests/test_integration.py --replace 'static_path=' 'static_url_path='
+    substituteInPlace tests/test_integration.py --replace "static_folder = '/'" "static_folder = '/x'"
+    substituteInPlace tests/test_integration.py --replace "'/foo'" "'/x/foo'"
   '';
 
-  propagatedBuildInputs = [ flask webassets flask_script nose ];
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    flask
+    webassets
+    flask-script
+    nose
+  ];
 
   meta = with lib; {
-    homepage = https://github.com/miracle2k/flask-assets;
+    homepage = "https://github.com/miracle2k/flask-assets";
     description = "Asset management for Flask, to compress and merge CSS and Javascript files";
     license = licenses.bsd2;
     maintainers = with maintainers; [ abbradar ];

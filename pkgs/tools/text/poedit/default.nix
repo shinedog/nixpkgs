@@ -1,23 +1,25 @@
-{ stdenv, fetchurl, autoconf, automake, libtool, gettext, pkgconfig, wxGTK30,
-  boost, icu, lucenepp, asciidoc, libxslt, xmlto, gtk2, gtkspell2, pugixml,
-  nlohmann_json, hicolor-icon-theme, wrapGAppsHook }:
+{ lib, stdenv, fetchFromGitHub, autoconf, automake, libtool, gettext, pkg-config, wxGTK32,
+  boost, icu, lucenepp, asciidoc, libxslt, xmlto, gtk3, gtkspell3, pugixml,
+  nlohmann_json, hicolor-icon-theme, wrapGAppsHook3 }:
 
 stdenv.mkDerivation rec {
-  name = "poedit-${version}";
-  version = "2.2.1";
+  pname = "poedit";
+  version = "3.4.2";
 
-  src = fetchurl {
-    url = "https://github.com/vslavik/poedit/archive/v${version}-oss.tar.gz";
-    sha256 = "0brj6ysisxng2xn8l9ii2rngsj5b4rk27hzfjbp3zwb2caagd3vq";
+  src = fetchFromGitHub {
+    owner = "vslavik";
+    repo = "poedit";
+    rev = "v${version}-oss";
+    hash = "sha256-CfCWfKRzeGGk8/B0BLauO4Xb88/Si1ezvcGKeURgC9o=";
   };
 
-  nativeBuildInputs = [ autoconf automake asciidoc wrapGAppsHook 
-    libxslt xmlto boost libtool pkgconfig ];
+  nativeBuildInputs = [ autoconf automake asciidoc wrapGAppsHook3
+    libxslt xmlto boost libtool pkg-config ];
 
-  buildInputs = [ lucenepp nlohmann_json wxGTK30 icu pugixml gtk2 gtkspell2 hicolor-icon-theme ];
+  buildInputs = [ lucenepp nlohmann_json wxGTK32 icu pugixml gtk3 gtkspell3 hicolor-icon-theme ];
 
   propagatedBuildInputs = [ gettext ];
-  
+
   preConfigure = "
     patchShebangs bootstrap
     ./bootstrap
@@ -28,19 +30,23 @@ stdenv.mkDerivation rec {
     "--without-cpprest"
     "--with-boost-libdir=${boost.out}/lib"
     "CPPFLAGS=-I${nlohmann_json}/include/nlohmann/"
+    "LDFLAGS=-llucene++"
   ];
- 
+
   preFixup = ''
-    gappsWrapperArgs+=(--prefix PATH : "${stdenv.lib.makeBinPath [ gettext ]}")
+    gappsWrapperArgs+=(--prefix PATH : "${lib.makeBinPath [ gettext ]}")
   '';
- 
+
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Cross-platform gettext catalogs (.po files) editor";
-    homepage = https://www.poedit.net/;
+    mainProgram = "poedit";
+    homepage = "https://www.poedit.net/";
     license = licenses.mit;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ domenkozar genesis ];
+    maintainers = with maintainers; [ dasj19 ];
+    # configure: error: GTK+ build of wxWidgets is required
+    broken = stdenv.isDarwin;
   };
 }

@@ -1,21 +1,63 @@
-{ lib, buildPythonPackage, fetchPypi
-, tzlocal, requests, vobject, lxml }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  icalendar,
+  lxml,
+  pytestCheckHook,
+  pythonOlder,
+  python,
+  pytz,
+  recurring-ical-events,
+  requests,
+  setuptools,
+  toPythonModule,
+  tzlocal,
+  vobject,
+  xandikos,
+}:
 
 buildPythonPackage rec {
   pname = "caldav";
-  version = "0.6.0";
+  version = "1.3.9";
 
-  propagatedBuildInputs = [ tzlocal requests vobject lxml ];
+  pyproject = true;
+  disabled = pythonOlder "3.7";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1ll9knpc50yxx858hrvfnapdi2a6g1pz9cnjhwffry2x7r4ckarz";
+  src = fetchFromGitHub {
+    owner = "python-caldav";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-R9zXwD0sZE4bg6MTHWWCWWlZ5wH0H6g650zA7AboAo8=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    vobject
+    lxml
+    requests
+    icalendar
+    recurring-ical-events
+    pytz
+    tzlocal
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    (toPythonModule (xandikos.override { python3Packages = python.pkgs; }))
+  ];
+
+  pythonImportsCheck = [ "caldav" ];
+
   meta = with lib; {
-    description = "This project is a CalDAV (RFC4791) client library for Python.";
-    homepage = "https://pythonhosted.org/caldav/";
+    description = "CalDAV (RFC4791) client library";
+    homepage = "https://github.com/python-caldav/caldav";
+    changelog = "https://github.com/python-caldav/caldav/blob/v${version}/CHANGELOG.md";
     license = licenses.asl20;
-    maintainers = with maintainers; [ marenz ];
+    maintainers = with maintainers; [
+      marenz
+      dotlambda
+    ];
   };
 }

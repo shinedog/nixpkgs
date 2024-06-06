@@ -1,40 +1,58 @@
-{ buildPythonPackage, stdenv, fetchPypi, fetchpatch
-, numpy, pandas, plotly, six, colorlover
-, ipython, ipywidgets, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  colorlover,
+  ipython,
+  ipywidgets,
+  numpy,
+  pandas,
+  plotly,
+  pytestCheckHook,
+  setuptools,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "cufflinks";
-  version = "0.15";
+  version = "0.17.3";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "014098a4568199957198c0a7fe3dbeb3b4010b6de8d692a41fe3b3ac107b660e";
+    hash = "sha256-SMGzQG3AMABBIZZkie68VRjOpw/U4/FjebSRMoUBpkQ=";
   };
 
-  propagatedBuildInputs = [
-    numpy pandas plotly six colorlover
-    ipython ipywidgets
-  ];
-
-  patches = [
-    # Plotly 3.8 compatibility. Remove with the next release. See https://github.com/santosjorge/cufflinks/pull/178
-    (fetchpatch {
-      url = "https://github.com/santosjorge/cufflinks/commit/cc4c23c2b45b870f6801d1cb0312948e1f73f424.patch";
-      sha256 = "1psl2h7vscpzvb4idr6s175v8znl2mfhkcyhb1926p4saswmghw1";
-    })
-  ];
-
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    nosetests -xv tests.py
+  # replace duplicated pandas method
+  # https://github.com/santosjorge/cufflinks/pull/249#issuecomment-1759619149
+  postPatch = ''
+    substituteInPlace tests.py \
+      --replace-fail "from nose.tools import assert_equals" "def assert_equals(x, y): assert x == y" \
+      --replace-fail "df.ix" "df.loc"
   '';
 
-  meta = {
-    homepage = https://github.com/santosjorge/cufflinks;
+  build-system = [ setuptools ];
+
+  dependencies = [
+    colorlover
+    ipython
+    ipywidgets
+    numpy
+    pandas
+    plotly
+    six
+  ];
+
+  pythonImportsCheck = [ "cufflinks" ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pytestFlagsArray = [ "tests.py" ];
+
+  meta = with lib; {
     description = "Productivity Tools for Plotly + Pandas";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ globin ];
+    homepage = "https://github.com/santosjorge/cufflinks";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

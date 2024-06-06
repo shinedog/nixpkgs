@@ -1,25 +1,36 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, zope_interface
-, mock
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  zope-interface,
+  mock,
+  pythonOlder,
 }:
-
 
 buildPythonPackage rec {
   pname = "transaction";
-  version = "2.4.0";
+  version = "4.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "17wz1y524ca07vr03yddy8dv0gbscs06dbdywmllxv5rc725jq3j";
+    hash = "sha256-aANduRP2DRvhL2Vj0gHaqzbIPnY94ViZ/4M48m5eYvI=";
   };
 
-  propagatedBuildInputs = [ zope_interface mock ];
+  propagatedBuildInputs = [
+    zope-interface
+    mock
+  ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "transaction" ];
+
+  meta = with lib; {
     description = "Transaction management";
-    homepage = https://pypi.python.org/pypi/transaction;
+    homepage = "https://transaction.readthedocs.io/";
+    changelog = "https://github.com/zopefoundation/transaction/blob/${version}/CHANGES.rst";
     license = licenses.zpl20;
+    maintainers = with maintainers; [ ];
   };
 }

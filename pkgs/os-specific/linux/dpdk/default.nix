@@ -1,64 +1,89 @@
-{ stdenv, lib, kernel, fetchurl, pkgconfig, numactl, shared ? false }:
+{ stdenv, lib
+, fetchurl
+, pkg-config, meson, ninja, makeWrapper
+, libbsd, numactl, libbpf, zlib, elfutils, jansson, openssl, libpcap, rdma-core
+, doxygen, python3, pciutils
+, withExamples ? []
+, shared ? false
+, machine ? (
+    if stdenv.isx86_64 then "nehalem"
+    else if stdenv.isAarch64 then "generic"
+    else null
+  )
+}:
 
-let
-
-  kver = kernel.modDirVersion or null;
-
-  mod = kernel != null;
-
-in stdenv.mkDerivation rec {
-  name = "dpdk-${version}" + lib.optionalString mod "-${kernel.version}";
-  version = "17.11.2";
+stdenv.mkDerivation rec {
+  pname = "dpdk";
+  version = "23.11";
 
   src = fetchurl {
     url = "https://fast.dpdk.org/rel/dpdk-${version}.tar.xz";
-    sha256 = "19m5l3jkrns8r1zbjb6ry18w50ff36kbl5b5g6pfcp9p57sfisd2";
+    sha256 = "sha256-ZPpY/fyelRDo5BTjvt0WW9PUykZaIxsoAyP4PNU/2GU=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ numactl ] ++ lib.optional mod kernel.moduleBuildDependencies;
-
-  RTE_KERNELDIR = if mod then "${kernel.dev}/lib/modules/${kver}/build" else "/var/empty";
-  RTE_TARGET = "x86_64-native-linuxapp-gcc";
-
-  # we need sse3 instructions to build
-  NIX_CFLAGS_COMPILE = [ "-msse3" ];
-  hardeningDisable = [ "pic" ];
-
-  postPatch = ''
-    cat >>config/defconfig_$RTE_TARGET <<EOF
-# Build static or shared libraries.
-CONFIG_RTE_BUILD_SHARED_LIB=${if shared then "y" else "n"}
-EOF
-  '' + lib.optionalString (!mod) ''
-    cat >>config/defconfig_$RTE_TARGET <<EOF
-# Do not build kernel modules.
-CONFIG_RTE_EAL_IGB_UIO=n
-CONFIG_RTE_KNI_KMOD=n
-EOF
-  '';
-
-  configurePhase = ''
-    make T=${RTE_TARGET} config
-  '';
-
-  installTargets = [ "install-runtime" "install-sdk" "install-kmod" ]; # skip install-doc
-
-  installFlags = [
-    "prefix=$(out)"
-  ] ++ lib.optionals mod [
-    "kerneldir=$(kmod)/lib/modules/${kver}"
+  nativeBuildInputs = [
+    makeWrapper
+    doxygen
+    meson
+    ninja
+    pkg-config
+    python3
+    python3.pkgs.sphinx
+    python3.pkgs.pyelftools
+  ];
+  buildInputs = [
+    jansson
+    libbpf
+    elfutils
+    libpcap
+    numactl
+    openssl.dev
+    zlib
+    python3
   ];
 
-  outputs = [ "out" ] ++ lib.optional mod "kmod";
+  propagatedBuildInputs = [
+    # Propagated to support current DPDK users in nixpkgs which statically link
+    # with the framework (e.g. odp-dpdk).
+    rdma-core
+    # Requested by pkg-config.
+    libbsd
+  ];
 
-  enableParallelBuilding = true;
+  postPatch = ''
+    patchShebangs config/arm buildtools
+  '';
+
+  mesonFlags = [
+    "-Dtests=false"
+    "-Denable_docs=true"
+    "-Ddeveloper_mode=disabled"
+  ]
+  ++ [(if shared then "-Ddefault_library=shared" else "-Ddefault_library=static")]
+  ++ lib.optional (machine != null) "-Dmachine=${machine}"
+  ++ lib.optional (withExamples != []) "-Dexamples=${builtins.concatStringsSep "," withExamples}";
+
+  postInstall = ''
+    # Remove Sphinx cache files. Not only are they not useful, but they also
+    # contain store paths causing spurious dependencies.
+    rm -rf $out/share/doc/dpdk/html/.doctrees
+
+    wrapProgram $out/bin/dpdk-devbind.py \
+      --prefix PATH : "${lib.makeBinPath [ pciutils ]}"
+  '' + lib.optionalString (withExamples != []) ''
+    mkdir -p $examples/bin
+    find examples -type f -executable -exec install {} $examples/bin \;
+  '';
+
+  outputs =
+    [ "out" "doc" ]
+    ++ lib.optional (withExamples != []) "examples";
 
   meta = with lib; {
     description = "Set of libraries and drivers for fast packet processing";
-    homepage = http://dpdk.org/;
+    homepage = "http://dpdk.org/";
     license = with licenses; [ lgpl21 gpl2 bsd2 ];
-    platforms =  [ "x86_64-linux" ];
-    maintainers = with maintainers; [ domenkozar orivej ];
+    platforms =  platforms.linux;
+    maintainers = with maintainers; [ magenbluten orivej mic92 zhaofengli ];
   };
 }

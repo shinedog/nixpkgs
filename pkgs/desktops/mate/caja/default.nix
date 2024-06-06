@@ -1,41 +1,59 @@
-{ stdenv, fetchurl, pkgconfig, intltool, gtk3, libnotify, libxml2, libexif, exempi, mate, hicolor-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, gtk-layer-shell
+, gtk3
+, libnotify
+, libxml2
+, libexif
+, exempi
+, mate-desktop
+, hicolor-icon-theme
+, wayland
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "caja-${version}";
-  version = "1.22.1";
+  pname = "caja";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "10b7yjimblymp1fpsrl4jb2k7kbhla2izsj3njfmg2n6fv9fy9iv";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "HjAUzhRVgX7C73TQnv37aDXYo3LtmhbvtZGe97ghlXo=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
-    wrapGAppsHook
+    pkg-config
+    gettext
+    wrapGAppsHook3
   ];
 
   buildInputs = [
+    gtk-layer-shell
     gtk3
     libnotify
     libxml2
     libexif
     exempi
-    mate.mate-desktop
+    mate-desktop
     hicolor-icon-theme
-  ];
-
-  patches = [
-    ./caja-extension-dirs.patch
+    wayland
   ];
 
   configureFlags = [ "--disable-update-mimedb" ];
 
-  meta = {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "File manager for the MATE desktop";
-    homepage = https://mate-desktop.org;
-    license = with stdenv.lib.licenses; [ gpl2 lgpl2 ];
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
+    homepage = "https://mate-desktop.org";
+    license = with licenses; [ gpl2Plus lgpl2Plus ];
+    platforms = platforms.unix;
+    maintainers = teams.mate.members;
   };
 }

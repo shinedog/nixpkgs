@@ -1,46 +1,59 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, docutils
-, virtualenv
-, webtest
-, zope_component
-, hupper
-, PasteDeploy
-, plaster
-, plaster-pastedeploy
-, repoze_lru
-, repoze_sphinx_autointerface
-, translationstring
-, venusian
-, webob
-, zope_deprecation
-, zope_interface
-, isPy35
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  webtest,
+  zope-component,
+  hupper,
+  pastedeploy,
+  plaster,
+  plaster-pastedeploy,
+  repoze-lru,
+  translationstring,
+  venusian,
+  webob,
+  zope-deprecation,
+  zope-interface,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "pyramid";
-  version = "1.10.4";
+  version = "2.0.2";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d80ccb8cfa550139b50801591d4ca8a5575334adb493c402fce2312f55d07d66";
+    hash = "sha256-NyE4pzjkIWU1zHbczm7d1aGqypUTDyNU+4NCZMBvGN4=";
   };
 
-  checkInputs = [ docutils virtualenv webtest zope_component ];
+  propagatedBuildInputs = [
+    hupper
+    pastedeploy
+    plaster
+    plaster-pastedeploy
+    repoze-lru
+    translationstring
+    venusian
+    webob
+    zope-deprecation
+    zope-interface
+  ];
 
-  propagatedBuildInputs = [ hupper PasteDeploy plaster plaster-pastedeploy repoze_lru repoze_sphinx_autointerface translationstring venusian webob zope_deprecation zope_interface ];
+  nativeCheckInputs = [
+    webtest
+    zope-component
+  ];
 
-  # Failing tests
-  # https://github.com/Pylons/pyramid/issues/1899
-  doCheck = !isPy35;
+  pythonImportsCheck = [ "pyramid" ];
 
-  meta = with stdenv.lib; {
-    description = "The Pyramid Web Framework, a Pylons project";
-    homepage = https://trypyramid.com/;
+  meta = with lib; {
+    description = "Python web framework";
+    homepage = "https://trypyramid.com/";
+    changelog = "https://github.com/Pylons/pyramid/blob/${version}/CHANGES.rst";
     license = licenses.bsd0;
-    maintainers = with maintainers; [ garbas domenkozar ];
+    maintainers = with maintainers; [ domenkozar ];
   };
-
 }

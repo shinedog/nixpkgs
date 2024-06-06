@@ -1,39 +1,81 @@
-{ stdenv, fetchFromGitHub, fetchpatch, python3Packages }:
+{ lib
+, fetchFromGitHub
+, fetchpatch
+, python3
+}:
 
-python3Packages.buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "pubs";
-  version = "0.8.2";
+  version = "0.9.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "pubs";
     repo = "pubs";
-    rev = "v${version}";
-    sha256 = "16zwdqfbmlla6906g3a57a4nj8wnl11fq78r20qms717bzv211j0";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-U/9MLqfXrzYVGttFSafw4pYDy26WgdsJMCxciZzO1pw=";
   };
 
   patches = [
-    # Fix for bibtexparser 1.1.0
+    # https://github.com/pubs/pubs/pull/278
     (fetchpatch {
-      url = https://github.com/pubs/pubs/pull/185/commits/e58ae98b93b8364a07fd5f5f452ba88ad332c948.patch;
-      sha256 = "1n7zrk119v395jj8wqg8wlymc9l9pq3v752yy3kam9kflc0aashp";
+      url = "https://github.com/pubs/pubs/commit/9623d2c3ca8ff6d2bb7f6c8d8624f9a174d831bc.patch";
+      hash = "sha256-6qoufKPv3k6C9BQTZ2/175Nk7zWPh89vG+zebx6ZFOk=";
     })
-    # Fix test broken by PyYAML 5.1
+    # https://github.com/pubs/pubs/pull/279
     (fetchpatch {
-      url = https://github.com/pubs/pubs/pull/194/commits/c3cb713ae76528eeeaaeb948fe319a76ab3934d8.patch;
-      sha256 = "05as418m7wzs65839bb91b2jrs8l68z8ldcjcd9cn4b9fcgsf3rk";
+      url = "https://github.com/pubs/pubs/commit/05e214eb406447196c77c8aa3e4658f70e505f23.patch";
+      hash = "sha256-UBkKiYaG6y6z8lsRpdcsaGsoklv6qj07KWdfkQcVl2g=";
     })
   ];
 
-  propagatedBuildInputs = with python3Packages; [
-    argcomplete dateutil configobj feedparser bibtexparser pyyaml requests six beautifulsoup4
+  nativeBuildInputs = with python3.pkgs; [
+    setuptools
   ];
 
-  checkInputs = with python3Packages; [ pyfakefs mock ddt ];
+  propagatedBuildInputs = with python3.pkgs; [
+    argcomplete
+    beautifulsoup4
+    bibtexparser
+    configobj
+    feedparser
+    python-dateutil
+    pyyaml
+    requests
+    six
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = with python3.pkgs; [
+    ddt
+    mock
+    pyfakefs
+    pytestCheckHook
+  ];
+
+  disabledTestPaths = [
+    # Disabling git tests because they expect git to be preconfigured
+    # with the user's details. See
+    # https://github.com/NixOS/nixpkgs/issues/94663
+    "tests/test_git.py"
+  ];
+
+  disabledTests = [
+    # https://github.com/pubs/pubs/issues/276
+    "test_readme"
+    # AssertionError: Lists differ: ['Ini[112 chars]d to...
+    "test_add_non_standard"
+  ];
+
+  pythonImportsCheck = [
+    "pubs"
+  ];
+
+  meta = with lib; {
     description = "Command-line bibliography manager";
-    homepage = https://github.com/pubs/pubs;
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ gebner ];
+    mainProgram = "pubs";
+    homepage = "https://github.com/pubs/pubs";
+    changelog = "https://github.com/pubs/pubs/blob/v${version}/changelog.md";
+    license = licenses.lgpl3Only;
+    maintainers = with maintainers; [ gebner dotlambda ];
   };
 }

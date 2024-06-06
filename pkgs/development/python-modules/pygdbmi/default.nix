@@ -1,23 +1,31 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, gdb
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  gdb,
+  pytest,
 }:
 
 buildPythonPackage rec {
   pname = "pygdbmi";
-  version = "0.9.0.0";
+  version = "0.11.0.0";
+  format = "setuptools";
 
   src = fetchFromGitHub {
-    #inherit pname version;
-    #inherit pname version;
     owner = "cs01";
     repo = "pygdbmi";
-    rev = version;
-    sha256 = "12xq9iajgqz23dska5x63hrx75icr5bwwswnmba0y69y39s0jpsj";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-JqEDN8Pg/JttyYQbwkxKkLYuxVnvV45VlClD23eaYyc=";
   };
 
-  checkInputs = [ gdb ];
+  nativeCheckInputs = [
+    gdb
+    pytest
+  ];
+
+  # tests require gcc for some reason
+  doCheck = !stdenv.hostPlatform.isDarwin;
 
   postPatch = ''
     # tries to execute flake8,
@@ -27,7 +35,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "Parse gdb machine interface output with Python";
-    homepage = https://github.com/cs01/pygdbmi;
+    homepage = "https://github.com/cs01/pygdbmi";
     license = licenses.mit;
     maintainers = [ maintainers.mic92 ];
   };

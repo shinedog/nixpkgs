@@ -1,30 +1,41 @@
-{ stdenv, fetchurl, zlib }:
+{ lib, stdenv, fetchurl, zlib, installShellFiles }:
 
 stdenv.mkDerivation rec {
-  name = "pngcheck-2.3.0";
+  pname = "pngcheck";
+  version = "3.0.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/png-mng/${name}.tar.gz";
-    sha256 = "0pzkj1bb4kdybk6vbfq9s0wzdm5szmrgixkas3xmbpv4mhws1w3p";
+    url = "mirror://sourceforge/png-mng/pngcheck-${version}.tar.gz";
+    sha256 = "sha256-DX4mLyQRb93yhHqM61yS2fXybvtC6f/2PsK7dnYTHKc=";
   };
 
   hardeningDisable = [ "format" ];
 
+  postPatch = ''
+    substituteInPlace $makefile \
+      --replace "gcc" "$CC"
+  '';
+
   makefile = "Makefile.unx";
-  makeFlags = "ZPATH=${zlib.static}/lib";
+  makeFlags = [ "ZPATH=${zlib.static}/lib" ];
+
+  nativeBuildInputs = [ installShellFiles ];
 
   buildInputs = [ zlib ];
 
   installPhase = ''
-    mkdir -p $out/bin/
-    cp pngcheck $out/bin/pngcheck
+    runHook preInstall
+    install -Dm555 -t $out/bin/ pngcheck
+    installManPage $pname.1
+    runHook postInstall
   '';
 
-  meta = {
-    homepage = http://pmt.sourceforge.net/pngcrush;
+  meta = with lib; {
+    homepage = "https://pmt.sourceforge.net/pngcrush";
     description = "Verifies the integrity of PNG, JNG and MNG files";
-    license = stdenv.lib.licenses.free;
-    platforms = with stdenv.lib.platforms; linux;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    license = licenses.free;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ starcraft66 ];
+    mainProgram = "pngcheck";
   };
 }

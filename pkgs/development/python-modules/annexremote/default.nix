@@ -1,34 +1,41 @@
-{ lib
-, isPy3k
-, buildPythonPackage
-, fetchFromGitHub
-, future
-, mock
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
   pname = "annexremote";
-  version = "1.3.1";
+  version = "1.6.5";
+  pyproject = true;
 
-  # use fetchFromGitHub instead of fetchPypi because the test suite of
-  # the package is not included into the PyPI tarball
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
-    rev = "v${version}";
     owner = "Lykos153";
     repo = "AnnexRemote";
-    sha256 = "13ny7h41430pi9393dw3qgwxvzcxacapjsw0d3vjm7lc4h566alq";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-8WAa5EO5n/dccNW0TUwFgcRjvDFt8QfpHIX2arM4HGc=";
   };
 
-  propagatedBuildInputs = [ future ];
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
 
-  checkInputs = [ nose ] ++ lib.optional (!isPy3k) mock;
-  checkPhase = "nosetests -v";
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "annexremote" ];
 
   meta = with lib; {
     description = "Helper module to easily develop git-annex remotes";
-    homepage = https://github.com/Lykos153/AnnexRemote;
-    license = licenses.gpl3;
+    homepage = "https://github.com/Lykos153/AnnexRemote";
+    changelog = "https://github.com/Lykos153/AnnexRemote/releases/tag/v${version}";
+    license = licenses.gpl3Only;
     maintainers = with maintainers; [ montag451 ];
   };
 }

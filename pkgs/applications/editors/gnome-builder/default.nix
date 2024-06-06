@@ -1,107 +1,116 @@
-{ gcc8Stdenv
+{ stdenv
+, lib
 , ctags
-, appstream-glib
+, cmark
 , desktop-file-utils
-, docbook_xsl
-, docbook_xml_dtd_43
+, editorconfig-core-c
 , fetchurl
 , flatpak
-, gnome3
+, gnome
 , libgit2-glib
+, gi-docgen
 , gobject-introspection
-, gspell
-, gtk-doc
-, gtk3
-, gtksourceview4
-, hicolor-icon-theme
+, enchant
+, icu
+, gtk4
+, gtksourceview5
 , json-glib
 , jsonrpc-glib
-, libdazzle
-, libpeas
+, libadwaita
+, libdex
+, libpanel
+, libpeas2
+, libportal-gtk4
+, libsysprof-capture
 , libxml2
 , meson
 , ninja
 , ostree
-, pcre
-, pkgconfig
+, d-spy
+, pcre2
+, pkg-config
 , python3
 , sysprof
 , template-glib
 , vala
-, vte
-, webkitgtk
-, wrapGAppsHook
+, vte-gtk4
+, webkitgtk_6_0
+, wrapGAppsHook4
 , dbus
-, xvfb_run
+, xvfb-run
 }:
 
-let
-  # Does not build with GCC 7
-  # https://gitlab.gnome.org/GNOME/gnome-builder/issues/868
-  stdenv = gcc8Stdenv;
-in
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "gnome-builder";
-  version = "3.32.0";
+  version = "46.2";
+
+  outputs = [ "out" "devdoc" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "00l7sshpndk995aw98mjmsc3mxhxzynlp7il551iwwjjdbc70qp4";
+    url = "mirror://gnome/sources/gnome-builder/${lib.versions.major finalAttrs.version}/gnome-builder-${finalAttrs.version}.tar.xz";
+    hash = "sha256-DIV7iQA7JHh/Kx0qrhLSdaB0xmhLSIA7SMACdtk3GWM=";
   };
 
+  patches = [
+    # The test environment hardcodes `GI_TYPELIB_PATH` environment variable to direct dependencies of libide & co.
+    # https://gitlab.gnome.org/GNOME/gnome-builder/-/commit/2ce510b0ec0518c29427a29b386bb2ac1a121edf
+    # https://gitlab.gnome.org/GNOME/gnome-builder/-/commit/2964f7c2a0729f2f456cdca29a0f5b7525baf7c1
+    #
+    # But Nix does not have a fallback path for typelibs like /usr/lib on FHS distros and relies solely
+    # on `GI_TYPELIB_PATH` environment variable. So, when Ide started to depend on Vte, which
+    # depends on Pango, among others, GIrepository was unable to find these indirect dependencies
+    # and crashed with:
+    #
+    #     Typelib file for namespace 'Pango', version '1.0' not found (g-irepository-error-quark, 0)
+    ./fix-finding-test-typelibs.patch
+  ];
+
   nativeBuildInputs = [
-    appstream-glib
     desktop-file-utils
-    docbook_xsl
-    docbook_xml_dtd_43
+    gi-docgen
     gobject-introspection
-    gtk-doc
-    hicolor-icon-theme
-    (meson.override ({ inherit stdenv; }))
+    meson
     ninja
-    pkgconfig
+    pkg-config
     python3
-    python3.pkgs.wrapPython
-    wrapGAppsHook
+    wrapGAppsHook4
   ];
 
   buildInputs = [
     ctags
+    cmark
+    editorconfig-core-c
     flatpak
-    gnome3.devhelp
-    gnome3.glade
     libgit2-glib
-    libpeas
-    vte
-    gspell
-    gtk3
-    gtksourceview4
+    libpeas2
+    libportal-gtk4
+    vte-gtk4
+    enchant
+    icu
+    gtk4
+    gtksourceview5
     json-glib
     jsonrpc-glib
-    libdazzle
+    libadwaita
+    libdex
+    libpanel
+    libsysprof-capture
     libxml2
     ostree
-    pcre
+    d-spy
+    pcre2
     python3
-    sysprof
     template-glib
     vala
-    webkitgtk
+    webkitgtk_6_0
   ];
 
-  checkInputs = [
+  nativeCheckInputs = [
     dbus
-    xvfb_run
+    xvfb-run
   ];
-
-  outputs = [ "out" "devdoc" ];
-
-  prePatch = ''
-    patchShebangs build-aux/meson/post_install.py
-  '';
 
   mesonFlags = [
-    "-Dpython_libprefix=${python3.libPrefix}"
     "-Ddocs=true"
 
     # Making the build system correctly detect clang header and library paths
@@ -112,23 +121,25 @@ stdenv.mkDerivation rec {
     "-Dnetwork_tests=false"
   ];
 
-  # Some tests fail due to being unable to find the Vte typelib, and I don't
-  # understand why. Somebody should look into fixing this.
   doCheck = true;
 
+  postPatch = ''
+    patchShebangs build-aux/meson/post_install.py
+    substituteInPlace build-aux/meson/post_install.py \
+      --replace "gtk-update-icon-cache" "gtk4-update-icon-cache"
+  '';
+
   checkPhase = ''
-    export NO_AT_BRIDGE=1
+    GTK_A11Y=none \
     xvfb-run -s '-screen 0 800x600x24' dbus-run-session \
-      --config-file=${dbus.daemon}/share/dbus-1/session.conf \
+      --config-file=${dbus}/share/dbus-1/session.conf \
       meson test --print-errorlogs
   '';
 
-  pythonPath = with python3.pkgs; requiredPythonModules [ pygobject3 ];
-
   preFixup = ''
-    buildPythonPath "$out $pythonPath"
     gappsWrapperArgs+=(
-      --prefix PYTHONPATH : "$program_PYTHONPATH"
+      # For sysprof-agent
+      --prefix PATH : "${sysprof}/bin"
     )
 
     # Ensure that all plugins get their interpreter paths fixed up.
@@ -137,9 +148,16 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  passthru.updateScript = gnome3.updateScript { packageName = pname; };
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    moveToOutput share/doc/libide "$devdoc"
+  '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gnome.updateScript {
+    packageName = "gnome-builder";
+  };
+
+  meta = with lib; {
     description = "An IDE for writing GNOME-based software";
     longDescription = ''
       Global search, auto-completion, source code map, documentation
@@ -151,9 +169,10 @@ stdenv.mkDerivation rec {
       currently recommend running gnome-builder inside a nix-shell with
       appropriate dependencies loaded.
     '';
-    homepage = https://wiki.gnome.org/Apps/Builder;
+    homepage = "https://apps.gnome.org/Builder/";
     license = licenses.gpl3Plus;
-    maintainers = gnome3.maintainers;
+    maintainers = teams.gnome.members;
     platforms = platforms.linux;
+    mainProgram = "gnome-builder";
   };
-}
+})

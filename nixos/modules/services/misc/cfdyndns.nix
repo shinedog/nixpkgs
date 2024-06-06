@@ -6,6 +6,12 @@ let
   cfg = config.services.cfdyndns;
 in
 {
+  imports = [
+    (mkRemovedOptionModule
+      [ "services" "cfdyndns" "apikey" ]
+      "Use services.cfdyndns.apikeyFile instead.")
+  ];
+
   options = {
     services.cfdyndns = {
       enable = mkEnableOption "Cloudflare Dynamic DNS Client";
@@ -17,10 +23,21 @@ in
         '';
       };
 
-      apikey = mkOption {
-        type = types.str;
+      apiTokenFile = mkOption {
+        default = null;
+        type = types.nullOr types.str;
         description = ''
-          The API Key to use to authenticate to CloudFlare.
+          The path to a file containing the API Token
+          used to authenticate with CloudFlare.
+        '';
+      };
+
+      apikeyFile = mkOption {
+        default = null;
+        type = types.nullOr types.str;
+        description = ''
+          The path to a file containing the API Key
+          used to authenticate with CloudFlare.
         '';
       };
 
@@ -40,31 +57,25 @@ in
       description = "CloudFlare Dynamic DNS Client";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      startAt = "5 minutes";
+      startAt = "*:0/5";
       serviceConfig = {
         Type = "simple";
-        User = config.ids.uids.cfdyndns;
-        Group = config.ids.gids.cfdyndns;
-        ExecStart = "/bin/sh -c '${pkgs.cfdyndns}/bin/cfdyndns'";
+        LoadCredential = lib.optional (cfg.apiTokenFile != null) "CLOUDFLARE_APITOKEN_FILE:${cfg.apiTokenFile}";
+        DynamicUser = true;
       };
       environment = {
-        CLOUDFLARE_EMAIL="${cfg.email}";
-        CLOUDFLARE_APIKEY="${cfg.apikey}";
         CLOUDFLARE_RECORDS="${concatStringsSep "," cfg.records}";
       };
-    };
-
-    users.users = {
-      cfdyndns = {
-        group = "cfdyndns";
-        uid = config.ids.uids.cfdyndns;
-      };
-    };
-
-    users.groups = {
-      cfdyndns = {
-        gid = config.ids.gids.cfdyndns;
-      };
+      script = ''
+        ${optionalString (cfg.apikeyFile != null) ''
+          export CLOUDFLARE_APIKEY="$(cat ${escapeShellArg cfg.apikeyFile})"
+          export CLOUDFLARE_EMAIL="${cfg.email}"
+        ''}
+        ${optionalString (cfg.apiTokenFile != null) ''
+          export CLOUDFLARE_APITOKEN=$(${pkgs.systemd}/bin/systemd-creds cat CLOUDFLARE_APITOKEN_FILE)
+        ''}
+        ${pkgs.cfdyndns}/bin/cfdyndns
+      '';
     };
   };
 }

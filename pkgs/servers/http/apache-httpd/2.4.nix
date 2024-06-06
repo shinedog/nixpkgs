@@ -1,6 +1,8 @@
-{ stdenv, fetchurl, perl, zlib, apr, aprutil, pcre, libiconv, lynx
+{ lib, stdenv, fetchurl, perl, zlib, apr, aprutil, pcre2, libiconv, lynx, which, libxcrypt
+, nixosTests
 , proxySupport ? true
 , sslSupport ? true, openssl
+, modTlsSupport ? false, rustls-ffi, Foundation
 , http2Support ? true, nghttp2
 , ldapSupport ? true, openldap
 , libxml2Support ? true, libxml2
@@ -8,51 +10,44 @@
 , luaSupport ? false, lua5
 }:
 
-let inherit (stdenv.lib) optional optionalString;
-in
-
-assert sslSupport -> aprutil.sslSupport && openssl != null;
-assert ldapSupport -> aprutil.ldapSupport && openldap != null;
-assert http2Support -> nghttp2 != null;
-
 stdenv.mkDerivation rec {
-  version = "2.4.39";
-  name = "apache-httpd-${version}";
+  pname = "apache-httpd";
+  version = "2.4.59";
 
   src = fetchurl {
     url = "mirror://apache/httpd/httpd-${version}.tar.bz2";
-    sha256 = "18ngvsjq65qxk3biggnkhkq8jlll9dsg9n3csra9p99sfw2rvjml";
+    hash = "sha256-7FFQHsSAKE/1L2NyWBNdMzIwp9Ipw6+m9sL5BA4yEyM=";
   };
 
   # FIXME: -dev depends on -doc
   outputs = [ "out" "dev" "man" "doc" ];
   setOutputFlags = false; # it would move $out/modules, etc.
 
-  buildInputs = [perl] ++
-    optional brotliSupport brotli ++
-    optional sslSupport openssl ++
-    optional ldapSupport openldap ++    # there is no --with-ldap flag
-    optional libxml2Support libxml2 ++
-    optional http2Support nghttp2 ++
-    optional stdenv.isDarwin libiconv;
+  nativeBuildInputs = [ which ];
 
-  prePatch = ''
+  buildInputs = [ perl libxcrypt ] ++
+    lib.optional brotliSupport brotli ++
+    lib.optional sslSupport openssl ++
+    lib.optional modTlsSupport rustls-ffi ++
+    lib.optional (modTlsSupport && stdenv.isDarwin) Foundation ++
+    lib.optional ldapSupport openldap ++    # there is no --with-ldap flag
+    lib.optional libxml2Support libxml2 ++
+    lib.optional http2Support nghttp2 ++
+    lib.optional stdenv.isDarwin libiconv;
+
+  postPatch = ''
     sed -i config.layout -e "s|installbuilddir:.*|installbuilddir: $dev/share/build|"
     sed -i support/apachectl.in -e 's|@LYNX_PATH@|${lynx}/bin/lynx|'
   '';
 
   # Required for ‘pthread_cancel’.
-  NIX_LDFLAGS = stdenv.lib.optionalString (!stdenv.isDarwin) "-lgcc_s";
-
-  preConfigure = ''
-    configureFlags="$configureFlags --includedir=$dev/include"
-  '';
+  NIX_LDFLAGS = lib.optionalString (!stdenv.isDarwin) "-lgcc_s";
 
   configureFlags = [
     "--with-apr=${apr.dev}"
     "--with-apr-util=${aprutil.dev}"
     "--with-z=${zlib.dev}"
-    "--with-pcre=${pcre.dev}"
+    "--with-pcre=${pcre2.dev}/bin/pcre2-config"
     "--disable-maintainer-mode"
     "--disable-debugger-mode"
     "--enable-mods-shared=all"
@@ -60,24 +55,26 @@ stdenv.mkDerivation rec {
     "--enable-cern-meta"
     "--enable-imagemap"
     "--enable-cgi"
-    (stdenv.lib.enableFeature proxySupport "proxy")
-    (stdenv.lib.enableFeature sslSupport "ssl")
-    (stdenv.lib.withFeatureAs libxml2Support "libxml2" "${libxml2.dev}/include/libxml2")
+    "--includedir=${placeholder "dev"}/include"
+    (lib.enableFeature proxySupport "proxy")
+    (lib.enableFeature sslSupport "ssl")
+    (lib.enableFeature modTlsSupport "tls")
+    (lib.withFeatureAs libxml2Support "libxml2" "${libxml2.dev}/include/libxml2")
     "--docdir=$(doc)/share/doc"
 
-    (stdenv.lib.enableFeature brotliSupport "brotli")
-    (stdenv.lib.withFeatureAs brotliSupport "brotli" brotli)
+    (lib.enableFeature brotliSupport "brotli")
+    (lib.withFeatureAs brotliSupport "brotli" brotli)
 
-    (stdenv.lib.enableFeature http2Support "http2")
-    (stdenv.lib.withFeature http2Support "nghttp2")
+    (lib.enableFeature http2Support "http2")
+    (lib.withFeature http2Support "nghttp2")
 
-    (stdenv.lib.enableFeature luaSupport "lua")
-    (stdenv.lib.withFeatureAs luaSupport "lua" lua5)
+    (lib.enableFeature luaSupport "lua")
+    (lib.withFeatureAs luaSupport "lua" lua5)
   ];
 
   enableParallelBuilding = true;
 
-  stripDebugList = "lib modules bin";
+  stripDebugList = [ "lib" "modules" "bin" ];
 
   postInstall = ''
     mkdir -p $doc/share/doc/httpd
@@ -87,14 +84,19 @@ stdenv.mkDerivation rec {
   '';
 
   passthru = {
-    inherit apr aprutil sslSupport proxySupport ldapSupport;
+    inherit apr aprutil sslSupport proxySupport ldapSupport luaSupport lua5;
+    tests = {
+      acme-integration = nixosTests.acme;
+      proxy = nixosTests.proxy;
+      php = nixosTests.php.httpd;
+    };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Apache HTTPD, the world's most popular web server";
-    homepage    = http://httpd.apache.org/;
+    homepage    = "https://httpd.apache.org/";
     license     = licenses.asl20;
-    platforms   = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
-    maintainers = with maintainers; [ lovek323 peti ];
+    platforms   = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ lovek323 ];
   };
 }

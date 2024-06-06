@@ -1,31 +1,41 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
-, setuptools_scm
+{
+  buildPythonPackage,
+  lib,
+  fetchFromGitHub,
+  setuptools-scm,
+  pythonOlder,
+  importlib-metadata,
+  callPackage,
 }:
 
 buildPythonPackage rec {
   pname = "pluggy";
-  version = "0.8.1";
+  version = "1.4.0";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8ddc32f03971bfdf900a81961a48ccf2fb677cf7715108f85295c67405798616";
+  disabled = pythonOlder "3.8";
+
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "pluggy";
+    rev = "refs/tags/${version}";
+    hash = "sha256-1XHJwODmpYQkYZvnZck6RrtT4lOeCf8cr1QFx9DCbzw=";
   };
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeBuildInputs = [ setuptools-scm ];
 
   # To prevent infinite recursion with pytest
   doCheck = false;
-
-  buildInputs = [ setuptools_scm ];
+  passthru.tests = {
+    pytest = callPackage ./tests.nix { };
+  };
 
   meta = {
+    changelog = "https://github.com/pytest-dev/pluggy/blob/${src.rev}/CHANGELOG.rst";
     description = "Plugin and hook calling mechanisms for Python";
-    homepage = "https://pypi.python.org/pypi/pluggy";
+    homepage = "https://github.com/pytest-dev/pluggy";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ ];
+    maintainers = with lib.maintainers; [ dotlambda ];
   };
 }

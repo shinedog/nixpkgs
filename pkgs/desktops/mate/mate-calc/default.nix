@@ -1,31 +1,49 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, gtk3, libxml2, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, gtk3
+, libmpc
+, libxml2
+, mpfr
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-calc-${version}";
-  version = "1.22.1";
+  pname = "mate-calc";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "0zin3w03zrkpb12rvay23bfk9fnjpybkr5mqzkpn9xfnqamhk8ld";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "gEsSXR4oZLHnSvgW2psquLGUcrmvl0Q37nNVraXmKPU=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    gettext
     itstool
-    wrapGAppsHook
+    pkg-config
+    wrapGAppsHook3
   ];
 
   buildInputs = [
     gtk3
+    libmpc
     libxml2
+    mpfr
   ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Calculator for the MATE desktop";
-    homepage = https://mate-desktop.org;
+    homepage = "https://mate-desktop.org";
     license = [ licenses.gpl2Plus ];
     platforms = platforms.linux;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

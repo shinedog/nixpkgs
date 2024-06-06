@@ -1,15 +1,17 @@
-{ stdenv, fetchFromGitHub, fetchpatch, autoreconfHook }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "numactl-${version}";
-  version = "2.0.12";
+  pname = "numactl";
+  version = "2.0.18";
 
   src = fetchFromGitHub {
-    owner = "numactl";
-    repo = "numactl";
+    owner = pname;
+    repo = pname;
     rev = "v${version}";
-    sha256 = "0crhpxwakp0gvd7wwpbkfd3brnrdf89lkbf03axnbrs0b6kaygg2";
+    hash = "sha256-ry29RUNa0Hv5gIhy2RTVT94mHhgfdIwb5aqjBycxxj0=";
   };
+
+  outputs = [ "out" "dev" "man" ];
 
   nativeBuildInputs = [ autoreconfHook ];
 
@@ -22,10 +24,10 @@ stdenv.mkDerivation rec {
   # building ~5% slower until reboot. Ugh!
   doCheck = false; # never ever!
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Library and tools for non-uniform memory access (NUMA) machines";
-    homepage = https://github.com/numactl/numactl;
+    homepage = "https://github.com/numactl/numactl";
     license = with licenses; [ gpl2 lgpl21 ]; # libnuma is lgpl21
-    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
+    platforms = platforms.linux;
   };
 }

@@ -1,73 +1,92 @@
-{
-  stdenv, fetchFromGitHub,
-  cmake, pkgconfig, lxqt-build-tools,
-  qtbase, qttools, qtx11extras, qtsvg, libdbusmenu, kwindowsystem, solid,
-  kguiaddons, liblxqt, libqtxdg, lxqt-globalkeys, libsysstat,
-  xorg, libstatgrab, lm_sensors, libpulseaudio, alsaLib, menu-cache,
-  lxmenu-data, pcre, libXdamage
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, alsa-lib
+, libdbusmenu-lxqt
+, kguiaddons
+, kwindowsystem
+, layer-shell-qt
+, libXdamage
+, libXdmcp
+, libXtst
+, libdbusmenu
+, liblxqt
+, libpthreadstubs
+, libpulseaudio
+, libqtxdg
+, libstatgrab
+, libsysstat
+, lm_sensors
+, lxqt-build-tools
+, lxqt-globalkeys
+, lxqt-menu-data
+, menu-cache
+, pcre
+, qtbase
+, qtsvg
+, qttools
+, qtwayland
+, solid
+, wrapQtAppsHook
+, gitUpdater
 }:
 
 stdenv.mkDerivation rec {
   pname = "lxqt-panel";
-  version = "0.14.1";
+  version = "2.0.1";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "1py3i7qgm6h2iwjwqfjml1rp06s7ls1d7z5i9iizsmfshdzkaq86";
+    hash = "sha256-m+LUG7hnkIJj48HJIy6pMyv3YZ/RfuSXbdBKJ9mi764=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qttools
-    qtx11extras
-    qtsvg
-    libdbusmenu
-    kwindowsystem
-    solid
+    alsa-lib
+    libdbusmenu-lxqt
     kguiaddons
-    liblxqt
-    libqtxdg
-    lxqt-globalkeys
-    libsysstat
-    xorg.libpthreadstubs
-    xorg.libXdmcp
-    libstatgrab
-    lm_sensors
-    libpulseaudio
-    alsaLib
-    menu-cache
-    lxmenu-data
-    pcre
+    kwindowsystem
+    layer-shell-qt
     libXdamage
+    libXdmcp
+    libXtst
+    libdbusmenu
+    liblxqt
+    libpthreadstubs
+    libpulseaudio
+    libqtxdg
+    libstatgrab
+    libsysstat
+    lm_sensors
+    lxqt-globalkeys
+    lxqt-menu-data
+    menu-cache
+    pcre
+    qtbase
+    qtsvg
+    qtwayland
+    solid
   ];
 
-  postPatch = ''
-    for dir in  autostart menu; do
-      substituteInPlace $dir/CMakeLists.txt \
-        --replace "DESTINATION \"\''${LXQT_ETC_XDG_DIR}" "DESTINATION \"etc/xdg"
-    done
-    substituteInPlace panel/CMakeLists.txt \
-      --replace "DESTINATION \''${LXQT_ETC_XDG_DIR}" "DESTINATION etc/xdg"
+  passthru.updateScript = gitUpdater { };
 
-    for f in cmake/BuildPlugin.cmake panel/CMakeLists.txt; do
-      substituteInPlace $f \
-        --replace "\''${LXQT_TRANSLATIONS_DIR}" "''${out}/share/lxqt/translations"
-    done
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/lxqt-panel";
     description = "The LXQt desktop panel";
-    homepage = https://github.com/lxqt/lxqt-panel;
-    license = licenses.lgpl21;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    mainProgram = "lxqt-panel";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
   };
 }

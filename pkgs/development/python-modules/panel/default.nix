@@ -1,50 +1,64 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, bokeh
-, param
-, pyviz-comms
-, markdown
-, pyct
-, testpath
-, pytest
-, scipy
-, plotly
-, altair
-, vega_datasets
-, hvplot
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonRelaxDepsHook,
+  bleach,
+  bokeh,
+  param,
+  pyviz-comms,
+  markdown,
+  pyct,
+  requests,
+  setuptools,
+  tqdm,
+  typing-extensions,
 }:
 
 buildPythonPackage rec {
   pname = "panel";
-  version = "0.4.0";
+  version = "1.4.3";
 
+  format = "wheel";
+
+  # We fetch a wheel because while we can fetch the node
+  # artifacts using npm, the bundling invoked in setup.py
+  # tries to fetch even more artifacts
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "21fc6729909dba4ba8c9a84b7fadd293322cc2594d15ac73b0f66a5ceffd1f98";
+    inherit pname version format;
+    hash = "sha256-iIBQ9UEcmO6q3bS2faFK7tY4mPVaoIWS7bMzKLzkfWw=";
+    dist = "py3";
+    python = "py3";
   };
 
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace "testpath<0.4" "testpath"
-  '';
+  nativeBuildInputs = [ pythonRelaxDepsHook ];
+
+  pythonRelaxDeps = [ "bokeh" ];
 
   propagatedBuildInputs = [
+    bleach
     bokeh
-    param
-    pyviz-comms
     markdown
+    param
     pyct
-    testpath
+    pyviz-comms
+    requests
+    setuptools
+    tqdm
+    typing-extensions
   ];
+
+  pythonImportsCheck = [ "panel" ];
 
   # infinite recursion in test dependencies (hvplot)
   doCheck = false;
 
   meta = with lib; {
     description = "A high level dashboarding library for python visualization libraries";
-    homepage = http://pyviz.org;
+    mainProgram = "panel";
+    homepage = "https://github.com/holoviz/panel";
+    changelog = "https://github.com/holoviz/panel/releases/tag/v${version}";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

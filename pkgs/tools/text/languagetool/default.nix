@@ -1,19 +1,21 @@
-{ stdenv, fetchzip, jre, makeWrapper }:
+{ lib, stdenv, fetchzip, jre, makeWrapper, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "LanguageTool-${version}";
-  version = "4.4";
+  pname = "LanguageTool";
+  version = "6.4";
 
   src = fetchzip {
-    url = "https://www.languagetool.org/download/${name}.zip";
-    sha256 = "0cdrh59jcwrj5zp2lhbi9wp29pzabp35i8f7lbrs6z1wib6mgmp1";
+    url = "https://www.languagetool.org/download/${pname}-${version}.zip";
+    sha256 = "sha256-MIP7+K3kmzrqXWcR23Rn+gMYR0zrGnnCYGhv81P2Pc4=";
   };
   nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ jre ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share
-    mv * $out/share/
+    mv -- * $out/share/
 
     for lt in languagetool{,-commandline,-server};do
       makeWrapper ${jre}/bin/java $out/bin/$lt \
@@ -22,14 +24,18 @@ stdenv.mkDerivation rec {
 
     makeWrapper ${jre}/bin/java $out/bin/languagetool-http-server \
       --add-flags "-cp $out/share/languagetool-server.jar org.languagetool.server.HTTPServer"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://languagetool.org;
+  passthru.tests.languagetool = nixosTests.languagetool;
+
+  meta = with lib; {
+    homepage = "https://languagetool.org";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [
-      edwtjo
-    ];
+    maintainers = with maintainers; [ edwtjo ];
+    platforms = jre.meta.platforms;
     description = "A proofreading program for English, French German, Polish, and more";
   };
 }

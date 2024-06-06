@@ -1,18 +1,59 @@
-{ stdenv, fetchurl, zlib, bzip2, openssl, attr, lzo, libgcrypt, e2fsprogs, gpgme, xz }:
-
-with stdenv.lib;
+{
+  lib,
+  stdenv,
+  fetchzip,
+  which,
+  attr,
+  e2fsprogs,
+  curl,
+  libargon2,
+  librsync,
+  libthreadar,
+  gpgme,
+  libgcrypt,
+  openssl,
+  bzip2,
+  lz4,
+  lzo,
+  xz,
+  zlib,
+  zstd,
+  CoreFoundation,
+}:
 
 stdenv.mkDerivation rec {
-  version = "2.6.3";
-  name = "dar-${version}";
+  version = "2.7.14";
+  pname = "dar";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/dar/${name}.tar.gz";
-    sha256 = "00jlmbg80xam3xg1vvrbi5wl6cwij5bz8w80d4k0bmmk4rrwq4rc";
+  src = fetchzip {
+    url = "mirror://sourceforge/dar/${pname}-${version}.tar.gz";
+    sha256 = "sha256-qesq+Rqo/llvQ7JPqYwLhObwZw2GlhXpYyc6NEA9c4M=";
   };
 
-  buildInputs = [ zlib bzip2 openssl lzo libgcrypt gpgme xz ]
-    ++ optionals stdenv.isLinux [ attr e2fsprogs ];
+  outputs = [ "out" "dev" ];
+
+  nativeBuildInputs = [ which ];
+
+  buildInputs = [
+    curl
+    librsync
+    libthreadar
+    gpgme
+    libargon2
+    libgcrypt
+    openssl
+    bzip2
+    lz4
+    lzo
+    xz
+    zlib
+    zstd
+  ] ++ lib.optionals stdenv.isLinux [
+    attr
+    e2fsprogs
+  ] ++ lib.optionals stdenv.isDarwin [
+    CoreFoundation
+  ];
 
   configureFlags = [
     "--disable-birthtime"
@@ -22,18 +63,20 @@ stdenv.mkDerivation rec {
     "--enable-threadar"
   ];
 
-  postInstall = ''
-    rm -r "$out"/share/dar # Disable html help
-  '';
+  hardeningDisable = [ "format" ];
 
   enableParallelBuilding = true;
 
-  hardeningDisable = [ "format" ];
+  postInstall = ''
+    # Disable html help
+    rm -r "$out"/share/dar
+  '';
 
-  meta = {
-    homepage = http://dar.linux.free.fr;
+  meta = with lib; {
+    homepage = "http://dar.linux.free.fr";
     description = "Disk ARchiver, allows backing up files into indexed archives";
-    license = licenses.gpl2;
+    maintainers = with maintainers; [ izorkin ];
+    license = licenses.gpl2Only;
     platforms = platforms.unix;
   };
 }

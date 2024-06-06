@@ -1,36 +1,69 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, nose
-, numpy
-, six
-, ruamel_yaml
-, msgpack-python
-, coverage
-, coveralls
-, pymongo
-, lsof
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  msgpack,
+  numpy,
+  pandas,
+  pydantic,
+  pymongo,
+  pytestCheckHook,
+  pythonOlder,
+  ruamel-yaml,
+  setuptools,
+  setuptools-scm,
+  torch,
+  tqdm,
 }:
 
 buildPythonPackage rec {
   pname = "monty";
-  version = "1.0.4";
+  version = "2024.5.24";
+  pyproject = true;
 
-  # No tests in Pypi
+  disabled = pythonOlder "3.9";
+
   src = fetchFromGitHub {
     owner = "materialsvirtuallab";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0vqaaz0dw0ypl6sfwbycpb0qs3ap04c4ghbggklxih66spdlggh6";
+    repo = "monty";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-c2RG38lsYWtwdCzrRTH/l9o4k6UPUOFC+wwV9zjoDvk=";
   };
 
-  checkInputs = [ lsof nose numpy msgpack-python coverage coveralls pymongo];
-  propagatedBuildInputs = [ six ruamel_yaml ];
-
-  preCheck = ''
+  postPatch = ''
     substituteInPlace tests/test_os.py \
       --replace 'self.assertEqual("/usr/bin/find", which("/usr/bin/find"))' '#'
   '';
+
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
+
+  propagatedBuildInputs = [
+    msgpack
+    ruamel-yaml
+    tqdm
+  ];
+
+  nativeCheckInputs = [
+    numpy
+    pandas
+    pydantic
+    pymongo
+    pytestCheckHook
+    torch
+  ];
+
+  pythonImportsCheck = [ "monty" ];
+
+  disabledTests = [
+    # Test file was removed and re-added after 2022.9.9
+    "test_reverse_readfile_gz"
+    "test_Path_objects"
+    "test_zopen"
+    "test_zpath"
+  ];
 
   meta = with lib; {
     description = "Serves as a complement to the Python standard library by providing a suite of tools to solve many common problems";
@@ -39,7 +72,8 @@ buildPythonPackage rec {
       standard library. Examples include useful utilities like transparent support for zipped files, useful design
       patterns such as singleton and cached_class, and many more.
     ";
-    homepage = https://github.com/materialsvirtuallab/monty;
+    homepage = "https://github.com/materialsvirtuallab/monty";
+    changelog = "https://github.com/materialsvirtuallab/monty/releases/tag/v${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ psyanticy ];
   };

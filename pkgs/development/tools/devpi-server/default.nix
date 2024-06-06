@@ -1,33 +1,125 @@
- { stdenv, pythonPackages, nginx }:
+{ lib, fetchFromGitHub, buildPythonApplication
+, pythonOlder
+, aiohttp
+, appdirs
+, beautifulsoup4
+, defusedxml
+, devpi-common
+, execnet
+, itsdangerous
+, nginx
+, packaging
+, passlib
+, platformdirs
+, pluggy
+, py
+, httpx
+, pyramid
+, pytestCheckHook
+, repoze-lru
+, setuptools
+, strictyaml
+, waitress
+, webtest
+, testers
+, devpi-server
+, nixosTests
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "${pname}-${version}";
+
+buildPythonApplication rec {
   pname = "devpi-server";
-  version = "4.4.0";
+  version = "6.10.0";
+  pyproject = true;
 
-  src = pythonPackages.fetchPypi {
-    inherit pname version;
-    sha256 = "0y77kcnk26pfid8vsw07v2k61x9sdl6wbmxg5qxnz3vd7703xpkl";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "devpi";
+    repo = "devpi";
+    rev = "server-${version}";
+    hash = "sha256-JqYWWItdAgtUtiYSqxUd40tT7ON4oHiDA4/3Uhb01b8=";
   };
 
-  propagatedBuildInputs = with pythonPackages;
-    [ devpi-common execnet itsdangerous pluggy waitress pyramid passlib ];
-  checkInputs = with pythonPackages; [ nginx webtest pytest beautifulsoup4 pytest-timeout mock pyyaml ];
-  preCheck = ''
-    # These tests pass with pytest 3.3.2 but not with pytest 3.4.0.
-    sed -i 's/test_basic/noop/' test_devpi_server/test_log.py
-    sed -i 's/test_new/noop/' test_devpi_server/test_log.py
-    sed -i 's/test_thread_run_try_again/noop/' test_devpi_server/test_replica.py
-  '';
-  checkPhase = ''
-    runHook preCheck
-    cd test_devpi_server/
-    PATH=$PATH:$out/bin pytest --slow -rfsxX
+  sourceRoot = "${src.name}/server";
+
+  postPatch = ''
+    substituteInPlace tox.ini \
+      --replace "--flake8" ""
   '';
 
-  meta = with stdenv.lib;{
-    homepage = http://doc.devpi.net;
+  nativeBuildInputs = [
+    setuptools
+  ];
+
+  propagatedBuildInputs = [
+    aiohttp
+    appdirs
+    defusedxml
+    devpi-common
+    execnet
+    itsdangerous
+    packaging
+    passlib
+    platformdirs
+    pluggy
+    pyramid
+    repoze-lru
+    setuptools
+    strictyaml
+    waitress
+    py
+    httpx
+  ] ++ passlib.optional-dependencies.argon2;
+
+  nativeCheckInputs = [
+    beautifulsoup4
+    nginx
+    py
+    pytestCheckHook
+    webtest
+  ];
+
+  # root_passwd_hash tries to write to store
+  # TestMirrorIndexThings tries to write to /var through ngnix
+  # nginx tests try to write to /var
+  preCheck = ''
+    export PATH=$PATH:$out/bin
+    export HOME=$TMPDIR
+  '';
+  pytestFlagsArray = [
+    "./test_devpi_server"
+    "-rfsxX"
+    "--ignore=test_devpi_server/test_nginx_replica.py"
+    "--ignore=test_devpi_server/test_streaming_nginx.py"
+    "--ignore=test_devpi_server/test_streaming_replica_nginx.py"
+  ];
+  disabledTests = [
+    "root_passwd_hash_option"
+    "TestMirrorIndexThings"
+    "test_auth_mirror_url_no_hash"
+    "test_auth_mirror_url_with_hash"
+    "test_auth_mirror_url_hidden_in_logs"
+    "test_simplelinks_timeout"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [
+    "devpi_server"
+  ];
+
+  passthru.tests = {
+    devpi-server = nixosTests.devpi-server;
+    version = testers.testVersion {
+      package = devpi-server;
+    };
+  };
+
+  meta = with lib;{
+    homepage = "http://doc.devpi.net";
     description = "Github-style pypi index server and packaging meta tool";
+    changelog = "https://github.com/devpi/devpi/blob/${src.rev}/server/CHANGELOG";
     license = licenses.mit;
     maintainers = with maintainers; [ makefu ];
   };

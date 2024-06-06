@@ -1,73 +1,41 @@
-{ stdenv, fetchurl, runCommand, fetchFromGitHub, autoreconfHook, gettext, makeWrapper, pkgconfig
-, vala, wrapGAppsHook, dbus, dconf ? null, glib, gdk_pixbuf, gobject-introspection, gtk2
-, gtk3, gtk-doc, isocodes, python3, json-glib, libnotify ? null, enablePythonLibrary ? true
-, enableUI ? true, withWayland ? false, libxkbcommon ? null, wayland ? null
-, buildPackages, runtimeShell }:
-
-assert withWayland -> wayland != null && libxkbcommon != null;
-
-with stdenv.lib;
+{ lib
+, stdenv
+, substituteAll
+, fetchFromGitHub
+, autoreconfHook
+, gettext
+, makeWrapper
+, pkg-config
+, vala
+, wrapGAppsHook3
+, dbus
+, systemd
+, dconf ? null
+, glib
+, gdk-pixbuf
+, gobject-introspection
+, gtk3
+, gtk4
+, gtk-doc
+, libdbusmenu-gtk3
+, runCommand
+, isocodes
+, cldr-annotations
+, unicode-character-database
+, unicode-emoji
+, python3
+, json-glib
+, libnotify ? null
+, enableUI ? true
+, withWayland ? true
+, libxkbcommon
+, wayland
+, buildPackages
+, runtimeShell
+, nixosTests
+}:
 
 let
-  emojiSrcs = {
-    data = fetchurl {
-      url = "http://unicode.org/Public/emoji/5.0/emoji-data.txt";
-      sha256 = "11jfz5rrvyc2ixliqfcjgmch4cn9mfy0x96qnpfcyz5fy1jvfyxf";
-    };
-    sequences = fetchurl {
-      url = "http://unicode.org/Public/emoji/5.0/emoji-sequences.txt";
-      sha256 = "09bii7f5mmladg0kl3n80fa9qaix6bv5ylm92x52j7wygzv0szb1";
-    };
-    variation-sequences = fetchurl {
-      url = "http://unicode.org/Public/emoji/5.0/emoji-variation-sequences.txt";
-      sha256 = "1wlg4gbq7spmpppjfy5zdl82sj0hc836p8gljgfrjmwsjgybq286";
-    };
-    zwj-sequences = fetchurl {
-      url = "http://unicode.org/Public/emoji/5.0/emoji-zwj-sequences.txt";
-      sha256 = "16gvzv76mjv9g81lm1m6cr3rpfqyn2k4hb9a62xd329252dhl25q";
-    };
-    test = fetchurl {
-      url = "http://unicode.org/Public/emoji/5.0/emoji-test.txt";
-      sha256 = "031qk2v8xdnba7hfinmgrmpglc9l8ll2hds6mw885p0hngdb3dgw";
-    };
-  };
-  emojiData = stdenv.mkDerivation {
-    name = "emoji-data-5.0";
-    unpackPhase = ":";
-    installPhase = ''
-      mkdir $out
-      ${builtins.toString (flip mapAttrsToList emojiSrcs (k: v: "cp ${v} $out/emoji-${k}.txt;"))}
-    '';
-  };
-  cldrEmojiAnnotation = stdenv.mkDerivation rec {
-    name = "cldr-emoji-annotation-${version}";
-    version = "31.90.0_1";
-    src = fetchFromGitHub {
-      owner = "fujiwarat";
-      repo = "cldr-emoji-annotation";
-      rev = version;
-      sha256 = "1vsj32bg8ab4d80rz0fxy6sj2lv31inzyjnddjm079bnvlaf2kih";
-    };
-    nativeBuildInputs = [ autoreconfHook ];
-  };
-  ucdSrcs = {
-    NamesList = fetchurl {
-      url = "https://www.unicode.org/Public/UNIDATA/NamesList.txt";
-      sha256 = "c17c7726f562bd9ef869096807f0297e1edef9a58fdae1fbae487378fa43586f";
-    };
-    Blocks = fetchurl {
-      url = "https://www.unicode.org/Public/UNIDATA/Blocks.txt";
-      sha256 = "a1a3ca4381eb91f7b65afe7cb7df615cdcf67993fef4b486585f66b349993a10";
-    };
-  };
-  ucd = stdenv.mkDerivation rec {
-    name = "ucd-12.0.0";
-    unpackPhase = ":";
-    installPhase = ''
-      mkdir $out
-      ${builtins.toString (flip mapAttrsToList ucdSrcs (k: v: "cp ${v} $out/${k}.txt;"))}
-    '';
-  };
   python3Runtime = python3.withPackages (ps: with ps; [ pygobject3 ]);
   python3BuildEnv = python3.buildEnv.override {
     # ImportError: No module named site
@@ -77,39 +45,76 @@ let
       makeWrapper ${glib.dev}/bin/glib-mkenums $out/bin/glib-mkenums --unset PYTHONPATH
     '';
   };
+  # make-dconf-override-db.sh needs to execute dbus-launch in the sandbox,
+  # it will fail to read /etc/dbus-1/session.conf unless we add this flag
+  dbus-launch = runCommand "sandbox-dbus-launch"
+    {
+      nativeBuildInputs = [ makeWrapper ];
+    } ''
+    makeWrapper ${dbus}/bin/dbus-launch $out/bin/dbus-launch \
+      --add-flags --config-file=${dbus}/share/dbus-1/session.conf
+  '';
 in
 
 stdenv.mkDerivation rec {
-  name = "ibus-${version}";
-  version = "1.5.20";
+  pname = "ibus";
+  version = "1.5.30";
 
   src = fetchFromGitHub {
     owner = "ibus";
     repo = "ibus";
     rev = version;
-    sha256 = "1npavb896qrp6qbqayb0va4mpsi68wybcnlbjknzgssqyw2ylh9r";
+    sha256 = "sha256-VgSjeKF9DCkDfE9lHEaWpgZb6ibdgoDf/I6qeJf8Ah4=";
   };
 
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      pythonInterpreter = python3Runtime.interpreter;
+      pythonSitePackages = python3.sitePackages;
+    })
+    ./build-without-dbus-launch.patch
+  ];
+
+  outputs = [ "out" "dev" "installedTests" ];
+
   postPatch = ''
-    substituteInPlace setup/ibus-setup.in --subst-var-by PYTHON ${python3Runtime.interpreter}
-    substituteInPlace data/dconf/Makefile.am --replace "dconf update" true
-    substituteInPlace configure.ac --replace '$python2dir/ibus' $out/${python3.sitePackages}/ibus
-    echo \#!${runtimeShell} > data/dconf/make-dconf-override-db.sh
+    # Maintainer does not want to create separate tarballs for final release candidate and release versions,
+    # so we need to set `ibus_released` to `1` in `configure.ac`. Otherwise, anyone running `ibus version` gets
+    # a version with an inaccurate `-rcX` suffix.
+    # https://github.com/ibus/ibus/issues/2584
+    substituteInPlace configure.ac --replace "m4_define([ibus_released], [0])" "m4_define([ibus_released], [1])"
+
+    patchShebangs --build data/dconf/make-dconf-override-db.sh
     cp ${buildPackages.gtk-doc}/share/gtk-doc/data/gtk-doc.make .
+    substituteInPlace bus/services/org.freedesktop.IBus.session.GNOME.service.in --replace "ExecStart=sh" "ExecStart=${runtimeShell}"
+    substituteInPlace bus/services/org.freedesktop.IBus.session.generic.service.in --replace "ExecStart=sh" "ExecStart=${runtimeShell}"
   '';
 
   preAutoreconf = "touch ChangeLog";
 
   configureFlags = [
+    # The `AX_PROG_{CC,CXX}_FOR_BUILD` autoconf macros can pick up unwrapped GCC binaries,
+    # so we set `{CC,CXX}_FOR_BUILD` to override that behavior.
+    # https://github.com/NixOS/nixpkgs/issues/21751
+    "CC_FOR_BUILD=${stdenv.cc}/bin/cc"
+    "CXX_FOR_BUILD=${stdenv.cc}/bin/c++"
     "--disable-memconf"
-    (enableFeature (dconf != null) "dconf")
-    (enableFeature (libnotify != null) "libnotify")
-    (enableFeature withWayland "wayland")
-    (enableFeature enablePythonLibrary "python-library")
-    (enableFeature enableUI "ui")
-    "--with-unicode-emoji-dir=${emojiData}"
-    "--with-emoji-annotation-dir=${cldrEmojiAnnotation}/share/unicode/cldr/common/annotations"
-    "--with-ucd-dir=${ucd}"
+    (lib.enableFeature (dconf != null) "dconf")
+    (lib.enableFeature (libnotify != null) "libnotify")
+    (lib.enableFeature withWayland "wayland")
+    (lib.enableFeature enableUI "ui")
+    "--disable-gtk2"
+    "--enable-gtk4"
+    "--enable-install-tests"
+    "--with-unicode-emoji-dir=${unicode-emoji}/share/unicode/emoji"
+    "--with-emoji-annotation-dir=${cldr-annotations}/share/unicode/cldr/common/annotations"
+    "--with-ucd-dir=${unicode-character-database}/share/unicode"
+  ];
+
+  makeFlags = [
+    "test_execsdir=${placeholder "installedTests"}/libexec/installed-tests/ibus"
+    "test_sourcesdir=${placeholder "installedTests"}/share/installed-tests/ibus"
   ];
 
   nativeBuildInputs = [
@@ -117,25 +122,31 @@ stdenv.mkDerivation rec {
     gtk-doc
     gettext
     makeWrapper
-    pkgconfig
+    pkg-config
     python3BuildEnv
     vala
-    wrapGAppsHook
+    wrapGAppsHook3
+    dbus-launch
+    gobject-introspection
   ];
 
-  propagatedBuildInputs = [ glib ];
+  propagatedBuildInputs = [
+    glib
+  ];
 
   buildInputs = [
     dbus
+    systemd
     dconf
-    gdk_pixbuf
-    gobject-introspection
-    gtk2
+    gdk-pixbuf
+    python3.pkgs.pygobject3 # for pygobject overrides
     gtk3
+    gtk4
     isocodes
     json-glib
     libnotify
-  ] ++ optionals withWayland [
+    libdbusmenu-gtk3
+  ] ++ lib.optionals withWayland [
     libxkbcommon
     wayland
   ];
@@ -144,13 +155,34 @@ stdenv.mkDerivation rec {
 
   doCheck = false; # requires X11 daemon
   doInstallCheck = true;
-  installCheckPhase = "$out/bin/ibus version";
+  installCheckPhase = ''
+    $out/bin/ibus version
+  '';
 
-  meta = {
-    homepage = https://github.com/ibus/ibus;
+  postInstall = ''
+    # It has some hardcoded FHS paths and also we do not use it
+    # since we set up the environment in NixOS tests anyway.
+    moveToOutput "bin/ibus-desktop-testing-runner" "$installedTests"
+  '';
+
+  postFixup = ''
+    # set necessary environment also for tests
+    for f in $installedTests/libexec/installed-tests/ibus/*; do
+        wrapGApp $f
+    done
+  '';
+
+  passthru = {
+    tests = {
+      installed-tests = nixosTests.installed-tests.ibus;
+    };
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/ibus/ibus";
     description = "Intelligent Input Bus, input method framework";
     license = licenses.lgpl21Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ ttuegel yegortimoshenko ];
+    maintainers = with maintainers; [ ttuegel yana ];
   };
 }

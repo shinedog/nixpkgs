@@ -1,31 +1,46 @@
-{ stdenv
-, buildPythonPackage
-, fetchgit
-, cmake
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  cmake,
 }:
 
 buildPythonPackage rec {
-  pname = "EditorConfig";
-  version = "0.12.1";
+  pname = "editorconfig";
+  version = "0.12.4";
+  pyproject = true;
 
-  # fetchgit used to ensure test submodule is available
-  src = fetchgit {
-    url = "https://github.com/editorconfig/editorconfig-core-py";
-    rev = "refs/tags/v${version}";
-    sha256 = "0svk7id7ncygj2rnxhm7602xizljyidk4xgrl6i0xgq3829cz4bl";
+  src = fetchFromGitHub {
+    owner = "editorconfig";
+    repo = "editorconfig-core-py";
+    rev = "v${version}";
+    hash = "sha256-+m674bLj6xs7MWU+8BMixEwy7/TjyES0lvCLLogTDHQ=";
+    fetchSubmodules = true;
   };
 
-  nativeBuildInputs = [ cmake ];
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [ cmake ];
+
+  dontUseCmakeConfigure = true;
+
   checkPhase = ''
+    runHook preCheck
+
     cmake .
-    # utf_8_char fails with python3
-    ctest -E "utf_8_char" .
+    ctest .
+
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://editorconfig.org;
-    description = "EditorConfig File Locator and Interpreter for Python";
-    license = licenses.psfl;
-  };
+  pythonImportsCheck = [ "editorconfig" ];
 
+  meta = with lib; {
+    description = "EditorConfig File Locator and Interpreter for Python";
+    mainProgram = "editorconfig";
+    homepage = "https://github.com/editorconfig/editorconfig-core-py";
+    license = licenses.psfl;
+    maintainers = with maintainers; [ nickcao ];
+  };
 }

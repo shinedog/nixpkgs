@@ -1,14 +1,27 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig, gobject-introspection, vala, gtk-doc, docbook_xsl, glib }:
+{ stdenv
+, lib
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, gobject-introspection
+, vala
+, gtk-doc
+, docbook_xsl
+, glib
+, mesonEmulatorHook
+, gnome
+}:
 
 # TODO: Add installed tests once https://gitlab.gnome.org/World/libcloudproviders/issues/4 is fixed
 
 stdenv.mkDerivation rec {
   pname = "libcloudproviders";
-  version = "0.3.0";
+  version = "0.3.6";
 
   src = fetchurl {
-    url = "https://gitlab.gnome.org/World/${pname}/repository/archive.tar.gz?ref=${version}";
-    sha256 = "1hby7vhxn6fw4ih3xbx6ab9vqp3a3dmlhr0z7mrwr73b7ankly0l";
+    url = "mirror://gnome/sources/libcloudproviders/${lib.versions.majorMinor version}/libcloudproviders-${version}.tar.xz";
+    hash = "sha256-O3URCzpP3vTFxaRA5IcB/gVNKuBh0VbIkTa7W6BedLc=";
   };
 
   outputs = [ "out" "dev" "devdoc" ];
@@ -17,13 +30,30 @@ stdenv.mkDerivation rec {
     "-Denable-gtk-doc=true"
   ];
 
-  nativeBuildInputs = [ meson ninja pkgconfig gobject-introspection vala gtk-doc docbook_xsl ];
+  strictDeps = true;
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gobject-introspection
+    vala
+    gtk-doc
+    docbook_xsl
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
 
   buildInputs = [ glib ];
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = "libcloudproviders";
+    };
+  };
+
+  meta = with lib; {
     description = "DBus API that allows cloud storage sync clients to expose their services";
-    homepage = https://gitlab.gnome.org/World/libcloudproviders;
+    homepage = "https://gitlab.gnome.org/World/libcloudproviders";
     license = licenses.lgpl3Plus;
     maintainers = with maintainers; [ jtojnar ];
     platforms = platforms.unix;

@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libX11, libXt, libXpm, libXaw, localStateDir?null }:
+{ lib, stdenv, fetchFromGitHub, autoconf, automake, libX11, libXt, libXpm, libXaw, localStateDir?null }:
 
-stdenv.mkDerivation rec {
-  name = "xjump-${version}";
+stdenv.mkDerivation {
+  pname = "xjump";
   version = "2.9.3";
   src = fetchFromGitHub {
     owner = "hugomg";
@@ -12,15 +12,12 @@ stdenv.mkDerivation rec {
   nativeBuildInputs = [ autoconf automake ];
   buildInputs = [ libX11 libXt libXpm libXaw ];
   preConfigure = "autoreconf --install";
-  patches = if stdenv.buildPlatform.isDarwin then [ ./darwin.patch ] else [];
-  configureFlags =
-    if localStateDir != null then
-      ["--localstatedir=${localStateDir}"]
-    else
-      [];
+  patches = lib.optionals stdenv.buildPlatform.isDarwin [ ./darwin.patch ];
+  configureFlags = lib.optionals (localStateDir != null) ["--localstatedir=${localStateDir}"];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The falling tower game";
+    mainProgram = "xjump";
     license = licenses.gpl2;
     maintainers = with maintainers; [ pmeunier ];
   };

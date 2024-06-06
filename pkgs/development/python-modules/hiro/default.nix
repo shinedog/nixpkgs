@@ -1,18 +1,28 @@
-{ stdenv, buildPythonPackage, fetchPypi, six, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  six,
+  mock,
+}:
 buildPythonPackage rec {
   pname = "hiro";
-  version = "0.5";
+  version = "1.1.1";
+  format = "setuptools";
   src = fetchPypi {
     inherit pname version;
 
-    sha256 = "57d9dac63077f24c3d0132c02ac5c71e4bd1d79bdac30dccad4c83fadd49fa1c";
+    hash = "sha256-2jM5rx3JpZTMqdycccclJysuMGYE5F0OBXXNE8X5XWg=";
   };
 
-  propagatedBuildInputs = [ six mock ];
+  propagatedBuildInputs = [
+    six
+    mock
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Time manipulation utilities for Python";
-    homepage = http://hiro.readthedocs.io/en/latest/;
+    homepage = "https://hiro.readthedocs.io/en/latest/";
     license = licenses.mit;
     maintainers = with maintainers; [ nyarly ];
   };

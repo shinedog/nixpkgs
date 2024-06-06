@@ -1,30 +1,37 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, python
-, sqlalchemy
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  nose,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "ofxtools";
-  version = "0.5.4";
+  version = "0.9.5";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "83e1ca0a61463fca99d096a694466726a49979a5d2b8a36a65514c7a8617d3ea";
+  disabled = pythonOlder "3.8";
+
+  # PyPI distribution does not include tests
+  src = fetchFromGitHub {
+    owner = "csingley";
+    repo = pname;
+    rev = version;
+    hash = "sha256-NsImnD+erhpakQnl1neuHfSKiV6ipNBMPGKMDM0gwWc=";
   };
 
+  nativeCheckInputs = [ nose ];
+  # override $HOME directory:
+  #   error: [Errno 13] Permission denied: '/homeless-shelter'
   checkPhase = ''
-    ${python.interpreter} -m unittest discover -s ofxtools
+    HOME=$TMPDIR nosetests tests/*.py
   '';
 
-  buildInputs = [ sqlalchemy ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/csingley/ofxtools";
     description = "Library for working with Open Financial Exchange (OFX) formatted data used by financial institutions";
+    mainProgram = "ofxget";
     license = licenses.mit;
-    broken = true;
   };
-
 }

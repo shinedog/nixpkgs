@@ -1,20 +1,21 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
   cfg = config.services.gogs;
+  opt = options.services.gogs;
   configFile = pkgs.writeText "app.ini" ''
-    APP_NAME = ${cfg.appName}
+    BRAND_NAME = ${cfg.appName}
     RUN_USER = ${cfg.user}
     RUN_MODE = prod
 
     [database]
-    DB_TYPE = ${cfg.database.type}
+    TYPE = ${cfg.database.type}
     HOST = ${cfg.database.host}:${toString cfg.database.port}
     NAME = ${cfg.database.name}
     USER = ${cfg.database.user}
-    PASSWD = #dbpass#
+    PASSWORD = #dbpass#
     PATH = ${cfg.database.path}
 
     [repository]
@@ -24,8 +25,7 @@ let
     DOMAIN = ${cfg.domain}
     HTTP_ADDR = ${cfg.httpAddress}
     HTTP_PORT = ${toString cfg.httpPort}
-    ROOT_URL = ${cfg.rootUrl}
-    STATIC_ROOT_PATH = ${cfg.staticRootPath}
+    EXTERNAL_URL = ${cfg.rootUrl}
 
     [session]
     COOKIE_NAME = session
@@ -90,7 +90,7 @@ in
         };
 
         port = mkOption {
-          type = types.int;
+          type = types.port;
           default = 3306;
           description = "Database host port.";
         };
@@ -111,9 +111,9 @@ in
           type = types.str;
           default = "";
           description = ''
-            The password corresponding to <option>database.user</option>.
+            The password corresponding to {option}`database.user`.
             Warning: this is stored in cleartext in the Nix store!
-            Use <option>database.passwordFile</option> instead.
+            Use {option}`database.passwordFile` instead.
           '';
         };
 
@@ -123,13 +123,14 @@ in
           example = "/run/keys/gogs-dbpassword";
           description = ''
             A file containing the password corresponding to
-            <option>database.user</option>.
+            {option}`database.user`.
           '';
         };
 
         path = mkOption {
           type = types.str;
           default = "${cfg.stateDir}/data/gogs.db";
+          defaultText = literalExpression ''"''${config.${opt.stateDir}}/data/gogs.db"'';
           description = "Path to the sqlite3 database file.";
         };
       };
@@ -143,6 +144,7 @@ in
       repositoryRoot = mkOption {
         type = types.str;
         default = "${cfg.stateDir}/repositories";
+        defaultText = literalExpression ''"''${config.${opt.stateDir}}/repositories"'';
         description = "Path to the git repositories.";
       };
 
@@ -165,7 +167,7 @@ in
       };
 
       httpPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 3000;
         description = "HTTP listen port.";
       };
@@ -177,13 +179,6 @@ in
           Marks session cookies as "secure" as a hint for browsers to only send
           them via HTTPS. This option is recommend, if Gogs is being served over HTTPS.
         '';
-      };
-
-      staticRootPath = mkOption {
-        type = types.str;
-        default = "${pkgs.gogs.data}";
-        example = "/var/lib/gogs/data";
-        description = "Upper level of template and static files path.";
       };
 
       extraConfig = mkOption {
@@ -200,7 +195,7 @@ in
       description = "Gogs (Go Git Service)";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      path = [ pkgs.gogs.bin ];
+      path = [ pkgs.gogs ];
 
       preStart = let
         runConfig = "${cfg.stateDir}/custom/conf/app.ini";
@@ -222,7 +217,6 @@ in
           sed -e "s,#secretkey#,$KEY,g" \
               -e "s,#dbpass#,$DBPASS,g" \
               -i ${runConfig}
-          chmod 440 ${runConfig} ${secretKey}
         ''}
 
         mkdir -p ${cfg.repositoryRoot}
@@ -230,7 +224,7 @@ in
         HOOKS=$(find ${cfg.repositoryRoot} -mindepth 4 -maxdepth 4 -type f -wholename "*git/hooks/*")
         if [ "$HOOKS" ]
         then
-          sed -ri 's,/nix/store/[a-z0-9.-]+/bin/gogs,${pkgs.gogs.bin}/bin/gogs,g' $HOOKS
+          sed -ri 's,/nix/store/[a-z0-9.-]+/bin/gogs,${pkgs.gogs}/bin/gogs,g' $HOOKS
           sed -ri 's,/nix/store/[a-z0-9.-]+/bin/env,${pkgs.coreutils}/bin/env,g' $HOOKS
           sed -ri 's,/nix/store/[a-z0-9.-]+/bin/bash,${pkgs.bash}/bin/bash,g' $HOOKS
           sed -ri 's,/nix/store/[a-z0-9.-]+/bin/perl,${pkgs.perl}/bin/perl,g' $HOOKS
@@ -242,8 +236,9 @@ in
         User = cfg.user;
         Group = cfg.group;
         WorkingDirectory = cfg.stateDir;
-        ExecStart = "${pkgs.gogs.bin}/bin/gogs web";
+        ExecStart = "${pkgs.gogs}/bin/gogs web";
         Restart = "always";
+        UMask = "0027";
       };
 
       environment = {

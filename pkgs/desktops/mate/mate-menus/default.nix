@@ -1,28 +1,49 @@
-{ stdenv, fetchurl, pkgconfig, intltool, glib, gobject-introspection, python3 }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, glib
+, gobject-introspection
+, python3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-menus-${version}";
-  version = "1.22.0";
+  pname = "mate-menus";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1lkakbf2f1815c146z4xp5f0h4lim6jzr02681wbvzalc6k97v5c";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "z0DHXH1vCq0dSWmCj8YgJcYiK8aoTwu51urX5FlwUI0=";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool gobject-introspection ];
+  nativeBuildInputs = [
+    pkg-config
+    gettext
+    gobject-introspection
+  ];
 
-  buildInputs = [ glib python3 ];
+  buildInputs = [
+    glib
+    python3
+  ];
 
   makeFlags = [
     "INTROSPECTION_GIRDIR=$(out)/share/gir-1.0/"
     "INTROSPECTION_TYPELIBDIR=$(out)/lib/girepository-1.0"
   ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "Menu system for MATE";
-    homepage = https://github.com/mate-desktop/mate-menus;
-    license = with licenses; [ gpl2 lgpl2 ];
+    homepage = "https://github.com/mate-desktop/mate-menus";
+    license = with licenses; [ gpl2Plus lgpl2Plus ];
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

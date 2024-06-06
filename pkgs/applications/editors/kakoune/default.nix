@@ -1,35 +1,42 @@
-{ stdenv, fetchFromGitHub, ncurses, asciidoc, docbook_xsl, libxslt, pkgconfig }:
+{ lib, stdenv, fetchFromGitHub }:
 
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-  name = "kakoune-${version}";
-  version = "2019.01.20";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "kakoune-unwrapped";
+  version = "2024.05.18";
   src = fetchFromGitHub {
     repo = "kakoune";
     owner = "mawww";
-    rev = "v${version}";
-    sha256 = "04ak1jm7b1i03sx10z3fxw08rn692y2fj482jn5kpzfzj91b2ila";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-1nYSVbvQ4tz1r8p7zCD6w/79haqpelb15qva9r3Fwew=";
   };
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ ncurses asciidoc docbook_xsl libxslt ];
-  makeFlags = [ "debug=no" ];
+  makeFlags = [ "debug=no" "PREFIX=${placeholder "out"}" ];
 
   postPatch = ''
-    export PREFIX=$out
-    cd src
-    sed -ie 's#--no-xmllint#--no-xmllint --xsltproc-opts="--nonet"#g' Makefile
+    echo "v${finalAttrs.version}" >.version
   '';
 
-  preConfigure = ''
-    export version="v${version}"
+  enableParallelBuilding = true;
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/kak -ui json -e "kill 0"
   '';
 
-  meta = {
-    homepage = http://kakoune.org/;
+  postInstall = ''
+    # make share/kak/autoload a directory, so we can use symlinkJoin with plugins
+    cd "$out/share/kak"
+    autoload_target=$(readlink autoload)
+    rm autoload
+    mkdir autoload
+    ln -s --relative "$autoload_target" autoload
+  '';
+
+  meta = with lib; {
+    homepage = "http://kakoune.org/";
     description = "A vim inspired text editor";
     license = licenses.publicDomain;
+    mainProgram = "kak";
     maintainers = with maintainers; [ vrthra ];
     platforms = platforms.unix;
   };
-}
+})

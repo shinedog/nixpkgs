@@ -1,17 +1,17 @@
 { mkDerivation, lib, fetchurl,
-  cmake, extra-cmake-modules, qtwebengine, qtscript, grantlee,
+  cmake, extra-cmake-modules, qtwebengine, qtscript, grantlee, qtxmlpatterns,
   kxmlgui, kwallet, kparts, kdoctools, kjobwidgets, kdesignerplugin,
   kiconthemes, knewstuff, sqlcipher, qca-qt5, kactivities, karchive,
   kguiaddons, knotifyconfig, krunner, kwindowsystem, libofx, shared-mime-info
 }:
 
 mkDerivation rec {
-  name = "skrooge-${version}";
-  version = "2.19.1";
+  pname = "skrooge";
+  version = "2.31.0";
 
   src = fetchurl {
-    url = "http://download.kde.org/stable/skrooge/${name}.tar.xz";
-    sha256 = "04pajy540vwff1y84ndrnscvlggiwfkr6w65g4hpa75cg7m169ya";
+    url = "mirror://kde/stable/skrooge/skrooge-${version}.tar.xz";
+    hash = "sha256-S90sUKJkUwgPAGlIuyN05a5DoehTFpFOnVLMF8Ac+HI=";
   };
 
   nativeBuildInputs = [
@@ -19,7 +19,7 @@ mkDerivation rec {
   ];
 
   buildInputs = [
-    qtwebengine qtscript grantlee kxmlgui kwallet kparts
+    qtwebengine qtscript grantlee kxmlgui kwallet kparts qtxmlpatterns
     kjobwidgets kdesignerplugin kiconthemes knewstuff sqlcipher qca-qt5
     kactivities karchive kguiaddons knotifyconfig krunner kwindowsystem libofx
   ];
@@ -30,12 +30,14 @@ mkDerivation rec {
   cmakeFlags = [
     "-DSKG_DESIGNER=OFF"
     "-DSKG_WEBENGINE=ON"
+    "-DSKG_WEBKIT=OFF"
+    "-DBUILD_TESTS=ON"
   ];
 
   meta = with lib; {
     description = "A personal finances manager, powered by KDE";
     license = with licenses; [ gpl3 ];
     maintainers = with maintainers; [ joko ];
-    homepage = https://skrooge.org/;
+    homepage = "https://skrooge.org/";
   };
 }

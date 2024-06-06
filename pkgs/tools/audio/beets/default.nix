@@ -1,251 +1,114 @@
-{ stdenv, fetchFromGitHub, writeScript, glibcLocales, diffPlugins
-, pythonPackages, imagemagick, gobject-introspection, gst_all_1
-, runtimeShell
+{ lib
+, callPackage
+, fetchFromGitHub
+, fetchPypi
 , fetchpatch
-
-# Attributes needed for tests of the external plugins
-, callPackage, beets
-
-, enableAcousticbrainz ? true
-, enableAcoustid       ? true
-, enableBadfiles       ? true, flac ? null, mp3val ? null
-, enableConvert        ? true, ffmpeg ? null
-, enableDiscogs        ? true
-, enableEmbyupdate     ? true
-, enableFetchart       ? true
-, enableGmusic         ? true
-, enableKeyfinder      ? true, keyfinder-cli ? null
-, enableKodiupdate     ? true
-, enableLastfm         ? true
-, enableMpd            ? true
-, enableReplaygain     ? true, bs1770gain ? null
-, enableSonosUpdate    ? true
-, enableThumbnails     ? true
-, enableWeb            ? true
-
-# External plugins
-, enableAlternatives   ? false
-, enableCopyArtifacts  ? false
-
-, bashInteractive, bash-completion
+, python3Packages
 }:
-
-assert enableAcoustid    -> pythonPackages.pyacoustid     != null;
-assert enableBadfiles    -> flac != null && mp3val != null;
-assert enableConvert     -> ffmpeg != null;
-assert enableDiscogs     -> pythonPackages.discogs_client != null;
-assert enableFetchart    -> pythonPackages.responses      != null;
-assert enableGmusic      -> pythonPackages.gmusicapi      != null;
-assert enableKeyfinder   -> keyfinder-cli != null;
-assert enableLastfm      -> pythonPackages.pylast         != null;
-assert enableMpd         -> pythonPackages.mpd2           != null;
-assert enableReplaygain  -> bs1770gain                    != null;
-assert enableSonosUpdate -> pythonPackages.soco           != null;
-assert enableThumbnails  -> pythonPackages.pyxdg          != null;
-assert enableWeb         -> pythonPackages.flask          != null;
-
-with stdenv.lib;
-
+/*
+** To customize the enabled beets plugins, use the pluginOverrides input to the
+** derivation.
+** Examples:
+**
+** Disabling a builtin plugin:
+** beets.override { pluginOverrides = { beatport.enable = false; }; }
+**
+** Enabling an external plugin:
+** beets.override { pluginOverrides = {
+**   alternatives = { enable = true; propagatedBuildInputs = [ beetsPackages.alternatives ]; };
+** }; }
+*/
 let
-  optionalPlugins = {
-    acousticbrainz = enableAcousticbrainz;
-    badfiles = enableBadfiles;
-    chroma = enableAcoustid;
-    convert = enableConvert;
-    discogs = enableDiscogs;
-    embyupdate = enableEmbyupdate;
-    fetchart = enableFetchart;
-    gmusic = enableGmusic;
-    keyfinder = enableKeyfinder;
-    kodiupdate = enableKodiupdate;
-    lastgenre = enableLastfm;
-    lastimport = enableLastfm;
-    mpdstats = enableMpd;
-    mpdupdate = enableMpd;
-    replaygain = enableReplaygain;
-    sonosupdate = enableSonosUpdate;
-    thumbnails = enableThumbnails;
-    web = enableWeb;
+  legacyMediafilePython3Packages = python3Packages.override {
+    overrides = self: super: {
+      mediafile = super.mediafile.overridePythonAttrs (oldAttrs: rec {
+        version = "0.10.1";
+        format = "pyproject";
+        src = fetchPypi {
+          pname = "mediafile";
+          inherit version;
+          hash = "sha256-kpZCoX7lAjuQhiIc6AzcLFHQYCGokNRDOwvVvTLysp8=";
+        };
+      });
+    };
+  };
+in lib.makeExtensible (self: {
+  beets = self.beets-stable;
+
+  beets-stable = callPackage ./common.nix rec {
+    python3Packages = legacyMediafilePython3Packages;
+    # NOTE: ./builtin-plugins.nix and ./common.nix can have some conditionals
+    # be removed when stable version updates
+    version = "1.6.0";
+    src = fetchFromGitHub {
+      owner = "beetbox";
+      repo = "beets";
+      rev = "v${version}";
+      hash = "sha256-fT+rCJJQR7bdfAcmeFRaknmh4ZOP4RCx8MXpq7/D8tM=";
+    };
+    extraPatches = [
+      # Bash completion fix for Nix
+      ./patches/bash-completion-always-print.patch
+
+      # Fix unidecode>=1.3.5 compat
+      (fetchpatch {
+        url = "https://github.com/beetbox/beets/commit/5ae1e0f3c8d3a450cb39f7933aa49bb78c2bc0d9.patch";
+        hash = "sha256-gqkrE+U1j3tt1qPRJufTGS/GftaSw/gweXunO/mCVG8=";
+      })
+
+      # Fix embedart with ImageMagick 7.1.1-12
+      # https://github.com/beetbox/beets/pull/4839
+      # The upstream patch does not apply on 1.6.0, as the related code has been refactored since
+      ./patches/fix-embedart-imagick-7.1.1-12.patch
+      # Pillow 10 compatibility fix, a backport of
+      # https://github.com/beetbox/beets/pull/4868, which doesn't apply now
+      ./patches/fix-pillow10-compat.patch
+
+      # Sphinx 6 compatibility fix.
+      (fetchpatch {
+        url = "https://github.com/beetbox/beets/commit/2106f471affd1dab35b4b26187b9c74d034528c5.patch";
+        hash = "sha256-V/886dYJW/O55VqU8sd+x/URIFcKhP6j5sUhTGMoxL8=";
+      })
+    ];
+    disabledTests = [
+      # This issue is present on this version alone, and can be removed on the
+      # next stable version version bump. Since this is fixed in branch master,
+      # we don't have a bug ticket open for this. As of writing, it also seems
+      # hard to find a patch that can be backported to v1.6.0 that would fix
+      # the failure, as the master branch has gone through too many changes
+      # now.
+      "test_get_single_item_by_path"
+    ];
   };
 
-  pluginsWithoutDeps = [
-    "absubmit" "beatport" "bench" "bpd" "bpm" "bucket" "cue" "duplicates"
-    "edit" "embedart" "export" "filefilter" "freedesktop" "fromfilename"
-    "ftintitle" "fuzzy" "hook" "ihate" "importadded" "importfeeds" "info"
-    "inline" "ipfs" "lyrics" "mbcollection" "mbsubmit" "mbsync" "metasync"
-    "missing" "permissions" "play" "plexupdate" "random" "rewrite" "scrub"
-    "smartplaylist" "spotify" "the" "types" "zero"
-  ];
+  beets-minimal = self.beets.override { disableAllPlugins = true; };
 
-  enabledOptionalPlugins = attrNames (filterAttrs (_: id) optionalPlugins);
-
-  allPlugins = pluginsWithoutDeps ++ attrNames optionalPlugins;
-  allEnabledPlugins = pluginsWithoutDeps ++ enabledOptionalPlugins;
-
-  testShell = "${bashInteractive}/bin/bash --norc";
-  completion = "${bash-completion}/share/bash-completion/bash_completion";
-
-  # This is a stripped down beets for testing of the external plugins.
-  externalTestArgs.beets = (beets.override {
-    enableAlternatives = false;
-    enableCopyArtifacts = false;
-  }).overrideAttrs (stdenv.lib.const {
-    doInstallCheck = false;
-  });
-
-  pluginArgs = externalTestArgs // { inherit pythonPackages; };
-
-  plugins = {
-    alternatives = callPackage ./alternatives-plugin.nix pluginArgs;
-    copyartifacts = callPackage ./copyartifacts-plugin.nix pluginArgs;
+  beets-unstable = callPackage ./common.nix {
+    inherit python3Packages;
+    version = "unstable-2024-03-16";
+    src = fetchFromGitHub {
+      owner = "beetbox";
+      repo = "beets";
+      rev = "b09806e0df8f01b9155017d3693764ae7beedcd5";
+      hash = "sha256-jE6nZLOEFufqclT6p1zK7dW+vt69q2ulaRsUldL7cSQ=";
+    };
+    extraPatches = [
+      # Bash completion fix for Nix
+      ./patches/unstable-bash-completion-always-print.patch
+    ];
+    pluginOverrides = {
+      # unstable has new plugins, so we register them here.
+      limit = { builtin = true; };
+      substitute = { builtin = true; };
+      advancedrewrite = { builtin = true; };
+      autobpm = { builtin = true; };
+    };
+    extraNativeBuildInputs = [
+      python3Packages.pydata-sphinx-theme
+    ];
   };
 
-in pythonPackages.buildPythonApplication rec {
-  pname = "beets";
-  version = "1.4.7";
-
-  src = fetchFromGitHub {
-    owner = "beetbox";
-    repo = "beets";
-    rev = "v${version}";
-    sha256 = "17gfz0g7pqm6wha8zf63zpw07zgi787w1bjwdcxdh1l3z4m7jc9l";
-  };
-
-  propagatedBuildInputs = [
-    pythonPackages.six
-    pythonPackages.enum34
-    pythonPackages.jellyfish
-    pythonPackages.munkres
-    pythonPackages.musicbrainzngs
-    pythonPackages.mutagen
-    pythonPackages.pyyaml
-    pythonPackages.unidecode
-    pythonPackages.gst-python
-    pythonPackages.pygobject3
-    gobject-introspection
-  ] ++ optional enableAcoustid      pythonPackages.pyacoustid
-    ++ optional (enableFetchart
-              || enableEmbyupdate
-              || enableKodiupdate
-              || enableAcousticbrainz)
-                                    pythonPackages.requests
-    ++ optional enableConvert       ffmpeg
-    ++ optional enableDiscogs       pythonPackages.discogs_client
-    ++ optional enableGmusic        pythonPackages.gmusicapi
-    ++ optional enableKeyfinder     keyfinder-cli
-    ++ optional enableLastfm        pythonPackages.pylast
-    ++ optional enableMpd           pythonPackages.mpd2
-    ++ optional enableSonosUpdate   pythonPackages.soco
-    ++ optional enableThumbnails    pythonPackages.pyxdg
-    ++ optional enableWeb           pythonPackages.flask
-    ++ optional enableAlternatives  plugins.alternatives
-    ++ optional enableCopyArtifacts plugins.copyartifacts;
-
-  buildInputs = [
-    imagemagick
-  ] ++ (with gst_all_1; [
-    gst-plugins-base
-    gst-plugins-good
-    gst-plugins-ugly
-  ]);
-
-  checkInputs = with pythonPackages; [
-    beautifulsoup4
-    mock
-    nose
-    rarfile
-    responses
-  ];
-
-  patches = [
-    ./replaygain-default-bs1770gain.patch
-    ./keyfinder-default-bin.patch
-
-    # Fix Python 3.7 compatibility
-    (fetchpatch {
-      url = "https://github.com/beetbox/beets/commit/"
-          + "15d44f02a391764da1ce1f239caef819f08beed8.patch";
-      sha256 = "12rjb4959nvnrm3fvvki7chxjkipa0cy8i0yi132xrcn8141dnpm";
-      excludes = [ "docs/changelog.rst" ];
-    })
-  ];
-
-  postPatch = ''
-    sed -i -e '/assertIn.*item.*path/d' test/test_info.py
-    echo echo completion tests passed > test/rsrc/test_completion.sh
-
-    sed -i -e '/^BASH_COMPLETION_PATHS *=/,/^])$/ {
-      /^])$/i u"${completion}"
-    }' beets/ui/commands.py
-  '' + optionalString enableBadfiles ''
-    sed -i -e '/self\.run_command(\[/ {
-      s,"flac","${flac.bin}/bin/flac",
-      s,"mp3val","${mp3val}/bin/mp3val",
-    }' beetsplug/badfiles.py
-  '' + optionalString enableConvert ''
-    sed -i -e 's,\(util\.command_output(\)\([^)]\+\)),\1[b"${ffmpeg.bin}/bin/ffmpeg" if args[0] == b"ffmpeg" else args[0]] + \2[1:]),' beetsplug/convert.py
-  '' + optionalString enableReplaygain ''
-    sed -i -re '
-      s!^( *cmd *= *b?['\'''"])(bs1770gain['\'''"])!\1${bs1770gain}/bin/\2!
-    ' beetsplug/replaygain.py
-    sed -i -e 's/if has_program.*bs1770gain.*:/if True:/' \
-      test/test_replaygain.py
-  '';
-
-  postInstall = ''
-    mkdir -p $out/share/zsh/site-functions
-    cp extra/_beet $out/share/zsh/site-functions/
-  '';
-
-  doCheck = true;
-
-  preCheck = ''
-    find beetsplug -mindepth 1 \
-      \! -path 'beetsplug/__init__.py' -a \
-      \( -name '*.py' -o -path 'beetsplug/*/__init__.py' \) -print \
-      | sed -n -re 's|^beetsplug/([^/.]+).*|\1|p' \
-      | sort -u > plugins_available
-
-     ${diffPlugins allPlugins "plugins_available"}
-  '';
-
-  checkPhase = ''
-    runHook preCheck
-
-    LANG=en_US.UTF-8 \
-    LOCALE_ARCHIVE=${assert stdenv.isLinux; glibcLocales}/lib/locale/locale-archive \
-    BEETS_TEST_SHELL="${testShell}" \
-    BASH_COMPLETION_SCRIPT="${completion}" \
-    HOME="$(mktemp -d)" nosetests -v
-
-    runHook postCheck
-  '';
-
-  doInstallCheck = true;
-
-  installCheckPhase = ''
-    runHook preInstallCheck
-
-    tmphome="$(mktemp -d)"
-
-    EDITOR="${writeScript "beetconfig.sh" ''
-      #!${runtimeShell}
-      cat > "$1" <<CFG
-      plugins: ${concatStringsSep " " allEnabledPlugins}
-      CFG
-    ''}" HOME="$tmphome" "$out/bin/beet" config -e
-    EDITOR=true HOME="$tmphome" "$out/bin/beet" config -e
-
-    runHook postInstallCheck
-  '';
-
-  makeWrapperArgs = [ "--set GI_TYPELIB_PATH \"$GI_TYPELIB_PATH\"" "--set GST_PLUGIN_SYSTEM_PATH_1_0 \"$GST_PLUGIN_SYSTEM_PATH_1_0\"" ];
-
-  meta = {
-    description = "Music tagger and library organizer";
-    homepage = http://beets.io;
-    license = licenses.mit;
-    maintainers = with maintainers; [ aszlig domenkozar pjones ];
-    platforms = platforms.linux;
-  };
-}
+  alternatives = callPackage ./plugins/alternatives.nix { beets = self.beets-minimal; };
+  copyartifacts = callPackage ./plugins/copyartifacts.nix { beets = self.beets-minimal; };
+  extrafiles = callPackage ./plugins/extrafiles.nix { beets = self.beets-minimal; };
+})

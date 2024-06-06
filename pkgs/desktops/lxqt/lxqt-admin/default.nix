@@ -1,46 +1,61 @@
-{ stdenv, fetchFromGitHub, cmake, lxqt-build-tools, qtx11extras, qttools, qtsvg, kwindowsystem, liblxqt, libqtxdg, polkit-qt }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, kwindowsystem
+, liblxqt
+, libqtxdg
+, lxqt-build-tools
+, polkit-qt-1
+, qtsvg
+, qttools
+, qtwayland
+, wrapQtAppsHook
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
   pname = "lxqt-admin";
-  version = "0.14.1";
+  version = "2.0.0";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "121qj46app2bqdr24g5sz2mdjfd9w86wpgkwap46s0zgxm4li44i";
+    hash = "sha256-Ps+XiCA6OmnsYj0D+pxpvRxfIZfRGFBbZ0t/IPZjlv8=";
   };
 
   nativeBuildInputs = [
     cmake
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtx11extras
-    qttools
-    qtsvg
     kwindowsystem
     liblxqt
     libqtxdg
-    polkit-qt
+    polkit-qt-1
+    qtsvg
+    qtwayland
   ];
 
   postPatch = ''
-    sed "s|\''${POLKITQT-1_POLICY_FILES_INSTALL_DIR}|''${out}/share/polkit-1/actions|" \
-      -i lxqt-admin-user/CMakeLists.txt
-
-    for f in lxqt-admin-{user,time}/CMakeLists.txt; do
-      substituteInPlace $f \
-        --replace "\''${LXQT_TRANSLATIONS_DIR}" "''${out}/share/lxqt/translations"
+    for f in lxqt-admin-{time,user}/CMakeLists.txt; do
+      substituteInPlace $f --replace-fail \
+        "\''${POLKITQT-1_POLICY_FILES_INSTALL_DIR}" \
+        "$out/share/polkit-1/actions"
     done
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/lxqt-admin";
     description = "LXQt system administration tool";
-    homepage = https://github.com/lxqt/lxqt-admin;
-    license = licenses.lgpl21;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
   };
 }

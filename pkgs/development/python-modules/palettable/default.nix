@@ -1,25 +1,36 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "palettable";
-  version = "3.1.1";
+  version = "3.3.3";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0685b223a236bb7e2a900ef7a855ccf9a4027361c8acf400f3b350ea51870f80";
+    sha256 = "sha256-CU3X2aX8HMpIVHc+XB/GoxWzO9WzqPRwZJKPrK8EkKg=";
   };
 
-  checkInputs = [ pytest ];
- 
-  checkPhase = ''
-    pytest 
-  '';
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [
+    "palettable"
+    "palettable.matplotlib"
+    "palettable.tableau"
+  ];
+
+  meta = with lib; {
     description = "A library of color palettes";
-    homepage = https://jiffyclub.github.io/palettable/;
+    homepage = "https://jiffyclub.github.io/palettable/";
+    changelog = "https://github.com/jiffyclub/palettable/blob/v${version}/CHANGELOG.rst";
     license = licenses.mit;
     maintainers = with maintainers; [ psyanticy ];
   };
 }
-

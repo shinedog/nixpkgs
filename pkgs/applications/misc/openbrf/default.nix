@@ -1,8 +1,9 @@
-{ stdenv, fetchFromGitHub, qtbase, vcg, glew, qmake, libGLU_combined }:
+{ mkDerivation, lib, stdenv, fetchFromGitHub, fetchpatch, qtbase, vcg, glew, qmake, libGLU, eigen, libGL }:
 
 
-stdenv.mkDerivation {
-  name = "openbrf-unstable-2016-01-09";
+mkDerivation {
+  pname = "openbrf";
+  version = "unstable-2016-01-09";
 
   src = fetchFromGitHub {
     owner = "cfcohen";
@@ -11,12 +12,22 @@ stdenv.mkDerivation {
     sha256 = "16254cnr60ihcn7bki7wl1qm6gkvzb99cn66md1pnb7za8nvzf4j";
   };
 
-  buildInputs = [ qtbase vcg glew ];
+  patches = [
+    # https://github.com/cfcohen/openbrf/pull/7
+    (fetchpatch {
+      name = "fix-build-against-newer-vcglib.patch";
+      url = "https://github.com/cfcohen/openbrf/commit/6d82a25314a393e72bfbe2ffc3965bcac407df4c.patch";
+      hash = "sha256-rNxAw6Le6QXMSirIAMhMmqVgNJLq6osnEOhWrY3mTpM=";
+    })
+  ];
 
-  enableParallelBuilding = true;
+  buildInputs = [ qtbase vcg glew eigen ];
+
   nativeBuildInputs = [ qmake ];
 
   qmakeFlags = [ "openBrf.pro" ];
+
+  env.NIX_CFLAGS_COMPILE = "-isystem ${lib.getDev eigen}/include/eigen3";
 
   postPatch = ''
     sed -i 's,^VCGLIB .*,VCGLIB = ${vcg}/include,' openBrf.pro
@@ -28,7 +39,7 @@ stdenv.mkDerivation {
     install -Dm644 reference.brf $out/share/openBrf/reference.brf
 
     patchelf  \
-      --set-rpath "${stdenv.lib.makeLibraryPath [ qtbase glew stdenv.cc.cc libGLU_combined ]}" \
+      --set-rpath "${lib.makeLibraryPath [ qtbase glew stdenv.cc.cc libGLU libGL ]}" \
       $out/share/openBrf/openBrf
 
     mkdir -p "$out/bin"
@@ -37,10 +48,11 @@ stdenv.mkDerivation {
 
   dontPatchELF = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A tool to edit resource files (BRF)";
-    homepage = https://github.com/cfcohen/openbrf;
-    maintainers = with stdenv.lib.maintainers; [ abbradar ];
+    mainProgram = "openBrf";
+    homepage = "https://github.com/cfcohen/openbrf";
+    maintainers = with lib.maintainers; [ abbradar ];
     license = licenses.free;
     platforms = platforms.linux;
   };

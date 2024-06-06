@@ -1,24 +1,38 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, ncurses5 }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, ncurses5
+, enableSdl2 ? false, SDL2, SDL2_image, SDL2_sound, SDL2_mixer, SDL2_ttf
+}:
 
-stdenv.mkDerivation rec {
-  version = "4.1.3";
-  name = "angband-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "angband";
+  version = "4.2.5";
 
   src = fetchFromGitHub {
     owner = "angband";
     repo = "angband";
-    rev = version;
-    sha256 = "0g9m7pq8a1hzhr83v552hfk37qc868lms2mlsq29pbi8vxdjybk7";
+    rev = finalAttrs.version;
+    hash = "sha256-XH2FUTJJaH5TqV2UD1CKKAXE4CRAb6zfg1UQ79a15k0=";
   };
 
   nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ ncurses5 ];
-  installFlags = "bindir=$(out)/bin";
+  buildInputs = [ ncurses5 ]
+  ++ lib.optionals enableSdl2 [
+    SDL2
+    SDL2_image
+    SDL2_sound
+    SDL2_mixer
+    SDL2_ttf
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://rephial.org/;
+  configureFlags = lib.optional enableSdl2 "--enable-sdl2";
+
+  installFlags = [ "bindir=$(out)/bin" ];
+
+  meta = with lib; {
+    homepage = "https://angband.github.io/angband";
     description = "A single-player roguelike dungeon exploration game";
-    maintainers = [ maintainers.chattered ];
+    mainProgram = "angband";
+    maintainers = [ maintainers.kenran ];
     license = licenses.gpl2;
+    platforms = platforms.unix;
   };
-}
+})

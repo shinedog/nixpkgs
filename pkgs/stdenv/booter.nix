@@ -8,7 +8,7 @@
 # special snowflake due to different authors writing in different times.]
 #
 # The second goal is consistency across each stdenv's stage functions. By
-# writing each stage it terms of the previous stage, commonalities between them
+# writing each stage in terms of the previous stage, commonalities between them
 # are more easily observable. [Before, there usually was a big attribute set
 # with each stage, and stages would access the previous stage by name.]
 #
@@ -121,9 +121,22 @@ stageFuns: let
   postStage = buildPackages: {
     __raw = true;
     stdenv.cc =
-      if buildPackages.stdenv.cc.isClang or false
-      then buildPackages.clang
-      else buildPackages.gcc;
+      if buildPackages.stdenv.hasCC
+      then
+        if buildPackages.stdenv.cc.isClang or false
+        # buildPackages.clang checks targetPackages.stdenv.cc (i. e. this
+        # attribute) to get a sense of the its set's default compiler and
+        # chooses between libc++ and libstdc++ based on that. If we hit this
+        # code here, we'll cause an infinite recursion. Since a set with
+        # clang as its default compiler always means libc++, we can infer this
+        # decision statically.
+        then buildPackages.llvmPackages.libcxxClang
+        else buildPackages.gcc
+      else
+        # This will blow up if anything uses it, but that's OK. The `if
+        # buildPackages.stdenv.cc.isClang then ... else ...` would blow up
+        # everything, so we make sure to avoid that.
+        buildPackages.stdenv.cc;
   };
 
 in dfold folder postStage (_: {}) withAllowCustomOverrides

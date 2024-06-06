@@ -1,36 +1,60 @@
-{ lib, buildPythonPackage, fetchPypi, substituteAll, locale, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  importlib-metadata,
+  pytestCheckHook,
+
+  # large-rebuild downstream dependencies and applications
+  flask,
+  black,
+  magic-wormhole,
+  mitmproxy,
+  typer,
+}:
 
 buildPythonPackage rec {
   pname = "click";
-  version = "7.0";
+  version = "8.1.7";
+  format = "setuptools";
 
-  src = fetchPypi {
-    pname = "Click";
-    inherit version;
-    sha256 = "5b94b49521f6456670fdb30cd82a4eca9412788a93fa6dd6df72c94d5a8ff2d7";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "pallets";
+    repo = "click";
+    rev = "refs/tags/${version}";
+    hash = "sha256-8YqIKRyw5MegnRwAO7YTCZateEFQFTH2PHpE8gTPTow=";
   };
 
-  postPatch = ''
-    substituteInPlace click/_unicodefun.py \
-      --replace "'locale'" "'${locale}/bin/locale'"
-  '';
+  propagatedBuildInputs = lib.optionals (pythonOlder "3.8") [ importlib-metadata ];
 
-  buildInputs = [ pytest ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  disabledTests = [
+    # test fails with filename normalization on zfs
+    "test_file_surrogates"
+  ];
 
-  # https://github.com/pallets/click/issues/823
-  doCheck = false;
+  passthru.tests = {
+    inherit
+      black
+      flask
+      magic-wormhole
+      mitmproxy
+      typer
+      ;
+  };
 
   meta = with lib; {
-    homepage = http://click.pocoo.org/;
+    homepage = "https://click.palletsprojects.com/";
     description = "Create beautiful command line interfaces in Python";
     longDescription = ''
       A Python package for creating beautiful command line interfaces in a
       composable way, with as little code as necessary.
     '';
     license = licenses.bsd3;
+    maintainers = with maintainers; [ nickcao ];
   };
 }

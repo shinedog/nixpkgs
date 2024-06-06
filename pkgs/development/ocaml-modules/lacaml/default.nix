@@ -1,30 +1,31 @@
-{ stdenv, fetchFromGitHub, darwin, ocaml, findlib, dune, base, stdio, liblapack, blas }:
+{ lib, stdenv, fetchurl, darwin, buildDunePackage, dune-configurator
+, lapack, blas
+}:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.05.0";
+assert (!blas.isILP64) && (!lapack.isILP64);
 
-stdenv.mkDerivation rec {
-  pname = "ocaml${ocaml.version}-lacaml";
-  version = "11.0.3";
+buildDunePackage rec {
+  pname = "lacaml";
+  version = "11.0.10";
 
-  src = fetchFromGitHub {
-    owner = "mmottl";
-    repo = "lacaml";
-    rev = "${version}";
-    sha256 = "1aflg07cc9ak9mg1cr0qr368c9s141glwlarl5nhalf6hhq7ibcb";
+  useDune2 = true;
+
+  minimumOCamlVersion = "4.08";
+
+  src = fetchurl {
+    url = "https://github.com/mmottl/lacaml/releases/download/${version}/lacaml-${version}.tbz";
+    sha256 = "sha256-Vg6Hl31u1bvh0hfWU9eqoI8pGZt4YhpGRf3ul3h+SJk=";
   };
 
-  buildInputs =
-    [ ocaml findlib dune base stdio liblapack blas ] ++
-    stdenv.lib.optionals stdenv.isDarwin
+  buildInputs = [ dune-configurator ];
+  propagatedBuildInputs = [ lapack blas ] ++
+    lib.optionals stdenv.isDarwin
       [ darwin.apple_sdk.frameworks.Accelerate ];
 
-  inherit (dune) installPhase;
-
-  meta = with stdenv.lib; {
-    homepage = http://mmottl.github.io/lacaml;
+  meta = with lib; {
+    homepage = "https://mmottl.github.io/lacaml";
     description = "OCaml bindings for BLAS and LAPACK";
     license = licenses.lgpl21Plus;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [ maintainers.rixed ];
+    maintainers = [ maintainers.vbgl ];
   };
 }

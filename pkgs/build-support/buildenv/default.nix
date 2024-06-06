@@ -1,8 +1,14 @@
 # buildEnv creates a tree of symlinks to the specified paths.  This is
-# a fork of the buildEnv in the Nix distribution.  Most changes should
-# eventually be merged back into the Nix distribution.
+# a fork of the hardcoded buildEnv in the Nix distribution.
 
 { buildPackages, runCommand, lib, substituteAll }:
+
+let
+  builder = substituteAll {
+    src = ./builder.pl;
+    inherit (builtins) storeDir;
+  };
+in
 
 lib.makeOverridable
 ({ name
@@ -36,31 +42,26 @@ lib.makeOverridable
 , # Shell commands to run after building the symlink tree.
   postBuild ? ""
 
-, # Additional inputs. Handy e.g. if using makeWrapper in `postBuild`.
-  buildInputs ? []
+# Additional inputs
+, nativeBuildInputs ? [] # Handy e.g. if using makeWrapper in `postBuild`.
+, buildInputs ? []
 
 , passthru ? {}
 , meta ? {}
 }:
 
-let
-  builder = substituteAll {
-    src = ./builder.pl;
-    inherit (builtins) storeDir;
-  };
-in
-
 runCommand name
   rec {
     inherit manifest ignoreCollisions checkCollisionContents passthru
-            meta pathsToLink extraPrefix postBuild buildInputs;
+            meta pathsToLink extraPrefix postBuild
+            nativeBuildInputs buildInputs;
     pkgs = builtins.toJSON (map (drv: {
       paths =
         # First add the usual output(s): respect if user has chosen explicitly,
         # and otherwise use `meta.outputsToInstall`. The attribute is guaranteed
         # to exist in mkDerivation-created cases. The other cases (e.g. runCommand)
         # aren't expected to have multiple outputs.
-        (if drv.outputUnspecified or false
+        (if (! drv ? outputSpecified || ! drv.outputSpecified)
             && drv.meta.outputsToInstall or null != null
           then map (outName: drv.${outName}) drv.meta.outputsToInstall
           else [ drv ])
@@ -72,7 +73,7 @@ runCommand name
     preferLocalBuild = true;
     allowSubstitutes = false;
     # XXX: The size is somewhat arbitrary
-    passAsFile = if builtins.stringLength pkgs >= 128*1024 then [ "pkgs" ] else null;
+    passAsFile = if builtins.stringLength pkgs >= 128*1024 then [ "pkgs" ] else [ ];
   }
   ''
     ${buildPackages.perl}/bin/perl -w ${builder}

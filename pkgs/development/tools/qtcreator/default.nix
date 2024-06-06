@@ -1,62 +1,106 @@
-{ stdenv, fetchurl, makeWrapper
-, qtbase, qtquickcontrols, qtscript, qtdeclarative, qmake
-, withDocumentation ? false
+{ stdenv
+, lib
+, fetchurl
+, cmake
+, pkg-config
+, ninja
+, python3
+, qtbase
+, qt5compat
+, qtdeclarative
+, qtdoc
+, qtquick3d
+, qtquicktimeline
+, qtserialport
+, qtsvg
+, qttools
+, qtwebengine
+, qtwayland
+, qtshadertools
+, wrapQtAppsHook
+, yaml-cpp
+, litehtml
+, libsecret
+, gumbo
+, llvmPackages
+, rustc-demangle
+, elfutils
+, perf
 }:
 
-with stdenv.lib;
-
-let
-  baseVersion = "4.6";
-  revision = "2";
-in
-
 stdenv.mkDerivation rec {
-  name = "qtcreator-${version}";
-  version = "${baseVersion}.${revision}";
+  pname = "qtcreator";
+  version = "13.0.1";
 
   src = fetchurl {
-    url = "http://download.qt-project.org/official_releases/qtcreator/${baseVersion}/${version}/qt-creator-opensource-src-${version}.tar.xz";
-    sha256 = "1k23i1qsw6d06sy7g0vd699rbvwv6vbw211fy0nn0705a5zndbxv";
+    url = "https://download.qt.io/official_releases/${pname}/${lib.versions.majorMinor version}/${version}/qt-creator-opensource-src-${version}.tar.xz";
+    hash = "sha256-gZAG0ZIfYcxnWYC8ydeVoiSM/XlhFdrUZqRFR1nasy4=";
   };
 
-  buildInputs = [ qtbase qtscript qtquickcontrols qtdeclarative ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    (qttools.override { withClang = true; })
+    wrapQtAppsHook
+    python3
+    ninja
+  ];
 
-  nativeBuildInputs = [ qmake makeWrapper ];
+  buildInputs = [
+    qtbase
+    qtdoc
+    qtsvg
+    qtquick3d
+    qtwebengine
+    qtwayland
+    qtserialport
+    qtshadertools
+    qt5compat
+    qtdeclarative
+    qtquicktimeline
+    yaml-cpp
+    litehtml
+    libsecret
+    gumbo
+    llvmPackages.libclang
+    llvmPackages.llvm
+    rustc-demangle
+    elfutils
+  ];
 
-  patches = optional (stdenv.hostPlatform.isAarch32 || stdenv.hostPlatform.isAarch64) ./0001-Fix-Allow-qt-creator-to-build-on-arm-aarch32-and-aar.patch;
+  cmakeFlags = [
+    # workaround for missing CMAKE_INSTALL_DATAROOTDIR
+    # in pkgs/development/tools/build-managers/cmake/setup-hook.sh
+    "-DCMAKE_INSTALL_DATAROOTDIR=${placeholder "out"}/share"
+    # qtdeclarative in nixpkgs does not provide qmlsc
+    # fix can't find Qt6QmlCompilerPlusPrivate
+    "-DQT_NO_FIND_QMLSC=TRUE"
+    "-DWITH_DOCS=ON"
+    "-DBUILD_DEVELOPER_DOCS=ON"
+    "-DBUILD_QBS=OFF"
+    "-DQTC_CLANG_BUILDMODE_MATCH=ON"
+    "-DCLANGTOOLING_LINK_CLANG_DYLIB=ON"
+  ];
 
-  doCheck = true;
-
-  enableParallelBuilding = true;
-
-  buildFlags = optional withDocumentation "docs";
-
-  installFlags = [ "INSTALL_ROOT=$(out)" ] ++ optional withDocumentation "install_docs";
-
-  preConfigure = ''
-    substituteInPlace src/plugins/plugins.pro \
-      --replace '$$[QT_INSTALL_QML]/QtQuick/Controls' '${qtquickcontrols}/${qtbase.qtQmlPrefix}/QtQuick/Controls'
-  '';
-
-  preBuild = optional withDocumentation ''
-    ln -s ${getLib qtbase}/$qtDocPrefix $NIX_QT5_TMP/share
-  '';
+  qtWrapperArgs = [
+    "--set-default PERFPROFILER_PARSER_FILEPATH ${lib.getBin perf}/bin"
+  ];
 
   postInstall = ''
     substituteInPlace $out/share/applications/org.qt-project.qtcreator.desktop \
       --replace "Exec=qtcreator" "Exec=$out/bin/qtcreator"
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Cross-platform IDE tailored to the needs of Qt developers";
     longDescription = ''
       Qt Creator is a cross-platform IDE (integrated development environment)
       tailored to the needs of Qt developers. It includes features such as an
       advanced code editor, a visual debugger and a GUI designer.
     '';
-    homepage = https://wiki.qt.io/Category:Tools::QtCreator;
-    license = "LGPL";
-    maintainers = [ maintainers.akaWolf ];
-    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" "armv7l-linux" ];
+    homepage = "https://wiki.qt.io/Qt_Creator";
+    license = licenses.gpl3Only; # annotated with The Qt Company GPL Exception 1.0
+    maintainers = [ maintainers.rewine ];
+    platforms = platforms.linux;
   };
 }

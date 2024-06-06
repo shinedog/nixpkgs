@@ -1,43 +1,65 @@
-{
-  stdenv, fetchFromGitHub, cmake, pkgconfig, lxqt-build-tools,
-  pcre, libexif, xorg, libfm, menu-cache,
-  qtx11extras, qttools
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, libXdmcp
+, libexif
+, libfm
+, libpthreadstubs
+, libxcb
+, lxqt-build-tools
+, lxqt-menu-data
+, menu-cache
+, pcre
+, pkg-config
+, qttools
+, wrapQtAppsHook
+, gitUpdater
+, version ? "2.0.2"
+, qtx11extras ? null
 }:
 
 stdenv.mkDerivation rec {
   pname = "libfm-qt";
-  version = "0.14.1";
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "lxqt";
-    repo = pname;
+    repo = "libfm-qt";
     rev = version;
-    sha256 = "00rn5i16h659zyp1dx213nc3jz7rx9phiw71zf6nspxzxsb8w2sc";
+    hash = {
+      "1.4.0" = "sha256-QxPYSA7537K+/dRTxIYyg+Q/kj75rZOdzlUsmSdQcn4=";
+      "2.0.2" = "sha256-Ntj+yixGGGgL8ylRv2IJsWtapxE71JNl9cC9K0JToNU=";
+    }."${version}";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    pcre
+    libXdmcp
     libexif
-    xorg.libpthreadstubs
-    xorg.libxcb
-    xorg.libXdmcp
-    qtx11extras
-    qttools
     libfm
+    libpthreadstubs
+    libxcb
+    lxqt-menu-data
     menu-cache
-  ];
+    pcre
+  ] ++ (lib.optionals (lib.versionAtLeast "2.0.0" version) [qtx11extras])
+  ;
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/libfm-qt";
     description = "Core library of PCManFM-Qt (Qt binding for libfm)";
-    homepage = https://github.com/lxqt/libfm-qt;
-    license = licenses.lgpl21;
+    license = licenses.lgpl21Plus;
     platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    maintainers = teams.lxqt.members;
   };
 }

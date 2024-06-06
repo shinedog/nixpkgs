@@ -1,19 +1,20 @@
-{ stdenv, fetchFromGitHub, fftw, gtk2, lv2, libsamplerate, libsndfile, pkgconfig, zita-convolver }:
+{ lib, stdenv, fetchgit, fftw, gtk2, lv2, libsamplerate, libsndfile, pkg-config, zita-convolver }:
 
 stdenv.mkDerivation rec {
-  name = "ir.lv2-${version}";
-  version = "1.2.4";
+  pname = "ir.lv2";
+  version = "0-unstable-2018-06-21";
 
-  src = fetchFromGitHub {
-    owner = "tomszilagyi";
-    repo = "ir.lv2";
-    rev = "${version}";
-    sha256 = "1p6makmgr898fakdxzl4agh48qqwgv1k1kwm8cgq187n0mhiknp6";
+  src = fetchgit {
+    url = "https://git.hq.sig7.se/ir.lv2.git";
+    rev = "38bf3ec7d370d8234dd55be99c14cf9533b43c60";
+    sha256 = "sha256-5toZYQX2oIAfQ5XPMMN+HGNE4FOE/t6mciih/OpU1dw=";
   };
 
   buildInputs = [ fftw gtk2 lv2 libsamplerate libsndfile zita-convolver ];
 
-  nativeBuildInputs = [  pkgconfig ];
+  nativeBuildInputs = [  pkg-config ];
+
+  env.NIX_CFLAGS_COMPILE = "-fpermissive";
 
   postBuild = "make convert4chan";
 
@@ -26,11 +27,12 @@ stdenv.mkDerivation rec {
     install -Dm755 convert4chan "$out/bin/convert4chan"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://factorial.hu/plugins/lv2/ir;
+  meta = with lib; {
+    homepage = "http://factorial.hu/plugins/lv2/ir";
     description = "Zero-latency, realtime, high performance signal convolver especially for creating reverb effects";
     license = licenses.gpl2;
     maintainers = [ maintainers.magnetophon ];
     platforms = platforms.linux;
+    mainProgram = "convert4chan";
   };
 }

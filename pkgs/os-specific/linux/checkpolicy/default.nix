@@ -1,13 +1,13 @@
-{ stdenv, fetchurl, bison, flex, libsepol }:
+{ lib, stdenv, fetchurl, bison, flex, libsepol }:
 
 stdenv.mkDerivation rec {
-  name = "checkpolicy-${version}";
-  version = "2.7";
-  inherit (libsepol) se_release se_url;
+  pname = "checkpolicy";
+  version = "3.6";
+  inherit (libsepol) se_url;
 
   src = fetchurl {
-    url = "${se_url}/${se_release}/checkpolicy-${version}.tar.gz";
-    sha256 = "009j9jc0hi4l7k8f21hn8fm25n0mqgzdpd4nk30nds6d3nglf4sl";
+    url = "${se_url}/${version}/checkpolicy-${version}.tar.gz";
+    sha256 = "sha256-GzRrPN1PinihV2J7rWSjs0ecZ7ahnRXm1chpRiDq28E=";
   };
 
   nativeBuildInputs = [ bison flex ];
@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
 
   makeFlags = [
     "PREFIX=$(out)"
-    "LIBSEPOLA=${stdenv.lib.getLib libsepol}/lib/libsepol.a"
+    "LIBSEPOLA=${lib.getLib libsepol}/lib/libsepol.a"
   ];
 
   meta = removeAttrs libsepol.meta ["outputsToInstall"] // {

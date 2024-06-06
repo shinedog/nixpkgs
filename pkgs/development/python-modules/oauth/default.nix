@@ -1,11 +1,13 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "oauth";
   version = "1.0.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,10 +17,9 @@ buildPythonPackage rec {
   # No tests included in archive
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/oauth;
+  meta = with lib; {
+    homepage = "https://code.google.com/archive/p/oauth/";
     description = "Library for OAuth version 1.0a";
     license = licenses.mit;
   };
-
 }

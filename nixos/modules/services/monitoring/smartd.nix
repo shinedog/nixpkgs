@@ -1,13 +1,13 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
 
-  host = config.networking.hostName or "unknown"
-       + optionalString (config.networking.domain != null) ".${config.networking.domain}";
+  host = config.networking.fqdnOrHostName;
 
   cfg = config.services.smartd;
+  opt = options.services.smartd;
 
   nm = cfg.notifications.mail;
   nw = cfg.notifications.wall;
@@ -18,9 +18,9 @@ let
     ${optionalString nm.enable ''
       {
       ${pkgs.coreutils}/bin/cat << EOF
-      From: smartd on ${host} <root>
-      To: undisclosed-recipients:;
-      Subject: SMART error on $SMARTD_DEVICESTRING: $SMARTD_FAILTYPE
+      From: smartd on ${host} <${nm.sender}>
+      To: ${nm.recipient}
+      Subject: $SMARTD_SUBJECT
 
       $SMARTD_FULLMESSAGE
       EOF
@@ -36,7 +36,7 @@ let
 
       $SMARTD_MESSAGE
       EOF
-      } | ${pkgs.utillinux}/bin/wall 2>/dev/null
+      } | ${pkgs.util-linux}/bin/wall 2>/dev/null
     ''}
     ${optionalString nx.enable ''
       export DISPLAY=${nx.display}
@@ -94,7 +94,7 @@ in
 
     services.smartd = {
 
-      enable = mkEnableOption "smartd daemon from <literal>smartmontools</literal> package";
+      enable = mkEnableOption "smartd daemon from `smartmontools` package";
 
       autodetect = mkOption {
         default = true;
@@ -104,7 +104,7 @@ in
           machine at the time it's being started (the default).
 
           Set to false to monitor the devices listed in
-          <option>services.smartd.devices</option> only.
+          {option}`services.smartd.devices` only.
         '';
       };
 
@@ -113,10 +113,10 @@ in
         type = types.listOf types.str;
         example = ["-A /var/log/smartd/" "--interval=3600"];
         description = ''
-          Extra command-line options passed to the <literal>smartd</literal>
+          Extra command-line options passed to the `smartd`
           daemon on startup.
 
-          (See <literal>man 8 smartd</literal>.)
+          (See `man 8 smartd`.)
         '';
       };
 
@@ -125,8 +125,19 @@ in
         mail = {
           enable = mkOption {
             default = config.services.mail.sendmailSetuidWrapper != null;
+            defaultText = literalExpression "config.services.mail.sendmailSetuidWrapper != null";
             type = types.bool;
             description = "Whenever to send e-mail notifications.";
+          };
+
+          sender = mkOption {
+            default = "root";
+            example = "example@domain.tld";
+            type = types.str;
+            description = ''
+              Sender of the notification messages.
+              Acts as the value of `email` in the emails' `From: ...` field.
+            '';
           };
 
           recipient = mkOption {
@@ -142,7 +153,7 @@ in
               Sendmail-compatible binary to be used to send the messages.
 
               You should probably enable
-              <option>services.postfix</option> or some other MTA for
+              {option}`services.postfix` or some other MTA for
               this to work.
             '';
           };
@@ -159,12 +170,14 @@ in
         x11 = {
           enable = mkOption {
             default = config.services.xserver.enable;
+            defaultText = literalExpression "config.services.xserver.enable";
             type = types.bool;
             description = "Whenever to send X11 xmessage notifications.";
           };
 
           display = mkOption {
             default = ":${toString config.services.xserver.display}";
+            defaultText = literalExpression ''":''${toString config.services.xserver.display}"'';
             type = types.str;
             description = "DISPLAY to send X11 notifications to.";
           };
@@ -185,10 +198,10 @@ in
           example = "-a -o on -s (S/../.././02|L/../../7/04)";
           description = ''
             Common default options for explicitly monitored (listed in
-            <option>services.smartd.devices</option>) devices.
+            {option}`services.smartd.devices`) devices.
 
             The default value turns on monitoring of all the things (see
-            <literal>man 5 smartd.conf</literal>).
+            `man 5 smartd.conf`).
 
             The example also turns on SMART Automatic Offline Testing on
             startup, and schedules short self-tests daily, and long
@@ -198,9 +211,10 @@ in
 
         autodetected = mkOption {
           default = cfg.defaults.monitored;
+          defaultText = literalExpression "config.${opt.defaults.monitored}";
           type = types.separatedString " ";
           description = ''
-            Like <option>services.smartd.defaults.monitored</option>, but for the
+            Like {option}`services.smartd.defaults.monitored`, but for the
             autodetected devices.
           '';
         };
@@ -229,11 +243,7 @@ in
 
     systemd.services.smartd = {
       description = "S.M.A.R.T. Daemon";
-
       wantedBy = [ "multi-user.target" ];
-
-      path = [ pkgs.nettools ]; # for hostname and dnsdomanname calls in smartd
-
       serviceConfig.ExecStart = "${pkgs.smartmontools}/sbin/smartd ${lib.concatStringsSep " " cfg.extraOptions} --no-fork --configfile=${smartdConf}";
     };
 

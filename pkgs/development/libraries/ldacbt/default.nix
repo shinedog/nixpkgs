@@ -1,11 +1,10 @@
-{ stdenv
+{ lib, stdenv
 , fetchFromGitHub
-, pkgconfig
 , cmake
 }:
 
 stdenv.mkDerivation rec {
-  name = "ldacBT-${version}";
+  pname = "ldacBT";
   version = "2.0.2.3";
 
   src = fetchFromGitHub {
@@ -16,15 +15,23 @@ stdenv.mkDerivation rec {
     fetchSubmodules = true;
   };
 
+  outputs = [ "out" "dev" ];
+
   nativeBuildInputs = [
     cmake
   ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    # CMakeLists.txt by default points to $out
+    "-DINSTALL_INCLUDEDIR=${placeholder "dev"}/include"
+  ];
+
+  meta = with lib; {
     description = "AOSP libldac dispatcher";
-    homepage    = https://github.com/EHfive/ldacBT;
+    homepage    = "https://github.com/EHfive/ldacBT";
     license     = licenses.asl20;
-    platforms   = platforms.all;
-    maintainers = with maintainers; [ adisbladis ];
+    # libldac code detects & #error's out on non-LE byte order
+    platforms   = platforms.littleEndian;
+    maintainers = with maintainers; [ ];
   };
 }

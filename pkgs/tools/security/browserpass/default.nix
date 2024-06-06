@@ -1,26 +1,38 @@
-{ lib, callPackage, buildGoModule, fetchFromGitHub, makeWrapper, gnupg }:
+{ lib
+, stdenv
+, buildGoModule
+, fetchFromGitHub
+, gnupg
+, makeWrapper
+, autoPatchelfHook
+, testers
+, browserpass
+}:
+
 buildGoModule rec {
   pname = "browserpass";
-  version = "3.0.6";
+  version = "3.1.0";
 
   src = fetchFromGitHub {
     owner = "browserpass";
     repo = "browserpass-native";
     rev = version;
-    sha256 = "0q3bsla07zjl6i69nj1axbkg2ia89pvh0jg6nlqgbm2kpzzbn0pz";
+    sha256 = "sha256-UZzOPRRiCUIG7uSSp9AEPMDN/+4cgyK47RhrI8oUx8U=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ] ++ lib.optionals stdenv.isLinux [ autoPatchelfHook ];
 
-  modSha256 = "13yw7idgw8l48yvm4jjha0kbx6q22m2zp13y006mikavynqsr5kj";
+  vendorHash = "sha256-CjuH4ANP2bJDeA+o+1j+obbtk5/NVLet/OFS3Rms4r0=";
+
+  doCheck = stdenv.buildPlatform.canExecute stdenv.hostPlatform;
 
   postPatch = ''
     # Because this Makefile will be installed to be used by the user, patch
     # variables to be valid by default
     substituteInPlace Makefile \
       --replace "PREFIX ?= /usr" ""
-    sed -i -e 's/SED :=.*/SED := sed/' Makefile
-    sed -i -e 's/INSTALL :=.*/INSTALL := install/' Makefile
+    sed -i -e 's/SED =.*/SED = sed/' Makefile
+    sed -i -e 's/INSTALL =.*/INSTALL = install/' Makefile
   '';
 
   DESTDIR = placeholder "out";
@@ -30,8 +42,10 @@ buildGoModule rec {
   '';
 
   buildPhase = ''
-    make
+    make browserpass
   '';
+
+  checkTarget = "test";
 
   installPhase = ''
     make install
@@ -41,14 +55,20 @@ buildGoModule rec {
 
     # This path is used by our firefox wrapper for finding native messaging hosts
     mkdir -p $out/lib/mozilla/native-messaging-hosts
-    ln -s $out/lib/browserpass/hosts/firefox/*.json $out/lib/mozilla/native-messaging-hosts
+    # Copy ff manifests rather than linking to allow link-farming to work recursively in dependants
+    cp $out/lib/browserpass/hosts/firefox/*.json $out/lib/mozilla/native-messaging-hosts/
   '';
+
+  passthru.tests.version = testers.testVersion {
+    package = browserpass;
+    command = "browserpass --version";
+  };
 
   meta = with lib; {
     description = "Browserpass native client app";
-    homepage = https://github.com/browserpass/browserpass-native;
+    mainProgram = "browserpass";
+    homepage = "https://github.com/browserpass/browserpass-native";
     license = licenses.isc;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ rvolosatovs infinisil ];
+    maintainers = with maintainers; [ rvolosatovs ];
   };
 }

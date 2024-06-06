@@ -1,24 +1,30 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "funcy";
-  version = "1.12";
+  version = "2.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0vdbh0ykmjsvq4vb3hrx5327q9ccl1jhbjca59lsr0v0ghwb0grz";
+    hash = "sha256-OWMxXVnUHG8wwEvJEOEKtQo6xKIlhov6lv7tEz3wdcs=";
   };
 
   # No tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Collection of fancy functional tools focused on practicality";
     homepage = "https://funcy.readthedocs.org/";
+    changelog = "https://github.com/Suor/funcy/blob/2.0/CHANGELOG";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
-
 }

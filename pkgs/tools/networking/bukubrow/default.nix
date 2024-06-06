@@ -1,37 +1,49 @@
-{ stdenv, rustPlatform, fetchFromGitHub, sqlite }:
+{ lib, rustPlatform, fetchFromGitHub, sqlite }: let
 
-rustPlatform.buildRustPackage rec {
-  name = "bukubrow-${version}";
-  version = "2.4.0";
+manifest = {
+  description = "Bukubrow extension host application";
+  name = "com.samhh.bukubrow";
+  path = "@out@/bin/bukubrow";
+  type = "stdio";
+};
+
+in rustPlatform.buildRustPackage rec {
+  pname = "bukubrow-host";
+  version = "5.4.0";
 
   src = fetchFromGitHub {
     owner = "SamHH";
-    repo = "bukubrow";
-    rev = version;
-    sha256 = "1wrwav7am73bmgbpwh1pi0b8k7vhydqvw91hmmhnvbjhrhbns7s5";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-xz5Agsm+ATQXXgpPGN4EQ00i1t8qUlrviNHauVdCu4U=";
   };
-  sourceRoot = "source/binary";
 
-  cargoSha256 = "19d1pgk8nm5jsfd696bqayi5s8ivv9gi6jdb00d10ddjxz234gs7";
+  cargoSha256 = "sha256-mH76ODPKlKDEK9ckThPnL5Ar7p1l1gNd7zXfesLZlBM=";
 
   buildInputs = [ sqlite ];
 
+  passAsFile = [ "firefoxManifest" "chromeManifest" ];
+  firefoxManifest = builtins.toJSON (manifest // {
+    allowed_extensions = [ "bukubrow@samhh.com" ];
+  });
+  chromeManifest = builtins.toJSON (manifest // {
+    allowed_origins = [ "chrome-extension://ghniladkapjacfajiooekgkfopkjblpn/" ];
+  });
+  postBuild = ''
+    substituteAll $firefoxManifestPath firefox.json
+    substituteAll $chromeManifestPath chrome.json
+  '';
   postInstall = ''
-    mkdir -p $out/etc $out/lib/mozilla/native-messaging-hosts
-
-    host_file="$out/bin/bukubrow"
-    sed -e "s!%%replace%%!$host_file!" browser-hosts/firefox.json > "$out/etc/firefox-host.json"
-    sed -e "s!%%replace%%!$host_file!" browser-hosts/chrome.json > "$out/etc/chrome-host.json"
-
-    ln -s $out/etc/firefox-host.json $out/lib/mozilla/native-messaging-hosts/com.samhh.bukubrow.json
+    install -Dm0644 firefox.json $out/lib/mozilla/native-messaging-hosts/com.samhh.bukubrow.json
+    install -Dm0644 chrome.json $out/etc/chromium/native-messaging-hosts/com.samhh.bukubrow.json
   '';
 
-  meta = with stdenv.lib; {
-    description = "Bukubrow is a WebExtension for Buku, a command-line bookmark manager";
-    homepage = https://github.com/SamHH/bukubrow;
+  meta = with lib; {
+    description = "A WebExtension for Buku, a command-line bookmark manager";
+    homepage = "https://github.com/SamHH/bukubrow-host";
     license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ infinisil ];
+    maintainers = [ ];
+    mainProgram = "bukubrow";
   };
 }
 

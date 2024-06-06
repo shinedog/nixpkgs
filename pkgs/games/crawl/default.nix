@@ -1,34 +1,68 @@
-{ stdenv, lib, fetchFromGitHub, fetchpatch, which, sqlite, lua5_1, perl, python3, zlib, pkgconfig, ncurses
-, dejavu_fonts, libpng, SDL2, SDL2_image, SDL2_mixer, libGLU_combined, freetype, pngcrush, advancecomp
-, tileMode ? false, enableSound ? tileMode
+{ stdenv
+, lib
+, fetchFromGitHub
+, which
+, sqlite
+, lua5_1
+, perl
+, python3
+, zlib
+, pkg-config
+, ncurses
+, dejavu_fonts
+, libpng
+, SDL2
+, SDL2_image
+, SDL2_mixer
+, libGLU
+, libGL
+, freetype
+, pngcrush
+, advancecomp
+, tileMode ? false
+, enableSound ? tileMode
+, buildPackages
+  # MacOS / Darwin builds
+, darwin
 }:
 
 stdenv.mkDerivation rec {
-  name = "crawl-${version}${lib.optionalString tileMode "-tiles"}";
-  version = "0.23.2";
+  pname = "crawl${lib.optionalString tileMode "-tiles"}";
+  version = "0.31.0";
 
   src = fetchFromGitHub {
     owner = "crawl";
     repo = "crawl";
     rev = version;
-    sha256 = "1d6mip4rvp81839yf2xm63hf34aza5wg4g5z5hi5275j94szaacs";
+    hash = "sha256-06tVEduk3Y2VDsoOuI4nGjN8p+wGZT7wEU80nBSg+UU=";
   };
 
-  patches = [
-    ./crawl_purify.patch  # Patch hard-coded paths
-    (fetchpatch {         # Use a nice high-res app icon
-      url = "https://github.com/crawl/crawl/commit/2aa1166087e44e6585b26cedf1fe81b3f3ba547f.patch";
-      sha256 = "1jqrdv4wy18shg1fdabdb421232hg5micphkixcyzxd1lrmvadg0";
-    })
-  ];
+  # Patch hard-coded paths and remove force library builds
+  postPatch = ''
+    substituteInPlace crawl-ref/source/util/find_font \
+      --replace '/usr/share/fonts /usr/local/share/fonts /usr/*/lib/X11/fonts' '${fontsPath}/share/fonts'
+    substituteInPlace crawl-ref/source/windowmanager-sdl.cc \
+      --replace 'SDL_image.h' 'SDL2/SDL_image.h'
+  '';
 
-  nativeBuildInputs = [ pkgconfig which perl pngcrush advancecomp ];
+  nativeBuildInputs = [ pkg-config which perl pngcrush advancecomp ];
 
   # Still unstable with luajit
   buildInputs = [ lua5_1 zlib sqlite ncurses ]
-                ++ (with python3.pkgs; [ pyyaml ])
-                ++ lib.optionals tileMode [ libpng SDL2 SDL2_image freetype libGLU_combined ]
-                ++ lib.optional enableSound SDL2_mixer;
+    ++ (with python3.pkgs; [ pyyaml ])
+    ++ lib.optionals tileMode [ libpng SDL2 SDL2_image freetype libGLU libGL ]
+    ++ lib.optional enableSound SDL2_mixer
+    ++ (lib.optionals stdenv.isDarwin (
+    with darwin.apple_sdk.frameworks; [
+      AppKit
+      AudioUnit
+      CoreAudio
+      ForceFeedback
+      Carbon
+      IOKit
+      OpenGL
+    ]
+  ));
 
   preBuild = ''
     cd crawl-ref/source
@@ -36,35 +70,56 @@ stdenv.mkDerivation rec {
     patchShebangs 'util'
     patchShebangs util/gen-mi-enum
     rm -rf contrib
-  '';
+    mkdir -p $out/xdg-data
+  ''
+  + lib.optionalString tileMode "mv xdg-data/*_tiles.* $out/xdg-data"
+  + lib.optionalString (!tileMode) "mv xdg-data/*_console.* $out/xdg-data";
 
   fontsPath = lib.optionalString tileMode dejavu_fonts;
 
-  makeFlags = [ "prefix=$(out)" "FORCE_CC=cc" "FORCE_CXX=c++" "HOSTCXX=c++"
-                "SAVEDIR=~/.crawl" "sqlite=${sqlite.dev}"
-              ] ++ lib.optional tileMode "TILES=y"
-                ++ lib.optional enableSound "SOUND=y";
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+    "FORCE_CC=${stdenv.cc.targetPrefix}cc"
+    "FORCE_CXX=${stdenv.cc.targetPrefix}c++"
+    "HOSTCXX=${buildPackages.stdenv.cc.targetPrefix}c++"
+    "FORCE_PKGCONFIG=y"
+    "SAVEDIR=~/.crawl"
+    "sqlite=${sqlite.dev}"
+    "DATADIR=${placeholder "out"}"
+  ]
+  ++ lib.optional tileMode "TILES=y"
+  ++ lib.optional enableSound "SOUND=y";
 
-  postInstall = ''
-    ${lib.optionalString tileMode "mv $out/bin/crawl $out/bin/crawl-tiles"}
-    sed -i 's#/usr/games/##' debian/crawl${lib.optionalString tileMode "-tiles"}.desktop
-    install -m 444 -D debian/crawl${lib.optionalString tileMode "-tiles"}.desktop \
-      $out/share/applications/crawl${lib.optionalString tileMode "-tiles"}.desktop
-    install -m 444 -D dat/tiles/stone_soup_icon-512x512.png $out/share/icons/hicolor/512x512/apps/crawl.png
-  '';
+  postInstall =
+    lib.optionalString tileMode ''
+      mv $out/bin/crawl $out/bin/crawl-tiles
+      echo "Exec=crawl-tiles" >> $out/xdg-data/org.develz.Crawl_tiles.desktop
+      echo "Icon=crawl" >> $out/xdg-data/org.develz.Crawl_tiles.desktop
+      install -Dm444 $out/xdg-data/org.develz.Crawl_tiles.desktop -t $out/share/applications
+      install -Dm444 $out/xdg-data/org.develz.Crawl_tiles.appdata.xml -t $out/share/metainfo
+    ''
+    +
+    lib.optionalString (!tileMode) ''
+      echo "Exec=crawl" >> $out/xdg-data/org.develz.Crawl_console.desktop
+      echo "Icon=crawl" >> $out/xdg-data/org.develz.Crawl_console.desktop
+      install -Dm444 $out/xdg-data/org.develz.Crawl_console.desktop -t $out/share/applications
+      install -Dm444 $out/xdg-data/org.develz.Crawl_console.appdata.xml -t $out/share/metainfo
+    ''
+    + "install -Dm444 dat/tiles/stone_soup_icon-512x512.png $out/share/icons/hicolor/512x512/apps/crawl.png"
+  ;
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Open-source, single-player, role-playing roguelike game";
-    homepage = http://crawl.develz.org/;
+    homepage = "http://crawl.develz.org/";
     longDescription = ''
       Dungeon Crawl: Stone Soup, an open-source, single-player, role-playing
       roguelike game of exploration and treasure-hunting in dungeons filled
       with dangerous and unfriendly monsters in a quest to rescue the
       mystifyingly fabulous Orb of Zot.
     '';
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
     license = with licenses; [ gpl2Plus bsd2 bsd3 mit licenses.zlib cc0 ];
     maintainers = [ maintainers.abbradar ];
   };

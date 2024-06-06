@@ -1,7 +1,7 @@
 { stdenv, runtimeShell, lib, fetchzip }:
 
 stdenv.mkDerivation rec {
-  name = "terminal-notifier-${version}";
+  pname = "terminal-notifier";
 
   version = "2.0.0";
 
@@ -26,8 +26,8 @@ stdenv.mkDerivation rec {
   '';
 
   meta = with lib; {
-    maintainers = with maintainers; [ cstrahan ];
-    homepage = https://github.com/julienXX/terminal-notifier;
+    maintainers = with maintainers; [ ];
+    homepage = "https://github.com/julienXX/terminal-notifier";
     license = licenses.mit;
     platforms  = platforms.darwin;
   };

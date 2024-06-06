@@ -9,7 +9,7 @@ in
 {
   options = {
     services.jackett = {
-      enable = mkEnableOption "Jackett";
+      enable = mkEnableOption "Jackett, API support for your favorite torrent trackers";
 
       dataDir = mkOption {
         type = types.str;
@@ -34,6 +34,8 @@ in
         default = "jackett";
         description = "Group under which Jackett runs.";
       };
+
+      package = mkPackageOption pkgs "jackett" { };
     };
   };
 
@@ -51,7 +53,7 @@ in
         Type = "simple";
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${pkgs.jackett}/bin/Jackett --NoUpdates --DataFolder '${cfg.dataDir}'";
+        ExecStart = "${cfg.package}/bin/Jackett --NoUpdates --DataFolder '${cfg.dataDir}'";
         Restart = "on-failure";
       };
     };

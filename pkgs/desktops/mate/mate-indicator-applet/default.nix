@@ -1,34 +1,57 @@
-{ stdenv, fetchurl, pkgconfig, intltool, gtk3, libindicator-gtk3, mate, hicolor-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, gtk3
+, libayatana-indicator
+, mate-panel
+, hicolor-icon-theme
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-indicator-applet-${version}";
-  version = "1.22.0";
+  pname = "mate-indicator-applet";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "0zad81qvcin4m329hfxhv4a5j8gf4gj8944mvjrdgdh71bzan2x1";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "zrPXA5cKPlWNfNffCxwhceOvdSolSVrO0uIiwemtSc0=";
   };
 
+  postPatch = ''
+    # Find installed Unity & Ayatana (new-style) indicators
+    substituteInPlace src/applet-main.c \
+      --replace-fail '/usr/share' '/run/current-system/sw/share'
+  '';
+
   nativeBuildInputs = [
-    pkgconfig
-    intltool
-    wrapGAppsHook
+    pkg-config
+    gettext
+    wrapGAppsHook3
   ];
 
   buildInputs = [
     gtk3
-    libindicator-gtk3
-    mate.mate-panel
+    libayatana-indicator
+    mate-panel
     hicolor-icon-theme
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mate-desktop/mate-indicator-applet;
+  configureFlags = [ "--with-ayatana-indicators" ];
+
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
+    homepage = "https://github.com/mate-desktop/mate-indicator-applet";
     description = "MATE panel indicator applet";
     longDescription = ''
       A small applet to display information from various applications
       consistently in the panel.
-       
+
       The indicator applet exposes Ayatana Indicators in the MATE Panel.
       Ayatana Indicators are an initiative by Canonical to provide crisp and
       clean system and application status indication. They take the form of
@@ -38,6 +61,6 @@ stdenv.mkDerivation rec {
     '';
     license = with licenses; [ gpl3Plus lgpl2Plus ];
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

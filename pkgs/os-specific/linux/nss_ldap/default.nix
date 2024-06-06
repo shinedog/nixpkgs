@@ -1,10 +1,11 @@
-{stdenv, fetchurl, openldap, perl}:
+{lib, stdenv, fetchurl, openldap, perl}:
 
-stdenv.mkDerivation {
-  name = "nss_ldap-265";
+stdenv.mkDerivation rec {
+  pname = "nss_ldap";
+  version = "265";
 
   src = fetchurl {
-    url = http://www.padl.com/download/nss_ldap-265.tar.gz;
+    url = "http://www.padl.com/download/nss_ldap-${version}.tar.gz";
     sha256 = "1a16q9p97d2blrj0h6vl1xr7dg7i4s8x8namipr79mshby84vdbp";
   };
 
@@ -28,9 +29,15 @@ stdenv.mkDerivation {
     mkdir -p $out/etc
   '';
 
-  buildInputs = [ openldap perl ];
+  nativeBuildInputs = [
+    perl # shebang of vers_string
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    openldap
+  ];
+
+  meta = with lib; {
     description = "LDAP module for the Solaris Nameservice Switch (NSS)";
     license = licenses.gpl2;
     platforms = platforms.linux;

@@ -1,27 +1,41 @@
-{ stdenv, fetchFromGitHub, pkgconfig, libpng, zlib, lcms2 }:
+{ lib, rustPlatform, fetchFromGitHub, pkg-config, libpng, zlib, lcms2 }:
 
-stdenv.mkDerivation rec {
-  name = "pngquant-${version}";
-  version = "2.12.1";
+rustPlatform.buildRustPackage rec {
+  pname = "pngquant";
+  version = "3.0.3";
+
+  outputs = [ "out" "man" ];
 
   src = fetchFromGitHub {
-    owner = "pornel";
+    owner = "kornelski";
     repo = "pngquant";
     rev = version;
-    sha256 = "0jdvry3kvmmxcgwf5a3zbfz0idl6yl3700ag7pf8sk4lg4qp0llp";
+    hash = "sha256-u2zEp9Llo+c/+1QGW4V4r40KQn/ATHCTEsrpy7bRf/I=";
     fetchSubmodules = true;
   };
 
-  preConfigure = "patchShebangs .";
+  cargoHash = "sha256-mZpg6BRpsvEiMsS6ZJzVYg6wXHLb3Cf72sK1yzTF8y4=";
+  cargoPatches = [
+    # https://github.com/kornelski/pngquant/issues/347
+    ./add-Cargo.lock.patch
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [ libpng zlib lcms2 ];
 
-  meta = with stdenv.lib; {
-    homepage = https://pngquant.org/;
+  doCheck = false; # Has no Rust-based tests
+
+  postInstall = ''
+    install -Dpm0444 pngquant.1 $man/share/man/man1/pngquant.1
+  '';
+
+  meta = with lib; {
+    homepage = "https://pngquant.org/";
     description = "A tool to convert 24/32-bit RGBA PNGs to 8-bit palette with alpha channel preserved";
+    changelog = "https://github.com/kornelski/pngquant/raw/${version}/CHANGELOG";
     platforms = platforms.unix;
-    license = licenses.gpl3;
-    maintainers = [ maintainers.volth ];
+    license = with licenses; [ gpl3Plus hpnd bsd2 ];
+    mainProgram = "pngquant";
+    maintainers = [ ];
   };
 }

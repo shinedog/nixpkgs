@@ -1,21 +1,32 @@
-{ stdenv, fetchFromGitHub }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+}:
 
 stdenv.mkDerivation rec {
-  name = "xxHash-${version}";
-  version = "0.7.0";
+  pname = "xxHash";
+  version = "0.8.2";
 
   src = fetchFromGitHub {
     owner = "Cyan4973";
     repo = "xxHash";
     rev = "v${version}";
-    sha256 = "19iyr7x0s7in9kp9wrj4iimdx58nv6jndz9x5ndnl07gd90y7jxb";
+    hash = "sha256-kofPs01jb189LUjYHHt+KxDifZQWl0Hm779711mvWtI=";
   };
 
-  outputs = [ "out" "dev" ];
+  nativeBuildInputs = [
+    cmake
+  ];
 
-  makeFlags = [ "PREFIX=$(out)" "INCLUDEDIR=$(dev)/include" ];
+  # Using unofficial CMake build script to install CMake module files.
+  cmakeDir = "../cmake_unofficial";
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=${if stdenv.hostPlatform.isStatic then "OFF" else "ON"}"
+  ];
+
+  meta = with lib; {
     description = "Extremely fast hash algorithm";
     longDescription = ''
       xxHash is an Extremely fast Hash algorithm, running at RAM speed limits.
@@ -24,9 +35,10 @@ stdenv.mkDerivation rec {
       highly portable, and hashes are identical on all platforms (little / big
       endian).
     '';
-    homepage = https://github.com/Cyan4973/xxHash;
+    homepage = "https://github.com/Cyan4973/xxHash";
     license = with licenses; [ bsd2 gpl2 ];
+    mainProgram = "xxhsum";
     maintainers = with maintainers; [ orivej ];
-    platforms = platforms.unix;
+    platforms = platforms.all;
   };
 }

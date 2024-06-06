@@ -1,45 +1,63 @@
-{ stdenv, fetchurl, python, makeWrapper, gawk, bash, getopt, procps
-, which, jre, version, sha256, coreutils, ...
+{ lib
+, stdenv
+, fetchurl
+, python
+, makeWrapper
+, gawk
+, bash
+, getopt
+, procps
+, which
+, jre
+, nixosTests
+  # generation is the attribute version suffix such as 3_11 in pkgs.cassandra_3_11
+, generation
+, version
+, sha256
+, extraMeta ? { }
+, callPackage
+, ...
 }:
 
 let
-  libPath = stdenv.lib.makeLibraryPath [ stdenv.cc.cc ];
-  binPath = with stdenv.lib; makeBinPath ([
+  libPath = lib.makeLibraryPath [ stdenv.cc.cc ];
+  binPath = lib.makeBinPath [
     bash
     getopt
     gawk
     which
     jre
     procps
-  ]);
+  ];
 in
 
 stdenv.mkDerivation rec {
-  name = "cassandra-${version}";
+  pname = "cassandra";
   inherit version;
 
   src = fetchurl {
     inherit sha256;
-    url = "mirror://apache/cassandra/${version}/apache-${name}-bin.tar.gz";
+    url = "mirror://apache/cassandra/${version}/apache-cassandra-${version}-bin.tar.gz";
   };
 
   nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir $out
     mv * $out
 
     # Clean up documentation.
-    mkdir -p $out/share/doc/${name}
+    mkdir -p $out/share/doc/${pname}-${version}
     mv $out/CHANGES.txt \
        $out/LICENSE.txt \
        $out/NEWS.txt \
        $out/NOTICE.txt \
-       $out/javadoc \
-       $out/share/doc/${name}
+       $out/share/doc/${pname}-${version}
 
     if [[ -d $out/doc ]]; then
-      mv "$out/doc/"* $out/share/doc/${name}
+      mv "$out/doc/"* $out/share/doc/${pname}-${version}
       rmdir $out/doc
     fi
 
@@ -51,8 +69,17 @@ stdenv.mkDerivation rec {
                bin/sstablescrub \
                bin/sstableupgrade \
                bin/sstableutil \
-               bin/sstableverify \
-               tools/bin/cassandra-stress \
+               bin/sstableverify; do
+      # Check if file exists because some don't exist across all versions
+      if [ -f $out/$cmd ]; then
+        wrapProgram $out/bin/$(basename "$cmd") \
+          --suffix-each LD_LIBRARY_PATH : ${libPath} \
+          --prefix PATH : ${binPath} \
+          --set JAVA_HOME ${jre}
+      fi
+    done
+
+    for cmd in tools/bin/cassandra-stress \
                tools/bin/cassandra-stressd \
                tools/bin/sstabledump \
                tools/bin/sstableexpiredblockers \
@@ -62,11 +89,9 @@ stdenv.mkDerivation rec {
                tools/bin/sstablerepairedset \
                tools/bin/sstablesplit \
                tools/bin/token-generator; do
-
-      # check if file exists because some bin tools don't exist across all
-      # cassandra versions
+      # Check if file exists because some don't exist across all versions
       if [ -f $out/$cmd ]; then
-        makeWrapper $out/$cmd $out/bin/$(${coreutils}/bin/basename "$cmd") \
+        makeWrapper $out/$cmd $out/bin/$(basename "$cmd") \
           --suffix-each LD_LIBRARY_PATH : ${libPath} \
           --prefix PATH : ${binPath} \
           --set JAVA_HOME ${jre}
@@ -74,13 +99,29 @@ stdenv.mkDerivation rec {
     done
 
     wrapProgram $out/bin/cqlsh --prefix PATH : ${python}/bin
-    '';
 
-  meta = with stdenv.lib; {
-    homepage = http://cassandra.apache.org/;
+    runHook postInstall
+  '';
+
+  passthru = {
+    tests =
+      let
+        test = nixosTests."cassandra_${generation}";
+      in
+      {
+        nixos =
+          assert test.testPackage.version == version;
+          test;
+      };
+
+    updateScript = callPackage ./update-script.nix { inherit generation; };
+  };
+
+  meta = with lib; {
+    homepage = "https://cassandra.apache.org/";
     description = "A massively scalable open source NoSQL database";
     platforms = platforms.unix;
     license = licenses.asl20;
-    maintainers = with maintainers; [ cransom ];
-  };
+    maintainers = [ maintainers.roberth ];
+  } // extraMeta;
 }

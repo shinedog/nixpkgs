@@ -1,23 +1,24 @@
-{ buildPythonPackage
-, lib
-, fetchFromGitHub
-, absl-py
-, enum34
-, future
-, mock
-, mpyq
-, numpy
-, portpicker
-, protobuf
-, pygame
-, s2clientprotocol
-, six
-, websocket_client
-, sc2-headless
+{
+  buildPythonPackage,
+  lib,
+  fetchFromGitHub,
+  absl-py,
+  enum34,
+  future,
+  mock,
+  mpyq,
+  numpy,
+  portpicker,
+  protobuf,
+  pygame,
+  s2clientprotocol,
+  six,
+  websocket-client,
+  sc2-headless,
 }:
 
-buildPythonPackage rec {
-  pname = "PySC2";
+buildPythonPackage {
+  pname = "pysc2";
   version = "1.2";
 
   src = fetchFromGitHub {
@@ -49,7 +50,7 @@ buildPythonPackage rec {
     pygame
     s2clientprotocol
     six
-    websocket_client
+    websocket-client
     sc2-headless
   ];
 
@@ -58,6 +59,6 @@ buildPythonPackage rec {
     homepage = "https://github.com/deepmind/pysc2";
     license = lib.licenses.asl20;
     platforms = lib.platforms.linux;
-    maintainers = with lib.maintainers; [ danharaj ];
+    maintainers = with lib.maintainers; [ ];
   };
 }

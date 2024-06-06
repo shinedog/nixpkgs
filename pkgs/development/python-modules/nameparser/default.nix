@@ -1,25 +1,32 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, glibcLocales
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "nameparser";
-  version = "1.0.3";
+  version = "1.1.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c01ec7d0bc093420a45d8b5ea8261a84ba12bff0cabf47cb15b716c5ea8f3d23";
+    hash = "sha256-qiQArXHM+AcGdbQDEaJXyTRln5GFSxVOG6bCZHYcBJ0=";
   };
 
-  LC_ALL="en_US.UTF-8";
-  buildInputs = [ glibcLocales ];
+  nativeCheckInputs = [ unittestCheckHook ];
 
-  meta = with stdenv.lib; {
-    description = "A simple Python module for parsing human names into their individual components";
-    homepage = https://github.com/derek73/python-nameparser;
+  pythonImportsCheck = [ "nameparser" ];
+
+  meta = with lib; {
+    description = "Module for parsing human names into their individual components";
+    homepage = "https://github.com/derek73/python-nameparser";
+    changelog = "https://github.com/derek73/python-nameparser/releases/tag/v${version}";
     license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ ];
   };
-
 }

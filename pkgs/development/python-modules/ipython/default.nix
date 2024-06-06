@@ -1,65 +1,122 @@
-{ lib
-, stdenv
-, buildPythonPackage
-, fetchPypi
-, pythonOlder
-# Build dependencies
-, glibcLocales
-# Test dependencies
-, nose
-, pygments
-# Runtime dependencies
-, jedi
-, decorator
-, pickleshare
-, traitlets
-, prompt_toolkit
-, pexpect
-, appnope
-, backcall
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # Build dependencies
+  setuptools,
+
+  # Runtime dependencies
+  decorator,
+  exceptiongroup,
+  jedi,
+  matplotlib-inline,
+  pexpect,
+  prompt-toolkit,
+  pygments,
+  stack-data,
+  traitlets,
+  typing-extensions,
+
+  # Optional dependencies
+  ipykernel,
+  ipyparallel,
+  ipywidgets,
+  matplotlib,
+  nbconvert,
+  nbformat,
+  notebook,
+  qtconsole,
+
+  # Reverse dependency
+  sage,
+
+  # Test dependencies
+  pickleshare,
+  pytest-asyncio,
+  pytest7CheckHook,
+  testpath,
 }:
 
 buildPythonPackage rec {
   pname = "ipython";
-  version = "7.2.0";
-  disabled = pythonOlder "3.5";
+  version = "8.24.0";
+  pyproject = true;
+  disabled = pythonOlder "3.10";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "6a9496209b76463f1dec126ab928919aaf1f55b38beb9219af3fe202f6bbdd12";
+    hash = "sha256-AQ2z+KcopXi7ZB/dBsBjufuOlqlGTGOuxjEPvLXoBQE=";
   };
 
-  prePatch = lib.optionalString stdenv.isDarwin ''
-    substituteInPlace setup.py --replace "'gnureadline'" " "
+  build-system = [ setuptools ];
+
+  dependencies =
+    [
+      decorator
+      jedi
+      matplotlib-inline
+      pexpect
+      prompt-toolkit
+      pygments
+      stack-data
+      traitlets
+    ]
+    ++ lib.optionals (pythonOlder "3.11") [ exceptiongroup ]
+    ++ lib.optionals (pythonOlder "3.12") [ typing-extensions ];
+
+  optional-dependencies = {
+    kernel = [ ipykernel ];
+    nbconvert = [ nbconvert ];
+    nbformat = [ nbformat ];
+    notebook = [
+      ipywidgets
+      notebook
+    ];
+    parallel = [ ipyparallel ];
+    qtconsole = [ qtconsole ];
+    matplotlib = [ matplotlib ];
+  };
+
+  pythonImportsCheck = [ "IPython" ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
+
+    # doctests try to fetch an image from the internet
+    substituteInPlace pyproject.toml \
+      --replace '"--ipdoctest-modules",' '"--ipdoctest-modules", "--ignore=IPython/core/display.py",'
   '';
 
-  buildInputs = [ glibcLocales ];
-
-  checkInputs = [ nose pygments ];
-
-  propagatedBuildInputs = [
-    jedi
-    decorator
+  nativeCheckInputs = [
     pickleshare
-    traitlets
-    prompt_toolkit
-    pygments
-    pexpect
-    backcall
-  ] ++ lib.optionals stdenv.isDarwin [appnope];
+    pytest-asyncio
+    pytest7CheckHook
+    testpath
+  ];
 
-  LC_ALL="en_US.UTF-8";
+  disabledTests =
+    [
+      # UnboundLocalError: local variable 'child' referenced before assignment
+      "test_system_interrupt"
+    ]
+    ++ lib.optionals (stdenv.isDarwin) [
+      # FileNotFoundError: [Errno 2] No such file or directory: 'pbpaste'
+      "test_clipboard_get"
+    ];
 
-  doCheck = false; # Circular dependency with ipykernel
+  passthru.tests = {
+    inherit sage;
+  };
 
-  checkPhase = ''
-    nosetests
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "IPython: Productive Interactive Computing";
-    homepage = http://ipython.org/;
-    license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ bjornfor fridh ];
+    downloadPage = "https://github.com/ipython/ipython/";
+    homepage = "https://ipython.org/";
+    changelog = "https://github.com/ipython/ipython/blob/${version}/docs/source/whatsnew/version${lib.versions.major version}.rst";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ bjornfor ];
   };
 }

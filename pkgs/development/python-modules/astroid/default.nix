@@ -1,31 +1,47 @@
-{ lib, fetchPypi, buildPythonPackage, pythonOlder, isPyPy
-, lazy-object-proxy, six, wrapt, typing, typed-ast
-, pytestrunner, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+  setuptools,
+  typing-extensions,
+  pip,
+  pylint,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "astroid";
-  version = "2.1.0";
+  version = "3.1.0"; # Check whether the version is compatible with pylint
+  pyproject = true;
 
-  disabled = pythonOlder "3.4";
+  disabled = pythonOlder "3.8";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "08hz675knh4294bancdapql392fmbjyimhbyrmfkz1ka7l035c1m";
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "astroid";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-+cTQHbqoucaNi7rPoyH6Cu07vZMS8KWn5C/A3NXRSwE=";
   };
 
-  # From astroid/__pkginfo__.py
-  propagatedBuildInputs = [ lazy-object-proxy six wrapt ]
-    ++ lib.optional (pythonOlder "3.5") typing
-    ++ lib.optional (pythonOlder "3.7" && !isPyPy) typed-ast;
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ pytestrunner pytest ];
+  propagatedBuildInputs = lib.optionals (pythonOlder "3.11") [ typing-extensions ];
+
+  nativeCheckInputs = [
+    pip
+    pytestCheckHook
+  ];
+
+  passthru.tests = {
+    inherit pylint;
+  };
 
   meta = with lib; {
+    changelog = "https://github.com/PyCQA/astroid/blob/${src.rev}/ChangeLog";
     description = "An abstract syntax tree for Python with inference support";
-    homepage = https://github.com/PyCQA/astroid;
-    license = licenses.lgpl2;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ nand0p ];
+    homepage = "https://github.com/PyCQA/astroid";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ GaetanLepage ];
   };
 }

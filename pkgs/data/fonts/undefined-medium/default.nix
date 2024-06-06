@@ -1,19 +1,24 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-fetchzip rec {
-  name = "undefined-medium-1.0";
+stdenvNoCC.mkDerivation rec {
+  pname = "undefined-medium";
+  version = "1.3";
 
-  url = https://github.com/andirueckel/undefined-medium/archive/v1.0.zip;
+  src = fetchzip {
+    url = "https://github.com/andirueckel/undefined-medium/archive/v1.3.zip";
+    hash = "sha256-cVdk6a0xijAQ/18W5jalqRS7IiPufMJW27Scns+nbEY=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts
-    unzip -j $downloadedFile ${name}/fonts/otf/\*.otf -d $out/share/fonts/opentype
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 fonts/otf/*.otf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  sha256 = "0v3p1g9f1c0d6b9lhrvm1grzivm7ddk7dvn96zl5hdzr2y60y1rw";
-
-  meta = with stdenv.lib; {
-    homepage = https://undefined-medium.com/;
+  meta = with lib; {
+    homepage = "https://undefined-medium.com/";
     description = "A pixel grid-based monospace typeface";
     longDescription = ''
       undefined medium is a free and open-source pixel grid-based
@@ -21,7 +26,6 @@ fetchzip rec {
       whatever else you can think of … it’s pretty undefined.
     '';
     license = licenses.ofl;
-    maintainers = [ maintainers.rycee ];
     platforms = platforms.all;
   };
 }

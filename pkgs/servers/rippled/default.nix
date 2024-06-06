@@ -1,18 +1,16 @@
-{ stdenv, fetchFromGitHub, fetchgit, fetchurl, git, cmake, pkgconfig
-, openssl, boost, zlib }:
+{ lib, stdenv, fetchgit, fetchurl, fetchpatch, git, cmake, pkg-config
+, openssl, boost, grpc, protobuf, libnsl, rocksdb_6_23, snappy }:
 
 let
-  sqlite3 = fetchurl {
+  sqlite3 = fetchurl rec {
     url = "https://www.sqlite.org/2018/sqlite-amalgamation-3260000.zip";
     sha256 = "0vh9aa5dyvdwsyd8yp88ss300mv2c2m40z79z569lcxa6fqwlpfy";
+    passthru.url = url;
   };
 
-  beast = fetchgit {
-    url = "https://github.com/boostorg/beast.git";
-    rev = "2f9a8440c2432d8a196571d6300404cb76314125";
-    sha256 = "1n9ms5cn67b0p0mhldz5psgylds22sm5x22q7knrsf20856vlk5a";
-    fetchSubmodules = false;
-    leaveDotGit = true;
+  boostSharedStatic = boost.override {
+    enableShared = true;
+    enabledStatic = true;
   };
 
   docca = fetchgit {
@@ -23,18 +21,28 @@ let
     leaveDotGit = true;
   };
 
+  nudb = fetchgit rec {
+    url = "https://github.com/CPPAlliance/NuDB.git";
+    rev = "2.0.5";
+    sha256 = "07dwvglhyzpqnhzd33a2vs80wrdxy55a3sirnd739xp1k5v8s2fx";
+    leaveDotGit = true;
+    fetchSubmodules = true;
+    postFetch = "cd $out && git tag ${rev}";
+  };
+
   rocksdb = fetchgit {
     url = "https://github.com/facebook/rocksdb.git";
-    rev = "a297643f2e327a8bc7061bfc838fdf11935a2cf2";
-    sha256 = "00z8i4fwr27j9d4ymnls7rcgfvm6xh36a4hy2m2njx4x513pgyzw";
+    rev = "v6.7.3";
+    sha256 = "0dzn5jg3i2mnnjj24dn9lzi3aajj5ga2akjf64lybyj481lq445k";
+    deepClone = true;
     fetchSubmodules = false;
     leaveDotGit = true;
   };
 
   lz4 = fetchgit rec {
     url = "https://github.com/lz4/lz4.git";
-    rev = "v1.8.2";
-    sha256 = "1niv553q60hwn95yflzmrqkp1046hrid13h0yr36lm4fjza21h9w";
+    rev = "v1.9.2";
+    sha256 = "0322xy2vfhxkb8akas7vwajjgcigq1q8l9f5fnfmavcsd6kmxmgg";
     leaveDotGit = true;
     fetchSubmodules = false;
     postFetch = "cd $out && git tag ${rev}";
@@ -42,96 +50,93 @@ let
 
   libarchive = fetchgit rec {
     url = "https://github.com/libarchive/libarchive.git";
-    rev = "v3.3.3";
-    sha256 = "165imgfmizpi4ffpiwfs8gxysn6lw3y1fxj5rga98filkl7hxs31";
+    rev = "v3.4.3";
+    sha256 = "00yrzy2129vr4nfhigd91651984sl447dyfjfz26dmzvna5hwzp1";
     leaveDotGit = true;
     fetchSubmodules = false;
     postFetch = "cd $out && git tag ${rev}";
   };
 
-  soci = fetchgit rec {
+  soci = fetchgit {
     url = "https://github.com/SOCI/soci.git";
-    rev = "3a1f602b3021b925d38828e3ff95f9e7f8887ff7";
-    sha256 = "0lnps42cidlrn43h13b9yc8cs3fwgz7wb6a1kfc9rnw7swkh757f";
+    rev = "04e1870294918d20761736743bb6136314c42dd5";
+    sha256 = "0w3b7qi3bwn8bxh4qbqy6c1fw2bbwh7pxvk8b3qb6h4qgsh6kx89";
     leaveDotGit = true;
     fetchSubmodules = false;
   };
 
-  snappy = fetchgit rec {
-    url = "https://github.com/google/snappy.git";
-    rev = "1.1.7";
-    sha256 = "1f0i0sz5gc8aqd594zn3py6j4w86gi1xry6qaz2vzyl4w7cb4v35";
-    leaveDotGit = true;
-    fetchSubmodules = false;
-    postFetch = "cd $out && git tag ${rev}";
-  };
-
-  nudb = fetchgit rec {
-    url = "https://github.com/vinniefalco/NuDB.git";
-    rev = "1.0.0";
-    sha256 = "142bxicv25xaw4fmpw8bbblb1grdw30wyj181xl4a5734zw3qgmz";
-    leaveDotGit = true;
-    fetchSubmodules = false;
-    postFetch = "cd $out && git tag ${rev}";
-  };
-
-  protobuf = fetchgit rec {
-    url = "https://github.com/protocolbuffers/protobuf.git";
-    rev = "v3.6.1";
-    sha256 = "0zl09q25ggfw95lakcs3mkq5pvsj17mx29b4nqr09g0mnbw9709c";
-    leaveDotGit = true;
-    fetchSubmodules = false;
-    postFetch = "cd $out && git tag ${rev}";
-  };
-
-  google-test = fetchgit rec {
+  google-test = fetchgit {
     url = "https://github.com/google/googletest.git";
-    rev = "c3bb0ee2a63279a803aaad956b9b26d74bf9e6e2";
-    sha256 = "0pj5b6jnrj5lrccz2disr8hklbnzd8hwmrwbfqmvhiwb9q9p0k2k";
+    rev = "5ec7f0c4a113e2f18ac2c6cc7df51ad6afc24081";
+    sha256 = "1ch7hq16z20ddhpc08slp9bny29j88x9vr6bi9r4yf5m77xbplja";
     leaveDotGit = true;
     fetchSubmodules = false;
   };
 
-  google-benchmark = fetchgit rec {
+  google-benchmark = fetchgit {
     url = "https://github.com/google/benchmark.git";
     rev = "5b7683f49e1e9223cf9927b24f6fd3d6bd82e3f8";
-    sha256 = "0qg70j47zqnrbszlgrzmxpr4g88kq0gyq6v16bhaggfm83c6mg6i";
+    sha256 = "0kcmb83framkncc50h0lyyz7v8nys6g19ja0h2p8x4sfafnnm6ig";
+    leaveDotGit = true;
+    fetchSubmodules = false;
+  };
+
+  date = fetchgit {
+    url = "https://github.com/HowardHinnant/date.git";
+    rev = "fc4cf092f9674f2670fb9177edcdee870399b829";
+    sha256 = "0w618p64mx2l074b6wd0xfc4h6312mabhvzabxxwsnzj4afpajcm";
     leaveDotGit = true;
     fetchSubmodules = false;
   };
 in stdenv.mkDerivation rec {
-  name = "rippled-${version}";
-  version = "1.2.1";
+  pname = "rippled";
+  version = "1.9.4";
 
-  src = fetchFromGitHub {
-    owner = "ripple";
-    repo = "rippled";
+  src = fetchgit {
+    url = "https://github.com/ripple/rippled.git";
     rev = version;
-    sha256 = "1lm0zzz0hi2sh2f4iqq3scapzdjbxcjgr700fgham9wqgaj2ash5";
+    leaveDotGit = true;
+    fetchSubmodules = true;
+    hash = "sha256-VW/VmnhtF2xyHfEud3D6b3n8uTE0a/nDW1GISs5QfwM=";
   };
 
-  hardeningDisable = ["format"];
-  cmakeFlags = ["-Dstatic=OFF"];
+  patches = [
+    # Fix gcc-13 build due to missing <cstdint> includes:
+    #   https://github.com/XRPLF/rippled/pull/4555
+    (fetchpatch {
+      name = "gcc-13.patch";
+      url  = "https://github.com/XRPLF/rippled/commit/c9a586c2437bc8ffd22e946c82e1cbe906e1fc40.patch";
+      hash = "sha256-+4BDTMFoQWUHljgwGB1gtczVPQH/U5MA0ojbnBykceg=";
+      excludes = [ "src/ripple/basics/StringUtilities.h" ];
+    })
+  ];
 
-  nativeBuildInputs = [ pkgconfig cmake git ];
-  buildInputs = [ openssl openssl.dev boost zlib ];
+  hardeningDisable = ["format"];
+  cmakeFlags = ["-Dstatic=OFF" "-DBoost_NO_BOOST_CMAKE=ON" "-DSNAPPY_INCLUDE_DIR=${snappy}/include" ];
+
+  nativeBuildInputs = [ pkg-config cmake git ];
+  buildInputs = [ openssl openssl.dev boostSharedStatic grpc protobuf libnsl rocksdb_6_23 snappy ];
 
   preConfigure = ''
     export HOME=$PWD
 
-    git config --global url."file://${beast}".insteadOf "https://github.com/vinniefalco/Beast.git"
-    git config --global url."file://${docca}".insteadOf "https://github.com/vinniefalco/docca.git"
-    git config --global url."file://${rocksdb}".insteadOf "https://github.com/facebook/rocksdb.git"
+    git config --global protocol.file.allow always
+    git config --global url."file://${rocksdb}".insteadOf "${rocksdb.url}"
+    git config --global url."file://${docca}".insteadOf "${docca.url}"
     git config --global url."file://${lz4}".insteadOf "${lz4.url}"
     git config --global url."file://${libarchive}".insteadOf "${libarchive.url}"
     git config --global url."file://${soci}".insteadOf "${soci.url}"
-    git config --global url."file://${snappy}".insteadOf "${snappy.url}"
     git config --global url."file://${nudb}".insteadOf "${nudb.url}"
-    git config --global url."file://${protobuf}".insteadOf "${protobuf.url}"
     git config --global url."file://${google-benchmark}".insteadOf "${google-benchmark.url}"
     git config --global url."file://${google-test}".insteadOf "${google-test.url}"
+    git config --global url."file://${date}".insteadOf "${date.url}"
 
-    substituteInPlace CMakeLists.txt --replace "URL https://www.sqlite.org/2018/sqlite-amalgamation-3260000.zip" "URL ${sqlite3}"
+    substituteInPlace Builds/CMake/deps/Sqlite.cmake --replace "http://www.sqlite.org/2018/sqlite-amalgamation-3260000.zip" ""
+    substituteInPlace Builds/CMake/deps/Sqlite.cmake --replace "https://www2.sqlite.org/2018/sqlite-amalgamation-3260000.zip" ""
+    substituteInPlace Builds/CMake/deps/Sqlite.cmake --replace "http://www2.sqlite.org/2018/sqlite-amalgamation-3260000.zip" ""
+    substituteInPlace Builds/CMake/deps/Sqlite.cmake --replace "URL ${sqlite3.url}" "URL ${sqlite3}"
+
+    substituteInPlace Builds/CMake/deps/Rocksdb.cmake --replace "RocksDB 6.27" "RocksDB"
   '';
 
   doCheck = true;
@@ -139,11 +144,12 @@ in stdenv.mkDerivation rec {
     ./rippled --unittest
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Ripple P2P payment network reference server";
-    homepage = https://ripple.com;
-    maintainers = with maintainers; [ ehmry offline ];
+    homepage = "https://github.com/ripple/rippled";
+    maintainers = with maintainers; [ offline RaghavSood ];
     license = licenses.isc;
-    platforms = [ "x86_64-linux" ];
+    platforms = platforms.linux;
+    mainProgram = "rippled";
   };
 }

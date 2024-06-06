@@ -1,38 +1,75 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, isPy37, pyperclip }:
+{
+  lib,
+  allpairspy,
+  approval-utilities,
+  beautifulsoup4,
+  buildPythonPackage,
+  empty-files,
+  fetchFromGitHub,
+  mock,
+  mrjob,
+  numpy,
+  pyperclip,
+  pytest,
+  pytest-asyncio,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  testfixtures,
+  typing-extensions,
+}:
 
 buildPythonPackage rec {
-  version = "0.2.4";
   pname = "approvaltests";
+  version = "12.2.0";
+  pyproject = true;
 
-  # no tests included in PyPI tarball
+  disabled = pythonOlder "3.8";
+
   src = fetchFromGitHub {
     owner = "approvals";
     repo = "ApprovalTests.Python";
-    rev = version;
-    sha256 = "05lj5i13zpkgw1wdc1v81wj4zqj8bpzqiwycdnwlg08azcy7k7j1";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-ePItKdDnKX3283EiK8hOqwFDxi3ULByHEQj9XOKMsWM=";
   };
 
-  propagatedBuildInputs = [ pyperclip ];
+  build-system = [ setuptools ];
 
-  postPatch = ''
-    substituteInPlace setup.py \
-      --replace "pyperclip==1.5.27" "pyperclip>=1.5.27"
-  '';
+  dependencies = [
+    allpairspy
+    approval-utilities
+    beautifulsoup4
+    empty-files
+    mock
+    mrjob
+    pyperclip
+    pytest
+    testfixtures
+    typing-extensions
+  ];
 
-  # Tests fail on Python 3.7
-  # https://github.com/approvals/ApprovalTests.Python/issues/36
-  doCheck = !isPy37;
+  nativeCheckInputs = [
+    numpy
+    pytest-asyncio
+    pytestCheckHook
+  ];
 
-  # Disable Linux failing test, because tries to use darwin/windows specific reporters
-  preCheck = stdenv.lib.optionalString stdenv.isLinux ''
-    substituteInPlace tests/test_genericdiffreporter.py \
-      --replace "test_find_working_reporter" "_find_working_reporter"
-  '';
+  disabledTests = [
+    # Tests expect paths below ApprovalTests.Python directory
+    "test_received_filename"
+    "test_pytest_namer"
+  ];
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [
+    "approvaltests.approvals"
+    "approvaltests.reporters.generic_diff_reporter_factory"
+  ];
+
+  meta = with lib; {
     description = "Assertion/verification library to aid testing";
-    homepage = https://github.com/approvals/ApprovalTests.Python;
+    homepage = "https://github.com/approvals/ApprovalTests.Python";
+    changelog = "https://github.com/approvals/ApprovalTests.Python/releases/tag/v${version}";
     license = licenses.asl20;
-    maintainers = [ maintainers.marsam ];
+    maintainers = with maintainers; [ ];
   };
 }

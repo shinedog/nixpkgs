@@ -1,30 +1,93 @@
-{ buildPythonPackage
-, fetchPypi
-, lib
-, recursivePthLoader
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  isPy27,
+  isPyPy,
+  cython,
+  distlib,
+  fetchPypi,
+  filelock,
+  flaky,
+  hatch-vcs,
+  hatchling,
+  importlib-metadata,
+  platformdirs,
+  pytest-freezegun,
+  pytest-mock,
+  pytest-timeout,
+  pytestCheckHook,
+  time-machine,
 }:
 
 buildPythonPackage rec {
   pname = "virtualenv";
-  version = "16.4.3";
+  version = "20.25.3";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "984d7e607b0a5d1329425dd8845bd971b957424b5ba664729fab51ab8c11bc39";
+    hash = "sha256-e7VUu9/qrMM0n6YU6lv/asMA/HwzXp+s86O8/HA/Rb4=";
   };
 
-  # Doubt this is needed - FRidh 2017-07-07
-  pythonPath = [ recursivePthLoader ];
+  nativeBuildInputs = [
+    hatch-vcs
+    hatchling
+  ];
 
-  patches = [ ./virtualenv-change-prefix.patch ];
+  propagatedBuildInputs = [
+    distlib
+    filelock
+    platformdirs
+  ] ++ lib.optionals (pythonOlder "3.8") [ importlib-metadata ];
 
-  # Tarball doesn't contain tests
-  doCheck = false;
+  nativeCheckInputs = [
+    cython
+    flaky
+    pytest-freezegun
+    pytest-mock
+    pytest-timeout
+    pytestCheckHook
+  ] ++ lib.optionals (!isPyPy) [ time-machine ];
 
-  meta = {
+  preCheck = ''
+    export HOME=$(mktemp -d)
+  '';
+
+  disabledTestPaths = [
+    # Ignore tests which require network access
+    "tests/unit/create/test_creator.py"
+    "tests/unit/seed/embed/test_bootstrap_link_via_app_data.py"
+  ];
+
+  disabledTests =
+    [
+      # Network access
+      "test_create_no_seed"
+      "test_seed_link_via_app_data"
+      # Permission Error
+      "test_bad_exe_py_info_no_raise"
+    ]
+    ++ lib.optionals (pythonOlder "3.11") [ "test_help" ]
+    ++ lib.optionals (isPyPy) [
+      # encoding problems
+      "test_bash"
+      # permission error
+      "test_can_build_c_extensions"
+      # fails to detect pypy version
+      "test_discover_ok"
+    ];
+
+  pythonImportsCheck = [ "virtualenv" ];
+
+  meta = with lib; {
     description = "A tool to create isolated Python environments";
-    homepage = http://www.virtualenv.org;
-    license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ goibhniu ];
+    mainProgram = "virtualenv";
+    homepage = "http://www.virtualenv.org";
+    changelog = "https://github.com/pypa/virtualenv/blob/${version}/docs/changelog.rst";
+    license = licenses.mit;
+    maintainers = with maintainers; [ goibhniu ];
   };
 }

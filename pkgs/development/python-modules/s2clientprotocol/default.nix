@@ -1,12 +1,14 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
-, protobuf
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  protobuf,
 }:
 
 buildPythonPackage rec {
   pname = "s2clientprotocol";
   version = "3.19.1.58600.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -21,6 +23,6 @@ buildPythonPackage rec {
     description = "StarCraft II - client protocol.";
     homepage = "https://github.com/Blizzard/sc2client-proto";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ danharaj ];
+    maintainers = with lib.maintainers; [ ];
   };
 }

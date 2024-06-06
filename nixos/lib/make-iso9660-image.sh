@@ -1,12 +1,3 @@
-source $stdenv/setup
-
-sources_=($sources)
-targets_=($targets)
-
-objects=($objects)
-symlinks=($symlinks)
-
-
 # Remove the initial slash from a path, since genisofs likes it that way.
 stripSlash() {
     res="$1"
@@ -35,13 +26,13 @@ if test -n "$bootable"; then
     # The -boot-info-table option modifies the $bootImage file, so
     # find it in `contents' and make a copy of it (since the original
     # is read-only in the Nix store...).
-    for ((i = 0; i < ${#targets_[@]}; i++)); do
-        stripSlash "${targets_[$i]}"
+    for ((i = 0; i < ${#targets[@]}; i++)); do
+        stripSlash "${targets[$i]}"
         if test "$res" = "$bootImage"; then
-            echo "copying the boot image ${sources_[$i]}"
-            cp "${sources_[$i]}" boot.img
+            echo "copying the boot image ${sources[$i]}"
+            cp "${sources[$i]}" boot.img
             chmod u+w boot.img
-            sources_[$i]=boot.img
+            sources[$i]=boot.img
         fi
     done
 
@@ -66,9 +57,9 @@ touch pathlist
 
 
 # Add the individual files.
-for ((i = 0; i < ${#targets_[@]}; i++)); do
-    stripSlash "${targets_[$i]}"
-    addPath "$res" "${sources_[$i]}"
+for ((i = 0; i < ${#targets[@]}; i++)); do
+    stripSlash "${targets[$i]}"
+    addPath "$res" "${sources[$i]}"
 done
 
 
@@ -77,6 +68,11 @@ for i in $(< $closureInfo/store-paths); do
     addPath "${i:1}" "$i"
 done
 
+# If needed, build a squashfs and add that
+if [[ -n "$squashfsCommand" ]]; then
+    (out="nix-store.squashfs" eval "$squashfsCommand")
+    addPath "nix-store.squashfs" "nix-store.squashfs"
+fi
 
 # Also include a manifest of the closures in a format suitable for
 # nix-store --load-db.
@@ -99,7 +95,13 @@ done
 
 mkdir -p $out/iso
 
+# daed2280-b91e-42c0-aed6-82c825ca41f3 is an arbitrary namespace, to prevent
+# independent applications from generating the same UUID for the same value.
+# (the chance of that being problematic seem pretty slim here, but that's how
+# version-5 UUID's work)
 xorriso="xorriso
+ -boot_image any gpt_disk_guid=$(uuid -v 5 daed2280-b91e-42c0-aed6-82c825ca41f3 $out | tr -d -)
+ -volume_date all_file_dates =$SOURCE_DATE_EPOCH
  -as mkisofs
  -iso-level 3
  -volid ${volumeID}
@@ -107,6 +109,7 @@ xorriso="xorriso
  -publisher nixos
  -graft-points
  -full-iso9660-filenames
+ -joliet
  ${isoBootFlags}
  ${usbBootFlags}
  ${efiBootFlags}
@@ -117,20 +120,16 @@ xorriso="xorriso
 
 $xorriso -output $out/iso/$isoName
 
-if test -n "$usbBootable"; then
-    echo "Making image hybrid..."
-    if test -n "$efiBootable"; then
-        isohybrid --uefi $out/iso/$isoName
-    else
-        isohybrid $out/iso/$isoName
-    fi
-fi
-
 if test -n "$compressImage"; then
     echo "Compressing image..."
-    bzip2 $out/iso/$isoName
+    zstd -T$NIX_BUILD_CORES --rm $out/iso/$isoName
 fi
 
 mkdir -p $out/nix-support
 echo $system > $out/nix-support/system
-echo "file iso $out/iso/$isoName" >> $out/nix-support/hydra-build-products
+
+if test -n "$compressImage"; then
+    echo "file iso $out/iso/$isoName.zst" >> $out/nix-support/hydra-build-products
+else
+    echo "file iso $out/iso/$isoName" >> $out/nix-support/hydra-build-products
+fi

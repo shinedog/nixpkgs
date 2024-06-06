@@ -1,39 +1,77 @@
-{ stdenv, python2, fetchFromGitHub }:
+{ pkgs, nodejs, lib, python3Packages, fetchFromGitHub, nixosTests, fetchNpmDeps, npmHooks }:
 
-with python2.pkgs; buildPythonApplication rec {
+with python3Packages;
+
+buildPythonApplication rec {
   pname = "isso";
-  version = "0.12.2";
+  version = "0.13.0";
 
-  # no tests on PyPI
   src = fetchFromGitHub {
     owner = "posativ";
     repo = pname;
-    rev = version;
-    sha256 = "18v8lzwgl5hcbnawy50lfp3wnlc0rjhrnw9ja9260awkx7jra9ba";
+    rev = "refs/tags/${version}";
+    sha256 = "sha256-kZNf7Rlb1DZtQe4dK1B283OkzQQcCX+pbvZzfL65gsA=";
   };
 
-  propagatedBuildInputs = [
-    bleach
-    cffi
-    configparser
-    html5lib
-    ipaddr
-    jinja2
-    misaka
-    werkzeug
+  npmDeps = fetchNpmDeps {
+    inherit src;
+    hash = "sha256-RBpuhFI0hdi8bB48Pks9Ac/UdcQ/DJw+WFnNj5f7IYE=";
+  };
+
+  outputs = [
+    "out"
+    "doc"
   ];
 
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    ${python.interpreter} setup.py nosetests
+  postPatch = ''
+    # Remove when https://github.com/posativ/isso/pull/973 is available.
+    substituteInPlace isso/tests/test_comments.py \
+      --replace "self.client.delete_cookie('localhost.local', '1')" "self.client.delete_cookie(key='1', domain='localhost')"
   '';
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    itsdangerous
+    jinja2
+    misaka
+    html5lib
+    werkzeug
+    bleach
+    flask-caching
+  ];
+
+  nativeBuildInputs = [
+    cffi
+    sphinxHook
+    sphinx
+    nodejs
+    npmHooks.npmConfigHook
+  ];
+
+  NODE_PATH = "$npmDeps";
+
+  preBuild = ''
+    ln -s ${npmDeps}/node_modules ./node_modules
+    export PATH="${npmDeps}/bin:$PATH"
+
+    make js
+  '';
+
+  nativeCheckInputs = [
+    pytest
+    pytest-cov
+  ];
+
+  checkPhase = ''
+    pytest
+  '';
+
+  passthru.tests = { inherit (nixosTests) isso; };
+
+  meta = with lib; {
     description = "A commenting server similar to Disqus";
-    homepage = https://posativ.org/isso/;
+    mainProgram = "isso";
+    homepage = "https://posativ.org/isso/";
     license = licenses.mit;
     maintainers = with maintainers; [ fgaz ];
   };
 }
-

@@ -1,24 +1,22 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "go-protobuf-${version}";
-  version = "2018-01-04";
-  rev = "1e59b77b52bf8e4b449a57e6f79f21226d571845";
-
-  goPackagePath = "github.com/golang/protobuf";
+buildGoModule rec {
+  pname = "go-protobuf";
+  version = "1.5.4";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "golang";
     repo = "protobuf";
-    sha256 = "19bkh81wnp6njg3931wky6hsnnl2d1ig20vfjxpv450sd3k6yys8";
+    rev = "v${version}";
+    sha256 = "sha256-AfyZ6xlqmrsVqtoKV1XMEo/Vba9Kpu1EgwfF6pPSZ64=";
   };
 
-  meta = with stdenv.lib; {
+  vendorHash = "sha256-jGAWUgW0DA7EwmlzVxnBmtbf2dp+P4Qwcb8mTAEhUi4=";
+
+  meta = with lib; {
     homepage    = "https://github.com/golang/protobuf";
     description = " Go bindings for protocol buffer";
     maintainers = with maintainers; [ lewo ];
     license     = licenses.bsd3;
-    platforms   = platforms.unix;
   };
 }

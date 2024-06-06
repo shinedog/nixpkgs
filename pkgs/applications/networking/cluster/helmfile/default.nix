@@ -1,37 +1,53 @@
-{ lib, buildGoPackage, fetchFromGitHub, makeWrapper, kubernetes-helm, ... }:
+{ lib
+, buildGo122Module
+, fetchFromGitHub
+, installShellFiles
+, makeWrapper
+, pluginsDir ? null
+}:
 
-let version = "0.40.1"; in
-
-buildGoPackage {
-  name = "helmfile-${version}";
+buildGo122Module rec {
+  pname = "helmfile";
+  version = "0.165.0";
 
   src = fetchFromGitHub {
-    owner = "roboll";
+    owner = "helmfile";
     repo = "helmfile";
     rev = "v${version}";
-    sha256 = "02ir10070rpayv9s53anldwjy5ggl268shgf085d188wl6vshaiv";
+    hash = "sha256-fXrfthjWaCo0p7NwP9EWa0uFeCCHInzi7h2tgawHlh0=";
   };
 
-  goPackagePath = "github.com/roboll/helmfile";
+  vendorHash = "sha256-nWfj/E3Lg58wZ27LEI91+Ns9lj+unK6xYTEcxdAFOXI=";
 
-  nativeBuildInputs = [ makeWrapper ];
+  doCheck = false;
 
-  buildFlagsArray = ''
-    -ldflags=
-    -X main.Version=${version}
+  subPackages = [ "." ];
+
+  ldflags = [ "-s" "-w" "-X go.szostok.io/version.version=v${version}" ];
+
+  nativeBuildInputs =
+    [ installShellFiles ] ++
+    lib.optional (pluginsDir != null) makeWrapper;
+
+  postInstall = lib.optionalString (pluginsDir != null) ''
+    wrapProgram $out/bin/helmfile \
+      --set HELM_PLUGINS "${pluginsDir}"
+  '' + ''
+    installShellCompletion --cmd helmfile \
+      --bash <($out/bin/helmfile completion bash) \
+      --fish <($out/bin/helmfile completion fish) \
+      --zsh <($out/bin/helmfile completion zsh)
   '';
-
-  postInstall = ''
-    wrapProgram $bin/bin/helmfile \
-      --prefix PATH : ${lib.makeBinPath [ kubernetes-helm ]}
-  '';
-
 
   meta = {
-    description = "Deploy Kubernetes Helm charts";
-    homepage = https://github.com/roboll/helmfile;
+    description = "Declarative spec for deploying Helm charts";
+    mainProgram = "helmfile";
+    longDescription = ''
+      Declaratively deploy your Kubernetes manifests, Kustomize configs,
+      and charts as Helm releases in one shot.
+    '';
+    homepage = "https://helmfile.readthedocs.io/";
     license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ pneumaticat ];
-    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ pneumaticat yurrriq ];
   };
 }

@@ -1,85 +1,99 @@
-{ stdenv
-, lib
-, buildPythonPackage
-, fetchPypi
-, pythonOlder
-, pytest
-, cython
-, cymem
-, darwin
-, msgpack-numpy
-, msgpack-python
-, preshed
-, numpy
-, murmurhash
-, pathlib
-, hypothesis
-, tqdm
-, cytoolz
-, plac
-, six
-, mock
-, wrapt
-, dill
+{
+  lib,
+  stdenv,
+  Accelerate,
+  blis,
+  buildPythonPackage,
+  catalogue,
+  confection,
+  CoreFoundation,
+  CoreGraphics,
+  CoreVideo,
+  cymem,
+  cython_0,
+  fetchPypi,
+  hypothesis,
+  mock,
+  murmurhash,
+  numpy,
+  plac,
+  preshed,
+  pydantic,
+  pytestCheckHook,
+  python,
+  pythonOlder,
+  setuptools,
+  srsly,
+  tqdm,
+  typing-extensions,
+  wasabi,
 }:
 
 buildPythonPackage rec {
   pname = "thinc";
-  version = "6.12.1";
+  version = "8.2.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1kkp8b3xcs3yn3ia5sxrh086c9xv27s2khdxd17abdypxxa99ich";
+    hash = "sha256-9a/FIikSqAvai9zslYNiorpTjXAn3I22FUhF0oWdynY=";
   };
 
-  buildInputs = lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
-    Accelerate CoreFoundation CoreGraphics CoreVideo
-  ]);
+  postPatch = ''
+    substituteInPlace setup.cfg \
+      --replace "preshed>=3.0.2,<3.1.0" "preshed"
+  '';
+
+  nativeBuildInputs = [ setuptools ];
+
+  buildInputs =
+    [ cython_0 ]
+    ++ lib.optionals stdenv.isDarwin [
+      Accelerate
+      CoreFoundation
+      CoreGraphics
+      CoreVideo
+    ];
 
   propagatedBuildInputs = [
-   cython
-   cymem
-   msgpack-numpy
-   msgpack-python
-   preshed
-   numpy
-   murmurhash
-   tqdm
-   cytoolz
-   plac
-   six
-   wrapt
-   dill
-  ] ++ lib.optional (pythonOlder "3.4") pathlib;
+    blis
+    catalogue
+    confection
+    cymem
+    murmurhash
+    numpy
+    plac
+    preshed
+    pydantic
+    srsly
+    tqdm
+    wasabi
+  ] ++ lib.optionals (pythonOlder "3.8") [ typing-extensions ];
 
-
-  checkInputs = [
+  nativeCheckInputs = [
     hypothesis
     mock
-    pytest
+    pytestCheckHook
   ];
 
-  prePatch = ''
-    substituteInPlace setup.py \
-      --replace "pathlib==1.0.1" "pathlib>=1.0.0,<2.0.0" \
-      --replace "plac>=0.9.6,<1.0.0" "plac>=0.9.6" \
-      --replace "msgpack-numpy<0.4.4" "msgpack-numpy" \
-      --replace "wheel>=0.32.0,<0.33.0" "wheel" \
-      --replace "wrapt>=1.10.0,<1.11.0" "wrapt" \
-      --replace "msgpack>=0.5.6,<0.6.0" "msgpack"
+  # Add native extensions.
+  preCheck = ''
+    export PYTHONPATH=$out/${python.sitePackages}:$PYTHONPATH
+
+    # avoid local paths, relative imports wont resolve correctly
+    mv thinc/tests tests
+    rm -r thinc
   '';
 
-  # Cannot find cython modules.
-  doCheck = false;
+  pythonImportsCheck = [ "thinc" ];
 
-  checkPhase = ''
-    pytest thinc/tests
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Practical Machine Learning for NLP in Python";
-    homepage = https://github.com/explosion/thinc;
+  meta = with lib; {
+    description = "Library for NLP machine learning";
+    homepage = "https://github.com/explosion/thinc";
+    changelog = "https://github.com/explosion/thinc/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ aborsu sdll ];
-    };
+    maintainers = with maintainers; [ aborsu ];
+  };
 }

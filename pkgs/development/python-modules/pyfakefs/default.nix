@@ -1,42 +1,61 @@
-{ stdenv, buildPythonPackage, fetchPypi, python, pytest, glibcLocales }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # tests
+  pandas,
+  pytestCheckHook,
+  undefined,
+}:
 
 buildPythonPackage rec {
-  version = "3.5.8";
   pname = "pyfakefs";
+  version = "5.4.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.5";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "8cd2270d65d3316dd4dc6bb83242df2e0990d27605209bc16e8041bcc0956961";
+    hash = "sha256-IMtR6GDC8/+DhZFirVE0u4sKHnqB3woYz8zEhi0Nncw=";
   };
 
-  postPatch = ''
-    # test doesn't work in sandbox
-    substituteInPlace pyfakefs/tests/fake_filesystem_test.py \
-      --replace "test_expand_root" "notest_expand_root"
-    substituteInPlace pyfakefs/tests/fake_os_test.py \
-      --replace "test_path_links_not_resolved" "notest_path_links_not_resolved" \
-      --replace "test_append_mode_tell_linux_windows" "notest_append_mode_tell_linux_windows"
-    substituteInPlace pyfakefs/tests/fake_filesystem_unittest_test.py \
-      --replace "test_copy_real_file" "notest_copy_real_file"
-  '' + (stdenv.lib.optionalString stdenv.isDarwin ''
-    # this test fails on darwin due to case-insensitive file system
-    substituteInPlace pyfakefs/tests/fake_os_test.py \
-      --replace "test_rename_dir_to_existing_dir" "notest_rename_dir_to_existing_dir"
-  '');
+  postPatch =
+    ''
+      # test doesn't work in sandbox
+      substituteInPlace pyfakefs/tests/fake_filesystem_test.py \
+        --replace "test_expand_root" "notest_expand_root"
+      substituteInPlace pyfakefs/tests/fake_os_test.py \
+        --replace "test_path_links_not_resolved" "notest_path_links_not_resolved" \
+        --replace "test_append_mode_tell_linux_windows" "notest_append_mode_tell_linux_windows"
+    ''
+    + (lib.optionalString stdenv.isDarwin ''
+      # this test fails on darwin due to case-insensitive file system
+      substituteInPlace pyfakefs/tests/fake_os_test.py \
+        --replace "test_rename_dir_to_existing_dir" "notest_rename_dir_to_existing_dir"
+    '');
 
-  checkInputs = [ pytest glibcLocales ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = ''
-    export LC_ALL=en_US.UTF-8
-    ${python.interpreter} -m pyfakefs.tests.all_tests
-    ${python.interpreter} -m pyfakefs.tests.all_tests_without_extra_packages
-    ${python.interpreter} -m pytest pyfakefs/pytest_tests/pytest_plugin_test.py
-  '';
+  pythonImportsCheck = [ "pyfakefs" ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pandas
+    pytestCheckHook
+    undefined
+  ];
+
+  meta = with lib; {
     description = "Fake file system that mocks the Python file system modules";
-    license     = licenses.asl20;
-    homepage    = http://pyfakefs.org/;
+    homepage = "http://pyfakefs.org/";
+    changelog = "https://github.com/jmcgeheeiv/pyfakefs/blob/v${version}/CHANGES.md";
+    license = licenses.asl20;
     maintainers = with maintainers; [ gebner ];
   };
 }

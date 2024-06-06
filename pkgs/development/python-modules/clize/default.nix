@@ -1,45 +1,57 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, dateutil
-, sigtools
-, six
-, attrs
-, od
-, docutils
-, repeated_test
-, unittest2
-, pygments
+{
+  lib,
+  attrs,
+  buildPythonPackage,
+  docutils,
+  fetchPypi,
+  od,
+  pygments,
+  pytestCheckHook,
+  pythonOlder,
+  python-dateutil,
+  repeated-test,
+  setuptools-scm,
+  sigtools,
 }:
 
 buildPythonPackage rec {
   pname = "clize";
-  version = "4.0.3";
+  version = "5.0.2";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "dbcfba5571dc30aaf90dc98fc279e2aab69d0f8f3665fc0394fbc10a87a2be60";
+    hash = "sha256-BH9aRHNgJxirG4VnKn4VMDOHF41agcJ13EKd+sHstRA=";
   };
 
-  checkInputs = [ 
-    dateutil
-    pygments
-    repeated_test
-    unittest2
-  ];
-  
-  propagatedBuildInputs = [ 
+  nativeBuildInputs = [ setuptools-scm ];
+
+  propagatedBuildInputs = [
     attrs
     docutils
     od
     sigtools
-    six
   ];
 
-  meta = with stdenv.lib; {
+  passthru.optional-dependencies = {
+    datetime = [ python-dateutil ];
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    python-dateutil
+    pygments
+    repeated-test
+  ];
+
+  pythonImportsCheck = [ "clize" ];
+
+  meta = with lib; {
     description = "Command-line argument parsing for Python";
     homepage = "https://github.com/epsy/clize";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
-
 }

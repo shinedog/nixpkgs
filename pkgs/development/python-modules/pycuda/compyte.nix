@@ -1,11 +1,8 @@
-{ mkDerivation
-, fetchFromGitHub
-}:
+{ mkDerivation, fetchFromGitHub }:
 
-mkDerivation rec {
+mkDerivation {
   pname = "compyte";
   version = "git-20150817";
-  name = pname + "-" + version;
 
   src = fetchFromGitHub {
     owner = "inducer";
@@ -18,5 +15,4 @@ mkDerivation rec {
     mkdir -p $out
     cp -r * $out
   '';
-
 }

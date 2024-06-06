@@ -1,7 +1,8 @@
-{ stdenv, kernel, ncurses }:
+{ lib, stdenv, kernel, ncurses }:
 
 stdenv.mkDerivation {
-  name = "tmon-${kernel.version}";
+  pname = "tmon";
+  version = kernel.version;
 
   inherit (kernel) src;
 
@@ -16,9 +17,10 @@ stdenv.mkDerivation {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Monitoring and Testing Tool for Linux kernel thermal subsystem";
-    homepage = https://www.kernel.org/;
+    mainProgram = "tmon";
+    homepage = "https://www.kernel.org/";
     license = licenses.gpl2;
     platforms = platforms.linux;
   };

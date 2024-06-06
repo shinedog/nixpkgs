@@ -1,8 +1,13 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+}:
 
 buildPythonPackage rec {
   pname = "should-dsl";
   version = "2.1.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit version;
@@ -13,9 +18,9 @@ buildPythonPackage rec {
   # There are no tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Should assertions in Python as clear and readable as possible";
-    homepage = http://www.should-dsl.info/;
+    homepage = "http://www.should-dsl.info/";
     license = licenses.mit;
     maintainers = with maintainers; [ jluttine ];
   };

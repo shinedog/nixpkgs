@@ -1,11 +1,11 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, cryptsetup }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, cryptsetup }:
 
 stdenv.mkDerivation rec {
-  name = "bruteforce-luks-${version}";
-  version = "1.3.1";
+  pname = "bruteforce-luks";
+  version = "1.4.1";
 
   src = fetchFromGitHub {
-    sha256 = "14ckm31wbzf3lnk472bywjjlh9kysb793nsh2gp04aa5hp5lym58";
+    sha256 = "sha256-t07YyfCjaXQs/OMekcPNBT8DeSRtq2+8tUpsPP2pG7o=";
     rev = version;
     repo = "bruteforce-luks";
     owner = "glv2";
@@ -18,9 +18,10 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "Cracks passwords of LUKS encrypted volumes";
+    mainProgram = "bruteforce-luks";
     longDescription = ''
       The program tries to decrypt at least one of the key slots by trying
       all the possible passwords. It is especially useful if you know

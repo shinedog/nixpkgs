@@ -1,18 +1,47 @@
-{ fetchurl, stdenv, libtool, gettext, zlib, bzip2, flac, libvorbis
-, exiv2, libgsf, rpm, pkgconfig
-, gtkSupport ? true, glib ? null, gtk3 ? null
-, videoSupport ? true, ffmpeg ? null, libmpeg2 ? null}:
-
-assert gtkSupport -> glib != null && gtk3 != null;
-assert videoSupport -> ffmpeg != null && libmpeg2 != null;
+{ lib, stdenv, fetchurl, fetchpatch, substituteAll
+, libtool, gettext, zlib, bzip2, flac, libvorbis
+, exiv2, libgsf, pkg-config
+, rpmSupport ? stdenv.isLinux, rpm
+, gstreamerSupport ? true, gst_all_1
+# ^ Needed e.g. for proper id3 and FLAC support.
+#   Set to `false` to decrease package closure size by about 87 MB (53%).
+, gstPlugins ? (gst: [ gst.gst-plugins-base gst.gst-plugins-good ])
+# If an application needs additional gstreamer plugins it can also make them
+# available by adding them to the environment variable
+# GST_PLUGIN_SYSTEM_PATH_1_0, e.g. like this:
+# postInstall = ''
+#   wrapProgram $out/bin/extract --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0"
+# '';
+# See also <https://nixos.org/nixpkgs/manual/#sec-language-gnome>.
+, gtkSupport ? true, glib, gtk3
+, videoSupport ? true, ffmpeg_4, libmpeg2
+}:
 
 stdenv.mkDerivation rec {
-  name = "libextractor-1.9";
+  pname = "libextractor";
+  version = "1.11";
 
   src = fetchurl {
-    url = "mirror://gnu/libextractor/${name}.tar.gz";
-    sha256 = "1zz2zvikvfibxnk1va3kgzs7djsmiqy7bmk8y01vbsf54ryjb3zh";
+    url = "mirror://gnu/libextractor/${pname}-${version}.tar.gz";
+    sha256 = "sha256-FvYzq4dGo4VHxKHaP0WRGSsIJa2DxDNvBXW4WEPYvY8=";
   };
+
+  patches = [
+    (fetchpatch {
+      name = "libextractor-exiv2-0.28.patch";
+      url = "https://git.pld-linux.org/?p=packages/libextractor.git;a=blob_plain;f=libextractor-exiv2-0.28.patch;h=d763b65f2578f1127713de8dc82f432d34f95a85;hb=0e7de1c6794e8c331a1a1a6a829993c7cd217d3a";
+      hash = "sha256-szAv2A+NmiQyj2+R7BO6fHX588vlTgljPtrnMR6mgGY=";
+    })
+  ] ++ lib.optionals gstreamerSupport [
+
+    # Libraries cannot be wrapped so we need to hardcode the plug-in paths.
+    (substituteAll {
+      src = ./gst-hardcode-plugins.patch;
+      load_gst_plugins = lib.concatMapStrings
+        (plugin: ''gst_registry_scan_path(gst_registry_get(), "${lib.getLib plugin}/lib/gstreamer-1.0");'')
+        (gstPlugins gst_all_1);
+    })
+  ];
 
   preConfigure =
     '' echo "patching installation directory in \`extractor.c'..."
@@ -20,12 +49,16 @@ stdenv.mkDerivation rec {
            -e "s|pexe[[:blank:]]*=.*$|pexe = strdup(\"$out/lib/\");|g"
     '';
 
+  nativeBuildInputs = [ pkg-config ];
+
   buildInputs =
    [ libtool gettext zlib bzip2 flac libvorbis exiv2
-     libgsf rpm
-     pkgconfig
-   ] ++ stdenv.lib.optionals gtkSupport [ glib gtk3 ]
-     ++ stdenv.lib.optionals videoSupport [ ffmpeg libmpeg2 ];
+     libgsf
+   ] ++ lib.optionals rpmSupport [ rpm ]
+     ++ lib.optionals gstreamerSupport
+          ([ gst_all_1.gstreamer ] ++ gstPlugins gst_all_1)
+     ++ lib.optionals gtkSupport [ glib gtk3 ]
+     ++ lib.optionals videoSupport [ ffmpeg_4 libmpeg2 ];
 
   configureFlags = [
     "--disable-ltdl-install"
@@ -36,13 +69,13 @@ stdenv.mkDerivation rec {
 
   # Checks need to be run after "make install", otherwise plug-ins are not in
   # the search path, etc.
-  # FIXME: Tests currently fail and the test framework appears to be deeply
-  # broken anyway.
   doCheck = false;
-  #postInstall = "make check";
+  doInstallCheck = !stdenv.isDarwin;
+  installCheckPhase = "make check";
 
-  meta = {
+  meta = with lib; {
     description = "Simple library for keyword extraction";
+    mainProgram = "extract";
 
     longDescription =
       '' GNU libextractor is a library used to extract meta-data from files
@@ -65,9 +98,9 @@ stdenv.mkDerivation rec {
          additional MIME types are detected.
       '';
 
-    license = stdenv.lib.licenses.gpl2Plus;
+    license = licenses.gpl3Plus;
 
-    maintainers = [ ];
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = [ maintainers.jorsn ];
+    platforms = platforms.unix;
   };
 }

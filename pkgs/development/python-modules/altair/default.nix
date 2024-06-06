@@ -1,37 +1,81 @@
-{ stdenv, buildPythonPackage, fetchPypi, fetchpatch
-, pytest, jinja2, sphinx, vega_datasets, ipython, glibcLocales
-, entrypoints, jsonschema, numpy, pandas, six, toolz, typing
-, pythonOlder, recommonmark }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+
+  # Runtime dependencies
+  hatchling,
+  toolz,
+  numpy,
+  jsonschema,
+  typing-extensions,
+  pandas,
+  jinja2,
+  packaging,
+
+  # Build, dev and test dependencies
+  anywidget,
+  ipython,
+  pytestCheckHook,
+  vega-datasets,
+  sphinx,
+}:
 
 buildPythonPackage rec {
   pname = "altair";
-  version = "3.0.0";
+  version = "5.2.0";
+  format = "pyproject";
+  disabled = pythonOlder "3.8";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0x4zm1xia6sln8dhwd803jlcii2a62fx3rlnj5vsa8g3anfc2v24";
+  src = fetchFromGitHub {
+    owner = "altair-viz";
+    repo = "altair";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-uTG+V0SQgAQtMjvrVvKVKgIBT9qO+26EPRxQCEXj/gc=";
   };
 
-  postPatch = ''
-    # Tests require network
-    rm altair/examples/boxplot_max_min.py altair/examples/line_percent.py
-  '';
+  nativeBuildInputs = [ hatchling ];
 
-  checkInputs = [ pytest jinja2 sphinx vega_datasets ipython glibcLocales recommonmark ];
+  propagatedBuildInputs = [
+    jinja2
+    jsonschema
+    numpy
+    packaging
+    pandas
+    toolz
+  ] ++ lib.optional (pythonOlder "3.11") typing-extensions;
 
-  propagatedBuildInputs = [ entrypoints jsonschema numpy pandas six toolz ]
-    ++ stdenv.lib.optionals (pythonOlder "3.5") [ typing ];
+  nativeCheckInputs = [
+    anywidget
+    ipython
+    sphinx
+    vega-datasets
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    export LANG=en_US.UTF-8
-    py.test altair --doctest-modules
-  '';
+  pythonImportsCheck = [ "altair" ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # Disabled because it requires internet connectivity
+    "tests/test_examples.py"
+    # TODO: Disabled because of missing altair_viewer package
+    "tests/vegalite/v5/test_api.py"
+    # avoid updating files and dependency on black
+    "tests/test_toplevel.py"
+    # require vl-convert package
+    "tests/utils/test_compiler.py"
+  ];
+
+  meta = with lib; {
     description = "A declarative statistical visualization library for Python.";
-    homepage = https://github.com/altair-viz/altair;
+    homepage = "https://altair-viz.github.io";
+    downloadPage = "https://github.com/altair-viz/altair";
+    changelog = "https://altair-viz.github.io/releases/changes.html";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ teh ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [
+      teh
+      vinetos
+    ];
   };
 }

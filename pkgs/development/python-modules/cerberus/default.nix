@@ -1,19 +1,46 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytestrunner, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  poetry-core,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  pname = "Cerberus";
-  version = "1.3";
+  pname = "cerberus";
+  version = "1.3.5";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0afhm8x812shj1fbj9jri6wcrlv0avcfis7619sl140mlhpgpzkz";
+  disabled = pythonOlder "3.9";
+
+  src = fetchFromGitHub {
+    owner = "pyeve";
+    repo = "cerberus";
+    rev = "refs/tags/${version}";
+    hash = "sha256-4sVNM4zHc9nsrntmJVdE9nm47CSF0UOJPPI9z3Z2YDc=";
   };
 
-  checkInputs = [ pytestrunner pytest ];
+  propagatedBuildInputs = [
+    poetry-core
+    setuptools
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://python-cerberus.org/;
-    description = "Lightweight, extensible schema and data validation tool for Python dictionaries";
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "cerberus" ];
+
+  disabledTestPaths = [
+    # We don't care about benchmarks
+    "cerberus/benchmarks/"
+  ];
+
+  meta = with lib; {
+    description = "Schema and data validation tool for Python dictionaries";
+    homepage = "http://python-cerberus.org/";
+    changelog = "https://github.com/pyeve/cerberus/blob/${version}/CHANGES.rst";
     license = licenses.mit;
+    maintainers = with maintainers; [ fab ];
   };
 }

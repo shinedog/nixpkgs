@@ -1,30 +1,40 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+}:
 
-buildGoPackage rec {
-  name = "cayley-${version}";
-  version = "0.6.1";
-
-  goPackagePath = "github.com/cayleygraph/cayley";
+buildGoModule rec {
+  pname = "cayley";
+  version = "0.7.7";
+  rev = "dcf764fef381f19ee49fad186b4e00024709f148";
 
   src = fetchFromGitHub {
     owner = "cayleygraph";
     repo = "cayley";
     rev = "v${version}";
-    sha256 = "1r0kw3y32bqm7g37svzrch2qj9n45p93xmsrf7dj1cg4wwkb65ry";
+    sha256 = "sha256-jIX0v6ujiQvEAb/mKkrpNgsY0YLkJYHy2sUfQnooE48=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-SSjHGJoW3I7r8emh3IwmiZQIVzdilAsA2ULdAqld2fA=";
 
-  buildFlagsArray = ''
-    -ldflags=
-      -X=main.Version=${version}
-  '';
-  
-  meta = {
-    homepage = https://cayley.io/;
-    description = "A graph database inspired by Freebase and Knowledge Graph";
-    maintainers = with stdenv.lib.maintainers; [ sigma ];
-    license = stdenv.lib.licenses.asl20;
-    platforms = stdenv.lib.platforms.unix;
+  subPackages = [ "cmd/cayley" ];
+
+  ldflags = let basename = "github.com/cayleygraph/cayley/version"; in [
+    "-s"
+    "-w"
+    "-X ${basename}.Version=${src.rev}"
+    "-X ${basename}.GitHash=${rev}"
+  ];
+
+  meta = with lib; {
+    description = "Graph database designed for ease of use and storing complex data";
+    longDescription = ''
+      Cayley is an open-source database for Linked Data. It is inspired by the
+      graph database behind Google's Knowledge Graph (formerly Freebase).
+    '';
+    homepage = "https://cayley.io/";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ sigma ];
+    mainProgram = "cayley";
   };
 }

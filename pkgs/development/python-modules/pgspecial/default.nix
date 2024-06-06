@@ -1,25 +1,51 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, psycopg2, click, sqlparse }:
+{
+  lib,
+  buildPythonPackage,
+  click,
+  configobj,
+  fetchPypi,
+  psycopg,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  sqlparse,
+}:
 
 buildPythonPackage rec {
   pname = "pgspecial";
-  version = "1.11.5";
+  version = "2.1.2";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0yvlxv9vy0hbfgf0xcwl7wh5hg6cl86arsv1ip3kvn9znn6x8kgl";
+    hash = "sha256-8EGeGzt4+zpy/jtUb2eIpxIJFTLVmf51k7X27lWoj4c=";
   };
 
-  checkInputs = [ pytest psycopg2 ];
-  propagatedBuildInputs = [ click sqlparse ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    find tests -name \*.pyc -delete
-    py.test tests
-  '';
+  dependencies = [
+    click
+    sqlparse
+    psycopg
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    configobj
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    # Test requires a Postgresql server
+    "test_slash_dp_pattern_schema"
+  ];
+
+  meta = with lib; {
     description = "Meta-commands handler for Postgres Database";
-    homepage = https://pypi.python.org/pypi/pgspecial;
+    homepage = "https://github.com/dbcli/pgspecial";
+    changelog = "https://github.com/dbcli/pgspecial/releases/tag/v${version}";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

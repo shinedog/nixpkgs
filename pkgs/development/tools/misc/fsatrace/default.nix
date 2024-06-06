@@ -1,31 +1,34 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "fsatrace-${version}";
-  version = "0.0.1-160";
+  pname = "fsatrace";
+  version = "0.0.5";
 
   src = fetchFromGitHub {
     owner = "jacereda";
     repo = "fsatrace";
-    rev = "2bf89d836e0156e68f121b0ffeedade7c9381f77";
-    sha256 = "0bndfmm0y738azwzf6m6xg6gjnrwcqlfjsampk67vga40yylwkbw";
+    rev = "5af79511828ca6cea4e5dd9f28e1676fb0b705e9";
+    "hash" = "sha256-pn07qlrRaM153znEviziuKWrkX9cLsNFCujovmE4UUA=";
   };
 
-  preConfigure = ''
-    mkdir -p $out/libexec/${name}
-    export makeFlags=INSTALLDIR=$out/libexec/${name}
+  installDir = "libexec/${pname}-${version}";
+
+  makeFlags = [ "INSTALLDIR=$(out)/$(installDir)" ];
+
+  preInstall = ''
+    mkdir -p $out/$installDir
   '';
 
   postInstall = ''
     mkdir -p $out/bin
-    ln -s $out/libexec/${name}/fsatrace $out/bin/
+    ln -s $out/$installDir/fsatrace $out/bin/fsatrace
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/jacereda/fsatrace;
+  meta = with lib; {
+    homepage = "https://github.com/jacereda/fsatrace";
     description = "filesystem access tracer";
+    mainProgram = "fsatrace";
     license = licenses.isc;
-    maintainers = [ maintainers.peti ];
     platforms = platforms.linux;
   };
 }

@@ -1,27 +1,31 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, menhir }:
+{ lib, fetchurl, buildDunePackage
+, menhir, menhirLib
+, fmt
+, qcheck
+}:
 
-stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-dolmen-${version}";
-	version = "0.2";
-	src = fetchFromGitHub {
-		owner = "Gbury";
-		repo = "dolmen";
-		rev = "v${version}";
-		sha256 = "1b9mf8p6mic0n76acx8x82hhgm2n40sdv0jri95im65l52223saf";
-	};
+buildDunePackage rec {
+  pname = "dolmen";
+  version = "0.9";
 
-	buildInputs = [ ocaml findlib ocamlbuild ];
-	propagatedBuildInputs = [ menhir ];
+  minimalOCamlVersion = "4.08";
 
-	makeFlags = "-C src";
+  src = fetchurl {
+    url = "https://github.com/Gbury/dolmen/releases/download/v${version}/dolmen-${version}.tbz";
+    hash = "sha256-AD21OFS6zDoz+lXtac95gXwQNppPfGvpRK8dzDZXigo=";
+  };
 
-	createFindlibDestdir = true;
+  nativeBuildInputs = [ menhir ];
+  propagatedBuildInputs = [ menhirLib fmt ];
 
-	meta = {
-		description = "An OCaml library providing clean and flexible parsers for input languages";
-		license = stdenv.lib.licenses.bsd2;
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (src.meta) homepage;
-		inherit (ocaml.meta) platforms;
-	};
+  doCheck = true;
+
+  checkInputs = [ qcheck ];
+
+  meta = {
+    description = "An OCaml library providing clean and flexible parsers for input languages";
+    license = lib.licenses.bsd2;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/Gbury/dolmen";
+  };
 }

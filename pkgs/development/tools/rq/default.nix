@@ -1,33 +1,36 @@
-{ stdenv, fetchFromGitHub, rustPlatform, llvmPackages, v8 }:
+{ lib, rustPlatform, fetchFromGitHub }:
 
-with rustPlatform;
-
-buildRustPackage rec {
-  name = "rq-${version}";
-  version = "0.10.4";
+rustPlatform.buildRustPackage rec {
+  pname = "rq";
+  version = "1.0.4";
 
   src = fetchFromGitHub {
     owner = "dflemstr";
-    repo = "rq";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "066f6sdy0vrp113wlg18q9p0clyrg9iqbj17ly0yn8dxr5iar002";
+    sha256 = "sha256-QyYTbMXikLSe3eYJRUALQJxUJjA6VlvaLMwGrxIKfZI=";
   };
 
-  cargoSha256 = "0c4awm1d87b396d3g3mp1md5p92i5a64a9jdawpr8mwjd0bly05m";
+  cargoSha256 = "sha256-WAgWc9rAQBjrsaHP6s3Djpg3iYmfRVC9J9yq0T/zMqA=";
 
-  buildInputs = [ llvmPackages.clang-unwrapped v8 ];
+  postPatch = ''
+    # Remove #[deny(warnings)] which is equivalent to -Werror in C.
+    # Prevents build failures when upgrading rustc, which may give more warnings.
+    substituteInPlace src/lib.rs \
+      --replace "#![deny(warnings)]" ""
 
-  configurePhase = ''
-    export LIBCLANG_PATH="${llvmPackages.clang-unwrapped}/lib"
-    export V8_SOURCE="${v8}"
+    # build script tries to get version information from git
+    # this fixes the --version output
+    rm build.rs
   '';
 
-  meta = with stdenv.lib; {
+  VERGEN_SEMVER = version;
+
+  meta = with lib; {
     description = "A tool for doing record analysis and transformation";
-    homepage = https://github.com/dflemstr/rq ;
+    mainProgram = "rq";
+    homepage = "https://github.com/dflemstr/rq";
     license = with licenses; [ asl20 ];
-    maintainers = [ maintainers.aristid ];
-    platforms = platforms.all;
-    broken = true;
+    maintainers = with maintainers; [ aristid Br1ght0ne figsoda ];
   };
 }

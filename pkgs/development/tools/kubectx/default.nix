@@ -1,53 +1,34 @@
-{ stdenv, lib, fetchFromGitHub, kubectl, makeWrapper }:
+{ lib, buildGoModule, fetchFromGitHub, installShellFiles }:
 
-with lib;
-
-stdenv.mkDerivation rec {
+buildGoModule rec {
   pname = "kubectx";
-  version = "0.6.3";
+  version = "0.9.5";
 
   src = fetchFromGitHub {
     owner = "ahmetb";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0nb867llpvjmkxv5bbqnyjrc4z74kibqg1d3dw7m47d5a5hn8525";
+    hash = "sha256-HVmtUhdMjbkyMpTgbsr5Mm286F9Q7zbc5rOxi7OBZEg=";
   };
 
-  buildInputs = [ makeWrapper ];
+  vendorHash = "sha256-3xetjviMuH+Nev12DB2WN2Wnmw1biIDAckUSGVRHQwM=";
 
-  dontBuild = true;
-  doCheck = false;
+  nativeBuildInputs = [ installShellFiles ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/share/zsh/site-functions
-    mkdir -p $out/share/bash-completion/completions
-    mkdir -p $out/share/fish/vendor_completions.d
+  ldflags = [
+    "-s"
+    "-w"
+    "-X main.version=${version}"
+  ];
 
-    cp kubectx $out/bin
-    cp kubens $out/bin
-
-    # Provide ZSH completions
-    cp completion/kubectx.zsh $out/share/zsh/site-functions/_kubectx
-    cp completion/kubens.zsh $out/share/zsh/site-functions/_kubens
-
-    # Provide BASH completions
-    cp completion/kubectx.bash $out/share/bash-completion/completions/kubectx
-    cp completion/kubens.bash $out/share/bash-completion/completions/kubens
-
-    # Provide FISH completions
-    cp completion/*.fish $out/share/fish/vendor_completions.d/
-
-    for f in $out/bin/*; do
-      wrapProgram $f --prefix PATH : ${makeBinPath [ kubectl ]}
-    done
+  postInstall = ''
+    installShellCompletion completion/*
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Fast way to switch between clusters and namespaces in kubectl!";
     license = licenses.asl20;
-    homepage = https://github.com/ahmetb/kubectx;
-    maintainers = with maintainers; [ periklis ];
-    platforms = with platforms; unix;
+    homepage = "https://github.com/ahmetb/kubectx";
+    maintainers = with maintainers; [ jlesquembre ];
   };
 }

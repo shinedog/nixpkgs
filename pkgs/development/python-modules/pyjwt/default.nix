@@ -1,23 +1,62 @@
-{ lib, buildPythonPackage, fetchPypi
-, cryptography, ecdsa
-, pytestrunner, pytestcov, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  cryptography,
+  pytestCheckHook,
+  pythonOlder,
+  sphinxHook,
+  sphinx-rtd-theme,
+  zope-interface,
+}:
 
 buildPythonPackage rec {
-  pname = "PyJWT";
-  version = "1.7.1";
+  pname = "pyjwt";
+  version = "2.8.0";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "8d59a976fb773f3e6a39c85636357c4f0e242707394cadadd9814f5cbaa20e96";
+    pname = "PyJWT";
+    inherit version;
+    hash = "sha256-V+KNFW49XBAIjgxoq7kL+sPfgrQKcb0NqiDGXM1cI94=";
   };
 
-  propagatedBuildInputs = [ cryptography ecdsa ];
+  postPatch = ''
+    sed -i '/types-cryptography/d' setup.cfg
+  '';
 
-  checkInputs = [ pytestrunner pytestcov pytest ];
+  outputs = [
+    "out"
+    "doc"
+  ];
+
+  nativeBuildInputs = [
+    setuptools
+    sphinxHook
+    sphinx-rtd-theme
+    zope-interface
+  ];
+
+  passthru.optional-dependencies.crypto = [ cryptography ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ] ++ (lib.flatten (lib.attrValues passthru.optional-dependencies));
+
+  disabledTests = [
+    # requires internet connection
+    "test_get_jwt_set_sslcontext_default"
+  ];
+
+  pythonImportsCheck = [ "jwt" ];
 
   meta = with lib; {
+    changelog = "https://github.com/jpadilla/pyjwt/blob/${version}/CHANGELOG.rst";
     description = "JSON Web Token implementation in Python";
-    homepage = https://github.com/jpadilla/pyjwt;
+    homepage = "https://github.com/jpadilla/pyjwt";
     license = licenses.mit;
     maintainers = with maintainers; [ prikhi ];
   };

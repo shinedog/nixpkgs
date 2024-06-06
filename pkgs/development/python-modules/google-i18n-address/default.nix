@@ -1,22 +1,41 @@
-{ buildPythonPackage, fetchPypi, lib, requests, pytest, pytestcov, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  hatchling,
+  requests,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "google-i18n-address";
-  version = "2.3.4";
+  version = "3.1.0";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0f1j1lp9bmllkzhciw0lxi7ipm8w461n0p97mz9714br0cs9glm1";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "mirumee";
+    repo = "google-i18n-address";
+    rev = "refs/tags/${version}";
+    hash = "sha256-dW/1wwnFDjYpym1ZaSZ7mOLpkHxsvuAHC8zBRekxWaw=";
   };
+
+  nativeBuildInputs = [ hatchling ];
 
   propagatedBuildInputs = [ requests ];
 
-  checkInputs = [ pytest pytestcov mock ];
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "i18naddress" ];
 
   meta = with lib; {
     description = "Google's i18n address data packaged for Python";
-    homepage = https://pypi.org/project/google-i18n-address/;
-    maintainers = with maintainers; [ ma27 ];
+    mainProgram = "update-validation-files";
+    homepage = "https://github.com/mirumee/google-i18n-address";
+    changelog = "https://github.com/mirumee/google-i18n-address/releases/tag/${version}";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

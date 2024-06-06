@@ -1,39 +1,73 @@
-{ stdenv, fetchurl, pkgconfig, gtk3, fribidi
-, libpng, popt, libgsf, enchant, wv, librsvg, bzip2, libjpeg, perl
-, boost, libxslt, goffice, wrapGAppsHook, gnome3
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, pkg-config
+, gtk3
+, fribidi
+, libpng
+, popt
+, libgsf
+, enchant
+, wv
+, librsvg
+, bzip2
+, libjpeg
+, perl
+, boost
+, libxslt
+, goffice
+, wrapGAppsHook3
 }:
 
 stdenv.mkDerivation rec {
-  name = "abiword-${version}";
-  version = "3.0.2";
+  pname = "abiword";
+  version = "3.0.5";
 
   src = fetchurl {
-    url = "https://www.abisource.com/downloads/abiword/${version}/source/${name}.tar.gz";
-    sha256 = "08imry821g81apdwym3gcs4nss0l9j5blqk31j5rv602zmcd9gxg";
+    url = "https://www.abisource.com/downloads/abiword/${version}/source/${pname}-${version}.tar.gz";
+    hash = "sha256-ElckfplwUI1tFFbT4zDNGQnEtCsl4PChvDJSbW86IbQ=";
   };
 
-  enableParallelBuilding = true;
-
   patches = [
-    # https://bugzilla.abisource.com/show_bug.cgi?id=13791
-    (fetchurl {
-      url = https://bugzilla.abisource.com/attachment.cgi?id=5860;
-      sha256 = "02p8kz02xm1197zcpzjs010mna9hxsbq5lwgxr8b7qhh9yxja7al";
+    # Fix build with libxml2 2.12
+    (fetchpatch {
+      url = "https://gitlab.gnome.org/World/AbiWord/-/commit/2a06be6a10a0718f8a3d8e00c317f5042c99a467.patch";
+      hash = "sha256-vfh81tGXe9dgnjcAtoWHOK8CtW7MZ75FFjnfKTkiKkk=";
     })
   ];
 
-  nativeBuildInputs = [ pkgconfig wrapGAppsHook ];
-
-  buildInputs = [
-    gtk3 librsvg bzip2 fribidi libpng popt
-    libgsf enchant wv libjpeg perl boost libxslt goffice gnome3.adwaita-icon-theme
+  nativeBuildInputs = [
+    pkg-config
+    wrapGAppsHook3
+    perl
   ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    gtk3
+    librsvg
+    bzip2
+    fribidi
+    libpng
+    popt
+    libgsf
+    enchant
+    wv
+    libjpeg
+    boost
+    libxslt
+    goffice
+  ];
+
+  strictDeps = true;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Word processing program, similar to Microsoft Word";
-    homepage = https://www.abisource.com/;
+    mainProgram = "abiword";
+    homepage = "https://www.abisource.com/";
     license = licenses.gpl3;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ pSub ylwghst ];
+    maintainers = with maintainers; [ pSub ylwghst sna ];
   };
 }

@@ -1,11 +1,31 @@
-{ fetchzip }:
+{ lib
+, stdenvNoCC
+, fetchurl
+}:
 
-fetchzip {
-  name = "libguestfs-appliance-1.38.0";
-  url = "http://libguestfs.org/download/binaries/appliance/appliance-1.38.0.tar.xz";
-  sha256 = "15rxwj5qjflizxk7slpbrj9lcwkd2lgm52f5yv101qba4yyn3g76";
+stdenvNoCC.mkDerivation rec {
+  pname = "libguestfs-appliance";
+  version = "1.46.0";
 
-  meta = {
-    hydraPlatforms = []; # Hydra fails with "Output limit exceeded"
+  src = fetchurl {
+    url = "http://download.libguestfs.org/binaries/appliance/appliance-${version}.tar.xz";
+    hash = "sha256-p1UN5wv3y+V5dFMG5yM3bVf1vaoDzQnVv9apfwC4gNg=";
+  };
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out
+    cp README.fixed initrd kernel root $out
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    description = "VM appliance disk image used in libguestfs package";
+    homepage = "https://libguestfs.org";
+    license = with licenses; [ gpl2Plus lgpl2Plus ];
+    platforms = [ "i686-linux" "x86_64-linux" ];
+    hydraPlatforms = [ ]; # Hydra fails with "Output limit exceeded"
   };
 }

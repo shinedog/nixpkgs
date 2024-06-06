@@ -1,22 +1,46 @@
-{ stdenv, fetchurl, gradle_2_5, perl, makeWrapper, jre, makeDesktopItem, writeText, runtimeShell }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, jre
+, jdk
+, gradle_6
+, makeDesktopItem
+, copyDesktopItems
+, perl
+, writeText
+, runtimeShell
+}:
 
 let
-  version = "1.4.0";
-  name = "jd-gui-${version}";
+  pname = "jd-gui";
+  version = "1.6.6";
 
-  src = fetchurl {
-    url    = "https://github.com/java-decompiler/jd-gui/archive/v${version}.tar.gz";
-    sha256 = "0anz7szlr5kgmsmkyv34jdynsnk8v6kvibcyz98jsd96fh725lax";
+  src = fetchFromGitHub {
+    owner = "java-decompiler";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-QHiZPYFwDQzbXVSuhwzQqBRXlkG9QVU+Jl6SKvBoCwQ=";
   };
 
+  patches = [
+    # https://github.com/java-decompiler/jd-gui/pull/362
+    (fetchpatch {
+      name = "nebula-plugin-gradle-6-compatibility.patch";
+      url = "https://github.com/java-decompiler/jd-gui/commit/91f805f9dc8ce0097460e63c8095ccea870687e6.patch";
+      hash = "sha256-9eaM9Mx2FaKIhGSOHjATKN/CrtvJeXyrH8Mdx8LNtpE=";
+    })
+  ];
+
   deps = stdenv.mkDerivation {
-    name = "${name}-deps";
-    inherit src;
-    nativeBuildInputs = [ gradle_2_5 perl ];
+    name = "${pname}-deps";
+    inherit src patches;
+
+    nativeBuildInputs = [ jdk perl gradle_6 ];
 
     buildPhase = ''
       export GRADLE_USER_HOME=$(mktemp -d);
-      gradle --no-daemon build
+      gradle --no-daemon jar
     '';
 
     # Mavenize dependency paths
@@ -29,7 +53,7 @@ let
 
     outputHashAlgo = "sha256";
     outputHashMode = "recursive";
-    outputHash = "1apmqiphnav79m4rdii58h7f4qslpfig4qybyyl2fr7zk92gv3l9";
+    outputHash = "sha256-gqUyZE+MoZRYCcJx95Qc4dZIC3DZvxee6UQhpfveDI4=";
   };
 
   # Point to our local deps repo
@@ -52,21 +76,23 @@ let
     }
   '';
 
-  desktopItem = launcher: makeDesktopItem {
+  desktopItem = makeDesktopItem {
     name = "jd-gui";
-    exec = "${launcher} %F";
+    exec = "jd-gui %F";
     icon = "jd-gui";
     comment = "Java Decompiler JD-GUI";
     desktopName = "JD-GUI";
     genericName = "Java Decompiler";
-    mimeType = "application/x-java-archive;application/x-java";
-    categories = "Development;Debugger;";
+    mimeTypes = [ "application/java" "application/java-vm" "application/java-archive" ];
+    categories = [ "Development" "Debugger" ];
+    startupWMClass = "org-jd-gui-App";
   };
 
 in stdenv.mkDerivation rec {
-  inherit name version src;
+  inherit pname version src patches;
+  name = "${pname}-${version}";
 
-  nativeBuildInputs = [ gradle_2_5 perl makeWrapper ];
+  nativeBuildInputs = [ jdk gradle_6 copyDesktopItems ];
 
   buildPhase = ''
     export GRADLE_USER_HOME=$(mktemp -d)
@@ -76,6 +102,8 @@ in stdenv.mkDerivation rec {
   installPhase = let
     jar = "$out/share/jd-gui/${name}.jar";
   in ''
+    runHook preInstall
+
     mkdir -p $out/bin $out/share/{jd-gui,icons/hicolor/128x128/apps}
     cp build/libs/${name}.jar ${jar}
     cp src/linux/resources/jd_icon_128.png $out/share/icons/hicolor/128x128/apps/jd-gui.png
@@ -83,18 +111,23 @@ in stdenv.mkDerivation rec {
     cat > $out/bin/jd-gui <<EOF
     #!${runtimeShell}
     export JAVA_HOME=${jre}
-    ${jre}/bin/java -jar ${jar} $@
+    exec ${jre}/bin/java -jar ${jar} "\$@"
     EOF
     chmod +x $out/bin/jd-gui
 
-    ${(desktopItem "$out/bin/jd-gui").buildCommand}
+    runHook postInstall
   '';
 
-  dontStrip = true;
+  desktopItems = [ desktopItem ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Fast Java Decompiler with powerful GUI";
-    homepage    = "http://jd.benow.ca/";
+    mainProgram = "jd-gui";
+    homepage    = "https://java-decompiler.github.io/";
+    sourceProvenance = with sourceTypes; [
+      fromSource
+      binaryBytecode  # deps
+    ];
     license     = licenses.gpl3;
     platforms   = platforms.unix;
     maintainers = [ maintainers.thoughtpolice ];

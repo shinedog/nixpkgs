@@ -1,6 +1,33 @@
-{ stdenv, lib, writeText, runCommandCC, bazel }:
+{
+  bazel
+, bazelTest
+, stdenv
+, darwin
+, extraBazelArgs ? ""
+, lib
+, runLocal
+, runtimeShell
+, writeScript
+, writeText
+, distDir
+}:
 
 let
+  toolsBazel = writeScript "bazel" ''
+    #! ${runtimeShell}
+
+    export CXX='${stdenv.cc}/bin/clang++'
+    export LD='${darwin.cctools}/bin/ld'
+    export LIBTOOL='${darwin.cctools}/bin/libtool'
+    export CC='${stdenv.cc}/bin/clang'
+
+    # XXX: hack for macosX, this flags disable bazel usage of xcode
+    # See: https://github.com/bazelbuild/bazel/issues/4231
+    export BAZEL_USE_CPP_ONLY_TOOLCHAIN=1
+
+    exec "$BAZEL_REAL" "$@"
+  '';
+
   WORKSPACE = writeText "WORKSPACE" ''
     workspace(name = "our_workspace")
   '';
@@ -22,36 +49,38 @@ let
       srcs = [ "lib.py" ],
     )
 
-    py_test(
+    py_binary(
       name = "bin",
       srcs = [ "bin.py" ],
+      imports = [ "." ],
       deps = [ ":lib" ],
     )
   '';
 
-  runLocal = name: script: runCommandCC name { preferLocalBuild = true; } script;
-
-  workspaceDir = runLocal "our_workspace" ''
+  workspaceDir = runLocal "our_workspace" {} (''
     mkdir $out
     cp ${WORKSPACE} $out/WORKSPACE
     mkdir $out/python
     cp ${pythonLib} $out/python/lib.py
     cp ${pythonBin} $out/python/bin.py
     cp ${pythonBUILD} $out/python/BUILD.bazel
-  '';
+  ''
+  + (lib.optionalString stdenv.isDarwin ''
+    mkdir $out/tools
+    cp ${toolsBazel} $out/tools/bazel
+  ''));
 
-  testBazel = runLocal "bazel-test-builtin-rules" ''
-    export HOME=$(mktemp -d)
-    # Note https://github.com/bazelbuild/bazel/issues/5763#issuecomment-456374609
-    # about why to create a subdir for the workspace.
-    cp -r ${workspaceDir} wd && chmod u+w wd && cd wd
-    ${bazel}/bin/bazel \
-      test \
-        --test_output=errors \
-        --host_javabase='@local_jdk//:jdk' \
-        //...
-
-    touch $out
-  '';
+  testBazel = bazelTest {
+    name = "${bazel.pname}-test-builtin-rules";
+    inherit workspaceDir;
+    bazelPkg = bazel;
+    bazelScript = ''
+      ${bazel}/bin/bazel \
+        run \
+        --distdir=${distDir} \
+        ${extraBazelArgs} \
+        //python:bin
+    '';
+  };
 
 in testBazel

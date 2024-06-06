@@ -1,16 +1,32 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+}:
+
 buildPythonPackage rec {
   pname = "kitchen";
-  version = "1.2.5";
+  version = "1.2.6";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "af9fbb60f68cbdb2ead402beb8fa7c7edadbe2aa7b5a70138b7c4b0fa88153fd";
+    hash = "sha256-uEz1gvG9FVa2DrxzcLnTMeuSR7awcM6J3+lZy6LAsDw=";
   };
 
-  meta = with stdenv.lib; {
+  # Waiting for upstream's clean-up
+  doCheck = false;
+
+  pythonImportsCheck = [ "kitchen" ];
+
+  meta = with lib; {
     description = "Kitchen contains a cornucopia of useful code";
-    license = licenses.lgpl2;
+    homepage = "https://github.com/fedora-infra/kitchen";
+    changelog = "https://github.com/fedora-infra/kitchen/blob/${version}/NEWS.rst";
+    license = licenses.lgpl2Only;
     maintainers = with maintainers; [ ];
   };
 }

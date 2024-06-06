@@ -1,35 +1,37 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, libcdio, pkgconfig,
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, libcdio, pkg-config,
   libiconv, IOKit, DiskArbitration}:
 
-stdenv.mkDerivation {
-  name = "libcdio-paranoia-0.94+2";
+stdenv.mkDerivation rec {
+  pname = "libcdio-paranoia";
+  version = "2.0.1";
 
   src = fetchFromGitHub {
     owner = "rocky";
     repo = "libcdio-paranoia";
-    rev = "release-10.2+0.94+2";
-    sha256 = "1wjgmmaca4baw7k5c3vdap9hnjc49ciagi5kvpvync3aqfmdvkha";
+    rev = "release-10.2+${version}";
+    hash = "sha256-kNGhhslp5noAVeho0kBVfyvb4kQpDY56nyL3a4aFgjE=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
   buildInputs = [ libcdio ] ++
-    stdenv.lib.optionals stdenv.isDarwin [ libiconv IOKit DiskArbitration ];
+    lib.optionals stdenv.isDarwin [ libiconv IOKit DiskArbitration ];
 
-  propagatedBuildInputs = stdenv.lib.optional stdenv.isDarwin DiskArbitration;
+  propagatedBuildInputs = lib.optional stdenv.isDarwin DiskArbitration;
 
-  configureFlags = stdenv.lib.optionals stdenv.isDarwin [
+  configureFlags = lib.optionals stdenv.isDarwin [
     "--disable-ld-version-script"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "CD paranoia on top of libcdio";
     longDescription = ''
       This is a port of xiph.org's cdda paranoia to use libcdio for CDROM
       access. By doing this, cdparanoia runs on platforms other than GNU/Linux.
     '';
+    homepage = "https://github.com/rocky/libcdio-paranoia";
     license = licenses.gpl3;
-    homepage = https://github.com/rocky/libcdio-paranoia;
-    platforms = platforms.linux ++ platforms.darwin;
-    maintainers = [ maintainers.pbogdan ];
+    maintainers = [ ];
+    mainProgram = "cd-paranoia";
+    platforms = platforms.unix;
   };
 }

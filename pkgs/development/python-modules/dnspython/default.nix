@@ -1,22 +1,72 @@
-{ buildPythonPackage, fetchPypi, lib }:
+{
+  lib,
+  aioquic,
+  buildPythonPackage,
+  cacert,
+  cryptography,
+  curio,
+  fetchPypi,
+  h2,
+  httpcore,
+  httpx,
+  idna,
+  hatchling,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  requests-toolbelt,
+  sniffio,
+  trio,
+}:
 
 buildPythonPackage rec {
   pname = "dnspython";
-  version = "1.16.0";
+  version = "2.6.1";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    extension = "zip";
-    sha256 = "36c5e8e38d4369a08b6780b7f27d790a292b2b08eea01607865bf0936c558e01";
+    hash = "sha256-6PD5wjp7fLmd7WTmw6bz5wHXj1DFXgArg53qciXP98w=";
   };
 
-  # needs networking for some tests
-  doCheck = false;
+  nativeBuildInputs = [ hatchling ];
 
-  meta = {
-    description = "A DNS toolkit for Python 3.x";
-    homepage = http://www.dnspython.org;
-    # BSD-like, check http://www.dnspython.org/LICENSE for details
-    license = lib.licenses.free;
+  passthru.optional-dependencies = {
+    DOH = [
+      httpx
+      h2
+      requests
+      requests-toolbelt
+      httpcore
+    ];
+    IDNA = [ idna ];
+    DNSSEC = [ cryptography ];
+    trio = [ trio ];
+    curio = [
+      curio
+      sniffio
+    ];
+    DOQ = [ aioquic ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  checkInputs = [ cacert ] ++ passthru.optional-dependencies.DNSSEC;
+
+  disabledTests = [
+    # dns.exception.SyntaxError: protocol not found
+    "test_misc_good_WKS_text"
+  ];
+
+  pythonImportsCheck = [ "dns" ];
+
+  meta = with lib; {
+    description = "A DNS toolkit for Python";
+    homepage = "https://www.dnspython.org";
+    changelog = "https://github.com/rthalley/dnspython/blob/v${version}/doc/whatsnew.rst";
+    license = with licenses; [ isc ];
+    maintainers = with maintainers; [ gador ];
   };
 }

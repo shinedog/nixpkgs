@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
   top = config.services.kubernetes;
+  otop = options.services.kubernetes;
   cfg = top.scheduler;
 in
 {
@@ -21,12 +22,13 @@ in
     extraOpts = mkOption {
       description = "Kubernetes scheduler extra command line options.";
       default = "";
-      type = str;
+      type = separatedString " ";
     };
 
     featureGates = mkOption {
       description = "List set of feature gates";
       default = top.featureGates;
+      defaultText = literalExpression "config.${otop.featureGates}";
       type = listOf str;
     };
 
@@ -41,13 +43,13 @@ in
     port = mkOption {
       description = "Kubernetes scheduler listening port.";
       default = 10251;
-      type = int;
+      type = port;
     };
 
     verbosity = mkOption {
       description = ''
         Optional glog verbosity level for logging statements. See
-        <link xlink:href="https://github.com/kubernetes/community/blob/master/contributors/devel/logging.md"/>
+        <https://github.com/kubernetes/community/blob/master/contributors/devel/logging.md>
       '';
       default = null;
       type = nullOr int;
@@ -56,37 +58,20 @@ in
   };
 
   ###### implementation
-  config =  let
-
-    schedulerPaths = filter (a: a != null) [
-      cfg.kubeconfig.caFile
-      cfg.kubeconfig.certFile
-      cfg.kubeconfig.keyFile
-    ];
-
-  in mkIf cfg.enable {
-    systemd.services.kube-scheduler = rec {
+  config = mkIf cfg.enable {
+    systemd.services.kube-scheduler = {
       description = "Kubernetes Scheduler Service";
-      wantedBy = [ "kube-control-plane-online.target" ];
+      wantedBy = [ "kubernetes.target" ];
       after = [ "kube-apiserver.service" ];
-      before = [ "kube-control-plane-online.target" ];
-      environment.KUBECONFIG = top.lib.mkKubeConfig "kube-scheduler" cfg.kubeconfig;
-      path = [ pkgs.kubectl ];
-      preStart = ''
-        until kubectl auth can-i get /api -q 2>/dev/null; do
-          echo kubectl auth can-i get /api: exit status $?
-          sleep 2
-        done
-      '';
       serviceConfig = {
         Slice = "kubernetes.slice";
         ExecStart = ''${top.package}/bin/kube-scheduler \
-          --address=${cfg.address} \
+          --bind-address=${cfg.address} \
           ${optionalString (cfg.featureGates != [])
             "--feature-gates=${concatMapStringsSep "," (feature: "${feature}=true") cfg.featureGates}"} \
-          --kubeconfig=${environment.KUBECONFIG} \
+          --kubeconfig=${top.lib.mkKubeConfig "kube-scheduler" cfg.kubeconfig} \
           --leader-elect=${boolToString cfg.leaderElect} \
-          --port=${toString cfg.port} \
+          --secure-port=${toString cfg.port} \
           ${optionalString (cfg.verbosity != null) "--v=${toString cfg.verbosity}"} \
           ${cfg.extraOpts}
         '';
@@ -96,14 +81,8 @@ in
         Restart = "on-failure";
         RestartSec = 5;
       };
-      unitConfig.ConditionPathExists = schedulerPaths;
-    };
-
-    systemd.paths.kube-scheduler = {
-      wantedBy = [ "kube-scheduler.service" ];
-      pathConfig = {
-        PathExists = schedulerPaths;
-        PathChanged = schedulerPaths;
+      unitConfig = {
+        StartLimitIntervalSec = 0;
       };
     };
 
@@ -117,4 +96,6 @@ in
 
     services.kubernetes.scheduler.kubeconfig.server = mkDefault top.apiserverAddress;
   };
+
+  meta.buildDocsInSandbox = false;
 }

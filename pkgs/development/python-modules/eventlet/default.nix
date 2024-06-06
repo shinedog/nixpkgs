@@ -1,33 +1,78 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pythonOlder
-, dnspython
-, enum34
-, greenlet
-, monotonic
-, six
-, nose
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonAtLeast,
+
+  # build-system
+  hatch-vcs,
+  hatchling,
+
+  # dependencies
+  dnspython,
+  greenlet,
+  isPyPy,
+  six,
+
+  # tests
+  iana-etc,
+  pytestCheckHook,
+  libredirect,
 }:
 
 buildPythonPackage rec {
   pname = "eventlet";
-  version = "0.24.1";
+  version = "0.35.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "d9d31a3c8dbcedbcce5859a919956d934685b17323fc80e1077cb344a2ffa68d";
+  src = fetchFromGitHub {
+    owner = "eventlet";
+    repo = "eventlet";
+    rev = "v${version}";
+    hash = "sha256-jMbCxqIn9f9+16rFwpQdkBHj6NwTNkQxnSVV4qQ1fjM=";
   };
 
-  checkInputs = [ nose ];
+  nativeBuildInputs = [
+    hatch-vcs
+    hatchling
+  ];
 
-  doCheck = false;  # too much transient errors to bother
+  propagatedBuildInputs = [
+    dnspython
+    greenlet
+    six
+  ];
 
-  propagatedBuildInputs = [ dnspython greenlet monotonic six ] ++ lib.optional (pythonOlder "3.4") enum34;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # libredirect is not available on darwin
+  # tests hang on pypy indefinitely
+  doCheck = !stdenv.isDarwin && !isPyPy;
+
+  preCheck = lib.optionalString doCheck ''
+    echo "nameserver 127.0.0.1" > resolv.conf
+    export NIX_REDIRECTS=/etc/protocols=${iana-etc}/etc/protocols:/etc/resolv.conf=$(realpath resolv.conf)
+    export LD_PRELOAD=${libredirect}/lib/libredirect.so
+
+    export EVENTLET_IMPORT_VERSION_ONLY=0
+  '';
+
+  disabledTests = [
+    # AssertionError: Expected single line "pass" in stdout
+    "test_fork_after_monkey_patch"
+    # Tests requires network access
+    "test_getaddrinfo"
+    "test_hosts_no_network"
+  ];
+
+  pythonImportsCheck = [ "eventlet" ];
 
   meta = with lib; {
-    homepage = https://pypi.python.org/pypi/eventlet/;
+    changelog = "https://github.com/eventlet/eventlet/blob/v${version}/NEWS";
     description = "A concurrent networking library for Python";
+    homepage = "https://github.com/eventlet/eventlet/";
+    license = licenses.mit;
+    maintainers = with maintainers; [ SuperSandro2000 ];
   };
-
 }

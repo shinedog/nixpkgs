@@ -1,12 +1,18 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
   top = config.services.kubernetes;
+  otop = options.services.kubernetes;
   cfg = top.controllerManager;
 in
 {
+  imports = [
+    (mkRenamedOptionModule [ "services" "kubernetes" "controllerManager" "address" ] ["services" "kubernetes" "controllerManager" "bindAddress"])
+    (mkRemovedOptionModule [ "services" "kubernetes" "controllerManager" "insecurePort" ] "")
+  ];
+
   ###### interface
   options.services.kubernetes.controllerManager = with lib.types; {
 
@@ -25,6 +31,7 @@ in
     clusterCidr = mkOption {
       description = "Kubernetes CIDR Range for Pods in cluster.";
       default = top.clusterCidr;
+      defaultText = literalExpression "config.${otop.clusterCidr}";
       type = str;
     };
 
@@ -33,19 +40,14 @@ in
     extraOpts = mkOption {
       description = "Kubernetes controller manager extra command line options.";
       default = "";
-      type = str;
+      type = separatedString " ";
     };
 
     featureGates = mkOption {
       description = "List set of feature gates";
       default = top.featureGates;
+      defaultText = literalExpression "config.${otop.featureGates}";
       type = listOf str;
-    };
-
-    insecurePort = mkOption {
-      description = "Kubernetes controller manager insecure listening port.";
-      default = 0;
-      type = int;
     };
 
     kubeconfig = top.lib.mkKubeConfigOptions "Kubernetes controller manager";
@@ -62,6 +64,7 @@ in
         service account's token secret.
       '';
       default = top.caFile;
+      defaultText = literalExpression "config.${otop.caFile}";
       type = nullOr path;
     };
 
@@ -95,7 +98,7 @@ in
     verbosity = mkOption {
       description = ''
         Optional glog verbosity level for logging statements. See
-        <link xlink:href="https://github.com/kubernetes/community/blob/master/contributors/devel/logging.md"/>
+        <https://github.com/kubernetes/community/blob/master/contributors/devel/logging.md>
       '';
       default = null;
       type = nullOr int;
@@ -104,31 +107,11 @@ in
   };
 
   ###### implementation
-  config = let
-
-    controllerManagerPaths = filter (a: a != null) [
-      cfg.kubeconfig.caFile
-      cfg.kubeconfig.certFile
-      cfg.kubeconfig.keyFile
-      cfg.rootCaFile
-      cfg.serviceAccountKeyFile
-      cfg.tlsCertFile
-      cfg.tlsKeyFile
-    ];
-
-  in mkIf cfg.enable {
-    systemd.services.kube-controller-manager = rec {
+  config = mkIf cfg.enable {
+    systemd.services.kube-controller-manager = {
       description = "Kubernetes Controller Manager Service";
-      wantedBy = [ "kube-control-plane-online.target" ];
+      wantedBy = [ "kubernetes.target" ];
       after = [ "kube-apiserver.service" ];
-      before = [ "kube-control-plane-online.target" ];
-      environment.KUBECONFIG = top.lib.mkKubeConfig "kube-controller-manager" cfg.kubeconfig;
-      preStart = ''
-        until kubectl auth can-i get /api -q 2>/dev/null; do
-          echo kubectl auth can-i get /api: exit status $?
-          sleep 2
-        done
-      '';
       serviceConfig = {
         RestartSec = "30s";
         Restart = "on-failure";
@@ -140,11 +123,10 @@ in
             "--cluster-cidr=${cfg.clusterCidr}"} \
           ${optionalString (cfg.featureGates != [])
             "--feature-gates=${concatMapStringsSep "," (feature: "${feature}=true") cfg.featureGates}"} \
-          --kubeconfig=${environment.KUBECONFIG} \
+          --kubeconfig=${top.lib.mkKubeConfig "kube-controller-manager" cfg.kubeconfig} \
           --leader-elect=${boolToString cfg.leaderElect} \
           ${optionalString (cfg.rootCaFile!=null)
             "--root-ca-file=${cfg.rootCaFile}"} \
-          --port=${toString cfg.insecurePort} \
           --secure-port=${toString cfg.securePort} \
           ${optionalString (cfg.serviceAccountKeyFile!=null)
             "--service-account-private-key-file=${cfg.serviceAccountKeyFile}"} \
@@ -161,16 +143,10 @@ in
         User = "kubernetes";
         Group = "kubernetes";
       };
-      path = top.path ++ [ pkgs.kubectl ];
-      unitConfig.ConditionPathExists = controllerManagerPaths;
-    };
-
-    systemd.paths.kube-controller-manager = {
-      wantedBy = [ "kube-controller-manager.service" ];
-      pathConfig = {
-        PathExists = controllerManagerPaths;
-        PathChanged = controllerManagerPaths;
+      unitConfig = {
+        StartLimitIntervalSec = 0;
       };
+      path = top.path;
     };
 
     services.kubernetes.pki.certs = with top.lib; {
@@ -188,4 +164,6 @@ in
 
     services.kubernetes.controllerManager.kubeconfig.server = mkDefault top.apiserverAddress;
   };
+
+  meta.buildDocsInSandbox = false;
 }

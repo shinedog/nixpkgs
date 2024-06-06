@@ -1,46 +1,57 @@
-{ stdenv
-, fetchpatch
-, buildPythonPackage
-, fetchPypi
-, swig2
-, openssl
-, typing
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  openssl,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  swig,
 }:
 
-
 buildPythonPackage rec {
-  version = "0.32.0";
-  pname = "M2Crypto";
+  pname = "m2crypto";
+  version = "0.41.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "09d3zs2ivyxbi0fa42mnan0fcplc08q2qd70p1b43sxxdbxcdj99";
+    pname = "M2Crypto";
+    inherit version;
+    hash = "sha256-OhNYx+6EkEbZF4Knd/F4a/AnocHVG1+vjxlDW/w/FJU=";
   };
 
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/void-linux/void-packages/raw/7946d12eb3d815e5ecd4578f1a6133d948694370/srcpkgs/python-M2Crypto/patches/libressl.patch";
-      sha256 = "0z5qnkndg6ma5f5qqrid5m95i9kybsr000v3fdy1ab562kf65a27";
-    })
+  build-system = [ setuptools ];
+
+  nativeBuildInputs = [ swig ];
+
+  buildInputs = [ openssl ];
+
+  env =
+    {
+      NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin (toString [
+        "-Wno-error=implicit-function-declaration"
+        "-Wno-error=incompatible-pointer-types"
+      ]);
+    }
+    // lib.optionalAttrs (stdenv.hostPlatform != stdenv.buildPlatform) {
+      CPP = "${stdenv.cc.targetPrefix}cpp";
+    };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    openssl
   ];
-  patchFlags = "-p0";
 
-  nativeBuildInputs = [ swig2 ];
-  buildInputs = [ swig2 openssl ];
+  pythonImportsCheck = [ "M2Crypto" ];
 
-  propagatedBuildInputs = [ typing ];
-
-  preConfigure = ''
-    substituteInPlace setup.py --replace "self.openssl = '/usr'" "self.openssl = '${openssl.dev}'"
-  '';
-
-  doCheck = false; # another test that depends on the network.
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Python crypto and SSL toolkit";
-    homepage = https://gitlab.com/m2crypto/m2crypto;
+    homepage = "https://gitlab.com/m2crypto/m2crypto";
+    changelog = "https://gitlab.com/m2crypto/m2crypto/-/blob/${version}/CHANGES";
     license = licenses.mit;
-    maintainers = with maintainers; [ andrew-d ];
+    maintainers = with maintainers; [ ];
   };
-
 }

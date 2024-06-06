@@ -23,7 +23,7 @@ fixDarwinDylibNames() {
     for fn in "$@"; do
         if [ -L "$fn" ]; then continue; fi
         echo "$fn: fixing dylib"
-        int_out=$(install_name_tool -id "$fn" "${flags[@]}" "$fn" 2>&1)
+        int_out=$(@targetPrefix@install_name_tool -id "$fn" "${flags[@]}" "$fn" 2>&1)
         result=$?
         if [ "$result" -ne 0 ] &&
             ! grep "shared library stub file and can't be changed" <<< "$out"
@@ -36,5 +36,5 @@ fixDarwinDylibNames() {
 
 fixDarwinDylibNamesIn() {
     local dir="$1"
-    fixDarwinDylibNames $(find "$dir" -name "*.dylib")
+    fixDarwinDylibNames $(find "$dir" -name "*.dylib" -o -name "*.so" -o -name "*.so.*")
 }

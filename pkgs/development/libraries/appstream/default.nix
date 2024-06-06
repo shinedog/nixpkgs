@@ -1,52 +1,133 @@
-{ stdenv, fetchpatch, fetchFromGitHub, meson, ninja, pkgconfig, gettext
-, xmlto, docbook_xsl, docbook_xml_dtd_45, libxslt
-, libstemmer, glib, xapian, libxml2, libyaml, gobject-introspection
-, pcre, itstool, gperf, vala
+{ lib
+, stdenv
+, substituteAll
+, fetchFromGitHub
+, meson
+, mesonEmulatorHook
+, ninja
+, pkg-config
+, cmake
+, gettext
+, xmlto
+, docbook-xsl-nons
+, docbook_xml_dtd_45
+, libxslt
+, libstemmer
+, glib
+, xapian
+, libxml2
+, libxmlb
+, libyaml
+, gobject-introspection
+, pcre
+, itstool
+, gperf
+, vala
+, curl
+, cairo
+, gdk-pixbuf
+, pango
+, librsvg
+, systemd
+, nixosTests
+, testers
+, withSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
 }:
 
-stdenv.mkDerivation rec {
-  name = "appstream-${version}";
-  version = "0.12.6";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "appstream";
+  version = "1.0.2";
+
+  outputs = [ "out" "dev" "installedTests" ];
 
   src = fetchFromGitHub {
-    owner  = "ximion";
-    repo   = "appstream";
-    rev    = "APPSTREAM_${stdenv.lib.replaceStrings ["."] ["_"] version}";
-    sha256 = "0hbl26aw3g2hag7z4di9z59qz057qcywrxpnnmp86z7rngvjbqpx";
+    owner = "ximion";
+    repo = "appstream";
+    rev = "v${finalAttrs.version}";
+    sha256 = "sha256-0NzZku6TQyyaTOAMWZD459RayhsH8cotlOaSKkVY/EQ=";
   };
 
-  nativeBuildInputs = [
-    meson ninja pkgconfig gettext
-    libxslt xmlto docbook_xsl docbook_xml_dtd_45
-    gobject-introspection itstool vala
+  patches = [
+    # Fix hardcoded paths
+    (substituteAll {
+      src = ./fix-paths.patch;
+      libstemmer_includedir = "${lib.getDev libstemmer}/include";
+    })
+
+    # Allow installing installed tests to a separate output.
+    ./installed-tests-path.patch
   ];
 
-  buildInputs = [ libstemmer pcre glib xapian libxml2 libyaml gperf ];
+  strictDeps = true;
 
-  prePatch = ''
-    substituteInPlace meson.build \
-      --replace /usr/include ${libstemmer}/include
+  depsBuildBuild = [
+    pkg-config
+  ];
 
-    substituteInPlace data/meson.build \
-      --replace /etc $out/etc
-  '';
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    cmake
+    gettext
+    libxslt
+    xmlto
+    docbook-xsl-nons
+    docbook_xml_dtd_45
+    gobject-introspection
+    itstool
+    vala
+    gperf
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
+
+  buildInputs = [
+    libstemmer
+    pcre
+    glib
+    xapian
+    libxml2
+    libxmlb
+    libyaml
+    curl
+    cairo
+    gdk-pixbuf
+    pango
+    librsvg
+  ] ++ lib.optionals withSystemd [
+    systemd
+  ];
 
   mesonFlags = [
     "-Dapidocs=false"
     "-Ddocs=false"
     "-Dvapi=true"
+    "-Dinstalled_test_prefix=${placeholder "installedTests"}"
+    "-Dcompose=true"
+  ] ++ lib.optionals (!withSystemd) [
+    "-Dsystemd=false"
   ];
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    installed-tests = nixosTests.installed-tests.appstream;
+    pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+    };
+  };
+
+  meta = with lib; {
     description = "Software metadata handling library";
-    homepage    = https://www.freedesktop.org/wiki/Distributions/AppStream/;
     longDescription = ''
       AppStream is a cross-distro effort for building Software-Center applications
       and enhancing metadata provided by software components.  It provides
       specifications for meta-information which is shipped by upstream projects and
       can be consumed by other software.
     '';
-    license     = licenses.lgpl21Plus;
-    platforms   = platforms.linux;
- };
-}
+    homepage = "https://www.freedesktop.org/wiki/Distributions/AppStream/";
+    license = licenses.lgpl21Plus;
+    mainProgram = "appstreamcli";
+    platforms = platforms.unix;
+    pkgConfigModules = [ "appstream" ];
+  };
+})

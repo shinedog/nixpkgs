@@ -1,7 +1,7 @@
-import ./make-test.nix ({ pkgs, ... }: {
+import ./make-test-python.nix ({ pkgs, ... }: {
   name = "fish";
 
-  machine =
+  nodes.machine =
     { pkgs, ... }:
 
     {
@@ -10,12 +10,17 @@ import ./make-test.nix ({ pkgs, ... }: {
         coreutils
         procps # kill collides with coreutils' to test https://github.com/NixOS/nixpkgs/issues/56432
       ];
+      # TODO: remove if/when #267880 is merged and this is a default
+      services.logrotate.enable = false;
     };
 
   testScript =
     ''
-      $machine->waitForFile("/etc/fish/generated_completions/coreutils.fish");
-      $machine->waitForFile("/etc/fish/generated_completions/kill.fish");
-      $machine->succeed("fish -ic 'echo \$fish_complete_path' | grep -q '/share/fish/completions /etc/fish/generated_completions /root/.local/share/fish/generated_completions\$'");
+      start_all()
+      machine.wait_for_file("/etc/fish/generated_completions/coreutils.fish")
+      machine.wait_for_file("/etc/fish/generated_completions/kill.fish")
+      machine.succeed(
+          "fish -ic 'echo $fish_complete_path' | grep -q '/share/fish/completions /etc/fish/generated_completions /root/.local/share/fish/generated_completions$'"
+      )
     '';
 })

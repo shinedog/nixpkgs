@@ -1,54 +1,79 @@
-{ stdenv, fetchFromGitHub, pantheon, substituteAll, meson, ninja, pkgconfig
-, vala, libgee, granite, gtk3, switchboard, pciutils, gobject-introspection }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, nix-update-script
+, meson
+, ninja
+, pkg-config
+, vala
+, libgee
+, libgtop
+, libgudev
+, libhandy
+, granite
+, gtk3
+, switchboard
+, udisks2
+, fwupd
+, appstream
+}:
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-about";
-  version = "2.5.2";
+  version = "6.2.0";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "11diwz2aj45yqkxdija8ny0sgm0wl2905gl3799cdl12ss9ffndp";
+    sha256 = "sha256-MJybc2yAchU6qMqkoRz45QdhR7bj/UFk2nyxcBivsHI=";
   };
 
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-    };
-  };
+  patches = [
+    # Add support for AppStream 1.0
+    # https://github.com/elementary/switchboard-plug-about/pull/275
+    (fetchpatch {
+      url = "https://github.com/elementary/switchboard-plug-about/commit/72d7da13da2824812908276751fd3024db2dd0f8.patch";
+      hash = "sha256-R7oW3mL77/JNqxuMiqxtdMlHWMJgGRQBBzVeRiqx8PY=";
+    })
+  ];
 
   nativeBuildInputs = [
-    gobject-introspection
     meson
     ninja
-    pkgconfig
+    pkg-config
     vala
   ];
 
   buildInputs = [
+    appstream
+    fwupd
     granite
     gtk3
     libgee
+    libgtop
+    libgudev
+    libhandy
     switchboard
+    udisks2
   ];
 
-  patches = [
-    (substituteAll {
-      src = ./lspci-path.patch;
-      inherit pciutils;
-    })
-    ./remove-update-button.patch
+  mesonFlags = [
+    # Does not play nice with the nix-snowflake logo
+    "-Dwallpaper=false"
   ];
 
-  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder ''out''}/lib/switchboard";
+  passthru = {
+    updateScript = nix-update-script { };
+  };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Switchboard About Plug";
-    homepage = https://github.com/elementary/witchboard-plug-about;
+    homepage = "https://github.com/elementary/switchboard-plug-about";
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+    maintainers = teams.pantheon.members;
   };
 
 }

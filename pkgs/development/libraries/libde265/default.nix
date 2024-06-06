@@ -1,24 +1,48 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
 
-stdenv.mkDerivation rec {
-  version = "1.0.3";
-  name = "libde265-${version}";
+, callPackage
+
+  # for passthru.tests
+, imagemagick
+, libheif
+, imlib2Full
+, gst_all_1
+}:
+
+stdenv.mkDerivation (finalAttrs: rec {
+  version = "1.0.15";
+  pname = "libde265";
 
   src = fetchFromGitHub {
     owner = "strukturag";
     repo = "libde265";
-    rev = "v${version}";
-    sha256 = "049g77f6c5sbk1h534zi9akj3y5h8zwnca5c9kqqjkn7f17irk10";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-guiLM4RNe5O0qpeCoQUbs1Z7j0wp8iK9za2+6NIB8yY=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
+
+  enableParallelBuilding = true;
+
+  passthru.tests = {
+    inherit imagemagick libheif imlib2Full;
+    inherit (gst_all_1) gst-plugins-bad;
+
+    test-corpus-decode = callPackage ./test-corpus-decode.nix {
+      libde265 = finalAttrs.finalPackage;
+    };
+  };
 
   meta = {
     homepage = "https://github.com/strukturag/libde265";
     description = "Open h.265 video codec implementation";
-    license = stdenv.lib.licenses.lgpl3;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = with stdenv.lib.maintainers; [ gebner ];
+    mainProgram = "dec265";
+    license = lib.licenses.lgpl3;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ gebner ];
   };
-
-}
+})

@@ -1,23 +1,32 @@
-{ stdenv, fetchurl, barcode, gnome3, autoreconfHook
+{ lib, stdenv, fetchurl, fetchpatch, barcode, gnome, autoreconfHook
 , gtk3, gtk-doc, libxml2, librsvg , libtool, libe-book, gsettings-desktop-schemas
-, intltool, itstool, makeWrapper, pkgconfig, hicolor-icon-theme
+, intltool, itstool, makeWrapper, pkg-config, yelp-tools, qrencode
 }:
 
 stdenv.mkDerivation rec {
-  name = "glabels-${version}";
+  pname = "glabels";
   version = "3.4.1";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/glabels/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
     sha256 = "0f2rki8i27pkd9r0gz03cdl1g4vnmvp0j49nhxqn275vi8lmgr0q";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig makeWrapper intltool ];
+  patches = [
+    # Pull patch pending upstream inclusion for -fno-common toolchain support:
+    #   https://github.com/jimevins/glabels/pull/76
+    (fetchpatch {
+      name = "fno-common.patch";
+      url = "https://github.com/jimevins/glabels/commit/f64e3f34e3631330fff2fb48ab271ff9c6160229.patch";
+      sha256 = "13q6g4bxzvzwjnvzkvijds2b6yvc4xqbdwgqnwmj65ln6ngxz8sa";
+    })
+  ];
+
+  nativeBuildInputs = [ autoreconfHook pkg-config makeWrapper intltool ];
   buildInputs = [
-    barcode gtk3 gtk-doc gnome3.yelp-tools
-    gnome3.gnome-common gsettings-desktop-schemas
-    itstool libxml2 librsvg libe-book libtool
-    hicolor-icon-theme
+    barcode gtk3 gtk-doc yelp-tools
+    gnome.gnome-common gsettings-desktop-schemas
+    itstool libxml2 librsvg libe-book libtool qrencode
   ];
 
   preFixup = ''
@@ -25,9 +34,16 @@ stdenv.mkDerivation rec {
       --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH"
   '';
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+  };
+
+  meta = with lib; {
     description = "Create labels and business cards";
-    homepage = https://glabels.org/;
+    homepage = "https://github.com/jimevins/glabels";
     license = with licenses; [ gpl3Plus lgpl3Plus ];
     platforms = platforms.unix;
     maintainers = [ maintainers.nico202 ];

@@ -1,26 +1,42 @@
-{ buildPythonPackage, fetchPypi, lib,
-  dicttoxml, pexpect, prettytable, requests_toolbelt
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+  setuptools,
+  setuptools-scm,
 }:
+
 buildPythonPackage rec {
   pname = "argcomplete";
-  version = "1.9.5";
+  version = "3.3.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "94423d1a56cdec2ef47699e02c9a48cf8827b9c4465b836c0cefb30afe85e59a";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "kislyuk";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-ekTmT6jYkC36X2e0ukwHfDGwdPg3jK8jML2naBCgNI8=";
   };
 
-  doCheck = false; # bash-completion test fails with "compgen: command not found".
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
 
-  # re-enable if we are able to make testing work
-  # buildInputs = [ coverage flake8 ];
+  # Tries to build and install test packages which fails
+  doCheck = false;
 
-  propagatedBuildInputs = [ dicttoxml pexpect prettytable requests_toolbelt ];
+  pythonImportsCheck = [ "argcomplete" ];
 
   meta = with lib; {
+    changelog = "https://github.com/kislyuk/argcomplete/blob/v${version}/Changes.rst";
     description = "Bash tab completion for argparse";
-    homepage = https://argcomplete.readthedocs.io;
-    maintainers = [ maintainers.womfoo ];
-    license = [ licenses.asl20 ];
+    downloadPage = "https://github.com/kislyuk/argcomplete";
+    homepage = "https://kislyuk.github.io/argcomplete/";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ womfoo ];
   };
 }

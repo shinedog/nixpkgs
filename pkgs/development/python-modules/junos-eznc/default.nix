@@ -1,41 +1,84 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, six
-, scp
-, pyserial
-, paramiko
-, netaddr
-, ncclient
-, lxml
-, jinja2
-, pyyaml
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  jinja2,
+  lxml,
+  mock,
+  ncclient,
+  netaddr,
+  nose2,
+  ntc-templates,
+  paramiko,
+  pyparsing,
+  pyserial,
+  pythonOlder,
+  pyyaml,
+  scp,
+  setuptools,
+  pytestCheckHook,
+  six,
+  transitions,
+  yamlordereddictloader,
 }:
 
 buildPythonPackage rec {
   pname = "junos-eznc";
-  version = "2.2.1";
+  version = "2.7.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0133a10ba3d46ddf70f0ba6620aa3b92e5533f08c57edd000dbffd8fe60d586d";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "Juniper";
+    repo = "py-junos-eznc";
+    rev = "refs/tags/${version}";
+    hash = "sha256-aoi+in5A8qSdQNY3V4S4wBBfPchR1an7G6GQHDhgxpQ=";
   };
 
+  build-system = [ setuptools ];
 
-  checkInputs = [ nose ];
-
-  propagatedBuildInputs = [
-    scp six pyserial paramiko netaddr ncclient lxml jinja2 pyyaml
+  dependencies = [
+    jinja2
+    lxml
+    ncclient
+    netaddr
+    ntc-templates
+    paramiko
+    pyparsing
+    pyserial
+    pyyaml
+    scp
+    six
+    transitions
+    yamlordereddictloader
   ];
 
-  checkPhase = ''
-    nosetests -v --with-coverage --cover-package=jnpr.junos --cover-inclusive -a unit
-  '';
+  nativeCheckInputs = [
+    mock
+    nose2
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.github.com/Juniper/py-junos-eznc;
+  pytestFlagsArray = [ "tests/unit" ];
+
+  disabledTests = [
+    # jnpr.junos.exception.FactLoopError: A loop was detected while gathering the...
+    "TestPersonality"
+    "TestGetSoftwareInformation"
+    "TestIfdStyle"
+    # KeyError: 'mac'
+    "test_textfsm_table_mutli_key"
+    # AssertionError: None != 'juniper.net'
+    "test_domain_fact_from_config"
+  ];
+
+  pythonImportsCheck = [ "jnpr.junos" ];
+
+  meta = with lib; {
     description = "Junos 'EZ' automation for non-programmers";
+    homepage = "https://github.com/Juniper/py-junos-eznc";
+    changelog = "https://github.com/Juniper/py-junos-eznc/releases/tag/${version}";
     license = licenses.asl20;
     maintainers = with maintainers; [ xnaveira ];
   };

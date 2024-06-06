@@ -1,49 +1,153 @@
-{ stdenv, fetchFromGitHub, makeWrapper, chromaprint, fetchpatch
-, fftw, flac, faad2, glibcLocales, mp4v2
-, libid3tag, libmad, libopus, libshout, libsndfile, libusb1, libvorbis
-, libGLU, libxcb, lilv, lv2, opusfile
-, pkgconfig, portaudio, portmidi, protobuf, qtbase, qtscript, qtsvg
-, qtx11extras, rubberband, scons, sqlite, taglib, upower, vampSDK
+{ lib
+, stdenv
+, mkDerivation
+, fetchFromGitHub
+, chromaprint
+, cmake
+, faad2
+, ffmpeg
+, fftw
+, flac
+, gbenchmark
+, glibcLocales
+, gtest
+, hidapi
+, lame
+, libebur128
+, libdjinterop
+, libGLU
+, libid3tag
+, libkeyfinder
+, libmad
+, libmodplug
+, libopus
+, libsecret
+, libshout
+, libsndfile
+, libusb1
+, libvorbis
+, libxcb
+, lilv
+, lv2
+, microsoft-gsl
+, mp4v2
+, opusfile
+, pcre
+, pkg-config
+, portaudio
+, portmidi
+, protobuf
+, qtbase
+, qtkeychain
+, qtscript
+, qtsvg
+, qtx11extras
+, rubberband
+, serd
+, sord
+, soundtouch
+, sratom
+, sqlite
+, taglib
+, upower
+, vamp-plugin-sdk
+, wavpack
+, wrapGAppsHook3
 }:
 
-stdenv.mkDerivation rec {
-  name = "mixxx-${version}";
-  version = "2.2.1";
+mkDerivation rec {
+  pname = "mixxx";
+  version = "2.4.1";
 
   src = fetchFromGitHub {
     owner = "mixxxdj";
     repo = "mixxx";
-    rev = "release-${version}";
-    sha256 = "1q6c2wfpprsx7s7nz1w0mhm2yhikj54jxcv61kwylxx3n5k2na9r";
+    rev = version;
+    hash = "sha256-BOdXgA+z3sFE4ngAEhSbp1gDbsti1STJY2Yy6Hp+zTE=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ cmake pkg-config wrapGAppsHook3 ];
+
+  dontWrapGApps = true;
 
   buildInputs = [
-    chromaprint fftw flac faad2 glibcLocales mp4v2 libid3tag libmad libopus libshout libsndfile
-    libusb1 libvorbis libxcb libGLU lilv lv2 opusfile pkgconfig portaudio portmidi protobuf qtbase qtscript qtsvg
-    qtx11extras rubberband scons sqlite taglib upower vampSDK
+    chromaprint
+    faad2
+    ffmpeg
+    fftw
+    flac
+    gbenchmark
+    glibcLocales
+    gtest
+    hidapi
+    lame
+    libebur128
+    libGLU
+    libid3tag
+    libdjinterop
+    libkeyfinder
+    libmad
+    libmodplug
+    libopus
+    libsecret
+    libshout
+    libsndfile
+    libusb1
+    libvorbis
+    libxcb
+    lilv
+    lv2
+    microsoft-gsl
+    mp4v2
+    opusfile
+    pcre
+    portaudio
+    portmidi
+    protobuf
+    qtbase
+    qtkeychain
+    qtscript
+    qtsvg
+    qtx11extras
+    rubberband
+    serd
+    sord
+    soundtouch
+    sratom
+    sqlite
+    taglib
+    upower
+    vamp-plugin-sdk
+    wavpack
   ];
 
-  enableParallelBuilding = true;
-
-  sconsFlags = [
-    "build=release"
-    "qtdir=${qtbase}"
-    "faad=1"
-    "opus=1"
-  ];
-
-  fixupPhase = ''
-    wrapProgram $out/bin/mixxx \
-      --set LOCALE_ARCHIVE ${glibcLocales}/lib/locale/locale-archive;
+  preFixup=''
+    qtWrapperArgs+=(--set LOCALE_ARCHIVE ${glibcLocales}/lib/locale/locale-archive ''${gappsWrapperArgs[@]})
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://mixxx.org;
+  # mixxx installs udev rules to DATADIR instead of SYSCONFDIR
+  # let's disable this and install udev rules manually via postInstall
+  # see https://github.com/mixxxdj/mixxx/blob/2.3.5/CMakeLists.txt#L1381-L1392
+  cmakeFlags = [
+    "-DINSTALL_USER_UDEV_RULES=OFF"
+  ];
+
+  postInstall = lib.optionalString stdenv.isLinux ''
+    rules="$src/res/linux/mixxx-usb-uaccess.rules"
+    if [ ! -f "$rules" ]; then
+        echo "$rules is missing, must update the Nix file."
+        exit 1
+    fi
+    mkdir -p "$out/lib/udev/rules.d"
+    cp "$rules" "$out/lib/udev/rules.d/69-mixxx-usb-uaccess.rules"
+  '';
+
+  meta = with lib; {
+    homepage = "https://mixxx.org";
     description = "Digital DJ mixing software";
+    mainProgram = "mixxx";
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.aszlig maintainers.goibhniu maintainers.bfortz ];
+    maintainers = with maintainers; [ goibhniu bfortz benley ];
     platforms = platforms.linux;
   };
 }

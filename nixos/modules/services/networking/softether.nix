@@ -5,7 +5,7 @@ with lib;
 let
   cfg = config.services.softether;
 
-  package = cfg.package.override { dataDir = cfg.dataDir; };
+  package = cfg.package.override { inherit (cfg) dataDir; };
 
 in
 {
@@ -18,14 +18,7 @@ in
 
       enable = mkEnableOption "SoftEther VPN services";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.softether;
-        defaultText = "pkgs.softether";
-        description = ''
-          softether derivation to use.
-        '';
-      };
+      package = mkPackageOption pkgs "softether" { };
 
       vpnserver.enable = mkEnableOption "SoftEther VPN Server";
 
@@ -50,7 +43,7 @@ in
       };
 
       dataDir = mkOption {
-        type = types.string;
+        type = types.path;
         default = "/var/lib/softether";
         description = ''
           Data directory for SoftEther VPN.
@@ -68,10 +61,8 @@ in
     mkMerge [{
       environment.systemPackages = [ package ];
 
-      systemd.services."softether-init" = {
+      systemd.services.softether-init = {
         description = "SoftEther VPN services initial task";
-        after = [ "keys.target" ];
-        wants = [ "keys.target" ];
         wantedBy = [ "network.target" ];
         serviceConfig = {
           Type = "oneshot";
@@ -90,7 +81,7 @@ in
       };
     }
 
-    (mkIf (cfg.vpnserver.enable) {
+    (mkIf cfg.vpnserver.enable {
       systemd.services.vpnserver = {
         description = "SoftEther VPN Server";
         after = [ "softether-init.service" ];
@@ -111,7 +102,7 @@ in
       };
     })
 
-    (mkIf (cfg.vpnbridge.enable) {
+    (mkIf cfg.vpnbridge.enable {
       systemd.services.vpnbridge = {
         description = "SoftEther VPN Bridge";
         after = [ "softether-init.service" ];
@@ -132,7 +123,7 @@ in
       };
     })
 
-    (mkIf (cfg.vpnclient.enable) {
+    (mkIf cfg.vpnclient.enable {
       systemd.services.vpnclient = {
         description = "SoftEther VPN Client";
         after = [ "softether-init.service" ];

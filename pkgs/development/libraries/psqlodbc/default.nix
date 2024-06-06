@@ -1,21 +1,26 @@
-{ stdenv, fetchurl, libiodbc, postgresql, openssl }:
+{ lib, stdenv, fetchurl, libiodbc, postgresql, openssl }:
 
 stdenv.mkDerivation rec {
-  name = "psqlodbc-09.01.0200";
+  pname = "psqlodbc";
+  version = "16.00.0000";
 
   src = fetchurl {
-    url = "https://ftp.postgresql.org/pub/odbc/versions/src/${name}.tar.gz";
-    sha256 = "0b4w1ahfpp34jpscfk2kv9050lh3xl9pvcysqvaigkcd0vsk1hl9";
+    url = "https://ftp.postgresql.org/pub/odbc/versions/src/psqlodbc-${version}.tar.gz";
+    hash = "sha256-r9iS+J0uzujT87IxTxvVvy0CIBhyxuNDHlwxCW7KTIs=";
   };
 
   buildInputs = [ libiodbc postgresql openssl ];
 
-  configureFlags = [ "--with-iodbc=${libiodbc}" ];
+  configureFlags = [
+    "--with-iodbc=${libiodbc}"
+    "--with-libpq=${lib.getDev postgresql}/bin/pg_config"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://psqlodbc.projects.postgresql.org/;
+  meta = with lib; {
+    homepage = "https://odbc.postgresql.org/";
     description = "ODBC driver for PostgreSQL";
     license = licenses.lgpl2;
     platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
   };
 }

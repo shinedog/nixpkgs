@@ -1,23 +1,32 @@
-{ stdenv, fetchFromGitHub, Foundation, readline }:
-
-with stdenv.lib;
+{ lib, stdenv, fetchFromGitHub, libuuid, cacert, Foundation, readline }:
 
 stdenv.mkDerivation rec {
-  name = "premake5-${version}";
-  version = "5.0.0-alpha12";
+  pname = "premake5";
+  version = "5.0.0-beta2";
 
   src = fetchFromGitHub {
     owner = "premake";
     repo = "premake-core";
     rev = "v${version}";
-    sha256 = "1h3hr96pdz94njn4bg02ldcz0k5j1x017d8svc7fdyvl2b77nqzf";
+    sha256 = "sha256-2R5gq4jaQsp8Ny1oGuIYkef0kn2UG9jMf20vq0714oY=";
   };
 
-  buildInputs = optionals stdenv.isDarwin [ Foundation readline ];
+  buildInputs = [ libuuid ] ++ lib.optionals stdenv.isDarwin [ Foundation readline ];
 
-  patchPhase = optional stdenv.isDarwin ''
+  patches = [ ./no-curl-ca.patch ];
+  postPatch = ''
+    substituteInPlace contrib/curl/premake5.lua \
+      --replace "ca = nil" "ca = '${cacert}/etc/ssl/certs/ca-bundle.crt'"
+  '' + lib.optionalString stdenv.isDarwin ''
     substituteInPlace premake5.lua \
-      --replace -mmacosx-version-min=10.4 -mmacosx-version-min=10.5
+      --replace -mmacosx-version-min=10.4 -mmacosx-version-min=10.5 \
+      --replace-fail '"-arch arm64"' '""' \
+      --replace-fail '"-arch x86_64"' '""'
+  '' + lib.optionalString stdenv.hostPlatform.isStatic ''
+    substituteInPlace \
+      binmodules/example/premake5.lua \
+      binmodules/luasocket/premake5.lua \
+      --replace SharedLib StaticLib
   '';
 
   buildPhase =
@@ -27,6 +36,10 @@ stdenv.mkDerivation rec {
        make -f Bootstrap.mak linux
     '';
 
+  env.NIX_CFLAGS_COMPILE = toString (lib.optionals stdenv.cc.isClang [
+    "-Wno-error=implicit-function-declaration"
+  ]);
+
   installPhase = ''
     install -Dm755 bin/release/premake5 $out/bin/premake5
   '';
@@ -35,9 +48,10 @@ stdenv.mkDerivation rec {
   setupHook = ./setup-hook.sh;
 
   meta = {
-    homepage = https://premake.github.io;
+    homepage = "https://premake.github.io";
     description = "A simple build configuration and project generation tool using lua";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = platforms.darwin ++ platforms.linux;
+    mainProgram = "premake5";
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.darwin ++ lib.platforms.linux;
   };
 }

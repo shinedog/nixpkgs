@@ -1,6 +1,6 @@
-import ./make-test.nix ({ pkgs, ...} : {
+import ./make-test-python.nix ({ pkgs, ...} : {
   name = "postgis";
-  meta = with pkgs.stdenv.lib.maintainers; {
+  meta = with pkgs.lib.maintainers; {
     maintainers = [ lsix ];
   };
 
@@ -9,10 +9,10 @@ import ./make-test.nix ({ pkgs, ...} : {
       { pkgs, ... }:
 
       {
-        services.postgresql = let mypg = pkgs.postgresql_11; in {
+        services.postgresql = {
             enable = true;
-            package = mypg;
-            extraPlugins = with mypg.pkgs; [
+            package = pkgs.postgresql;
+            extraPlugins = ps: with ps; [
               postgis
             ];
         };
@@ -20,10 +20,11 @@ import ./make-test.nix ({ pkgs, ...} : {
   };
 
   testScript = ''
-    startAll;
-    $master->waitForUnit("postgresql");
-    $master->sleep(10); # Hopefully this is long enough!!
-    $master->succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis;'");
-    $master->succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis_topology;'");
+    start_all()
+    master.wait_for_unit("postgresql")
+    master.sleep(10)  # Hopefully this is long enough!!
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis;'")
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis_raster;'")
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis_topology;'")
   '';
 })

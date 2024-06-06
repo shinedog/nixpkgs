@@ -1,35 +1,59 @@
-{ stdenv, fetchurl, pkgconfig, intltool, libtool, libxml2, libcanberra-gtk3, gnome3, gtk3, mate, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, libtool
+, gtk-layer-shell
+, gtk3
+, libcanberra-gtk3
+, libmatemixer
+, libxml2
+, mate-desktop
+, mate-panel
+, wayland
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-media-${version}";
-  version = "1.22.1";
+  pname = "mate-media";
+  version = "1.28.1";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "13g1n2ddgr1yxgl4fsqj3sgb9344b756kam9v3sq6vh0bxlr4yf2";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "vNwQLiL2P1XmMWbVxwjpHBE1cOajCodDRaiGCeg6mRI=";
   };
 
-  buildInputs = [
-    libxml2
-    libcanberra-gtk3
-    gtk3
-    mate.libmatemixer
-    mate.mate-panel
-    mate.mate-desktop
-  ];
-
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     libtool
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    gtk-layer-shell
+    gtk3
+    libcanberra-gtk3
+    libmatemixer
+    libxml2
+    mate-desktop
+    mate-panel
+    wayland
+  ];
+
+  configureFlags = [ "--enable-in-process" ];
+
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Media tools for MATE";
-    homepage = https://mate-desktop.org;
-    license = licenses.gpl3;
+    homepage = "https://mate-desktop.org";
+    license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo maintainers.chpatrick ];
+    maintainers = teams.mate.members ++ (with maintainers; [ chpatrick ]);
   };
 }

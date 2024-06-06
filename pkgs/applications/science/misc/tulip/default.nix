@@ -1,18 +1,31 @@
-{ fetchurl, stdenv, libxml2, freetype, libGLU_combined, glew, qt4
-, cmake, makeWrapper, libjpeg, python }:
+{ lib, stdenv, fetchurl, libxml2, freetype, libGLU, libGL, glew
+, qtbase, wrapQtAppsHook, autoPatchelfHook, python3
+, cmake, libjpeg, llvmPackages }:
 
-let version = "5.1.0"; in
 stdenv.mkDerivation rec {
-  name = "tulip-${version}";
+  pname = "tulip";
+  version = "5.7.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/auber/${name}_src.tar.gz";
-    sha256 = "1i70y8b39gkpxfalr9844pa3l4bnnyw5y7ngxdqibil96k2b9q9h";
+    url = "mirror://sourceforge/auber/tulip-${version}_src.tar.gz";
+    hash = "sha256-7z21WkPi1v2AGishDmXZPAedMjgXPRnpUiHTzEnc5LY=";
   };
 
-  buildInputs = [ libxml2 freetype glew libGLU_combined qt4 libjpeg python ];
+  nativeBuildInputs = [ cmake wrapQtAppsHook ]
+    ++ lib.optionals stdenv.isLinux [ autoPatchelfHook ];
 
-  nativeBuildInputs = [ cmake makeWrapper ];
+  buildInputs = [ libxml2 freetype glew libjpeg qtbase python3 ]
+    ++ lib.optionals stdenv.isDarwin [ llvmPackages.openmp ]
+    ++ lib.optionals stdenv.isLinux [ libGLU libGL ];
+
+  qtWrapperArgs = [ ''--prefix PATH : ${lib.makeBinPath [ python3 ]}'' ];
+
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin (toString [
+    # fatal error: 'Python.h' file not found
+    "-I${python3}/include/${python3.libPrefix}"
+    # error: format string is not a string literal (potentially insecure)
+    "-Wno-format-security"
+  ]);
 
   # FIXME: "make check" needs Docbook's DTD 4.4, among other things.
   doCheck = false;
@@ -28,11 +41,11 @@ stdenv.mkDerivation rec {
          data that can be tailored to the problems he or she is addressing.
       '';
 
-    homepage = http://tulip.labri.fr/;
+    homepage = "http://tulip.labri.fr/";
 
-    license = stdenv.lib.licenses.gpl3Plus;
+    license = lib.licenses.gpl3Plus;
 
     maintainers = [ ];
-    platforms = stdenv.lib.platforms.gnu ++ stdenv.lib.platforms.linux;  # arbitrary choice
+    platforms = lib.platforms.all;
   };
 }

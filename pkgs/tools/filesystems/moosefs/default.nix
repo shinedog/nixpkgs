@@ -1,41 +1,57 @@
-{ stdenv
-, fetchzip
+{ lib, stdenv
 , fetchFromGitHub
-, makeWrapper
-, python
+, python3
 , fuse
-, pkgconfig
+, pkg-config
 , libpcap
-, file
-, zlib 
+, zlib
 }:
 
 stdenv.mkDerivation rec {
   pname = "moosefs";
-  version = "3.0.104";
+  version = "3.0.117";
 
   src = fetchFromGitHub {
     owner = pname;
     repo = pname;
     rev = "v${version}";
-    sha256 = "057xg7zy872w4hczk9b9ckmqyah3qhgysvxddqizr204cyadicxh";
+    sha256 = "sha256-6zBMAi9ruPPlcnpdgqwl35QZ5u4MyFPUa70yvGTkHpo=";
   };
 
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
+  nativeBuildInputs = [
+    pkg-config
+  ];
 
   buildInputs =
-    [ fuse libpcap zlib ];
+    [ fuse libpcap zlib python3 ];
 
-  postInstall = ''
-    wrapProgram $out/sbin/mfscgiserv \
-        --prefix PATH ":" "${python}/bin"
+  strictDeps = true;
+
+  buildFlags = lib.optionals stdenv.isDarwin [ "CPPFLAGS=-UHAVE_STRUCT_STAT_ST_BIRTHTIME" ];
+
+  # Fix the build on macOS with macFUSE installed
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace configure --replace \
+      "/usr/local/lib/pkgconfig" "/nonexistent"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://moosefs.com;
+  preBuild = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace config.h --replace \
+      "#define HAVE_STRUCT_STAT_ST_BIRTHTIME 1" \
+      "#undef HAVE_STRUCT_STAT_ST_BIRTHTIME"
+  '';
+
+  postInstall = ''
+    substituteInPlace $out/sbin/mfscgiserv --replace "datapath=\"$out" "datapath=\""
+  '';
+
+  doCheck = true;
+
+  meta = with lib; {
+    homepage = "https://moosefs.com";
     description = "Open Source, Petabyte, Fault-Tolerant, Highly Performing, Scalable Network Distributed File System";
-    platforms = platforms.linux;
-    license = licenses.gpl2;
+    platforms = platforms.unix;
+    license = licenses.gpl2Only;
     maintainers = [ maintainers.mfossen ];
   };
 }

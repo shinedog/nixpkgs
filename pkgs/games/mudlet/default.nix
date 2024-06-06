@@ -1,46 +1,159 @@
-{ fetchurl, unzip, stdenv, makeWrapper, qtbase, yajl, libzip, hunspell
-, boost, lua5_1, luafilesystem, luazip, lrexlib, luasqlite3, qmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, git
+, pkg-config
+, qttools
+, which
+, wrapQtAppsHook
+, boost
+, hunspell
+, libGLU
+, libsForQt5
+, libsecret
+, libzip
+, lua
+, pcre
+, pugixml
+, qtbase
+, qtmultimedia
+, discord-rpc
+, yajl
+, AppKit
+}:
 
+let
+  overrideLua =
+    let
+      packageOverrides = self: super: {
+        # luasql-sqlite3 master branch broke compatibility with lua 5.1. Pin to
+        # an earlier commit.
+        # https://github.com/lunarmodules/luasql/issues/147
+        luasql-sqlite3 = super.luaLib.overrideLuarocks super.luasql-sqlite3
+          (drv: {
+            version = "2.6.0-1-custom";
+            src = fetchFromGitHub {
+              owner = "lunarmodules";
+              repo = "luasql";
+              rev = "8c58fd6ee32faf750daf6e99af015a31402578d1";
+              hash = "sha256-XlTB5O81yWCrx56m0cXQp7EFzeOyfNeqGbuiYqMrTUk=";
+            };
+          });
+      };
+    in
+    lua.override { inherit packageOverrides; };
+
+  luaEnv = overrideLua.withPackages (ps: with ps; [
+    luazip
+    luafilesystem
+    lrexlib-pcre
+    luasql-sqlite3
+    lua-yajl
+    luautf8
+  ]);
+in
 stdenv.mkDerivation rec {
-  name = "mudlet-${version}";
-  version = "3.0.0-delta";
+  pname = "mudlet";
+  version = "4.17.2";
 
-  src = fetchurl {
-    url = "https://github.com/Mudlet/Mudlet/archive/Mudlet-${version}.tar.gz";
-    sha256 = "08fhqd323kgz5s17ac5z9dhkjxcmwvcmvhzy0x1vw4rayhijfrd7";
+  src = fetchFromGitHub {
+    owner = "Mudlet";
+    repo = "Mudlet";
+    rev = "Mudlet-${version}";
+    fetchSubmodules = true;
+    hash = "sha256-K75frptePKfHeGQNXaX4lKsLwO6Rs6AAka6hvP8MA+k=";
   };
 
-  nativeBuildInputs = [ makeWrapper qmake ];
-  buildInputs = [
-    unzip qtbase lua5_1 hunspell libzip yajl boost
-    luafilesystem luazip lrexlib luasqlite3
+  patches = [
+    (fetchpatch {
+      name = "darwin-AppKit.patch";
+      url = "https://github.com/Mudlet/Mudlet/commit/68cdd404f81a6d16c80068c45fe0f10802f08d9e.patch";
+      hash = "sha256-74FtcjOR/lu9ohtcoup0+gUfCQRznO48zMmb97INhdY=";
+    })
   ];
 
-  preConfigure = "cd src";
+  nativeBuildInputs = [
+    cmake
+    git
+    pkg-config
+    qttools
+    which
+    wrapQtAppsHook
+  ];
 
-  installPhase = let
-    luaZipPath = "${luazip}/lib/lua/5.1/?.so";
-    luaFileSystemPath = "${luafilesystem}/lib/lua/5.1/?.so";
-    lrexlibPath = "${lrexlib}/lib/lua/5.1/?.so";
-    luasqlitePath = "${luasqlite3}/lib/lua/5.1/?.so";
-  in ''
+  buildInputs = [
+    boost
+    hunspell
+    libGLU
+    libsForQt5.qtkeychain
+    libsecret
+    libzip
+    luaEnv
+    pcre
+    pugixml
+    qtbase
+    qtmultimedia
+    yajl
+    discord-rpc
+  ] ++ lib.optional stdenv.isDarwin [
+    AppKit
+  ];
+
+  cmakeFlags = [
+    # RPATH of binary /nix/store/.../bin/... contains a forbidden reference to /build/
+    "-DCMAKE_SKIP_BUILD_RPATH=ON"
+  ];
+
+  WITH_FONTS = "NO";
+  WITH_UPDATER = "NO";
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -pv $out/lib
+    cp 3rdparty/edbee-lib/edbee-lib/qslog/lib/libQsLog${stdenv.hostPlatform.extensions.sharedLibrary} $out/lib
+    mkdir -pv $out/share/mudlet
+    cp -r ../src/mudlet-lua/lua $out/share/mudlet/
+
+    mkdir -pv $out/share/pixmaps
+    cp -r ../mudlet.png $out/share/pixmaps/
+
+    cp -r ../translations $out/share/
+
+  '' + lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/Applications
+    cp -r src/mudlet.app/ $out/Applications/mudlet.app
+    mv $out/Applications/mudlet.app/Contents/MacOS/mudlet $out/Applications/mudlet.app/Contents/MacOS/mudlet-unwrapped
+    makeQtWrapper $out/Applications/Mudlet.app/Contents/MacOS/mudlet-unwrapped $out/Applications/Mudlet.app/Contents/MacOS/mudlet \
+      --set LUA_CPATH "${luaEnv}/lib/lua/${lua.luaversion}/?.so" \
+      --prefix LUA_PATH : "$NIX_LUA_PATH" \
+      --prefix DYLD_LIBRARY_PATH : "${lib.makeLibraryPath [ libsForQt5.qtkeychain discord-rpc ]}:$out/lib" \
+      --chdir "$out";
+
+  '' + lib.optionalString (!stdenv.isDarwin) ''
     mkdir -pv $out/bin
-    cp mudlet $out
-    cp -r mudlet-lua $out
+    cp src/mudlet $out/bin/mudlet-unwrapped
+    makeQtWrapper $out/bin/mudlet-unwrapped $out/bin/mudlet \
+      --set LUA_CPATH "${luaEnv}/lib/lua/${lua.luaversion}/?.so" \
+      --prefix LUA_PATH : "$NIX_LUA_PATH" \
+      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ libsForQt5.qtkeychain discord-rpc ]}" \
+      --chdir "$out";
 
-    makeWrapper $out/mudlet $out/bin/mudlet \
-      --set LUA_CPATH "${luaFileSystemPath};${luaZipPath};${lrexlibPath};${luasqlitePath}" \
-      --run "cd $out";
+    mkdir -pv $out/share/applications
+    cp ../mudlet.desktop $out/share/applications/
+
+  '' + ''
+    runHook postInstall
   '';
 
-  patches = [ ./libs.patch ];
-
-  meta = {
+  meta = with lib; {
     description = "Crossplatform mud client";
-    homepage = http://mudlet.org/;
-    maintainers = [ stdenv.lib.maintainers.wyvie ];
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.gpl2;
-    broken = true;
+    homepage = "https://www.mudlet.org/";
+    maintainers = with maintainers; [ wyvie pstn cpu felixalbrigtsen ];
+    platforms = platforms.linux ++ platforms.darwin;
+    license = licenses.gpl2Plus;
+    mainProgram = "mudlet";
   };
 }

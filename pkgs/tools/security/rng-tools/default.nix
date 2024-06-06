@@ -1,66 +1,87 @@
-{ stdenv, fetchFromGitHub, libtool, autoreconfHook, pkgconfig
-, sysfsutils
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, libtool
+, pkg-config
+, psmisc
+, argp-standalone
+, openssl
+, libcap
+, jitterentropy, withJitterEntropy ? true
   # WARNING: DO NOT USE BEACON GENERATED VALUES AS SECRET CRYPTOGRAPHIC KEYS
   # https://www.nist.gov/programs-projects/nist-randomness-beacon
-, curl ? null, libxml2 ? null, openssl ? null, withNistBeacon ? false
-  # Systems that support RDRAND but not AES-NI require libgcrypt to use RDRAND as an entropy source
-, libgcrypt ? null, withGcrypt ? true
-  # Not sure if jitterentropy is safe to use for cryptography
-  # and thus a default entropy source
-, jitterentropy ? null, withJitterEntropy ? false
-, libp11 ? null, opensc ? null, withPkcs11 ? true
+, curl, jansson, libxml2, withNistBeacon ? false
+, libp11, opensc, withPkcs11 ? true
+, rtl-sdr, withRtlsdr ? true
+, withQrypt ? false
 }:
-
-with stdenv.lib;
 
 stdenv.mkDerivation rec {
   pname = "rng-tools";
-  version = "6.7";
+  version = "6.17";
 
   src = fetchFromGitHub {
     owner = "nhorman";
-    repo = "rng-tools";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "19f75m6mzg8h7b4snzg7d6ypvkz6nq32lrpi9ja95gqz4wsd18a5";
+    hash = "sha256-wqJvLvxmNG2nb5P525w25Y8byUUJi24QIHNJomCKeG8=";
   };
 
-  postPatch = ''
-    cp README.md README
-
-    ${optionalString withPkcs11 ''
-      substituteInPlace rngd.c \
-        --replace /usr/lib64/opensc-pkcs11.so ${opensc}/lib/opensc-pkcs11.so
-    ''}
-  '';
-
-  nativeBuildInputs = [ autoreconfHook libtool pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook libtool pkg-config ];
 
   configureFlags = [
-    (withFeature   withGcrypt        "libgcrypt")
-    (enableFeature withJitterEntropy "jitterentropy")
-    (withFeature   withNistBeacon    "nistbeacon")
-    (withFeature   withPkcs11        "pkcs11")
+    (lib.enableFeature (withJitterEntropy) "jitterentropy")
+    (lib.withFeature   (withNistBeacon)    "nistbeacon")
+    (lib.withFeature   (withPkcs11)        "pkcs11")
+    (lib.withFeature   (withRtlsdr)        "rtlsdr")
+    (lib.withFeature   (withQrypt)         "qrypt")
   ];
 
-  buildInputs = [ sysfsutils ]
-    ++ optionals withGcrypt        [ libgcrypt ]
-    ++ optionals withJitterEntropy [ jitterentropy ]
-    ++ optionals withNistBeacon    [ curl libxml2 openssl ]
-    ++ optionals withPkcs11        [ libp11 openssl ];
-
-  # This shouldn't be necessary but is as of 6.7
-  NIX_LDFLAGS = optionalString withPkcs11 "-lcrypto";
+  buildInputs = [ openssl libcap ]
+    ++ lib.optionals stdenv.hostPlatform.isMusl [ argp-standalone ]
+    ++ lib.optionals withJitterEntropy [ jitterentropy ]
+    ++ lib.optionals withNistBeacon    [ curl jansson libxml2 ]
+    ++ lib.optionals withPkcs11        [ libp11 libp11.passthru.openssl ]
+    ++ lib.optionals withRtlsdr        [ rtl-sdr ]
+    ++ lib.optionals withQrypt         [ curl jansson ];
 
   enableParallelBuilding = true;
 
-  # For cross-compilation
-  makeFlags = [ "AR:=$(AR)" ];
+  makeFlags = [
+    "AR:=$(AR)" # For cross-compilation
+  ] ++ lib.optionals withPkcs11 [
+    "PKCS11_ENGINE=${opensc}/lib/opensc-pkcs11.so" # Overrides configure script paths
+  ];
 
-  meta = {
+  doCheck = true;
+  preCheck = ''
+    patchShebangs tests/*.sh
+    export RNGD_JITTER_TIMEOUT=10
+  '';
+  # After updating to jitterentropy 3.4.1 jitterentropy initialization seams
+  # to have increased. On some system rng-tools fail therefore to initialize the
+  # jitterentropy entropy source. You can increase the init timeout with a command-line
+  # option (-O jitter:timeout:SECONDS). The environment variable above only has effect
+  # for the test cases.
+  # Patching the timeout to a larger value was declined upstream,
+  # see (https://github.com/nhorman/rng-tools/pull/178).
+  nativeCheckInputs = [ psmisc ]; # rngtestjitter.sh needs killall
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    runHook preInstallCheck
+    set -o pipefail
+    $out/bin/rngtest --version | grep $version
+    runHook postInstallCheck
+  '';
+
+  meta = with lib; {
     description = "A random number generator daemon";
-    homepage = https://github.com/nhorman/rng-tools;
+    homepage = "https://github.com/nhorman/rng-tools";
+    changelog = "https://github.com/nhorman/rng-tools/releases/tag/v${version}";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ johnazoidberg ];
+    maintainers = with maintainers; [ johnazoidberg c0bw3b ];
   };
 }

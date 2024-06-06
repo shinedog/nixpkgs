@@ -1,31 +1,86 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, pytest, setuptools, structlog, pytest-asyncio, pytest_xdist, flaky, tornado, pycurl }:
+{
+  lib,
+  platformdirs,
+  buildPythonPackage,
+  docutils,
+  fetchFromGitHub,
+  flaky,
+  installShellFiles,
+  pycurl,
+  pytest-asyncio,
+  pytest-httpbin,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  structlog,
+  tomli,
+  tornado,
+  awesomeversion,
+  packaging,
+  lxml,
+}:
 
 buildPythonPackage rec {
   pname = "nvchecker";
-  version = "1.4.3";
+  version = "2.14.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0v340wkq4sn9pvcpjh076l8mcqkn3nrn7if8p6iysk02bjxvknbv";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "lilydjwg";
+    repo = "nvchecker";
+    rev = "v${version}";
+    hash = "sha256-V2lTGeaiwUsh8IONbZ5GQrqevJMhjeuFLTDF8UdWg8Q=";
   };
 
-  propagatedBuildInputs = [ setuptools structlog tornado pycurl ];
-  checkInputs = [ pytest pytest-asyncio pytest_xdist flaky ];
+  nativeBuildInputs = [
+    setuptools
+    docutils
+    installShellFiles
+  ];
 
-  # Disable tests for now, because our version of pytest seems to be too new
-  # https://github.com/lilydjwg/nvchecker/commit/42a02efec84824a073601e1c2de30339d251e4c7
-  doCheck = false;
+  propagatedBuildInputs = [
+    structlog
+    platformdirs
+    tornado
+    pycurl
+  ] ++ lib.optionals (pythonOlder "3.11") [ tomli ];
 
-  checkPhase = ''
-    py.test
+  __darwinAllowLocalNetworking = true;
+
+  nativeCheckInputs = [
+    flaky
+    pytest-asyncio
+    pytest-httpbin
+    pytestCheckHook
+  ];
+
+  postBuild = ''
+    patchShebangs docs/myrst2man.py
+    make -C docs man
   '';
 
-  disabled = pythonOlder "3.5";
+  postInstall = ''
+    installManPage docs/_build/man/nvchecker.1
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/lilydjwg/nvchecker;
+  pythonImportsCheck = [ "nvchecker" ];
+
+  pytestFlagsArray = [ "-m 'not needs_net'" ];
+
+  optional-dependencies = {
+    # vercmp = [ pyalpm ];
+    awesomeversion = [ awesomeversion ];
+    pypi = [ packaging ];
+    htmlparser = [ lxml ];
+  };
+
+  meta = with lib; {
     description = "New version checker for software";
+    homepage = "https://github.com/lilydjwg/nvchecker";
+    changelog = "https://github.com/lilydjwg/nvchecker/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ marsam ];
+    maintainers = with maintainers; [ ];
   };
 }

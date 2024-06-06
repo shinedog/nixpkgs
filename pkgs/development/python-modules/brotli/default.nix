@@ -1,26 +1,35 @@
-{ lib, buildPythonPackage, fetchFromGitHub, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "brotli";
-  version = "1.0.7";
+  version = "1.1.0";
+  format = "setuptools";
 
-  # PyPI doesn't contain tests so let's use GitHub
   src = fetchFromGitHub {
     owner = "google";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "1811b55wdfg4kbsjcgh1kc938g118jpvif97ilgrmbls25dfpvvw";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-MvceRcle2dSkkucC2PlsCizsIf8iv95d8Xjqew266wc=";
+    # .gitattributes is not correct or GitHub does not parse it correct and the archive is missing the test data
+    forceFetchGit = true;
   };
 
-  checkInputs = [ pytest ];
+  # only returns information how to really build
+  dontConfigure = true;
 
-  checkPhase = ''
-    pytest python/tests
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = {
-    homepage = https://github.com/google/brotli;
+  pytestFlagsArray = [ "python/tests" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/google/brotli";
     description = "Generic-purpose lossless compression algorithm";
-    license = lib.licenses.mit;
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

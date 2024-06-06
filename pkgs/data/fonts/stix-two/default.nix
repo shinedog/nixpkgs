@@ -1,21 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  version = "2.0.0";
-in fetchzip {
-  name = "stix-two-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "stix-two";
+  version = "2.13";
 
-  url = "mirror://sourceforge/stixfonts/Current%20Release/STIXv${version}.zip";
+  src = fetchzip {
+    url = "https://github.com/stipub/stixfonts/raw/v${version}/zipfiles/STIX${builtins.replaceStrings [ "." ] [ "_" ] version}-all.zip";
+    stripRoot = false;
+    hash = "sha256-hfQmrw7HjlhQSA0rVTs84i3j3iMVR0k7tCRBcB6hEpU=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts
-    unzip -j $downloadedFile \*.otf -d $out/share/fonts/opentype
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 */*.otf -t $out/share/fonts/opentype
+    install -Dm644 */*.ttf -t $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
-  sha256 = "19i30d2xjk52bjj7xva1hnlyh58yd5phas1njcc8ldcz87a1lhql";
-
-  meta = with stdenv.lib; {
-    homepage = http://www.stixfonts.org/;
+  meta = with lib; {
+    homepage = "https://www.stixfonts.org/";
     description = "Fonts for Scientific and Technical Information eXchange";
     license = licenses.ofl;
     platforms = platforms.all;

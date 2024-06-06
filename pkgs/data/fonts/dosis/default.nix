@@ -1,19 +1,26 @@
-{ stdenv, fetchzip}:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-fetchzip rec {
-  name = "dosis-1.007";
+stdenvNoCC.mkDerivation rec {
+  pname = "dosis";
+  version = "1.007";
 
-  url = https://github.com/impallari/Dosis/archive/12df1e13e58768f20e0d48ff15651b703f9dd9dc.zip;
+  src = fetchFromGitHub {
+    owner = "impallari";
+    repo = "Dosis";
+    rev = "12df1e13e58768f20e0d48ff15651b703f9dd9dc";
+    hash = "sha256-rZ49uNBlI+NWkiZykpyXzOonXlbVB6Vf6a/8A56Plj4=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/{doc,fonts}
-    unzip -j $downloadedFile \*.otf                    -d $out/share/fonts/opentype
-    unzip -j $downloadedFile \*README.md \*FONTLOG.txt -d "$out/share/doc/${name}"
+  installPhase = ''
+    runHook preInstall
+
+    find . -name '*.otf' -exec install -m444 -Dt $out/share/fonts/opentype {} \;
+    install -m444 -Dt $out/share/doc/${pname}-${version} README.md FONTLOG.txt
+
+    runHook postInstall
   '';
 
-  sha256 = "11a8jmgaly14l7rm3jxkwwv3ngr8fdlkp70nicjk2rg0nny2cvfq";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A very simple, rounded, sans serif family";
     longDescription = ''
       Dosis is a very simple, rounded, sans serif family.
@@ -26,7 +33,7 @@ fetchzip rec {
       It comes in 7 incremental weights: ExtraLight, Light, Book, Medium,
       Semibold, Bold & ExtraBold
     '';
-    homepage = http://www.impallari.com/dosis;
+    homepage = "http://www.impallari.com/dosis";
     license = licenses.ofl;
     maintainers = with maintainers; [ cmfwyp ];
     platforms = platforms.all;

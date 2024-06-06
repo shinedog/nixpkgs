@@ -1,27 +1,28 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, alsaLib ? null, fftwFloat, fltk13
-, fluidsynth_1 ? null, lame ? null, libgig ? null, libjack2 ? null, libpulseaudio ? null
+{ lib, fetchFromGitHub, fetchpatch, cmake, pkg-config, alsa-lib ? null, carla ? null, fftwFloat, fltk13
+, fluidsynth ? null, lame ? null, libgig ? null, libjack2 ? null, libpulseaudio ? null
 , libsamplerate, libsoundio ? null, libsndfile, libvorbis ? null, portaudio ? null
-, qtbase, qtx11extras, qttools, SDL ? null }:
+, qtbase, qtx11extras, qttools, SDL ? null, mkDerivation }:
 
-stdenv.mkDerivation rec {
-  name = "lmms-${version}";
-  version = "1.2.0-rc7";
+mkDerivation rec {
+  pname = "lmms";
+  version = "1.2.2";
 
   src = fetchFromGitHub {
     owner = "LMMS";
     repo = "lmms";
     rev = "v${version}";
-    sha256 = "1hshzf2sbdfw37y9rz1ksgvn81kp2n23dp74lsaasc2n7wzjwdis";
+    sha256 = "006hwv1pbh3y5whsxkjk20hsbgwkzr4dawz43afq1gil69y7xpda";
     fetchSubmodules = true;
   };
 
-  nativeBuildInputs = [ cmake qttools pkgconfig ];
+  nativeBuildInputs = [ cmake qttools pkg-config ];
 
   buildInputs = [
-    alsaLib
+    carla
+    alsa-lib
     fftwFloat
     fltk13
-    fluidsynth_1
+    fluidsynth
     lame
     libgig
     libjack2
@@ -36,14 +37,21 @@ stdenv.mkDerivation rec {
     SDL # TODO: switch to SDL2 in the next version
   ];
 
-  cmakeFlags = [ "-DWANT_QT5=ON" ];
-  enableParallelBuilding = true;
+  patches = [
+    (fetchpatch {
+      url = "https://raw.githubusercontent.com/archlinux/svntogit-community/cf64acc45e3264c6923885867e2dbf8b7586a36b/trunk/lmms-carla-export.patch";
+      sha256 = "sha256-wlSewo93DYBN2PvrcV58dC9kpoo9Y587eCeya5OX+j4=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [ "-DWANT_QT5=ON" ];
+
+  meta = with lib; {
     description = "DAW similar to FL Studio (music production software)";
-    homepage = https://lmms.io;
+    mainProgram = "lmms";
+    homepage = "https://lmms.io";
     license = licenses.gpl2Plus;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ goibhniu yegortimoshenko ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    maintainers = with maintainers; [ goibhniu yana ];
   };
 }

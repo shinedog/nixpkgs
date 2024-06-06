@@ -1,14 +1,15 @@
-{ stdenv, fetchurl, gnugrep, findutils }:
+{ lib, stdenv, fetchurl }:
 
 let
-  version = "22-1.1ubuntu1"; # Zesty
+  version = "30+20230519-1ubuntu3"; # mantic 2023-08-26
 
 in stdenv.mkDerivation {
-  name = "kmod-blacklist-${version}";
+  pname = "kmod-blacklist";
+  inherit version;
 
   src = fetchurl {
     url = "https://launchpad.net/ubuntu/+archive/primary/+files/kmod_${version}.debian.tar.xz";
-    sha256 = "1k749g707ccb82l4xmrkp53khl71f57cpj9fzd1qyzrz147fjyhi";
+    hash = "sha256-VGw1/rUjl9/j6026ut0dvC0/8maAAz8umb0D3YGf8p4=";
   };
 
   installPhase = ''
@@ -21,17 +22,17 @@ in stdenv.mkDerivation {
     done
 
     substituteInPlace "$out"/modprobe.conf \
-      --replace "blacklist bochs-drm" "" \
       --replace /sbin/lsmod /run/booted-system/sw/bin/lsmod \
       --replace /sbin/rmmod /run/booted-system/sw/bin/rmmod \
       --replace /sbin/modprobe /run/booted-system/sw/bin/modprobe \
-      --replace " grep " " ${gnugrep}/bin/grep " \
-      --replace " xargs " " ${findutils}/bin/xargs "
+      --replace " grep " " /run/booted-system/sw/bin/grep " \
+      --replace " xargs " " /run/booted-system/sw/bin/xargs "
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://packages.ubuntu.com/source/zesty/kmod;
+  meta = with lib; {
+    homepage = "https://launchpad.net/ubuntu/+source/kmod";
     description = "Linux kernel module blacklists from Ubuntu";
     platforms = platforms.linux;
+    license = with licenses; [ gpl2Plus lgpl21Plus ];
   };
 }

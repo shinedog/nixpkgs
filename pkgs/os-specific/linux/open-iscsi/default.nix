@@ -1,39 +1,66 @@
-{ stdenv, fetchFromGitHub, automake, autoconf, libtool, gettext
-, utillinux, openisns, openssl, kmod, perl, systemd, pkgconf
-}:
+{ stdenv
+, lib
+, fetchFromGitHub
+, meson
+, pkg-config
+, ninja
+, perl
+, util-linux
+, open-isns
+, openssl
+, kmod
+, systemd
+, runtimeShell
+, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "open-iscsi-${version}";
-  version = "2.0.877";
-
-  nativeBuildInputs = [ autoconf automake gettext libtool perl pkgconf ];
-  buildInputs = [ kmod openisns.lib openssl systemd utillinux ];
+  pname = "open-iscsi";
+  version = "2.1.9";
 
   src = fetchFromGitHub {
     owner = "open-iscsi";
     repo = "open-iscsi";
     rev = version;
-    sha256 = "0v3dsrl34pdx0yl5jsanrpgg3vw466rl8k81hkshgq3a5mq5qhf6";
+    hash = "sha256-y0NIb/KsKpCd8byr/SXI7nwTKXP2/bSSoW8QgeL5xdc=";
   };
 
-  DESTDIR = "$(out)";
-
-  NIX_LDFLAGS = "-lkmod -lsystemd";
-  NIX_CFLAGS_COMPILE = "-DUSE_KMOD";
+  nativeBuildInputs = [
+    meson
+    pkg-config
+    ninja
+    perl
+  ];
+  buildInputs = [
+    kmod
+    (lib.getLib open-isns)
+    openssl
+    systemd
+    util-linux
+  ];
 
   preConfigure = ''
-    sed -i 's|/usr|/|' Makefile
+    patchShebangs .
   '';
 
-  postInstall = ''
-    cp usr/iscsistart $out/sbin/
-    $out/sbin/iscsistart -v
+  prePatch = ''
+    substituteInPlace etc/systemd/iscsi-init.service.template \
+      --replace /usr/bin/sh ${runtimeShell}
+    sed -i '/install_dir: db_root/d' meson.build
   '';
 
-  meta = with stdenv.lib; {
+  mesonFlags = [
+    "-Discsi_sbindir=${placeholder "out"}/sbin"
+    "-Drulesdir=${placeholder "out"}/etc/udev/rules.d"
+    "-Dsystemddir=${placeholder "out"}/lib/systemd"
+    "-Ddbroot=/etc/iscsi"
+  ];
+
+  passthru.tests = { inherit (nixosTests) iscsi-root; };
+
+  meta = with lib; {
     description = "A high performance, transport independent, multi-platform implementation of RFC3720";
-    license = licenses.gpl2;
-    homepage = https://www.open-iscsi.com;
+    license = licenses.gpl2Plus;
+    homepage = "https://www.open-iscsi.com";
     platforms = platforms.linux;
     maintainers = with maintainers; [ cleverca22 zaninime ];
   };

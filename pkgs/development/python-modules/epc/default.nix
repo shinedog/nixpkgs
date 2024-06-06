@@ -1,12 +1,14 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, sexpdata
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  sexpdata,
 }:
 
 buildPythonPackage rec {
   pname = "epc";
   version = "0.0.5";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -16,10 +18,9 @@ buildPythonPackage rec {
   propagatedBuildInputs = [ sexpdata ];
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "EPC (RPC stack for Emacs Lisp) implementation in Python";
     homepage = "https://github.com/tkf/python-epc";
     license = licenses.gpl3;
   };
-
 }

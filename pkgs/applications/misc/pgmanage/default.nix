@@ -1,14 +1,16 @@
-{ stdenv, fetchFromGitHub, postgresql, openssl } :
-
+{ lib, stdenv, fetchFromGitHub, postgresql, openssl, nixosTests } :
 stdenv.mkDerivation rec {
-  name = "pgmanage-${version}";
-  version = "11.0.1";
+  pname = "pgmanage";
+  # The last release 11.0.1 from 2018 fails the NixOS test
+  # probably because of PostgreSQL-12 incompatibility.
+  # Fortunately the latest master does succeed the test.
+  version = "unstable-2022-05-11";
 
   src = fetchFromGitHub {
     owner  = "pgManage";
     repo   = "pgManage";
-    rev    = "v${version}";
-    sha256 = "1a1dbc32b3y0ph8ydf800h6pz7dg6g1gxgid4gffk7k58xj0c5yf";
+    rev    = "a028604416be382d6d310bc68b4e7c3cd16020fb";
+    sha256 = "sha256-ibCzZrqfbio1wBVFKB6S/wdRxnCc7s3IQdtI9txxhaM=";
   };
 
   patchPhase = ''
@@ -21,7 +23,9 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ postgresql openssl ];
 
-  meta = with stdenv.lib; {
+  passthru.tests.sign-in = nixosTests.pgmanage;
+
+  meta = with lib; {
     description = "A fast replacement for PGAdmin";
     longDescription = ''
       At the heart of pgManage is a modern, fast, event-based C-binary, built in
@@ -29,8 +33,9 @@ stdenv.mkDerivation rec {
       PostgreSQL interface can hope to be. (Note: pgManage replaces Postage,
       which is no longer maintained.)
     '';
-    homepage = https://github.com/pgManage/pgManage;
+    homepage = "https://github.com/pgManage/pgManage";
     license = licenses.postgresql;
     maintainers = [ maintainers.basvandijk ];
+    mainProgram = "pgmanage";
   };
 }

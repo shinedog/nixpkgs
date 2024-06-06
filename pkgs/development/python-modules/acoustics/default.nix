@@ -1,30 +1,56 @@
-{ lib, buildPythonPackage, fetchPypi
-, pytest, numpy, scipy, matplotlib, pandas, tabulate, pythonOlder }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flit-core,
+  matplotlib,
+  numpy,
+  pandas,
+  pytestCheckHook,
+  pythonOlder,
+  scipy,
+  tabulate,
+}:
 
 buildPythonPackage rec {
   pname = "acoustics";
-  version = "0.2.0.post2";
-
-  checkInputs = [ pytest ];
-  propagatedBuildInputs = [ numpy scipy matplotlib pandas tabulate ];
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c0ca4d7ca67fd867c3a7e34232a98a1fc210ee7ff845f3d2eed445a01737b2ff";
-  };
-
-  checkPhase = ''
-    pushd tests
-    py.test ./.
-    popd
-  '';
+  version = "0.2.6-unstable-2023-08-20";
+  pyproject = true;
 
   disabled = pythonOlder "3.6";
 
+  src = fetchFromGitHub {
+    owner = "python-acoustics";
+    repo = "python-acoustics";
+    rev = "99d79206159b822ea2f4e9d27c8b2fbfeb704d38";
+    hash = "sha256-/4bVjlhj8ihpAFHEWPaZ/xBILi3rb8f0NmwAexJCg+o=";
+  };
+
+  nativeBuildInputs = [ flit-core ];
+
+  propagatedBuildInputs = [
+    matplotlib
+    numpy
+    pandas
+    scipy
+    tabulate
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
+    mkdir -p $HOME/.matplotlib
+    echo "backend: ps" > $HOME/.matplotlib/matplotlibrc
+  '';
+
+  pytestFlagsArray = [ "-Wignore::DeprecationWarning" ];
+
+  pythonImportsCheck = [ "acoustics" ];
+
   meta = with lib; {
-    description = "A package for acousticians";
-    maintainers = with maintainers; [ fridh ];
+    description = "Python package for acousticians";
     license = with licenses; [ bsd3 ];
-    homepage = https://github.com/python-acoustics/python-acoustics;
+    homepage = "https://github.com/python-acoustics/python-acoustics";
   };
 }

@@ -1,33 +1,45 @@
-{ stdenv, fetchFromGitHub, crystal, shards, which
-, openssl, readline }:
+{ lib
+, fetchFromGitHub
+, crystal
+, shards
+, makeWrapper
+, pkg-config
+, which
+, openssl
+, readline
+, libyaml
+, zlib
+}:
 
-stdenv.mkDerivation rec {
+crystal.buildCrystalPackage rec {
   pname = "icr";
-  version = "0.5.0";
+  version = "0.9.0";
 
   src = fetchFromGitHub {
-    owner  = "crystal-community";
-    repo   = "icr";
-    rev    = "v${version}";
-    sha256 = "1vavdzgm06ssnxm6mylki6xma0mfsj63n5kivhk1v4pg4xj966w5";
+    owner = "crystal-community";
+    repo = "icr";
+    rev = "v${version}";
+    hash = "sha256-29B/i8oEjwNOYjnc78QcYTl6fC/M9VfAVCCBjLBKp0Q=";
   };
 
-  postPatch = ''
-    substituteInPlace Makefile \
-      --replace /usr/local $out
+  shardsFile = ./shards.nix;
+
+  buildInputs = [ libyaml openssl readline zlib ];
+
+  nativeBuildInputs = [ makeWrapper pkg-config which ];
+
+  # tests are failing due to our sandbox
+  doCheck = false;
+
+  postFixup = ''
+    wrapProgram $out/bin/icr \
+      --prefix PATH : ${lib.makeBinPath [ crystal shards which ]}
   '';
 
-  buildInputs = [ openssl readline ];
-
-  nativeBuildInputs = [ crystal shards which ];
-
-  doCheck = true;
-
-  checkTarget = "test";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Interactive console for the Crystal programming language";
-    homepage = https://github.com/crystal-community/icr;
+    mainProgram = "icr";
+    homepage = "https://github.com/crystal-community/icr";
     license = licenses.mit;
     maintainers = with maintainers; [ peterhoeg ];
   };

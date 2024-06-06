@@ -1,47 +1,56 @@
-{ lib, stdenv, buildEnv
-, haskell, nodejs
-, fetchurl, fetchpatch, makeWrapper, git }:
+{ pkgs
+, lib
+, makeWrapper
+, nodejs ? pkgs.nodejs_18
+}:
 
 let
-  fetchElmDeps = import ./fetchElmDeps.nix { inherit stdenv lib fetchurl; };
-  hsPkgs = haskell.packages.ghc864.override {
-    overrides = self: super: with haskell.lib;
-      let elmPkgs = {
-            elm = overrideCabal (self.callPackage ./packages/elm.nix { }) (drv: {
-              # sadly with parallelism most of the time breaks compilation
-              enableParallelBuilding = false;
-              preConfigure = self.fetchElmDeps {
-                elmPackages = (import ./packages/elm-srcs.nix);
-                versionsDat = ./versions.dat;
-              };
-              patches = [
-                (fetchpatch {
-                  url = "https://github.com/elm/compiler/pull/1886/commits/39d86a735e28da514be185d4c3256142c37c2a8a.patch";
-                  sha256 = "0nni5qx1523rjz1ja42z6z9pijxvi3fgbw1dhq5qi11mh1nb9ay7";
-                })
-              ];
-              buildTools = drv.buildTools or [] ++ [ makeWrapper ];
-              jailbreak = true;
-              postInstall = ''
-                wrapProgram $out/bin/elm \
-                  --prefix PATH ':' ${lib.makeBinPath [ nodejs ]}
-              '';
-            });
+  fetchElmDeps = pkgs.callPackage ./lib/fetchElmDeps.nix { };
 
-            /*
-            The elm-format expression is updated via a script in the https://github.com/avh4/elm-format repo:
-            `pacakge/nix/build.sh`
-            */
-            elm-format = justStaticExecutables (doJailbreak (self.callPackage ./packages/elm-format.nix {}));
+  # Haskell packages that require ghc 9.6
+  hs96Pkgs = import ./packages/ghc9_6 { inherit pkgs lib makeWrapper nodejs fetchElmDeps; };
 
-            inherit fetchElmDeps;
-            elmVersion = elmPkgs.elm.version;
-          };
-      in elmPkgs // {
-        inherit elmPkgs;
+  # Haskell packages that require ghc 8.10
+  hs810Pkgs = import ./packages/ghc8_10 { inherit pkgs lib; };
 
-        # Needed for elm-format
-        indents = self.callPackage ./packages/indents.nix {};
-      };
-  };
-in hsPkgs.elmPkgs
+  # Haskell packages that require ghc 9.2
+  hs92Pkgs = import ./packages/ghc9_2 { inherit pkgs lib; };
+
+  # Patched, originally npm-downloaded, packages
+  patchedNodePkgs = import ./packages/node { inherit pkgs lib nodejs makeWrapper; };
+
+  assembleScope = self: basics:
+    (hs96Pkgs self).elmPkgs // (hs92Pkgs self).elmPkgs // (hs810Pkgs self).elmPkgs // (patchedNodePkgs self) // basics;
+in
+lib.makeScope pkgs.newScope
+  (self: assembleScope self
+    (with self; {
+      inherit fetchElmDeps nodejs;
+
+      /* Node/NPM based dependencies can be upgraded using script `packages/generate-node-packages.sh`.
+
+        * Packages which rely on `bin-wrap` will fail by default
+          and can be patched using `patchBinwrap` function defined in `packages/lib.nix`.
+
+        * Packages which depend on npm installation of elm can be patched using
+          `patchNpmElm` function also defined in `packages/lib.nix`.
+      */
+      elmLib =
+        let
+          hsElmPkgs = (hs810Pkgs self) // (hs96Pkgs self);
+        in
+        import ./lib {
+          inherit lib;
+          inherit (pkgs) writeScriptBin stdenv;
+          inherit (self) elm;
+        };
+
+      elm-json = callPackage ./packages/elm-json { };
+
+      elm-test-rs = callPackage ./packages/elm-test-rs { };
+
+      elm-test = callPackage ./packages/elm-test { };
+
+      lamdera = callPackage ./packages/lamdera { };
+    })
+  )

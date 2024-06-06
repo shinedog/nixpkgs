@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, cmake, curl }:
+{ lib, stdenv, fetchFromGitHub, cmake, curl }:
 
 stdenv.mkDerivation rec {
-  name = "curlpp-${version}";
+  pname = "curlpp";
   version = "0.8.1";
   src = fetchFromGitHub {
     owner = "jpbarrette";
@@ -12,11 +12,11 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ curl ];
   nativeBuildInputs = [ cmake ];
-  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://www.curlpp.org/;
+  meta = with lib; {
+    homepage = "https://www.curlpp.org/";
     description = "C++ wrapper around libcURL";
+    mainProgram = "curlpp-config";
     license = licenses.mit;
     maintainers = with maintainers; [ CrazedProgrammer ];
   };

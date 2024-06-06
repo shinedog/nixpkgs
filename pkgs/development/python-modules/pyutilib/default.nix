@@ -1,18 +1,20 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  nose,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "pyutilib";
-  version = "5.6.5";
+  version = "6.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     pname = "PyUtilib";
     inherit version;
-    sha256 = "4730084624be98f2c326da88f3852831c6aa919e11babab2c34b0299c8f5ce2a";
+    hash = "sha256-08FPjtkCioMbK/Ubird3brqH5mz8WKBrmcNZqqZA8EA=";
   };
 
   propagatedBuildInputs = [
@@ -25,8 +27,8 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "PyUtilib: A collection of Python utilities";
-    homepage = https://github.com/PyUtilib/pyutilib;
+    homepage = "https://github.com/PyUtilib/pyutilib";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = [ ];
   };
 }

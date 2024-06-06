@@ -1,27 +1,50 @@
-{ stdenv, fetchPypi, buildPythonPackage, nose, mock, glibcLocales, isPy3k }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  mock,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "parameterized";
-  version = "0.7.0";
+  version = "0.9.0";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d8c8837fb677ed2d5a93b9e2308ce0da3aeb58cf513120d501e0b7af14da78d5";
+    hash = "sha256-f8kFJyzvpPNkwaNCnLvpwPmLeTmI77W/kKrIDwjbCbE=";
   };
 
-  # Tests require some python3-isms but code works without.
-  doCheck = isPy3k;
-
-  checkInputs = [ nose mock glibcLocales ];
-
-  checkPhase = ''
-    LC_ALL="en_US.UTF-8" nosetests -v
+  postPatch = ''
+    # broken with pytest 7 and python 3.12
+    # https://github.com/wolever/parameterized/issues/167
+    # https://github.com/wolever/parameterized/pull/162
+    substituteInPlace parameterized/test.py \
+      --replace 'assert_equal(missing, [])' "" \
+      --replace "assertRaisesRegexp" "assertRaisesRegex"
   '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ setuptools ];
+
+  checkInputs = [
+    mock
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [ "parameterized/test.py" ];
+
+  pythonImportsCheck = [ "parameterized" ];
+
+  meta = with lib; {
     description = "Parameterized testing with any Python test framework";
-    homepage = https://pypi.python.org/pypi/parameterized;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ma27 ];
+    homepage = "https://github.com/wolever/parameterized";
+    changelog = "https://github.com/wolever/parameterized/blob/v${version}/CHANGELOG.txt";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ ];
   };
 }

@@ -1,41 +1,32 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, topkg, dune
-, cmdliner, astring, fmt, result
+{ lib, buildDunePackage, fetchurl, fetchpatch
+, astring, cmdliner, fmt, re, stdlib-shims, uutf, ocaml-syntax-shims
 }:
 
-let param =
-  if stdenv.lib.versionAtLeast ocaml.version "4.02" then {
-    version = "0.8.2";
-    sha256 = "1zpg079v89mz2dpnh59f9hk5r03wl26skfn43llrv3kg24abjfpf";
-    buildInputs = [ dune ];
-    buildPhase = "dune build -p alcotest";
-    inherit (dune) installPhase;
-  } else {
-    version = "0.7.2";
-    sha256 = "1qgsz2zz5ky6s5pf3j3shc4fjc36rqnjflk8x0wl1fcpvvkr52md";
-    buildInputs = [ ocamlbuild topkg ];
-    inherit (topkg) buildPhase installPhase;
-  };
-in
+buildDunePackage rec {
+  pname = "alcotest";
+  version = "1.7.0";
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-alcotest-${version}";
-  inherit (param) version buildPhase installPhase;
-
-  src = fetchzip {
-    url = "https://github.com/mirage/alcotest/archive/${version}.tar.gz";
-    inherit (param) sha256;
+  src = fetchurl {
+    url = "https://github.com/mirage/alcotest/releases/download/${version}/alcotest-${version}.tbz";
+    hash = "sha256-gSus2zS0XoiZXgfXMGvasvckee8ZlmN/HV0fQWZ5At8=";
   };
 
-  buildInputs = [ ocaml findlib ] ++ param.buildInputs;
+  # Fix tests with OCaml 5.2
+  patches = fetchpatch {
+    url = "https://github.com/mirage/alcotest/commit/aa437168b258db97680021116af176c55e1bd53b.patch";
+    hash = "sha256-cytuJFg4Mft47LsAEcz2zvzyy1wNzMdeLK+cjaFANpo=";
+  };
 
-  propagatedBuildInputs = [ cmdliner astring fmt result ];
+  nativeBuildInputs = [ ocaml-syntax-shims ];
 
-  createFindlibDestdir = true;
+  propagatedBuildInputs = [ astring cmdliner fmt re stdlib-shims uutf ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mirage/alcotest;
+  doCheck = true;
+
+  meta = with lib; {
+    homepage = "https://github.com/mirage/alcotest";
     description = "A lightweight and colourful test framework";
-    license = stdenv.lib.licenses.isc;
+    license = licenses.isc;
     maintainers = [ maintainers.ericbmerritt ];
   };
 }

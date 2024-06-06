@@ -1,7 +1,7 @@
 { qtModule, qtbase, qtdeclarative }:
 
 qtModule {
-  name = "qtsensors";
-  qtInputs = [ qtbase qtdeclarative ];
+  pname = "qtsensors";
+  propagatedBuildInputs = [ qtbase qtdeclarative ];
   outputs = [ "out" "dev" "bin" ];
 }

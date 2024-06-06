@@ -1,15 +1,21 @@
-{ stdenv, fetchgit, libowfat, zlib }:
+{ lib, stdenv, fetchgit, libowfat, zlib, nixosTests }:
 
 stdenv.mkDerivation {
-  name = "opentracker-2018-05-26";
+  pname = "opentracker";
+  version = "unstable-2021-08-23";
 
   src = fetchgit {
     url = "https://erdgeist.org/gitweb/opentracker";
-    rev = "6411f1567f64248b0d145493c2e61004d2822623";
-    sha256 = "110nfb6n4clykwdzpk54iccsfjawq0krjfqhg114i1z0ri5dyl8j";
+    rev = "110868ec4ebe60521d5a4ced63feca6a1cf0aa2a";
+    sha256 = "sha256-SuElfmk7zONolTiyg0pyvbfvyJRn3r9OrXwpTzLw8LI=";
   };
 
   buildInputs = [ libowfat zlib ];
+
+  makeFlags = [
+    "LIBOWFAT_HEADERS=${libowfat}/include/libowfat"
+    "LIBOWFAT_LIBRARY=${libowfat}/lib"
+  ];
 
   installPhase = ''
     runHook preInstall
@@ -18,11 +24,16 @@ stdenv.mkDerivation {
     runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://erdgeist.org/arts/software/opentracker/;
+  passthru.tests = {
+    bittorrent-integration = nixosTests.bittorrent;
+  };
+
+  meta = with lib; {
+    homepage = "https://erdgeist.org/arts/software/opentracker/";
     license = licenses.beerware;
     platforms = platforms.linux;
-    description = "Bittorrent tracker project which aims for minimal resource usage and is intended to run at your wlan router.";
+    description = "Bittorrent tracker project which aims for minimal resource usage and is intended to run at your wlan router";
+    mainProgram = "opentracker";
     maintainers = with maintainers; [ makefu ];
   };
 }

@@ -1,44 +1,77 @@
-{ stdenv
-, fetchFromGitHub
-, buildPythonPackage
-, pyusb
-, numpy
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+
+  # build-system
+  cython,
+  git,
+  pkgconfig,
+  setuptools,
+  setuptools-scm,
+
+  # dependneices
+  numpy,
+
+  # optional-dependenices
+  pyusb,
+
+  # tests
+  mock,
+  pytestCheckHook,
+  zipp,
 }:
 
 ## Usage
-# In NixOS, simply add the `udev` multiple output to services.udev.packages:
-#   services.udev.packages = [ pkgs.python3Packages.seabreeze.udev ];
+# In NixOS, add the package to services.udev.packages for non-root plugdev
+# users to get device access permission:
+#    services.udev.packages = [ pkgs.python3Packages.seabreeze ];
 
 buildPythonPackage rec {
   pname = "seabreeze";
-  version = "0.6.0";
+  version = "2.6.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "ap--";
     repo = "python-seabreeze";
-    rev = "python-seabreeze-v${version}";
-    sha256 = "0bc2s9ic77gz9m40w89snixphxlzib60xa4f49n4zasjrddfz1l8";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-Ead9G4i8/mFwPqL2PGsndtmX93Njld3nvTTr6ROJTac=";
+    leaveDotGit = true;
   };
 
-  outputs = [ "out" "udev" ];
+  nativeBuildInputs = [
+    cython
+    git
+    pkgconfig
+    setuptools
+    setuptools-scm
+  ];
+
+  propagatedBuildInputs = [ numpy ];
+
+  passthru.optional-dependencies = {
+    pyseabreeze = [ pyusb ];
+  };
 
   postInstall = ''
-    mkdir -p $udev/lib/udev/rules.d
-    cp misc/10-oceanoptics.rules $udev/lib/udev/rules.d/10-oceanoptics.rules
+    mkdir -p $out/etc/udev/rules.d
+    cp os_support/10-oceanoptics.rules $out/etc/udev/rules.d/10-oceanoptics.rules
   '';
 
-  # underlying c libraries are tested and fail
-  # (c libs are used with anaconda, which we don't care about as we use the alternative path, being that of pyusb).
-  doCheck = false;
-
-  propagatedBuildInputs = [ pyusb numpy ];
+  # few backends enabled, but still some tests
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    zipp
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
 
   setupPyBuildFlags = [ "--without-cseabreeze" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/ap--/python-seabreeze";
     description = "A python library to access Ocean Optics spectrometers";
-    maintainers = [];
+    maintainers = [ ];
     license = licenses.mit;
   };
 }

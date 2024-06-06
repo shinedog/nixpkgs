@@ -1,23 +1,39 @@
-{ buildGoModule, fetchFromGitHub, lib }:
+{ buildGoModule, fetchFromGitHub, installShellFiles, lib }:
 
 buildGoModule rec {
-  name = "pet-${version}";
-  version = "0.3.4";
+  pname = "pet";
+  version = "0.8.4";
 
   src = fetchFromGitHub {
     owner = "knqyf263";
     repo = "pet";
     rev = "v${version}";
-    sha256 = "0m2fzpqxk7hrbxsgqplkg7h2p7gv6s1miymv3gvw0cz039skag0s";
+    sha256 = "sha256-XFizQxegyMIAUEKT8/kzWyC4TWICMUE7SuHQsTNpK4w=";
   };
 
-  modSha256 = "06ham8lsx5c1vk5jkwp1aa9g4q4g7sfq7gxz2gkffa98x2vlawyf";
+  vendorHash = "sha256-XvSg7EhFdK7wt1Eei56pj/emiE4qsVJkOpgPNsnDNc4=";
+
+  ldflags = [
+    "-s" "-w" "-X=github.com/knqyf263/pet/cmd.version=${version}"
+  ];
+
+  doCheck = false;
 
   subPackages = [ "." ];
 
+  nativeBuildInputs = [
+    installShellFiles
+  ];
+
+  postInstall = ''
+    installShellCompletion --cmd pet \
+      --zsh ./misc/completions/zsh/_pet
+  '';
+
   meta = with lib; {
     description = "Simple command-line snippet manager, written in Go";
-    homepage = https://github.com/knqyf263/pet;
+    mainProgram = "pet";
+    homepage = "https://github.com/knqyf263/pet";
     license = licenses.mit;
     maintainers = with maintainers; [ kalbasit ];
     platforms = platforms.linux ++ platforms.darwin;

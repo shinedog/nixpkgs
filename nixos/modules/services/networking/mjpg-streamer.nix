@@ -26,7 +26,7 @@ in {
         type = types.str;
         default = "output_http.so -w @www@ -n -p 5050";
         description = ''
-          Output plugin. <literal>@www@</literal> is substituted for default mjpg-streamer www directory.
+          Output plugin. `@www@` is substituted for default mjpg-streamer www directory.
           See plugins documentation for more information.
         '';
       };
@@ -49,10 +49,11 @@ in {
 
   config = mkIf cfg.enable {
 
-    users.users = optional (cfg.user == "mjpg-streamer") {
-      name = "mjpg-streamer";
-      uid = config.ids.uids.mjpg-streamer;
-      group = cfg.group;
+    users.users = optionalAttrs (cfg.user == "mjpg-streamer") {
+      mjpg-streamer = {
+        uid = config.ids.uids.mjpg-streamer;
+        group = cfg.group;
+      };
     };
 
     systemd.services.mjpg-streamer = {

@@ -17,7 +17,7 @@ let
     ${cfg.extraConfig}
   '';
 
-  bindingCfg = { config, ... }: {
+  bindingCfg = { ... }: {
     options = {
 
       keys = mkOption {
@@ -53,7 +53,7 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Whether to enable the <command>triggerhappy</command> hotkey daemon.
+          Whether to enable the {command}`triggerhappy` hotkey daemon.
         '';
       };
 
@@ -62,18 +62,18 @@ in
         default = "nobody";
         example = "root";
         description = ''
-          User account under which <command>triggerhappy</command> runs.
+          User account under which {command}`triggerhappy` runs.
         '';
       };
 
       bindings = mkOption {
         type = types.listOf (types.submodule bindingCfg);
         default = [];
-        example = lib.literalExample ''
-          [ { keys = ["PLAYPAUSE"];  cmd = "''${pkgs.mpc_cli}/bin/mpc -q toggle"; } ]
+        example = lib.literalExpression ''
+          [ { keys = ["PLAYPAUSE"];  cmd = "''${pkgs.mpc-cli}/bin/mpc -q toggle"; } ]
         '';
         description = ''
-          Key bindings for <command>triggerhappy</command>.
+          Key bindings for {command}`triggerhappy`.
         '';
       };
 
@@ -81,7 +81,7 @@ in
         type = types.lines;
         default = "";
         description = ''
-          Literal contents to append to the end of <command>triggerhappy</command> configuration file.
+          Literal contents to append to the end of {command}`triggerhappy` configuration file.
         '';
       };
 
@@ -102,7 +102,6 @@ in
 
     systemd.services.triggerhappy = {
       wantedBy = [ "multi-user.target" ];
-      after = [ "local-fs.target" ];
       description = "Global hotkey daemon";
       serviceConfig = {
         ExecStart = "${pkgs.triggerhappy}/bin/thd ${optionalString (cfg.user != "root") "--user ${cfg.user}"} --socket ${socket} --triggers ${configFile} --deviceglob /dev/input/event*";

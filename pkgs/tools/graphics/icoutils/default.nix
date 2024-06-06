@@ -1,17 +1,31 @@
-{ stdenv, fetchurl, libpng, perl, perlPackages, makeWrapper }:
+{ lib, stdenv, fetchurl, fetchpatch, autoreconfHook, libpng, perl, perlPackages, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "icoutils-0.32.3";
+  pname = "icoutils";
+  version = "0.32.3";
 
   src = fetchurl {
-    url = "mirror://savannah/icoutils/${name}.tar.bz2";
+    url = "mirror://savannah/icoutils/icoutils-${version}.tar.bz2";
     sha256 = "1q66cksms4l62y0wizb8vfavhmf7kyfgcfkynil3n99s0hny1aqp";
   };
 
-  buildInputs = [ makeWrapper libpng perl ];
+  patches = [
+    # Fixes a linker failure with newer versions of ld64 due to not supporting nested archives.
+    (fetchpatch {
+      url = "https://git.savannah.nongnu.org/cgit/icoutils.git/patch/?id=aa3572119bfe34484025f37dbbc4d5070f735908";
+      hash = "sha256-4YCI+SYT2bCBNegkpN5jcfi6gOeec65TmCABr98HHB4=";
+    })
+  ];
+
+  nativeBuildInputs = [ autoreconfHook makeWrapper ];
+  buildInputs = [ libpng perl ];
   propagatedBuildInputs = [ perlPackages.LWP ];
 
-  patchPhase = ''
+  # Fixes a build failure on aarch64-darwin. Define for all Darwin targets for when x86_64-darwin
+  # upgrades to a newer SDK.
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-DTARGET_OS_IPHONE=0";
+
+  postPatch = ''
     patchShebangs extresso/extresso
     patchShebangs extresso/extresso.in
     patchShebangs extresso/genresscript
@@ -24,9 +38,9 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = https://www.nongnu.org/icoutils/;
+    homepage = "https://www.nongnu.org/icoutils/";
     description = "Set of programs to deal with Microsoft Windows(R) icon and cursor files";
-    license = stdenv.lib.licenses.gpl3Plus;
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
+    license = lib.licenses.gpl3Plus;
+    platforms = with lib.platforms; linux ++ darwin;
   };
 }

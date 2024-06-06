@@ -1,49 +1,58 @@
-{ stdenv, fetchurl, makeWrapper
-, xorg, imlib2, libjpeg, libpng
-, curl, libexif, perlPackages }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, makeWrapper
+, xorg
+, imlib2
+, libjpeg
+, libpng
+, curl
+, libexif
+, jpegexiforient
+, perl
+, enableAutoreload ? !stdenv.hostPlatform.isDarwin
+}:
 
-with stdenv.lib;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "feh";
+  version = "3.10.2";
 
-stdenv.mkDerivation rec {
-  name = "feh-${version}";
-  version = "3.1.3";
-
-  src = fetchurl {
-    url = "https://feh.finalrewind.org/${name}.tar.bz2";
-    sha256 = "1vsnxf4as3vyzjfhd8frzb1a8i7wnq7ck5ljx7qxqrnfqvxl1s4z";
+  src = fetchFromGitHub {
+    owner = "derf";
+    repo = "feh";
+    rev = finalAttrs.version;
+    hash = "sha256-378rhZhpcua3UbsY0OcGKGXdMIQCuG84YjJ9vfJhZVs=";
   };
 
   outputs = [ "out" "man" "doc" ];
 
-  nativeBuildInputs = [ makeWrapper xorg.libXt ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  buildInputs = [ xorg.libX11 xorg.libXinerama imlib2 libjpeg libpng curl libexif ];
+  buildInputs = [ xorg.libXt xorg.libX11 xorg.libXinerama imlib2 libjpeg libpng curl libexif ];
 
   makeFlags = [
-    "PREFIX=${placeholder "out"}" "exif=1"
-  ] ++ optional stdenv.isDarwin "verscmp=0";
+    "PREFIX=${placeholder "out"}"
+    "exif=1"
+  ] ++ lib.optional stdenv.isDarwin "verscmp=0"
+  ++ lib.optional enableAutoreload "inotify=1";
 
   installTargets = [ "install" ];
   postInstall = ''
-    wrapProgram "$out/bin/feh" --prefix PATH : "${libjpeg.bin}/bin" \
+    wrapProgram "$out/bin/feh" --prefix PATH : "${lib.makeBinPath [ libjpeg jpegexiforient ]}" \
                                --add-flags '--theme=feh'
   '';
 
-  checkInputs = [ perlPackages.perl perlPackages.TestCommand ];
-  preCheck = ''
-    export PERL5LIB="${perlPackages.TestCommand}/${perlPackages.perl.libPrefix}"
-  '';
-  postCheck = ''
-    unset PERL5LIB
-  '';
-
+  nativeCheckInputs = lib.singleton (perl.withPackages (p: [ p.TestCommand ]));
   doCheck = true;
 
-  meta = {
+  meta = with lib; {
     description = "A light-weight image viewer";
     homepage = "https://feh.finalrewind.org/";
-    license = licenses.mit;
-    maintainers = [ maintainers.viric maintainers.willibutz ];
+    # released under a variant of the MIT license
+    # https://spdx.org/licenses/MIT-feh.html
+    license = licenses.mit-feh;
+    maintainers = with maintainers; [ gepbird globin viric willibutz ];
     platforms = platforms.unix;
+    mainProgram = "feh";
   };
-}
+})

@@ -1,56 +1,87 @@
-{ pkgs, ... }:
+{ config, pkgs, lib, ... }: let
 
-{
+  cfg = config.boot.swraid;
 
-  environment.systemPackages = [ pkgs.mdadm ];
+  mdadm_conf = config.environment.etc."mdadm.conf";
 
-  services.udev.packages = [ pkgs.mdadm ];
+  enable_implicitly_for_old_state_versions = lib.versionOlder config.system.stateVersion "23.11";
 
-  boot.initrd.availableKernelModules = [ "md_mod" "raid0" "raid1" "raid10" "raid456" ];
+  minimum_config_is_set = config_text:
+    (builtins.match ".*(MAILADDR|PROGRAM).*" mdadm_conf.text) != null;
 
-  boot.initrd.extraUdevRulesCommands = ''
-    cp -v ${pkgs.mdadm}/lib/udev/rules.d/*.rules $out/
-  '';
+in {
+  imports = [
+    (lib.mkRenamedOptionModule [ "boot" "initrd" "services" "swraid" "enable" ] [ "boot" "swraid" "enable" ])
+    (lib.mkRenamedOptionModule [ "boot" "initrd" "services" "swraid" "mdadmConf" ] [ "boot" "swraid" "mdadmConf" ])
+  ];
 
-  systemd.services.mdadm-shutdown = {
-    wantedBy = [ "final.target"];
-    after = [ "umount.target" ];
 
-    unitConfig = {
-      DefaultDependencies = false;
+  options.boot.swraid = {
+    enable = lib.mkEnableOption "swraid support using mdadm" // {
+      description = ''
+        Whether to enable support for Linux MD RAID arrays.
+
+        When this is enabled, mdadm will be added to the system path,
+        and MD RAID arrays will be detected and activated
+        automatically, both in stage-1 (initramfs) and in stage-2 (the
+        final NixOS system).
+
+        This should be enabled if you want to be able to access and/or
+        boot from MD RAID arrays. {command}`nixos-generate-config`
+        should detect it correctly in the standard installation
+        procedure.
+      '';
+      default = enable_implicitly_for_old_state_versions;
+      defaultText = "`true` if stateVersion is older than 23.11";
     };
 
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = ''${pkgs.mdadm}/bin/mdadm --wait-clean --scan'';
-    };
-  };
-
-  systemd.services."mdmon@" = {
-    description = "MD Metadata Monitor on /dev/%I";
-
-    unitConfig.DefaultDependencies = false;
-
-    serviceConfig = {
-      Type = "forking";
-      Environment = "IMSM_NO_PLATFORM=1";
-      ExecStart = ''${pkgs.mdadm}/bin/mdmon --offroot --takeover %I'';
-      KillMode = "none";
-    };
-  };
-
-  systemd.services."mdadm-grow-continue@" = {
-    description = "Manage MD Reshape on /dev/%I";
-
-    unitConfig.DefaultDependencies = false;
-
-    serviceConfig = {
-      ExecStart = ''${pkgs.mdadm}/bin/mdadm --grow --continue /dev/%I'';
-      StandardInput = "null";
-      StandardOutput = "null";
-      StandardError = "null";
-      KillMode = "none";
+    mdadmConf = lib.mkOption {
+      description = "Contents of {file}`/etc/mdadm.conf`.";
+      type = lib.types.lines;
+      default = "";
     };
   };
- 
+
+  config = lib.mkIf cfg.enable {
+    warnings = lib.mkIf
+        ( !enable_implicitly_for_old_state_versions && !minimum_config_is_set mdadm_conf)
+        [ "mdadm: Neither MAILADDR nor PROGRAM has been set. This will cause the `mdmon` service to crash." ];
+
+    environment.systemPackages = [ pkgs.mdadm ];
+
+    environment.etc."mdadm.conf".text = lib.mkAfter cfg.mdadmConf;
+
+    services.udev.packages = [ pkgs.mdadm ];
+
+    systemd.packages = [ pkgs.mdadm ];
+
+    boot.initrd = {
+      availableKernelModules = [ "md_mod" "raid0" "raid1" "raid10" "raid456" ];
+
+      extraUdevRulesCommands = lib.mkIf (!config.boot.initrd.systemd.enable) ''
+        cp -v ${pkgs.mdadm}/lib/udev/rules.d/*.rules $out/
+      '';
+
+      extraUtilsCommands = lib.mkIf (!config.boot.initrd.systemd.enable) ''
+        # Add RAID mdadm tool.
+        copy_bin_and_libs ${pkgs.mdadm}/sbin/mdadm
+        copy_bin_and_libs ${pkgs.mdadm}/sbin/mdmon
+      '';
+
+      extraUtilsCommandsTest = lib.mkIf (!config.boot.initrd.systemd.enable) ''
+        $out/bin/mdadm --version
+      '';
+
+      extraFiles."/etc/mdadm.conf".source = pkgs.writeText "mdadm.conf" mdadm_conf.text;
+
+      systemd = {
+        contents."/etc/mdadm.conf".text = mdadm_conf.text;
+
+        packages = [ pkgs.mdadm ];
+        initrdBin = [ pkgs.mdadm ];
+      };
+
+      services.udev.packages = [ pkgs.mdadm ];
+    };
+  };
 }

@@ -7,17 +7,14 @@ let
   cfg = config.services.nexus;
 
 in
-
 {
   options = {
     services.nexus = {
       enable = mkEnableOption "Sonatype Nexus3 OSS service";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.nexus;
-        description = "Package which runs Nexus3";
-      };
+      package = lib.mkPackageOption pkgs "nexus" { };
+
+      jdkPackage = lib.mkPackageOption pkgs "openjdk8" { };
 
       user = mkOption {
         type = types.str;
@@ -68,6 +65,28 @@ in
           -Dkaraf.data=${cfg.home}/nexus3
           -Djava.io.tmpdir=${cfg.home}/nexus3/tmp
           -Dkaraf.startLocalConsole=false
+          -Djava.endorsed.dirs=${cfg.package}/lib/endorsed
+        '';
+        defaultText = literalExpression ''
+          '''
+            -Xms1200M
+            -Xmx1200M
+            -XX:MaxDirectMemorySize=2G
+            -XX:+UnlockDiagnosticVMOptions
+            -XX:+UnsyncloadClass
+            -XX:+LogVMOutput
+            -XX:LogFile=''${home}/nexus3/log/jvm.log
+            -XX:-OmitStackTraceInFastThrow
+            -Djava.net.preferIPv4Stack=true
+            -Dkaraf.home=''${package}
+            -Dkaraf.base=''${package}
+            -Dkaraf.etc=''${package}/etc/karaf
+            -Djava.util.logging.config.file=''${package}/etc/karaf/java.util.logging.properties
+            -Dkaraf.data=''${home}/nexus3
+            -Djava.io.tmpdir=''${home}/nexus3/tmp
+            -Dkaraf.startLocalConsole=false
+            -Djava.endorsed.dirs=''${package}/lib/endorsed
+          '''
         '';
 
         description = ''
@@ -80,14 +99,13 @@ in
   };
 
   config = mkIf cfg.enable {
-    users.users."${cfg.user}" = {
+    users.users.${cfg.user} = {
       isSystemUser = true;
-      group = cfg.group;
-      home = cfg.home;
+      inherit (cfg) group home;
       createHome = true;
     };
 
-    users.groups."${cfg.group}" = {};
+    users.groups.${cfg.group} = { };
 
     systemd.services.nexus = {
       description = "Sonatype Nexus3";
@@ -100,6 +118,7 @@ in
         NEXUS_USER = cfg.user;
         NEXUS_HOME = cfg.home;
 
+        INSTALL4J_JAVA_HOME = cfg.jdkPackage;
         VM_OPTS_FILE = pkgs.writeText "nexus.vmoptions" cfg.jvmOpts;
       };
 

@@ -1,34 +1,62 @@
-{ stdenv, fetchurl, python3Packages, sqlite, which }:
+{
+  lib,
+  fetchFromGitHub,
+  python3,
+  sqlite,
+  which,
+}:
 
-python3Packages.buildPythonApplication rec {
-  name = "${pname}-${version}";
+python3.pkgs.buildPythonApplication rec {
   pname = "s3ql";
-  version = "2.26";
+  version = "5.1.3";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "https://bitbucket.org/nikratio/${pname}/downloads/${name}.tar.bz2";
-    sha256 = "0xs1jbak51zwjrd6jmd96xl3a3jpw0p1s05f7sw5wipvvg0xnmfn";
+  src = fetchFromGitHub {
+    owner = "s3ql";
+    repo = "s3ql";
+    rev = "refs/tags/s3ql-${version}";
+    hash = "sha256-8vGW0Kl6hDTY+9mTnm2S659PZ/9gl90d2tXxKIIFimo=";
   };
 
-  buildInputs = [ which ]; # tests will fail without which
-  propagatedBuildInputs = with python3Packages; [
-    sqlite apsw pycrypto requests defusedxml dugong llfuse
-    cython pytest pytest-catchlog
+  build-system = with python3.pkgs; [ setuptools ];
+
+  nativeBuildInputs = [ which ] ++ (with python3.pkgs; [ cython ]);
+
+  propagatedBuildInputs = with python3.pkgs; [
+    apsw
+    cryptography
+    defusedxml
+    dugong
+    google-auth
+    google-auth-oauthlib
+    pyfuse3
+    requests
+    sqlite
+    trio
+  ];
+
+  nativeCheckInputs = with python3.pkgs; [
+    pytest-trio
+    pytestCheckHook
   ];
 
   preBuild = ''
-    # https://bitbucket.org/nikratio/s3ql/issues/118/no-module-named-s3qldeltadump-running#comment-16951851
-    ${python3Packages.python.interpreter} ./setup.py build_cython build_ext --inplace
+    ${python3.pkgs.python.pythonOnBuildForHost.interpreter} ./setup.py build_cython build_ext --inplace
   '';
 
-  checkPhase = ''
-    pytest tests
+  preCheck = ''
+    export HOME=$(mktemp -d)
   '';
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "s3ql" ];
+
+  pytestFlagsArray = [ "tests/" ];
+
+  meta = with lib; {
     description = "A full-featured file system for online data storage";
-    homepage = https://bitbucket.org/nikratio/s3ql;
-    license = licenses.gpl3;
+    homepage = "https://github.com/s3ql/s3ql/";
+    changelog = "https://github.com/s3ql/s3ql/releases/tag/s3ql-${version}";
+    license = licenses.gpl3Only;
     maintainers = with maintainers; [ rushmorem ];
     platforms = platforms.linux;
   };

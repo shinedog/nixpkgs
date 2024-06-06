@@ -1,37 +1,76 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, ifaddr
-, typing
-, isPy27
-, pythonOlder
-, python
+{
+  lib,
+  cython,
+  async-timeout,
+  buildPythonPackage,
+  fetchFromGitHub,
+  ifaddr,
+  poetry-core,
+  pytest-asyncio,
+  pytest-timeout,
+  pythonOlder,
+  pytestCheckHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "zeroconf";
-  version = "0.22.0";
-  disabled = isPy27;
+  version = "0.132.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "09dqfbj37l7vnj0fj4a82dqgq9mwm6fnsnsmljg25k1ygcn5hrpy";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "jstasiak";
+    repo = "python-zeroconf";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Jmz9zs//EVdBbEElq6OEfGZiOiMvjV5CJxZOM/lHvok=";
   };
 
-  propagatedBuildInputs = [ ifaddr ]
-    ++ stdenv.lib.optionals (pythonOlder "3.5") [ typing ];
-
-  # tests not included with pypi release
-  doCheck = false;
-
-  checkPhase = ''
-    ${python.interpreter} test_zeroconf.py
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail "Cython>=3.0.8" "Cython"
   '';
 
-  meta = with stdenv.lib; {
-    description = "A pure python implementation of multicast DNS service discovery";
-    homepage = https://github.com/jstasiak/python-zeroconf;
-    license = licenses.lgpl21;
+  build-system = [
+    cython
+    poetry-core
+    setuptools
+  ];
+
+  dependencies = [ ifaddr ] ++ lib.optionals (pythonOlder "3.11") [ async-timeout ];
+
+  nativeCheckInputs = [
+    pytest-asyncio
+    pytest-timeout
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    sed -i '/addopts/d' pyproject.toml
+  '';
+
+  disabledTests = [
+    # OSError: [Errno 19] No such device
+    "test_close_multiple_times"
+    "test_integration_with_listener_ipv6"
+    "test_launch_and_close"
+    "test_launch_and_close_context_manager"
+    "test_launch_and_close_v4_v6"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [
+    "zeroconf"
+    "zeroconf.asyncio"
+  ];
+
+  meta = with lib; {
+    description = "Python implementation of multicast DNS service discovery";
+    homepage = "https://github.com/python-zeroconf/python-zeroconf";
+    changelog = "https://github.com/python-zeroconf/python-zeroconf/releases/tag/${version}";
+    license = licenses.lgpl21Only;
     maintainers = with maintainers; [ abbradar ];
   };
 }

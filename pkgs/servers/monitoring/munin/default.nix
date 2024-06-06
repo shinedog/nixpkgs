@@ -1,20 +1,23 @@
-{ stdenv, fetchFromGitHub, makeWrapper, which, coreutils, rrdtool, perlPackages
-, python, ruby, jre, nettools, bc
+{ lib, stdenv, fetchFromGitHub, makeWrapper, which, coreutils, rrdtool, perlPackages
+, python3, ruby, jre8, nettools, bc
 }:
 
 stdenv.mkDerivation rec {
-  version = "2.0.43";
-  name = "munin-${version}";
+  version = "2.0.76";
+  pname = "munin";
 
   src = fetchFromGitHub {
     owner = "munin-monitoring";
     repo = "munin";
     rev = version;
-    sha256 = "1ydhf9hcb3n5h0ss5f1zf9yz4r4njqxazlz931ixvx5gyhj9gq5l";
+    sha256 = "sha256-9PfIzUObm3Nu2k2TFjbQ3cqIDkPz07ZUczEcfm3bpDc=";
   };
 
-  buildInputs = [
+  nativeBuildInputs = [
     makeWrapper
+  ];
+
+  buildInputs = [
     which
     coreutils
     rrdtool
@@ -26,11 +29,11 @@ stdenv.mkDerivation rec {
     perlPackages.NetSSLeay
     perlPackages.NetServer
     perlPackages.LogLog4perl
-    perlPackages.IOSocketInet6
+    perlPackages.IOSocketINET6
     perlPackages.Socket6
     perlPackages.URI
     perlPackages.DBFile
-    perlPackages.DateManip
+    perlPackages.TimeDate
     perlPackages.FileCopyRecursive
     perlPackages.FCGI
     perlPackages.NetSNMP
@@ -38,9 +41,9 @@ stdenv.mkDerivation rec {
     perlPackages.ListMoreUtils
     perlPackages.LWP
     perlPackages.DBDPg
-    python
+    python3
     ruby
-    jre
+    jre8
     # tests
     perlPackages.TestLongString
     perlPackages.TestDifferences
@@ -52,9 +55,9 @@ stdenv.mkDerivation rec {
   ];
 
   # needs to find a local perl module during build
-  PERL_USE_UNSAFE_INC = "1";
+  env.PERL_USE_UNSAFE_INC = "1";
 
-  # TODO: tests are failing http://munin-monitoring.org/ticket/1390#comment:1
+  # TODO: tests are failing https://munin-monitoring.org/ticket/1390#comment:1
   # NOTE: important, test command always exits with 0, think of a way to abort the build once tests pass
   doCheck = false;
 
@@ -89,19 +92,23 @@ stdenv.mkDerivation rec {
     sed -i '/ENV{PATH}/d' node/lib/Munin/Node/Service.pm
   '';
 
+  # Disable parallel build, errors:
+  #  Can't locate Munin/Common/Defaults.pm in @INC ...
+  enableParallelBuilding = false;
+
   # DESTDIR shouldn't be needed (and shouldn't have worked), but munin
   # developers have forgotten to use PREFIX everywhere, so we use DESTDIR to
   # ensure that everything is installed in $out.
-  makeFlags = ''
-    PREFIX=$(out)
-    DESTDIR=$(out)
-    PERLLIB=$(out)/${perlPackages.perl.libPrefix}
-    PERL=${perlPackages.perl}/bin/perl
-    PYTHON=${python}/bin/python
-    RUBY=${ruby}/bin/ruby
-    JAVARUN=${jre}/bin/java
-    PLUGINUSER=munin
-  '';
+  makeFlags = [
+    "PREFIX=$(out)"
+    "DESTDIR=$(out)"
+    "PERLLIB=$(out)/${perlPackages.perl.libPrefix}"
+    "PERL=${perlPackages.perl.outPath}/bin/perl"
+    "PYTHON=${python3.interpreter}"
+    "RUBY=${ruby.outPath}/bin/ruby"
+    "JAVARUN=${jre8.outPath}/bin/java"
+    "PLUGINUSER=munin"
+  ];
 
   postFixup = ''
     echo "Removing references to /usr/{bin,sbin}/ from munin plugins..."
@@ -119,14 +126,14 @@ stdenv.mkDerivation rec {
         esac
         wrapProgram "$file" \
           --set PERL5LIB "$out/${perlPackages.perl.libPrefix}:${with perlPackages; makePerlPath [
-                LogLog4perl IOSocketInet6 Socket6 URI DBFile DateManip
+                LogLog4perl IOSocketINET6 Socket6 URI DBFile TimeDate
                 HTMLTemplate FileCopyRecursive FCGI NetCIDR NetSNMP NetServer
                 ListMoreUtils DBDPg LWP rrdtool
                 ]}"
     done
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Networked resource monitoring tool";
     longDescription = ''
       Munin is a monitoring tool that surveys all your computers and remembers
@@ -134,9 +141,9 @@ stdenv.mkDerivation rec {
       interface. Munin can help analyze resource trends and 'what just happened
       to kill our performance?' problems.
     '';
-    homepage = http://munin-monitoring.org/;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.domenkozar maintainers.bjornfor ];
+    homepage = "https://munin-monitoring.org/";
+    license = licenses.gpl2Only;
+    maintainers = [ maintainers.bjornfor ];
     platforms = platforms.linux;
   };
 }

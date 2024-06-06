@@ -1,21 +1,33 @@
-{ stdenv, fetchurl, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, fixDarwinDylibNames
+}:
 
-stdenv.mkDerivation rec {
-  version = "2.2.0";
-  name = "LASzip-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  version = "3.4.3";
+  pname = "LASzip";
 
-  src = fetchurl {
-    url = "https://github.com/LASzip/LASzip/archive/v${version}.tar.gz";
-    sha256 = "b8e8cc295f764b9d402bc587f3aac67c83ed8b39f1cb686b07c168579c61fbb2";
+  src = fetchFromGitHub {
+    owner = "LASzip";
+    repo = "LASzip";
+    rev = finalAttrs.version;
+    hash = "sha256-9fzal54YaocONtguOCxnP7h1LejQPQ0dKFiCzfvTjCY=";
   };
 
-  buildInputs = [cmake];
+  nativeBuildInputs = [
+    cmake
+  ] ++ lib.optionals stdenv.isDarwin [
+    fixDarwinDylibNames
+  ];
 
   meta = {
     description = "Turn quickly bulky LAS files into compact LAZ files without information loss";
-    homepage = https://laszip.org;
-    license = stdenv.lib.licenses.lgpl2;
-    maintainers = [ stdenv.lib.maintainers.michelk ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://laszip.org";
+    changelog = "https://github.com/LASzip/LASzip/releases/tag/${finalAttrs.src.rev}";
+    license = lib.licenses.lgpl2;
+    maintainers = [ lib.maintainers.michelk ];
+    platforms = lib.platforms.unix;
   };
-}
+})

@@ -1,16 +1,32 @@
-{ stdenv, fetchurl, autoreconfHook,
-  gzip, bzip2, pkgconfig, flex, check,
-  pam, coreutils
+{ lib
+, stdenv
+, fetchurl
+, nixosTests
+, autoreconfHook
+, pkg-config
+, flex
+, check
+, pam
+, coreutils
+, gzip
+, bzip2
+, xz
+, zstd
+, gitUpdater
 }:
 
 stdenv.mkDerivation rec {
-  name = "kbd-${version}";
-  version = "2.0.4";
+  pname = "kbd";
+  version = "2.6.4";
 
   src = fetchurl {
-    url = "mirror://kernel/linux/utils/kbd/${name}.tar.xz";
-    sha256 = "124swm93dm4ca0pifgkrand3r9gvj3019d4zkfxsj9djpvv0mnaz";
+    url = "mirror://kernel/linux/utils/kbd/${pname}-${version}.tar.xz";
+    sha256 = "sha256-UZ+NCHrsyn4KM80IS++SwGbrGXMWZmU9zHDJ1xqkCSY=";
   };
+
+  # vlock is moved into its own output, since it depends on pam. This
+  # reduces closure size for most use cases.
+  outputs = [ "out" "vlock" "dev" ];
 
   configureFlags = [
     "--enable-optional-progs"
@@ -18,13 +34,12 @@ stdenv.mkDerivation rec {
     "--disable-nls"
   ];
 
-  patches = [ ./search-paths.patch ];
+  patches = [
+    ./search-paths.patch
+  ];
 
   postPatch =
     ''
-      # Add Neo keymap subdirectory
-      sed -i -e 's,^KEYMAPSUBDIRS *= *,&i386/neo ,' data/Makefile.am
-
       # Renaming keymaps with name clashes, because loadkeys just picks
       # the first keymap it sees. The clashing names lead to e.g.
       # "loadkeys no" defaulting to a norwegian dvorak map instead of
@@ -33,21 +48,22 @@ stdenv.mkDerivation rec {
       mv qwertz/cz{,-qwertz}.map
       mv olpc/es{,-olpc}.map
       mv olpc/pt{,-olpc}.map
-      mv dvorak/{no.map,dvorak-no.map}
       mv fgGIod/trf{,-fgGIod}.map
       mv colemak/{en-latin9,colemak}.map
       popd
 
-      # Fix the path to gzip/bzip2.
-      substituteInPlace src/libkeymap/findfile.c \
-        --replace gzip ${gzip}/bin/gzip \
-        --replace bzip2 ${bzip2.bin}/bin/bzip2 \
+      # Fix paths to decompressors. Trailing space to avoid replacing `xz` in `".xz"`.
+      substituteInPlace src/libkbdfile/kbdfile.c \
+        --replace 'gzip '  '${gzip}/bin/gzip ' \
+        --replace 'bzip2 ' '${bzip2.bin}/bin/bzip2 ' \
+        --replace 'xz '    '${xz.bin}/bin/xz ' \
+        --replace 'zstd '  '${zstd.bin}/bin/zstd '
 
-      # We get a warning in armv5tel-linux and the fuloong2f, so we
-      # disable -Werror in it.
-      ${stdenv.lib.optionalString (stdenv.isAarch32 || stdenv.hostPlatform.isMips) ''
-        sed -i s/-Werror// src/Makefile.am
-      ''}
+      sed -i '
+        1i prefix:=$(vlock)
+        1i bindir := $(vlock)/bin' \
+        src/vlock/Makefile.in \
+        src/vlock/Makefile.am
     '';
 
   postInstall = ''
@@ -57,16 +73,27 @@ stdenv.mkDerivation rec {
     done
   '';
 
-
   buildInputs = [ check pam ];
-  nativeBuildInputs = [ autoreconfHook pkgconfig flex ];
+  NIX_LDFLAGS = lib.optional stdenv.hostPlatform.isStatic "-laudit";
+  nativeBuildInputs = [ autoreconfHook pkg-config flex ];
 
-  makeFlags = [ "setowner=" ];
+  passthru.tests = {
+    inherit (nixosTests) keymap kbd-setfont-decompress kbd-update-search-paths-patch;
+  };
+  passthru = {
+    gzip = gzip;
+    updateScript = gitUpdater {
+       # No nicer place to find latest release.
+       url = "https://github.com/legionus/kbd.git";
+       rev-prefix = "v";
+    };
+  };
 
-  meta = with stdenv.lib; {
-    homepage = ftp://ftp.altlinux.org/pub/people/legion/kbd/;
-    description = "Linux keyboard utilities and keyboard maps";
+  meta = with lib; {
+    homepage = "https://kbd-project.org/";
+    description = "Linux keyboard tools and keyboard maps";
     platforms = platforms.linux;
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ davidak ];
   };
 }

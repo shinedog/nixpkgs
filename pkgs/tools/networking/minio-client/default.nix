@@ -1,28 +1,38 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, nixosTests }:
 
-buildGoPackage rec {
-  name = "minio-client-${version}";
-
-  version = "2019-01-30T19-57-22Z";
+buildGoModule rec {
+  pname = "minio-client";
+  version = "2024-06-01T15-03-35Z";
 
   src = fetchFromGitHub {
     owner = "minio";
     repo = "mc";
     rev = "RELEASE.${version}";
-    sha256 = "1w0ig0daf0zxpkz449xq2hm7ajhzn8hlnnmpac6ip82qy53xnbm4";
+    sha256 = "sha256-4BbqAGfHjM369EtZhFy01m3ClSnM1UHl/u+CXksY1+I=";
   };
 
-  goPackagePath = "github.com/minio/mc";
+  vendorHash = "sha256-nM7q5Vg8VpsUo4/jt4sHK3UAMGxdDUq6TEBxurB9c/A=";
 
-  buildFlagsArray = [''-ldflags=
-    -X github.com/minio/mc/cmd.Version=${version}
-  ''];
+  subPackages = [ "." ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/minio/mc;
+  patchPhase = ''
+    sed -i "s/Version.*/Version = \"${version}\"/g" cmd/build-constants.go
+    sed -i "s/ReleaseTag.*/ReleaseTag = \"RELEASE.${version}\"/g" cmd/build-constants.go
+    sed -i "s/CommitID.*/CommitID = \"${src.rev}\"/g" cmd/build-constants.go
+  '';
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/mc --version | grep ${version} > /dev/null
+  '';
+
+  passthru.tests.minio = nixosTests.minio;
+
+  meta = with lib; {
+    homepage = "https://github.com/minio/mc";
     description = "A replacement for ls, cp, mkdir, diff and rsync commands for filesystems and object storage";
-    maintainers = with maintainers; [ eelco bachp ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [ bachp eelco ];
+    mainProgram = "mc";
     license = licenses.asl20;
   };
 }

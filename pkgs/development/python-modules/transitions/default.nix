@@ -1,30 +1,64 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, six, nose, mock, dill, pycodestyle }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  fontconfig,
+  graphviz,
+  mock,
+  pycodestyle,
+  pygraphviz,
+  pytestCheckHook,
+  pythonAtLeast,
+  setuptools,
+  six,
+}:
 
 buildPythonPackage rec {
   pname = "transitions";
-  version = "0.6.9";
+  version = "0.9.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "afe0f498cf1f3f3b0fc13562011b8895a172df8f891dbb5118923d46e78a96d7";
+    hash = "sha256-NULDcQjpPirl8hUgjsVzLJSncpN4VKECzXNFuWf+5hs=";
   };
 
-  postPatch = ''
-    substituteInPlace setup.py --replace "dill<0.2.7" dill
+  build-system = [ setuptools ];
+
+  dependencies = [
+    six
+    pygraphviz # optional
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    graphviz
+    pycodestyle
+  ];
+
+  preCheck = ''
+    export FONTCONFIG_FILE=${fontconfig.out}/etc/fonts/fonts.conf
+    export HOME=$TMPDIR
   '';
 
-  propagatedBuildInputs = [ six ];
+  disabledTests =
+    [
+      "test_diagram"
+      "test_ordered_with_graph"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # Upstream issue https://github.com/pygraphviz/pygraphviz/issues/441
+      "test_binary_stream"
+    ];
 
-  checkInputs = [ nose mock dill pycodestyle ];
+  pythonImportsCheck = [ "transitions" ];
 
-  checkPhase = ''
-    nosetests
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/pytransitions/transitions;
+  meta = with lib; {
+    homepage = "https://github.com/pytransitions/transitions";
     description = "A lightweight, object-oriented finite state machine implementation in Python";
+    changelog = "https://github.com/pytransitions/transitions/releases/tag/${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ dotlambda ];
   };

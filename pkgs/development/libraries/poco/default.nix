@@ -1,33 +1,43 @@
-{ stdenv, fetchurl, cmake, pkgconfig, zlib, pcre, expat, sqlite, openssl, unixODBC, mysql }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, zlib, pcre2, expat, sqlite, openssl, unixODBC, libmysqlclient }:
 
 stdenv.mkDerivation rec {
-  name = "poco-${version}";
+  pname = "poco";
 
-  version = "1.9.0";
+  version = "1.13.3";
 
-  src = fetchurl {
-    url = "https://pocoproject.org/releases/${name}/${name}-all.tar.gz";
-    sha256 = "11z1i0drbacs7c7d5virc3kz7wh79svd06iffh8j6giikl7vz1q3";
+  src = fetchFromGitHub {
+    owner = "pocoproject";
+    repo = "poco";
+    sha256 = "sha256-ryBQjzg1DyYd/LBZzjHxq8m/7ZXRSKNNGRkIII0eHK0=";
+    rev = "poco-${version}-release";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  buildInputs = [ zlib pcre expat sqlite openssl unixODBC mysql.connector-c ];
+  buildInputs = [ unixODBC libmysqlclient ];
+  propagatedBuildInputs = [ zlib pcre2 expat sqlite openssl ];
 
-  MYSQL_DIR = mysql.connector-c;
+  outputs = [ "out" "dev" ];
+
+  MYSQL_DIR = libmysqlclient;
   MYSQL_INCLUDE_DIR = "${MYSQL_DIR}/include/mysql";
 
-  cmakeFlags = [
-    "-DPOCO_UNBUNDLED=ON"
+  configureFlags = [
+    "--unbundled"
   ];
 
-  enableParallelBuilding = true;
+  postFixup = ''
+    grep -rlF INTERFACE_INCLUDE_DIRECTORIES "$dev/lib/cmake/Poco" | while read -r f; do
+      substituteInPlace "$f" \
+        --replace "$"'{_IMPORT_PREFIX}/include' ""
+    done
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://pocoproject.org/;
+  meta = with lib; {
+    homepage = "https://pocoproject.org/";
     description = "Cross-platform C++ libraries with a network/internet focus";
     license = licenses.boost;
-    maintainers = with maintainers; [ orivej ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ orivej tomodachi94 ];
+    platforms = platforms.unix;
   };
 }

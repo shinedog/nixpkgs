@@ -1,33 +1,52 @@
-{ stdenv, fetchFromGitHub, compiler ? if stdenv.cc.isClang then "clang" else null, stdver ? null }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+}:
 
-with stdenv.lib; stdenv.mkDerivation rec {
-  name = "tbb-${version}";
-  version = "2019_U5";
+stdenv.mkDerivation rec {
+  pname = "tbb";
+  version = "2021.11.0";
+
+  outputs = [ "out" "dev" ];
 
   src = fetchFromGitHub {
-    owner = "01org";
-    repo = "tbb";
-    rev = version;
-    sha256 = "0390da1iya2mvn3ribjb1f8yvzsqsf5b16wn6dqbjxcz0crmwlzk";
+    owner = "oneapi-src";
+    repo = "oneTBB";
+    rev = "v${version}";
+    hash = "sha256-zGZHMtAUVzBKFbCshpepm3ce3tW6wQ+F30kYYXAQ/TE=";
   };
 
-  makeFlags = concatStringsSep " " (
-    optional (compiler != null) "compiler=${compiler}" ++
-    optional (stdver != null) "stdver=${stdver}"
-  );
+  nativeBuildInputs = [
+    cmake
+  ];
 
-  patches = stdenv.lib.optional stdenv.hostPlatform.isMusl ./glibc-struct-mallinfo.patch;
+  patches = [
+    # Fix musl build from https://github.com/oneapi-src/oneTBB/pull/899
+    (fetchpatch {
+      url = "https://patch-diff.githubusercontent.com/raw/oneapi-src/oneTBB/pull/899.patch";
+      hash = "sha256-kU6RRX+sde0NrQMKlNtW3jXav6J4QiVIUmD50asmBPU=";
+    })
+  ];
 
-  installPhase = ''
-    mkdir -p $out/lib
-    cp "build/"*release*"/"*${stdenv.hostPlatform.extensions.sharedLibrary}* $out/lib/
-    mv include $out/
-    rm $out/include/index.html
+  # Fix build with modern gcc
+  # In member function 'void std::__atomic_base<_IntTp>::store(__int_type, std::memory_order) [with _ITp = bool]',
+  NIX_CFLAGS_COMPILE = lib.optionals stdenv.cc.isGNU [ "-Wno-error=array-bounds" "-Wno-error=stringop-overflow" ] ++
+    # error: variable 'val' set but not used
+    lib.optionals stdenv.cc.isClang [ "-Wno-error=unused-but-set-variable" ] ++
+    # Workaround for gcc-12 ICE when using -O3
+    # https://gcc.gnu.org/PR108854
+    lib.optionals (stdenv.cc.isGNU && stdenv.isx86_32) [ "-O2" ];
+
+  # Disable failing test on musl
+  # test/conformance/conformance_resumable_tasks.cpp:37:24: error: ‘suspend’ is not a member of ‘tbb::v1::task’; did you mean ‘tbb::detail::r1::suspend’?
+  postPatch = lib.optionalString stdenv.hostPlatform.isMusl ''
+    substituteInPlace test/CMakeLists.txt \
+      --replace 'conformance_resumable_tasks' ""
   '';
 
-  enableParallelBuilding = true;
-
-  meta = {
+  meta = with lib; {
     description = "Intel Thread Building Blocks C++ Library";
     homepage = "http://threadingbuildingblocks.org/";
     license = licenses.asl20;
@@ -39,7 +58,7 @@ with stdenv.lib; stdenv.mkDerivation rec {
       represents a higher-level, task-based parallelism that abstracts platform
       details and threading mechanisms for scalability and performance.
     '';
-    platforms = with platforms; linux ++ darwin;
-    maintainers = with maintainers; [ thoughtpolice dizfer ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ thoughtpolice tmarkus ];
   };
 }

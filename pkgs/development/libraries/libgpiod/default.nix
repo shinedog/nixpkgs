@@ -1,37 +1,38 @@
-{ stdenv, fetchgit, autoreconfHook, autoconf-archive, pkgconfig, kmod, enable-tools ? true }:
+{ lib, stdenv, fetchurl, autoreconfHook, autoconf-archive, pkg-config
+, enable-tools ? true }:
 
 stdenv.mkDerivation rec {
-  name = "libgpiod-unstable-${version}";
-  version = "2018-10-07";
+  pname = "libgpiod";
+  version = "2.1.2";
 
-  src = fetchgit {
-    url = "https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git";
-    rev = "4bf402d3a49336eacd33654441d575bd267780b8";
-    sha256 = "01f3jzb133z189sxdiz9qiy65p0bjqhynfllidbpxdr0cxkyyc1d";
+  src = fetchurl {
+    url = "https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/snapshot/libgpiod-${version}.tar.gz";
+    hash = "sha256-sb3x4/dSOGlfk+RCBiuvwGkXDyv08M1LjgScpnExofA=";
   };
 
-  buildInputs = [ kmod ];
   nativeBuildInputs = [
     autoconf-archive
-    pkgconfig
+    pkg-config
     autoreconfHook
   ];
 
   configureFlags = [
     "--enable-tools=${if enable-tools then "yes" else "no"}"
     "--enable-bindings-cxx"
-    "--prefix=$(out)"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "C library and tools for interacting with the linux GPIO character device";
     longDescription = ''
       Since linux 4.8 the GPIO sysfs interface is deprecated. User space should use
       the character device instead. This library encapsulates the ioctl calls and
       data structures behind a straightforward API.
     '';
-    homepage = https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/about/;
-    license = licenses.lgpl2;
+    homepage = "https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git/about/";
+    license = with licenses; [
+      lgpl21Plus # libgpiod
+      lgpl3Plus # C++ bindings
+    ] ++ lib.optional enable-tools gpl2Plus;
     maintainers = [ maintainers.expipiplus1 ];
     platforms = platforms.linux;
   };

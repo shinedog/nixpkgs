@@ -1,8 +1,13 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+}:
 
 buildPythonPackage rec {
   pname = "limitlessled";
   version = "1.1.3";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -11,7 +16,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "Control LimitlessLED products";
-    homepage = https://github.com/happyleavesaoc/python-limitlessled/;
+    homepage = "https://github.com/happyleavesaoc/python-limitlessled/";
     license = licenses.mit;
     maintainers = with maintainers; [ sephalon ];
   };

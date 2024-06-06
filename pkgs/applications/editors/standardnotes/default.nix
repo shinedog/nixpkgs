@@ -1,48 +1,81 @@
-{ stdenv, appimage-run, fetchurl, runtimeShell }:
+{ lib
+, stdenv
+, fetchurl
+, dpkg
+, makeWrapper
+, electron
+, libsecret
+, asar
+, glib
+, desktop-file-utils
+, callPackage
+}:
 
 let
-  version = "3.0.6";
 
-  plat = {
-    "i386-linux" = "i386";
-    "x86_64-linux" = "x86_64";
-  }.${stdenv.hostPlatform.system};
+  srcjson = builtins.fromJSON (builtins.readFile ./src.json);
 
-  sha256 = {
-    "i386-linux" = "0czhlbacjks9x8y2w46nzlvk595psqhqw0vl0bvsq7sz768dk0ni";
-    "x86_64-linux" = "0haji9h8rrm9yvqdv6i2y6xdd0yhsssjjj83hmf6cb868lwyigsf";
-  }.${stdenv.hostPlatform.system};
+  throwSystem = throw "Unsupported system: ${stdenv.hostPlatform.system}";
+
 in
 
 stdenv.mkDerivation rec {
-  name = "standardnotes-${version}";
 
-  src = fetchurl {
-    url = "https://github.com/standardnotes/desktop/releases/download/v${version}/standard-notes-${version}-${plat}.AppImage";
-    inherit sha256;
-  };
+  pname = "standardnotes";
 
-  buildInputs = [ appimage-run ];
+  src = fetchurl (srcjson.deb.${stdenv.hostPlatform.system} or throwSystem);
 
-  unpackPhase = ":";
+  inherit (srcjson) version;
 
-  installPhase = ''
-    mkdir -p $out/{bin,share}
-    cp $src $out/share/standardNotes.AppImage
-    echo "#!${runtimeShell}" > $out/bin/standardnotes
-    echo "${appimage-run}/bin/appimage-run $out/share/standardNotes.AppImage" >> $out/bin/standardnotes
-    chmod +x $out/bin/standardnotes $out/share/standardNotes.AppImage
+  dontConfigure = true;
+
+  dontBuild = true;
+
+  nativeBuildInputs = [ makeWrapper dpkg desktop-file-utils asar ];
+
+  unpackPhase = "dpkg-deb --fsys-tarfile $src | tar -x --no-same-permissions --no-same-owner";
+
+  installPhase = let
+    libPath = lib.makeLibraryPath [
+      libsecret
+      glib
+      stdenv.cc.cc.lib
+    ];
+  in
+    ''
+    runHook preInstall
+
+    mkdir -p $out/bin $out/share/standardnotes
+    cp -R usr/share/{applications,icons} $out/share
+    cp -R opt/Standard\ Notes/resources/app.asar $out/share/standardnotes/
+    asar e $out/share/standardnotes/app.asar asar-unpacked
+    find asar-unpacked -name '*.node' -exec patchelf \
+      --add-rpath "${libPath}" \
+      {} \;
+    asar p asar-unpacked $out/share/standardnotes/app.asar
+
+    makeWrapper ${electron}/bin/electron $out/bin/standardnotes \
+      --add-flags $out/share/standardnotes/app.asar
+
+    ${desktop-file-utils}/bin/desktop-file-install --dir $out/share/applications \
+      --set-key Exec --set-value standardnotes usr/share/applications/standard-notes.desktop
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = callPackage ./update.nix {};
+
+  meta = with lib; {
     description = "A simple and private notes app";
     longDescription = ''
       Standard Notes is a private notes app that features unmatched simplicity,
       end-to-end encryption, powerful extensions, and open-source applications.
     '';
-    homepage = https://standardnotes.org;
-    license = licenses.agpl3;
-    maintainers = with maintainers; [ mgregoire ];
-    platforms = [ "i386-linux" "x86_64-linux" ];
+    homepage = "https://standardnotes.org";
+    license = licenses.agpl3Only;
+    maintainers = with maintainers; [ mgregoire chuangzhu squalus ];
+    sourceProvenance = [ sourceTypes.binaryNativeCode ];
+    platforms = builtins.attrNames srcjson.deb;
+    mainProgram = "standardnotes";
   };
 }

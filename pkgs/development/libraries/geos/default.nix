@@ -1,20 +1,42 @@
-{ stdenv, fetchurl, python }:
+{ lib
+, stdenv
+, callPackage
+, fetchurl
+, testers
 
-stdenv.mkDerivation rec {
-  name = "geos-3.7.2";
+, cmake
+}:
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "geos";
+  version = "3.12.1";
 
   src = fetchurl {
-    url = "https://download.osgeo.org/geos/${name}.tar.bz2";
-    sha256 = "01vpkncvq1i1191agq03yg1h7d0igj10gv5z2mqk24nnwrdycri1";
+    url = "https://download.osgeo.org/geos/${finalAttrs.pname}-${finalAttrs.version}.tar.bz2";
+    hash = "sha256-1up+SSIktRGT6CRP4+wXxNRNB3fzwyyk+xcRQFSaDQM=";
   };
 
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ cmake ];
 
-  buildInputs = [ python ];
+  # https://github.com/libgeos/geos/issues/930
+  cmakeFlags = lib.optionals (stdenv.isDarwin && stdenv.isx86_64) [
+    "-DCMAKE_CTEST_ARGUMENTS=--exclude-regex;unit-geom-Envelope"
+  ];
 
-  meta = {
-    description = "C++ port of the Java Topology Suite (JTS)";
-    homepage = http://geos.refractions.net/;
-    license = "GPL";
+  doCheck = true;
+
+  passthru.tests = {
+    pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+    geos = callPackage ./tests.nix { geos = finalAttrs.finalPackage; };
   };
-}
+
+  meta = with lib; {
+    description = "C/C++ library for computational geometry with a focus on algorithms used in geographic information systems (GIS) software";
+    homepage = "https://libgeos.org";
+    license = licenses.lgpl21Only;
+    mainProgram = "geosop";
+    maintainers = teams.geospatial.members;
+    pkgConfigModules = [ "geos" ];
+    changelog = "https://github.com/libgeos/geos/releases/tag/${finalAttrs.finalPackage.version}";
+  };
+})

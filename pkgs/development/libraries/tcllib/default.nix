@@ -1,24 +1,28 @@
-{ stdenv, fetchurl, tcl }:
+{ lib
+, fetchzip
+, tcl
+, critcl
+, withCritcl ? true
+}:
 
-stdenv.mkDerivation rec {
-  name = "tcllib-${version}";
-  version = "1.19";
+tcl.mkTclDerivation rec {
+  pname = "tcllib";
+  version = "1.21";
 
-  src = fetchurl {
+  src = fetchzip {
     url = "mirror://sourceforge/tcllib/tcllib-${version}.tar.gz";
-    sha256 = "173abxaazdmf210v651708ab6h7xhskvd52krxk6ifam337qgzh1";
+    hash = "sha256-p8thpRpC+9k/LvbBFaSOIpDXuhMlEWhs0qbrjtKcTzQ=";
   };
 
-  passthru = {
-    libPrefix = "tcllib${version}";
-  };
+  nativeBuildInputs = lib.optional withCritcl critcl;
 
-  buildInputs = [ tcl ];
+  buildFlags = [ "all" ] ++ lib.optional withCritcl "critcl";
 
   meta = {
-    homepage = https://sourceforge.net/projects/tcllib/;
+    homepage = "https://core.tcl-lang.org/tcllib/";
     description = "Tcl-only library of standard routines for Tcl";
-    license = stdenv.lib.licenses.tcltk;
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.tcltk;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ fgaz ];
   };
 }

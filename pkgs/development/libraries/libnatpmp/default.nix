@@ -1,22 +1,44 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, fixDarwinDylibNames
+}:
 
 stdenv.mkDerivation rec {
-  name = "libnatpmp-${version}";
-  version = "20150609";
+  pname = "libnatpmp";
+  version = "20230423";
 
   src = fetchurl {
-    name = "${name}.tar.gz";
-    url = "http://miniupnp.free.fr/files/download.php?file=${name}.tar.gz";
-    sha256 = "1c1n8n7mp0amsd6vkz32n8zj3vnsckv308bb7na0dg0r8969rap1";
+    url = "https://miniupnp.tuxfamily.org/files/${pname}-${version}.tar.gz";
+    hash = "sha256-BoTtLIQGQ351GaG9IOqDeA24cbOjpddSMRuj6Inb/HA=";
   };
 
-  makeFlags = [ "INSTALLPREFIX=$(out)" ];
+  patches = [
+    # install natpmp_declspec.h too, else nothing that uses this library will build
+    (fetchpatch {
+      url = "https://github.com/miniupnp/libnatpmp/commit/5f4a7c65837a56e62c133db33c28cd1ea71db662.patch";
+      hash = "sha256-tvoGFmo5AzUgb40bIs/EzikE0ex1SFzE5peLXhktnbc=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://miniupnp.free.fr/libnatpmp.html;
+  makeFlags = [
+    "INSTALLPREFIX=$(out)"
+    "CC:=$(CC)"
+  ];
+
+  nativeBuildInputs = lib.optional stdenv.isDarwin fixDarwinDylibNames;
+
+  postFixup = ''
+    chmod +x $out/lib/*
+  '';
+
+  meta = with lib; {
     description = "NAT-PMP client";
+    homepage = "http://miniupnp.free.fr/libnatpmp.html";
     license = licenses.bsd3;
     maintainers = with maintainers; [ orivej ];
-    platforms = platforms.linux;
+    mainProgram = "natpmpc";
+    platforms = platforms.all;
   };
 }

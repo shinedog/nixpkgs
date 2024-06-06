@@ -1,4 +1,4 @@
-{ stdenv, binutils-unwrapped, cctools, llvm }:
+{ lib, stdenv, makeWrapper, binutils-unwrapped, cctools, llvm, clang-unwrapped, dualAs ? false }:
 
 # Make sure both underlying packages claim to have prepended their binaries
 # with the same targetPrefix.
@@ -9,13 +9,16 @@ let
   cmds = [
     "ar" "ranlib" "as" "install_name_tool"
     "ld" "strip" "otool" "lipo" "nm" "strings" "size"
+    "codesign_allocate"
   ];
+  isCCToolsLLVM = lib.getName cctools == "cctools-llvm";
 in
 
 # TODO: loop over targetPrefixed binaries too
 stdenv.mkDerivation {
-  name = "${targetPrefix}cctools-binutils-darwin";
-  outputs = [ "out" "info" "man" ];
+  pname = "${targetPrefix}cctools-binutils-darwin" + lib.optionalString dualAs "-dualas";
+  inherit (cctools) version;
+  outputs = [ "out" "man" ];
   buildCommand = ''
     mkdir -p $out/bin $out/include
 
@@ -31,7 +34,7 @@ stdenv.mkDerivation {
     # - strip: the binutils one seems to break mach-o files
     # - lipo: gcc build assumes it exists
     # - nm: the gnu one doesn't understand many new load commands
-    for i in ${stdenv.lib.concatStringsSep " " (builtins.map (e: targetPrefix + e) cmds)}; do
+    for i in ${lib.concatStringsSep " " (map (e: targetPrefix + e) cmds)}; do
       ln -sf "${cctools}/bin/$i" "$out/bin/$i"
     done
 
@@ -39,22 +42,67 @@ stdenv.mkDerivation {
 
     ln -s ${binutils-unwrapped.out}/share $out/share
 
-    ln -s ${cctools}/libexec $out/libexec
+    mkdir -p "$man"/share/man/man{1,5}
+    for i in ${lib.concatStringsSep " " cmds}; do
+      for path in "${cctools.man}"/share/man/man?/$i.*; do
+        dest_path="$man''${path#${cctools.man}}"
+        ln -sv "$path" "$dest_path"
+      done
+    done
+  ''
+  + lib.optionalString (!isCCToolsLLVM) (
+    # cctools-port has a `libexec` folder for `as`, but cctools-llvm uses the clang
+    # assembler on both platforms. Only link it when cctools is cctools-port.
+    ''
+      ln -s ${cctools}/libexec $out/libexec
+    ''
+    # cctools-llvm uses the LLVM assembler on both architectures, so use the assembler
+    # from that instead of relinking it.
+    #
+    # On aarch64-darwin we must use clang, because "as" from cctools just doesn't
+    # handle the arch. Proxying calls to clang produces quite a bit of warnings,
+    # and using clang directly here is a better option than relying on cctools.
+    # On x86_64-darwin the Clang version is too old to support this mode.
+    + lib.optionalString stdenv.isAarch64 ''
+      rm $out/bin/${targetPrefix}as
+      makeWrapper "${clang-unwrapped}/bin/clang" "$out/bin/${targetPrefix}as" \
+        --add-flags "-x assembler -integrated-as -c"
+    ''
+    # x86-64 Darwin gnat-bootstrap emits assembly
+    # with MOVQ as the mnemonic for quadword interunit moves
+    # such as `movq %rbp, %xmm0`.
+    # The clang integrated assembler recognises this as valid,
+    # but unfortunately the cctools-port GNU assembler does not;
+    # it instead uses MOVD as the mnemonic.
+    # The assembly that a GCC build emits is determined at build time
+    # and cannot be changed afterwards.
+    #
+    # To build GNAT on x86-64 Darwin, therefore,
+    # we need both the clang _and_ the cctools-port assemblers to be available:
+    # the former to build at least the stage1 compiler,
+    # and the latter at least to be detectable
+    # as the target for the final compiler.
+    #
+    # We choose to match the Aarch64 case above,
+    # wrapping the clang integrated assembler as `as`.
+    # It then seems sensible to wrap the cctools GNU assembler as `gas`.
+    #
+    + lib.optionalString (stdenv.isx86_64 && dualAs) ''
+      mv $out/bin/${targetPrefix}as $out/bin/${targetPrefix}gas
+      makeWrapper "${clang-unwrapped}/bin/clang" "$out/bin/${targetPrefix}as" \
+        --add-flags "-x assembler -integrated-as -c"
+    ''
+  );
 
-    mkdir -p "$info/nix-support" "$man/nix-support"
-    printWords ${binutils-unwrapped.info} \
-      >> $info/nix-support/propagated-build-inputs
-    # FIXME: cctools missing man pages
-    printWords ${binutils-unwrapped.man} \
-      >> $man/nix-support/propagated-build-inputs
-  '';
+  nativeBuildInputs = lib.optionals (!isCCToolsLLVM && (stdenv.isAarch64 || dualAs)) [ makeWrapper ];
 
   passthru = {
     inherit targetPrefix;
+    isCCTools = true;
   };
 
   meta = {
-    maintainers = with stdenv.lib.maintainers; [ matthewbauer ];
+    maintainers = with lib.maintainers; [ matthewbauer ];
     priority = 10;
   };
 }

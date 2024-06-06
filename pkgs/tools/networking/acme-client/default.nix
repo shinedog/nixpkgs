@@ -1,38 +1,40 @@
-{ stdenv
-, apple_sdk ? null
-, cacert
-, defaultCaFile ? "${cacert}/etc/ssl/certs/ca-bundle.crt"
+{ lib
+, stdenv
 , fetchurl
 , libbsd
 , libressl
-, pkgconfig
+, pkg-config
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "acme-client-${version}";
-  version = "0.1.16";
+  pname = "acme-client";
+  version = "1.3.3";
 
   src = fetchurl {
-    url = "https://kristaps.bsd.lv/acme-client/snapshots/acme-client-portable-${version}.tgz";
-    sha256 = "00q05b3b1dfnfp7sr1nbd212n0mqrycl3cr9lbs51m7ncaihbrz9";
+    url = "https://data.wolfsden.cz/sources/acme-client-${version}.tar.gz";
+    hash = "sha256-HJOk2vlDD7ADrLdf/eLEp+teu9XN0KrghEe6y4FIDoI=";
   };
 
-  buildInputs = [ libbsd libressl pkgconfig ]
-    ++ optional stdenv.isDarwin apple_sdk.sdk;
+  nativeBuildInputs = [
+    pkg-config
+  ];
 
-  CFLAGS = "-DDEFAULT_CA_FILE='\"${defaultCaFile}\"'";
+  buildInputs = [
+    libbsd
+    libressl
+  ];
 
-  preConfigure = ''
-    export PREFIX="$out"
-  '';
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+  ];
 
-  meta = {
-    homepage = https://kristaps.bsd.lv/acme-client/;
+  meta = with lib; {
     description = "Secure ACME/Let's Encrypt client";
+    homepage = "https://git.wolfsden.cz/acme-client-portable";
     platforms = platforms.unix;
     license = licenses.isc;
     maintainers = with maintainers; [ pmahoney ];
+    mainProgram = "acme-client";
   };
 }
+

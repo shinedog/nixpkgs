@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, libsodium, libevent }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, libsodium, libevent, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "dnscrypt-wrapper-${version}";
+  pname = "dnscrypt-wrapper";
   version = "0.4.2";
 
   src = fetchFromGitHub {
@@ -13,14 +13,22 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+  # causes `dnscrypt-wrapper --gen-provider-keypair` to crash
+  hardeningDisable = [ "fortify3" ];
+
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
   buildInputs = [ libsodium libevent ];
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    inherit (nixosTests) dnscrypt-wrapper;
+  };
+
+  meta = with lib; {
     description = "A tool for adding dnscrypt support to any name resolver";
-    homepage = https://dnscrypt.info/;
+    homepage = "https://dnscrypt.info/";
     license = licenses.isc;
-    maintainers = with maintainers; [ tstrobel joachifm ];
+    maintainers = with maintainers; [ joachifm ];
     platforms = platforms.linux;
+    mainProgram = "dnscrypt-wrapper";
   };
 }

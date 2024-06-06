@@ -1,127 +1,67 @@
-{ GConf
-, alsaLib
-, at-spi2-atk
-, atk
-, cairo
-, cups
-, dbus
-, expat
-, fetchurl
-, fontconfig
-, gdk_pixbuf
-, glib
-, gtk2
-, gtk3
+{ stdenv
 , lib
-, libX11
-, libXScrnSaver
-, libXcomposite
-, libXcursor
-, libXdamage
-, libXext
-, libXfixes
-, libXi
-, libXrandr
-, libXrender
-, libXtst
-, libappindicator
-, libdrm
-, libnotify
-, libpciaccess
-, libpng12
-, libxcb
-, nspr
-, nss
-, pango
-, pciutils
-, pulseaudio
-, stdenv
-, udev
-, wrapGAppsHook
+, fetchurl
+, makeWrapper
+, electron
+, common-updater-scripts
+, writeShellScript
+, makeDesktopItem
 }:
 
-let
-  libs = [
-    GConf
-    alsaLib
-    at-spi2-atk
-    atk
-    cairo
-    cups
-    dbus
-    expat
-    fontconfig
-    gdk_pixbuf
-    glib
-    gtk2
-    gtk3
-    libX11
-    libXScrnSaver
-    libXcomposite
-    libXcursor
-    libXdamage
-    libXext
-    libXfixes
-    libXi
-    libXrandr
-    libXrender
-    libXtst
-    libappindicator
-    libdrm
-    libnotify
-    libpciaccess
-    libpng12
-    libxcb
-    nspr
-    nss
-    pango
-    pciutils
-    pulseaudio
-    stdenv.cc.cc.lib
-    udev
-  ];
-
-  libPath = lib.makeLibraryPath libs;
-in
-
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "stretchly";
-  version = "0.19.1";
+  version = "1.15.1";
 
   src = fetchurl {
-    url = "https://github.com/hovancik/stretchly/releases/download/v${version}/stretchly-${version}.tar.xz";
-    sha256 = "1q2wxfqs8qv9b1rfh5lhmyp3rrgdl05m6ihsgkxlgp0yzi07afz8";
+    url = "https://github.com/hovancik/stretchly/releases/download/v${finalAttrs.version}/stretchly-${finalAttrs.version}.tar.xz";
+    hash = "sha256-suTH6o7vtUr2DidPXAwqrya5/WukQOFmS/34LaiWDBs=";
   };
 
-  nativeBuildInputs = [
-    wrapGAppsHook
-  ];
+  icon = fetchurl {
+    url = "https://raw.githubusercontent.com/hovancik/stretchly/v${finalAttrs.version}/stretchly_128x128.png";
+    hash = "sha256-tO0cNKopG/recQus7KDUTyGpApvR5/tpmF5C4V14DnI=";
+  };
 
-  buildInputs = libs;
-
-  dontPatchELF = true;
-  dontBuild = true;
-  dontConfigure = true;
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
-    mkdir -p $out/bin $out/lib/stretchly
-    cp -r ./* $out/lib/stretchly/
-    ln -s $out/lib/stretchly/libffmpeg.so $out/lib/
-    ln -s $out/lib/stretchly/libnode.so $out/lib/
-    ln -s $out/lib/stretchly/stretchly $out/bin/
+    runHook preInstall
+
+    mkdir -p $out/bin $out/share/${finalAttrs.pname}/
+    mv resources/app.asar* $out/share/${finalAttrs.pname}/
+
+    mkdir -p $out/share/applications
+    ln -s ${finalAttrs.desktopItem}/share/applications/* $out/share/applications/
+
+    makeWrapper ${electron}/bin/electron $out/bin/${finalAttrs.pname} \
+      --add-flags $out/share/${finalAttrs.pname}/app.asar
+
+    runHook postInstall
   '';
 
-  preFixup = ''
-    patchelf --set-rpath "${libPath}" $out/lib/stretchly/libffmpeg.so
-    patchelf --set-rpath "${libPath}" $out/lib/stretchly/libnode.so
+  passthru = {
+    updateScript = writeShellScript "update-stretchly" ''
+      set -eu -o pipefail
 
-    patchelf \
-      --set-rpath "$out/lib/stretchly:${libPath}" \
-      --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      $out/lib/stretchly/stretchly
-  '';
+      # get the latest release version
+      latest_version=$(curl -s https://api.github.com/repos/hovancik/stretchly/releases/latest | jq --raw-output .tag_name | sed -e 's/^v//')
 
-  meta = with stdenv.lib; {
+      echo "updating to $latest_version..."
+
+      ${common-updater-scripts}/bin/update-source-version stretchly "$latest_version"
+    '';
+  };
+
+  desktopItem = makeDesktopItem {
+    name = finalAttrs.pname;
+    exec = finalAttrs.pname;
+    icon = finalAttrs.icon;
+    desktopName = "Stretchly";
+    genericName = "Stretchly";
+    categories = [ "Utility" ];
+  };
+
+  meta = with lib; {
     description = "A break time reminder app";
     longDescription = ''
       stretchly is a cross-platform electron app that reminds you to take
@@ -130,10 +70,11 @@ stdenv.mkDerivation rec {
       seconds every 10 minutes. Every 30 minutes, it displays a window
       containing an idea for a longer 5 minute break.
     '';
-    homepage = https://hovancik.net/stretchly;
-    downloadPage = https://hovancik.net/stretchly/downloads/;
+    homepage = "https://hovancik.net/stretchly";
+    downloadPage = "https://hovancik.net/stretchly/downloads/";
     license = licenses.bsd2;
-    maintainers = with maintainers; [ cdepillabout ];
+    maintainers = with maintainers; [ _1000101 ];
     platforms = platforms.linux;
+    mainProgram = "stretchly";
   };
-}
+})

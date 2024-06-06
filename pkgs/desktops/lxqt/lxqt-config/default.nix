@@ -1,69 +1,86 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, lxqt-build-tools, qtbase,
-  qtx11extras, qttools, qtsvg, kwindowsystem, libkscreen, liblxqt,
-  libqtxdg, xorg }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, glib
+, kwindowsystem
+, libXScrnSaver
+, libXcursor
+, libXdmcp
+, libkscreen
+, liblxqt
+, libpthreadstubs
+, libqtxdg
+, libxcb
+, lxqt-build-tools
+, lxqt-menu-data
+, pkg-config
+, qtbase
+, qtsvg
+, qttools
+, qtwayland
+, wrapQtAppsHook
+, xf86inputlibinput
+, xkeyboard_config
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
   pname = "lxqt-config";
-  version = "0.14.1";
+  version = "2.0.0";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "0x1k08587i2pakxlrj2n0l82r179sfywnzn2cphxiy89r5zpn7vi";
+    hash = "sha256-lFZTu6MqqWTjytYC7In/YJ38PYksZXduHvA/FRY4v0U=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qtx11extras
-    qttools
-    qtsvg
+    glib.bin
     kwindowsystem
+    libXScrnSaver
+    libXcursor
+    libXdmcp
     libkscreen
     liblxqt
+    libpthreadstubs
     libqtxdg
-    xorg.libpthreadstubs
-    xorg.libXdmcp
-    xorg.libXScrnSaver
-    xorg.libxcb
-    xorg.libXcursor
-    xorg.xf86inputlibinput
-    xorg.xf86inputlibinput.dev
+    libxcb
+    lxqt-menu-data
+    qtbase
+    qtsvg
+    qtwayland
+    xf86inputlibinput
+    xf86inputlibinput.dev
   ];
 
   postPatch = ''
-    substituteInPlace src/CMakeLists.txt \
-      --replace "DESTINATION \"\''${LXQT_ETC_XDG_DIR}" "DESTINATION \"etc/xdg"
+    substituteInPlace lxqt-config-appearance/configothertoolkits.cpp \
+      --replace-fail 'QStringLiteral("gsettings' \
+                'QStringLiteral("${glib.bin}/bin/gsettings'
 
-    for f in \
-      lxqt-config-file-associations/CMakeLists.txt \
-      lxqt-config-brightness/CMakeLists.txt \
-      lxqt-config-appearance/CMakeLists.txt \
-      lxqt-config-locale/CMakeLists.txt \
-      lxqt-config-monitor/CMakeLists.txt \
-      lxqt-config-input/CMakeLists.txt \
-      liblxqt-config-cursor/CMakeLists.txt \
-      src/CMakeLists.txt
-    do
-      substituteInPlace $f \
-        --replace "\''${LXQT_TRANSLATIONS_DIR}" "''${out}/share/lxqt/translations"
-    done
-
-    sed -i "/\''${XORG_LIBINPUT_INCLUDE_DIRS}/a ${xorg.xf86inputlibinput.dev}/include/xorg" lxqt-config-input/CMakeLists.txt
+    substituteInPlace lxqt-config-input/keyboardlayoutconfig.h \
+      --replace-fail '/usr/share/X11/xkb/rules/base.lst' \
+                '${xkeyboard_config}/share/X11/xkb/rules/base.lst'
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/lxqt-config";
     description = "Tools to configure LXQt and the underlying operating system";
-    homepage = https://github.com/lxqt/lxqt-config;
-    license = licenses.lgpl21;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
   };
 
 }

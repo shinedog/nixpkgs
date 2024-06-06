@@ -1,28 +1,40 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPy27,
+  pytestCheckHook,
+  pytest-cov,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "venusian";
-  version = "1.2.0";
+  version = "3.1.0";
+  pyproject = true;
+
+  disabled = isPy27;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "64ec8285b80b110d0ae5db4280e90e31848a59db98db1aba4d7d46f48ce91e3e";
+    hash = "sha256-63LNym8xOaFdyA+cldPBD4pUoLqIHu744uxbQtPuOpU=";
   };
 
-  checkInputs = [ pytest ];
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-cov
+  ];
 
   checkPhase = ''
     pytest
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library for deferring decorator actions";
-    homepage = http://pylonsproject.org/;
+    homepage = "https://pylonsproject.org/";
     license = licenses.bsd0;
-    maintainers = with maintainers; [ garbas domenkozar ];
+    maintainers = with maintainers; [ domenkozar ];
   };
 }

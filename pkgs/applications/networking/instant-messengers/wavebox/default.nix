@@ -1,67 +1,94 @@
-{ alsaLib, autoPatchelfHook, fetchurl, gtk3, libnotify
-, makeDesktopItem, makeWrapper, nss, stdenv, udev, xdg_utils
+{ alsa-lib
+, autoPatchelfHook
+, fetchurl
+, gtk3
+, gtk4
+, libnotify
+, copyDesktopItems
+, makeDesktopItem
+, makeWrapper
+, mesa
+, nss
+, lib
+, libdrm
+, qt5
+, stdenv
+, udev
+, xdg-utils
 , xorg
 }:
 
-with stdenv.lib;
+stdenv.mkDerivation rec {
+  pname = "wavebox";
+  version = "10.124.17-2";
 
-let
-  bits = "x86_64";
-
-  version = "4.7.3";
-
-  desktopItem = makeDesktopItem rec {
-    name = "Wavebox";
-    exec = "wavebox";
-    icon = "wavebox";
-    desktopName = name;
-    genericName = name;
-    categories = "Network;";
-  };
-
-  tarball = "Wavebox_${replaceStrings ["."] ["_"] (toString version)}_linux_${bits}.tar.gz";
-
-in stdenv.mkDerivation rec {
-  name = "wavebox-${version}";
   src = fetchurl {
-    url = "https://github.com/wavebox/waveboxapp/releases/download/v${version}/${tarball}";
-    sha256 = "1yg2lib4h5illz0ss4hvr78s4v1cjbxlczjzaw6bqigyk95smm23";
+    url = "https://download.wavebox.app/stable/linux/tar/Wavebox_${version}.tar.gz";
+    sha256 = "sha256-RS1/zs/rFWsj29BrT8Mb2IXgy9brBsQypxfvnd7pKl0=";
   };
 
   # don't remove runtime deps
   dontPatchELF = true;
+  # ignore optional Qt 6 shim
+  autoPatchelfIgnoreMissingDeps = [ "libQt6Widgets.so.6" "libQt6Gui.so.6" "libQt6Core.so.6" ];
 
-  nativeBuildInputs = [ autoPatchelfHook makeWrapper ];
+  nativeBuildInputs = [ autoPatchelfHook makeWrapper qt5.wrapQtAppsHook copyDesktopItems ];
 
   buildInputs = with xorg; [
-    libXdmcp libXScrnSaver libXtst
+    libXdmcp
+    libXScrnSaver
+    libXtst
+    libxshmfence
+    libXdamage
   ] ++ [
-    alsaLib gtk3 nss
+    alsa-lib
+    gtk3
+    nss
+    libdrm
+    mesa
+    gtk4
+    qt5.qtbase
   ];
 
-  runtimeDependencies = [ udev.lib libnotify ];
+  runtimeDependencies = [ (lib.getLib udev) libnotify gtk4 ];
+
+  desktopItems = [
+    (makeDesktopItem rec {
+      name = "Wavebox";
+      exec = "wavebox";
+      icon = "wavebox";
+      desktopName = name;
+      genericName = name;
+      categories = [ "Network" "WebBrowser" ];
+    })
+  ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/bin $out/opt/wavebox
     cp -r * $out/opt/wavebox
 
-    # provide desktop item and icon
-    mkdir -p $out/share/applications $out/share/pixmaps
-    ln -s ${desktopItem}/share/applications/* $out/share/applications
-    ln -s $out/opt/wavebox/Wavebox-linux-x64/wavebox_icon.png $out/share/pixmaps/wavebox.png
+    # provide icon for desktop item
+    mkdir -p $out/share/icons/hicolor/128x128/apps
+    ln -s $out/opt/wavebox/product_logo_128.png $out/share/icons/hicolor/128x128/apps/wavebox.png
+
+    runHook postInstall
   '';
 
   postFixup = ''
-    makeWrapper $out/opt/wavebox/Wavebox $out/bin/wavebox \
-      --prefix PATH : ${xdg_utils}/bin
+    makeWrapper $out/opt/wavebox/wavebox-launcher $out/bin/wavebox \
+    --prefix PATH : ${xdg-utils}/bin
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = ./update.sh;
+
+  meta = with lib; {
     description = "Wavebox messaging application";
-    homepage = https://wavebox.io;
+    homepage = "https://wavebox.io";
     license = licenses.mpl20;
     maintainers = with maintainers; [ rawkode ];
-    platforms = ["x86_64-linux"];
-    hydraPlatforms = [];
+    platforms = [ "x86_64-linux" ];
+    hydraPlatforms = [ ];
   };
 }

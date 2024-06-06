@@ -1,48 +1,91 @@
-{ lib, fetchPypi, buildPythonPackage, isPy3k, python, pytest
-, typing-extensions
-, protobuf
-, hidapi
-, ecdsa
-, mnemonic
-, requests
-, pyblake2
-, click
-, construct
-, libusb1
-, rlp
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPy3k,
+  installShellFiles,
+  attrs,
+  click,
+  construct,
+  construct-classes,
+  ecdsa,
+  hidapi,
+  libusb1,
+  mnemonic,
+  pillow,
+  protobuf,
+  requests,
+  shamir-mnemonic,
+  simple-rlp,
+  typing-extensions,
+  trezor-udev-rules,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "trezor";
-  version = "0.11.2";
+  version = "0.13.8";
+  format = "setuptools";
 
   disabled = !isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a6f4b47b37a21247535fc43411cb70a8c61ef0a5a2dfee668bd05611e2741fb8";
+    hash = "sha256-Y01O3fNWAyV8MhYY2FSMajWyc4Rle2XjsL261jWlfP8=";
   };
 
-  propagatedBuildInputs = [ typing-extensions protobuf hidapi ecdsa mnemonic requests pyblake2 click construct libusb1 rlp ];
+  nativeBuildInputs = [ installShellFiles ];
 
-  # build requires UTF-8 locale
-  LANG = "en_US.UTF-8";
+  propagatedBuildInputs = [
+    attrs
+    click
+    construct
+    construct-classes
+    ecdsa
+    hidapi
+    libusb1
+    mnemonic
+    pillow
+    protobuf
+    requests
+    shamir-mnemonic
+    simple-rlp
+    typing-extensions
+  ] ++ lib.optionals stdenv.isLinux [ trezor-udev-rules ];
 
-  checkInputs = [
-    pytest
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTestPaths = [
+    "tests/test_stellar.py" # requires stellar-sdk
+    "tests/test_firmware.py" # requires network downloads
   ];
 
-  # disable test_tx_api.py as it requires being online
-  checkPhase = ''
-    runHook preCheck
-    ${python.interpreter} -m pytest --pyarg trezorlib.tests.unit_tests --ignore trezorlib/tests/unit_tests/test_tx_api.py
-    runHook postCheck
+  pythonImportsCheck = [ "trezorlib" ];
+
+  postCheck = ''
+    $out/bin/trezorctl --version
   '';
 
-  meta = {
-    description = "Python library for communicating with TREZOR Bitcoin Hardware Wallet";
-    homepage = https://github.com/trezor/python-trezor;
-    license = lib.licenses.gpl3;
-    maintainers = with lib.maintainers; [ np prusnak ];
+  postFixup = ''
+    mkdir completions
+    _TREZORCTL_COMPLETE=source_bash $out/bin/trezorctl > completions/trezorctl || true
+    _TREZORCTL_COMPLETE=source_zsh $out/bin/trezorctl > completions/_trezorctl || true
+    _TREZORCTL_COMPLETE=source_fish $out/bin/trezorctl > completions/trezorctl.fish || true
+    installShellCompletion --bash completions/trezorctl
+    installShellCompletion --zsh completions/_trezorctl
+    installShellCompletion --fish completions/trezorctl.fish
+  '';
+
+  meta = with lib; {
+    description = "Python library for communicating with Trezor Hardware Wallet";
+    mainProgram = "trezorctl";
+    homepage = "https://github.com/trezor/trezor-firmware/tree/master/python";
+    license = licenses.gpl3;
+    maintainers = with maintainers; [
+      np
+      prusnak
+      mmahut
+    ];
   };
 }

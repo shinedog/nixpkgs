@@ -1,33 +1,76 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, six
-, python-engineio
-, mock
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  bidict,
+  python-engineio,
+
+  # optional-dependencies
+  aiohttp,
+  requests,
+  websocket-client,
+
+  # tests
+  msgpack,
+  pytestCheckHook,
+  simple-websocket,
+  uvicorn,
+
 }:
 
 buildPythonPackage rec {
   pname = "python-socketio";
-  version = "3.1.2";
+  version = "5.11.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "aa702157694d55a743fb6f1cc0bd1af58fbfda8a7d71d747d4b12d6dac29cab3";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "miguelgrinberg";
+    repo = "python-socketio";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-t5QbuXjipLaf9GV+N5FLq45xJPK2/FUaM/0s8RNPTzo=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
   propagatedBuildInputs = [
-    six
+    bidict
     python-engineio
   ];
 
-  checkInputs = [ mock ];
-  # tests only on github, but latest github release not tagged
-  doCheck = false;
+  passthru.optional-dependencies = {
+    client = [
+      requests
+      websocket-client
+    ];
+    asyncio_client = [ aiohttp ];
+  };
+
+  nativeCheckInputs = [
+    msgpack
+    pytestCheckHook
+    uvicorn
+    simple-websocket
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  pythonImportsCheck = [ "socketio" ];
 
   meta = with lib; {
-    description = "Socket.IO server";
-    homepage = https://github.com/miguelgrinberg/python-socketio/;
-    license = licenses.mit;
-    maintainers = [ maintainers.mic92 ];
+    description = "Python Socket.IO server and client";
+    longDescription = ''
+      Socket.IO is a lightweight transport protocol that enables real-time
+      bidirectional event-based communication between clients and a server.
+    '';
+    homepage = "https://github.com/miguelgrinberg/python-socketio/";
+    changelog = "https://github.com/miguelgrinberg/python-socketio/blob/v${version}/CHANGES.md";
+    license = with licenses; [ mit ];
+    maintainers = with maintainers; [ mic92 ];
   };
 }

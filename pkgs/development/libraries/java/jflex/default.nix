@@ -1,14 +1,15 @@
-{stdenv, fetchurl, jre} :
+{lib, stdenv, fetchurl, jre} :
 
 stdenv.mkDerivation rec {
-  name = "jflex-1.7.0";
+  pname = "jflex";
+  version = "1.9.1";
 
   src = fetchurl {
-    url = "http://jflex.de/release/${name}.tar.gz";
-    sha256 = "1k7bqw1mn569g9dxc0ia3yz1bzgzs5w52lh1xn3hgj7k5ymh54kk";
+    url = "http://jflex.de/release/jflex-${version}.tar.gz";
+    sha256 = "sha256-4MHp7vkf9t8E1z+l6v8T86ArZ5/uFHTlzK4AciTfbfY=";
   };
 
-  sourceRoot = name;
+  sourceRoot = "${pname}-${version}";
 
   installPhase = ''
     runHook preInstall
@@ -29,9 +30,10 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage = https://www.jflex.de/;
+    homepage = "https://www.jflex.de/";
     description = "Lexical analyzer generator for Java, written in Java";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "jflex";
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.unix;
   };
 }

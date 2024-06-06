@@ -1,69 +1,81 @@
-{ lib, fetchurl, python3Packages, qtbase, makeWrapper }:
-
-let
-
-  python = python3Packages.python;
-
-in
+{ lib, stdenv, fetchFromGitHub, python3Packages, wrapQtAppsHook
+, secp256k1, qtwayland }:
 
 python3Packages.buildPythonApplication rec {
   pname = "electron-cash";
-  version = "4.0.2";
+  version = "4.3.1";
 
-  src = fetchurl {
-    url = "https://electroncash.org/downloads/${version}/win-linux/Electron-Cash-${version}.tar.gz";
-    # Verified using official SHA-1 and signature from
-    # https://github.com/fyookball/keys-n-hashes
-    sha256 = "6255cd0493442ec57c10ae70ca2e84c6a29497f90a1393e6ac5772afe7572acf";
+  src = fetchFromGitHub {
+    owner = "Electron-Cash";
+    repo = "Electron-Cash";
+    rev = "refs/tags/${version}";
+    sha256 = "sha256-xOyj5XerOwgfvI0qj7+7oshDvd18h5IeZvcJTis8nWo=";
   };
 
-  propagatedBuildInputs = with python3Packages; [
-    dnspython
-    ecdsa
-    jsonrpclib-pelix
-    matplotlib
-    pbkdf2
-    pyaes
-    pycrypto
-    pyqt5
-    pysocks
-    qrcode
-    requests
-    tlslite-ng
-    qdarkstyle
-
-    # plugins
-    keepkey
-    trezor
-    btchip
+  build-system = with python3Packages; [
+    cython
   ];
 
-  nativeBuildInputs = [ makeWrapper ];
+  propagatedBuildInputs = with python3Packages; [
+    # requirements
+    pyaes
+    ecdsa
+    requests
+    qrcode
+    protobuf
+    jsonrpclib-pelix
+    pysocks
+    qdarkstyle
+    python-dateutil
+    stem
+    certifi
+    pathvalidate
+    dnspython
+    bitcoinrpc
+
+    # requirements-binaries
+    pyqt5
+    psutil
+    pycryptodomex
+    cryptography
+
+    # requirements-hw
+    trezor
+    keepkey
+    btchip-python
+    hidapi
+    pyopenssl
+    pyscard
+    pysatochip
+  ];
+
+  nativeBuildInputs = [ wrapQtAppsHook ];
+
+  buildInputs = [ ] ++ lib.optional stdenv.isLinux qtwayland;
 
   postPatch = ''
     substituteInPlace contrib/requirements/requirements.txt \
-      --replace "qdarkstyle<2.6" "qdarkstyle<3"
+      --replace "qdarkstyle==2.6.8" "qdarkstyle<3"
 
     substituteInPlace setup.py \
       --replace "(share_dir" "(\"share\""
   '';
 
-  checkInputs = with python3Packages; [
-    pytest
-  ];
-
-  checkPhase = ''
-    unset HOME
-    pytest lib/tests
-  '';
-
-  postInstall = ''
+  postInstall = lib.optionalString stdenv.isLinux ''
     substituteInPlace $out/share/applications/electron-cash.desktop \
       --replace "Exec=electron-cash" "Exec=$out/bin/electron-cash"
+  '';
 
-    # Please remove this when #44047 is fixed
-    wrapProgram $out/bin/electron-cash \
-      --prefix QT_PLUGIN_PATH : ${qtbase}/lib/qt-5.${lib.versions.minor qtbase.version}/plugins
+  # If secp256k1 wasn't added to the library path, the following warning is given:
+  #
+  #   Electron Cash was unable to find the secp256k1 library on this system.
+  #   Elliptic curve cryptography operations will be performed in slow
+  #   Python-only mode.
+  preFixup = ''
+    makeWrapperArgs+=("''${qtWrapperArgs[@]}")
+    makeWrapperArgs+=(
+      "--prefix" "LD_LIBRARY_PATH" ":" "${secp256k1}/lib"
+    )
   '';
 
   doInstallCheck = true;
@@ -73,15 +85,16 @@ python3Packages.buildPythonApplication rec {
 
   meta = with lib; {
     description = "A Bitcoin Cash SPV Wallet";
+    mainProgram = "electron-cash";
     longDescription = ''
       An easy-to-use Bitcoin Cash client featuring wallets generated from
       mnemonic seeds (in addition to other, more advanced, wallet options)
       and the ability to perform transactions without downloading a copy
       of the blockchain.
     '';
-    homepage = https://www.electroncash.org/;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ lassulus nyanloutre ];
+    homepage = "https://www.electroncash.org/";
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ lassulus nyanloutre oxalica ];
     license = licenses.mit;
   };
 }

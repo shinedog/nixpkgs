@@ -1,54 +1,121 @@
-{ fetchurl, fetchpatch, stdenv, lib, pkgconfig
-, libgpgerror, libassuan, libcap ? null, libsecret ? null, ncurses ? null, gtk2 ? null, gcr ? null, qt ? null
-, enableEmacs ? false
+{ stdenv
+, lib
+, fetchurl
+, fetchpatch
+, pkg-config
+, autoreconfHook
+, wrapGAppsHook3
+, libgpg-error
+, libassuan
+, libsForQt5
+, ncurses
+, gtk2
+, gcr
+, withLibsecret ? true
+, libsecret
 }:
 
-stdenv.mkDerivation rec {
-  name = "pinentry-1.1.0";
-
-  src = fetchurl {
-    url = "mirror://gnupg/pinentry/${name}.tar.bz2";
-    sha256 = "0w35ypl960pczg5kp6km3dyr000m1hf0vpwwlh72jjkjza36c1v8";
+let
+  flavorInfo = {
+    tty = { flag = "tty"; };
+    curses = {
+      flag = "curses";
+      buildInputs = [ ncurses ];
+    };
+    gtk2 = {
+      flag = "gtk2";
+      buildInputs = [ gtk2 ];
+    };
+    gnome3 = {
+      flag = "gnome3";
+      buildInputs = [ gcr ];
+      nativeBuildInputs = [ wrapGAppsHook3 ];
+    };
+    qt = {
+      flag = "qt";
+      buildInputs = [ libsForQt5.qtbase ];
+      nativeBuildInputs = [ libsForQt5.wrapQtAppsHook ];
+    };
+    emacs = { flag = "emacs"; };
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libgpgerror libassuan libcap libsecret gtk2 gcr ncurses qt ];
+  buildPinentry = pinentryExtraPname: buildFlavors:
+    let
+      enableFeaturePinentry = f:
+        lib.enableFeature (lib.elem f buildFlavors) ("pinentry-" + flavorInfo.${f}.flag);
 
-  prePatch = ''
-    substituteInPlace pinentry/pinentry-curses.c --replace ncursesw ncurses
-  '';
+      pinentryMkDerivation =
+        if (lib.elem "qt" buildFlavors)
+        then libsForQt5.mkDerivation
+        else stdenv.mkDerivation;
 
-  patches = lib.optionals (gtk2 != null) [
-    (fetchpatch {
-      url = "https://salsa.debian.org/debian/pinentry/raw/debian/1.1.0-1/debian/patches/"
-          + "0007-gtk2-When-X11-input-grabbing-fails-try-again-over-0..patch";
-      sha256 = "15r1axby3fdlzz9wg5zx7miv7gqx2jy4immaw4xmmw5skiifnhfd";
-    })
-  ];
+    in
+    pinentryMkDerivation rec {
+      pname = "pinentry-${pinentryExtraPname}";
+      version = "1.2.1";
 
-  configureFlags = [
-    (stdenv.lib.withFeature   (libcap != null)    "libcap")
-    (stdenv.lib.enableFeature (libsecret != null) "libsecret")
-    (stdenv.lib.enableFeature (ncurses != null)   "pinentry-curses")
-    (stdenv.lib.enableFeature true                "pinentry-tty")
-    (stdenv.lib.enableFeature enableEmacs         "pinentry-emacs")
-    (stdenv.lib.enableFeature (gtk2 != null)      "pinentry-gtk2")
-    (stdenv.lib.enableFeature (gcr != null)       "pinentry-gnome3")
-    (stdenv.lib.enableFeature (qt != null)        "pinentry-qt")
+      src = fetchurl {
+        url = "mirror://gnupg/pinentry/pinentry-${version}.tar.bz2";
+        hash = "sha256-RXoYXlqFI4+5RalV3GNSq5YtyLSHILYvyfpIx1QKQGc=";
+      };
 
-    "--with-libassuan-prefix=${libassuan.dev}"
-    "--with-libgpg-error-prefix=${libgpgerror.dev}"
-  ];
+      nativeBuildInputs = [ pkg-config autoreconfHook ]
+        ++ lib.concatMap (f: flavorInfo.${f}.nativeBuildInputs or [ ]) buildFlavors;
 
-  meta = with stdenv.lib; {
-    homepage = http://gnupg.org/aegypten2/;
-    description = "GnuPG’s interface to passphrase input";
-    license = licenses.gpl2Plus;
-    platforms = platforms.all;
-    longDescription = ''
-      Pinentry provides a console and (optional) GTK+ and Qt GUIs allowing users
-      to enter a passphrase when `gpg' or `gpg2' is run and needs it.
-    '';
-    maintainers = [ maintainers.ttuegel ];
-  };
+      buildInputs = [ libgpg-error libassuan ]
+        ++ lib.optional withLibsecret libsecret
+        ++ lib.concatMap (f: flavorInfo.${f}.buildInputs or [ ]) buildFlavors;
+
+      dontWrapGApps = true;
+      dontWrapQtApps = true;
+
+      patches = [
+        ./autoconf-ar.patch
+      ] ++ lib.optionals (lib.elem "gtk2" buildFlavors) [
+        (fetchpatch {
+          url = "https://salsa.debian.org/debian/pinentry/raw/debian/1.1.0-1/debian/patches/0007-gtk2-When-X11-input-grabbing-fails-try-again-over-0..patch";
+          sha256 = "15r1axby3fdlzz9wg5zx7miv7gqx2jy4immaw4xmmw5skiifnhfd";
+        })
+      ];
+
+      configureFlags = [
+        "--with-libgpg-error-prefix=${libgpg-error.dev}"
+        "--with-libassuan-prefix=${libassuan.dev}"
+        (lib.enableFeature withLibsecret "libsecret")
+      ] ++ (map enableFeaturePinentry (lib.attrNames flavorInfo));
+
+      postInstall =
+        lib.optionalString (lib.elem "gnome3" buildFlavors) ''
+          wrapGApp $out/bin/pinentry-gnome3
+        '' + lib.optionalString (lib.elem "qt" buildFlavors) ''
+          wrapQtApp $out/bin/pinentry-qt
+        '';
+
+      passthru = { flavors = buildFlavors; };
+
+      meta = with lib; {
+        homepage = "https://gnupg.org/software/pinentry/index.html";
+        description = "GnuPG’s interface to passphrase input";
+        license = licenses.gpl2Plus;
+        platforms =
+          if elem "gnome3" buildFlavors then platforms.linux else
+          if elem "qt" buildFlavors then (remove "aarch64-darwin" platforms.all) else
+          platforms.all;
+        longDescription = ''
+          Pinentry provides a console and (optional) GTK and Qt GUIs allowing users
+          to enter a passphrase when `gpg` or `gpg2` is run and needs it.
+        '';
+        maintainers = with maintainers; [ fpletz ];
+        mainProgram = "pinentry";
+      };
+    };
+in
+{
+  pinentry-curses = buildPinentry "curses" [ "curses" "tty" ];
+  pinentry-emacs = buildPinentry "emacs" [ "emacs" "curses" "tty" ];
+  pinentry-gnome3 = buildPinentry "gnome3" [ "gnome3" "curses" "tty" ];
+  pinentry-gtk2 = buildPinentry "gtk2" [ "gtk2" "curses" "tty" ];
+  pinentry-qt = buildPinentry "qt" [ "qt" "curses" "tty" ];
+  pinentry-tty = buildPinentry "tty" [ "tty" ];
+  pinentry-all = buildPinentry "all" [ "curses" "tty" "gtk2" "gnome3" "qt" "emacs" ];
 }

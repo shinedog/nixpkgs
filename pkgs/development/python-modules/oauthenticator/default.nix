@@ -1,46 +1,80 @@
-{ lib
-, buildPythonPackage
-, jupyterhub
-, globus-sdk
-, mwoauth
-, codecov
-, flake8
-, pyjwt
-, pytest
-, pytestcov
-, pytest-tornado
-, requests-mock
-, pythonOlder
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchPypi,
+  google-api-python-client,
+  google-auth-oauthlib,
+  jupyterhub,
+  mwoauth,
+  pyjwt,
+  pytest-asyncio,
+  pytestCheckHook,
+  requests-mock,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "oauthenticator";
-  version = "0.8.2";
+  version = "16.3.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5195b5d66808787894590926b038381eb47495c9df4fd0d907c84d86cb35132f";
+    hash = "sha256-QMddGJUfafXoBxMCjlx1lH45a4Bab3AP4j8Px7JxYaQ=";
   };
 
-  checkPhase = ''
-    py.test oauthenticator/tests
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace-fail " --cov=oauthenticator" ""
   '';
 
-  # No tests in archive
-  doCheck = false;
-   
-  checkInputs = [  globus-sdk mwoauth codecov flake8 pytest
-    pytestcov pytest-tornado requests-mock pyjwt ];
-  
-  propagatedBuildInputs = [ jupyterhub ];
+  build-system = [ setuptools ];
 
-  disabled = pythonOlder "3.4";
+  dependencies = [
+    jupyterhub
+    pyjwt
+  ];
+
+  passthru.optional-dependencies = {
+    googlegroups = [
+      google-api-python-client
+      google-auth-oauthlib
+    ];
+    mediawiki = [ mwoauth ];
+  };
+
+  nativeCheckInputs = [
+    pytest-asyncio
+    pytestCheckHook
+    requests-mock
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  disabledTests = [
+    # Tests are outdated, https://github.com/jupyterhub/oauthenticator/issues/432
+    "test_azuread"
+    "test_mediawiki"
+    # Tests require network access
+    "test_allowed"
+    "test_auth0"
+    "test_bitbucket"
+    "test_cilogon"
+    "test_github"
+    "test_gitlab"
+    "test_globus"
+    "test_google"
+    "test_openshift"
+  ];
+
+  pythonImportsCheck = [ "oauthenticator" ];
 
   meta = with lib; {
-    description = "Authenticate JupyterHub users with common OAuth providers, including GitHub, Bitbucket, and more.";
-    homepage =  https://github.com/jupyterhub/oauthenticator;
+    description = "Authenticate JupyterHub users with common OAuth providers";
+    homepage = "https://github.com/jupyterhub/oauthenticator";
+    changelog = "https://github.com/jupyterhub/oauthenticator/blob/${version}/docs/source/reference/changelog.md";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ ixxie ];
+    maintainers = with maintainers; [ ];
   };
 }

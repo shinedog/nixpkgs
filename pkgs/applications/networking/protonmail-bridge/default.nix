@@ -1,85 +1,57 @@
-{ stdenv, fetchurl, lib, qtbase, qtmultimedia, qtsvg, qtdeclarative, qttools, full,
-  libsecret, libGL, libpulseaudio, glib, makeWrapper, makeDesktopItem }:
+{ lib, buildGoModule, fetchFromGitHub, pkg-config, libsecret }:
 
-let
-  version = "1.1.4-1";
+buildGoModule rec {
+  pname = "protonmail-bridge";
+  version = "3.11.1";
 
-  description = ''
-    An application that runs on your computer in the background and seamlessly encrypts
-    and decrypts your mail as it enters and leaves your computer.
-
-    To work, gnome-keyring service must be enabled.
-  '';
-
-  desktopItem = makeDesktopItem {
-    name = "protonmail-bridge";
-    exec = "protonmail-bridge";
-    icon = "protonmail-bridge";
-    comment = stdenv.lib.replaceStrings ["\n"] [" "] description;
-    desktopName = "ProtonMail Bridge";
-    genericName = "ProtonMail Bridge for Linux";
-    categories = "Utility;Security;Network;Email";
-  };
-in stdenv.mkDerivation rec {
-  name = "protonmail-bridge-${version}";
-
-  src = fetchurl {
-    url = "https://protonmail.com/download/protonmail-bridge_${version}_amd64.deb";
-    sha256 = "16w3l81j10syl2pis08sl752yapbgjy531qs0n1ghmsx2d12n7kl";
+  src = fetchFromGitHub {
+    owner = "ProtonMail";
+    repo = "proton-bridge";
+    rev = "v${version}";
+    hash = "sha256-PM162vj1Q336fM5z6KoBgtujz9UgESIxUW3Lw8AEYTw=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  vendorHash = "sha256-qi6ME74pJH/wgDh0xp/Rsc9hPd3v3L/M8pBQJzNieK8=";
 
-  sourceRoot = ".";
+  nativeBuildInputs = [ pkg-config ];
 
-  unpackCmd = ''
-    ar p "$src" data.tar.xz | tar xJ
+  buildInputs = [ libsecret ];
+
+  preBuild = ''
+    patchShebangs ./utils/
+    (cd ./utils/ && ./credits.sh bridge)
   '';
 
-  installPhase = ''
-    mkdir -p $out/{bin,lib,share/applications}
-    mkdir -p $out/share/{applications,icons/hicolor/scalable/apps}
-
-    cp -r usr/lib/protonmail/bridge/protonmail-bridge $out/lib
-    cp usr/share/icons/protonmail/ProtonMail_Bridge.svg $out/share/icons/hicolor/scalable/apps/protonmail-bridge.svg
-    cp ${desktopItem}/share/applications/* $out/share/applications
-
-    ln -s $out/lib/protonmail-bridge $out/bin/protonmail-bridge
-  '';
-
-  postFixup = let
-    rpath = lib.makeLibraryPath [
-      stdenv.cc.cc.lib
-      qtbase
-      qtmultimedia
-      qtsvg
-      qtdeclarative
-      qttools
-      libGL
-      libsecret
-      libpulseaudio
-      glib
+  ldflags =
+    let constants = "github.com/ProtonMail/proton-bridge/v3/internal/constants"; in
+    [
+      "-X ${constants}.Version=${version}"
+      "-X ${constants}.Revision=${src.rev}"
+      "-X ${constants}.buildTime=unknown"
+      "-X ${constants}.FullAppName=ProtonMailBridge" # Should be "Proton Mail Bridge", but quoting doesn't seems to work in nix's ldflags
     ];
 
-    qtPath = prefix: "${full}/${prefix}";
-  in ''
-    patchelf \
-      --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      --set-rpath "${rpath}" \
-      $out/lib/protonmail-bridge
+  subPackages = [
+    "cmd/Desktop-Bridge"
+  ];
 
-    wrapProgram $out/lib/protonmail-bridge \
-      --set QT_PLUGIN_PATH "${qtPath qtbase.qtPluginPrefix}" \
-      --set QML_IMPORT_PATH "${qtPath qtbase.qtQmlPrefix}" \
-      --set QML2_IMPORT_PATH "${qtPath qtbase.qtQmlPrefix}" \
+  postInstall = ''
+    mv $out/bin/Desktop-Bridge $out/bin/protonmail-bridge # The cli is named like that in other distro packages
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://www.protonmail.com/bridge;
-    license = licenses.mit;
-    platforms = [ "x86_64-linux" ];
-    maintainers = with maintainers; [ lightdiscord ];
+  meta = {
+    changelog = "https://github.com/ProtonMail/proton-bridge/blob/${src.rev}/Changelog.md";
+    description = "Use your ProtonMail account with your local e-mail client";
+    downloadPage = "https://github.com/ProtonMail/proton-bridge/releases";
+    homepage = "https://github.com/ProtonMail/proton-bridge";
+    license = lib.licenses.gpl3Plus;
+    longDescription = ''
+      An application that runs on your computer in the background and seamlessly encrypts
+      and decrypts your mail as it enters and leaves your computer.
 
-    inherit description;
+      To work, use secret-service freedesktop.org API (e.g. Gnome keyring) or pass.
+    '';
+    mainProgram = "protonmail-bridge";
+    maintainers = with lib.maintainers; [ mrfreezeex daniel-fahey ];
   };
 }

@@ -1,44 +1,60 @@
-{ stdenv, fetchurl, pkgconfig, guile, ncurses, libffi }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, guile
+, libffi
+, ncurses
+}:
 
-let
-  name = "guile-ncurses-${version}";
-  version = "1.7";
-in stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "guile-ncurses";
+  version = "3.1";
 
   src = fetchurl {
-    url = "mirror://gnu/guile-ncurses/${name}.tar.gz";
-    sha256 = "153vv75gb7l62sp3666rc97i63rnaqbx2rjar7d9b5w81fhwv4r5";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
+    hash = "sha256-7onozq/Kud0O8/wazJsQ9NIbpLJW0ynYQtYYPmP41zM=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ guile ncurses libffi ];
+  nativeBuildInputs = [
+    pkg-config
+  ];
+  buildInputs = [
+    guile
+    libffi
+    ncurses
+  ];
 
-  preConfigure = ''
-    configureFlags="$configureFlags --with-guilesitedir=$out/share/guile/site"
-  '';
+  configureFlags = [
+    "--with-gnu-filesystem-hierarchy"
+  ];
+
+  env = lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = "-Wno-error=implicit-function-declaration";
+  };
 
   postFixup = ''
-    for f in $out/share/guile/site/ncurses/**.scm; do \
+    for f in $out/${guile.siteDir}/ncurses/**.scm; do \
       substituteInPlace $f \
-        --replace "libguile-ncurses" "$out/lib/libguile-ncurses"; \
+        --replace "libguile-ncurses" "$out/lib/guile/${guile.effectiveVersion}/libguile-ncurses"; \
     done
   '';
 
   # XXX: 1 of 65 tests failed.
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/guile-ncurses/";
     description = "Scheme interface to the NCurses libraries";
+    mainProgram = "guile-ncurses-shell";
     longDescription = ''
       GNU Guile-Ncurses is a library for the Guile Scheme interpreter that
       provides functions for creating text user interfaces.  The text user
       interface functionality is built on the ncurses libraries: curses, form,
       panel, and menu.
     '';
-    homepage = "https://www.gnu.org/software/guile-ncurses/";
     license = licenses.lgpl3Plus;
     maintainers = with maintainers; [ vyp ];
-    platforms = platforms.gnu ++ platforms.linux;
+    platforms = guile.meta.platforms;
   };
 }

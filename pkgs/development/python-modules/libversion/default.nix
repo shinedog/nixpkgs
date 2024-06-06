@@ -1,23 +1,49 @@
-{ stdenv, buildPythonPackage, fetchPypi, pkgconfig, libversion, pythonOlder }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  libversion,
+  pkg-config,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "libversion";
-  version = "1.1.3";
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1ax1bq5hrbs2pq2krya83yj1s5cm33pcpwalnc15cgj73kmhb5fn";
-  };
-
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libversion ];
+  version = "1.2.4";
+  format = "setuptools";
 
   disabled = pythonOlder "3.6";
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/repology/py-libversion;
+  src = fetchFromGitHub {
+    owner = "repology";
+    repo = "py-libversion";
+    rev = version;
+    hash = "sha256-p0wtSB+QXAERf+57MMb8cqWoy1bG3XaCpR9GPwYYvJM=";
+  };
+
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "'pkg-config'" "'$(command -v $PKG_CONFIG)'"
+  '';
+
+  nativeBuildInputs = [ pkg-config ];
+
+  buildInputs = [ libversion ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  preCheck = ''
+    # import from $out
+    rm -r libversion
+  '';
+
+  pythonImportsCheck = [ "libversion" ];
+
+  meta = with lib; {
     description = "Python bindings for libversion, which provides fast, powerful and correct generic version string comparison algorithm";
+    homepage = "https://github.com/repology/py-libversion";
     license = licenses.mit;
-    maintainers = [ maintainers.ryantm ];
+    maintainers = with maintainers; [ ryantm ];
   };
 }

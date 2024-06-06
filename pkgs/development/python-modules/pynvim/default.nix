@@ -1,41 +1,47 @@
-{ buildPythonPackage
-, fetchPypi
-, lib
-, nose
-, msgpack
-, greenlet
-, trollius
-, pythonOlder
-, isPyPy
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  msgpack,
+  greenlet,
+  pythonOlder,
+  isPyPy,
 }:
 
 buildPythonPackage rec {
   pname = "pynvim";
-  version = "0.3.2";
+  version = "0.5.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "01dybk4vs452pljn1q3il5z2sd313ki0lgiglc0xmjc6wp290r6g";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "neovim";
+    repo = "pynvim";
+    rev = "refs/tags/${version}";
+    hash = "sha256-3LqgKENFzdfCjMlD6Xzv5W23yvIkNMUYo2+LlzKZ3cc=";
   };
 
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    nosetests
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace " + pytest_runner" ""
   '';
 
-  # Tests require pkgs.neovim,
-  # which we cannot add because of circular dependency.
+  buildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [ msgpack ] ++ lib.optionals (!isPyPy) [ greenlet ];
+
+  # Tests require pkgs.neovim which we cannot add because of circular dependency
   doCheck = false;
 
-  propagatedBuildInputs = [ msgpack ]
-    ++ lib.optional (!isPyPy) greenlet
-    ++ lib.optional (pythonOlder "3.4") trollius;
+  pythonImportsCheck = [ "pynvim" ];
 
-  meta = {
+  meta = with lib; {
     description = "Python client for Neovim";
-    homepage = "https://github.com/neovim/python-client";
-    license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ garbas ];
+    homepage = "https://github.com/neovim/pynvim";
+    changelog = "https://github.com/neovim/pynvim/releases/tag/${version}";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ figsoda ];
   };
 }

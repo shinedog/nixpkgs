@@ -1,26 +1,38 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub, nix-update-script }:
 
-stdenv.mkDerivation rec {
-  name = "material-icons-${version}";
-  version = "3.0.1";
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "material-icons";
+  version = "4.0.0";
 
   src = fetchFromGitHub {
-    owner  = "google";
-    repo   = "material-design-icons";
-    rev    = "${version}";
-    sha256 = "17q5brcqyyc8gbjdgpv38p89s60cwxjlwy2ljnrvas5cj0s62np0";
+    owner = "google";
+    repo = "material-design-icons";
+    rev = finalAttrs.version;
+    hash = "sha256-wX7UejIYUxXOnrH2WZYku9ljv4ZAlvgk8EEJJHOCCjE=";
   };
 
-  buildCommand = ''
+  dontConfigure = true;
+  dontBuild = true;
+
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
-    cp $src/iconfont/*.ttf $out/share/fonts/truetype
+    cp font/*.ttf $out/share/fonts/truetype
+
+    mkdir -p $out/share/fonts/opentype
+    cp font/*.otf $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = nix-update-script { };
+
+  meta = with lib; {
     description = "System status icons by Google, featuring material design";
-    homepage = https://material.io/icons;
+    homepage = "https://material.io/icons";
     license = licenses.asl20;
     platforms = platforms.all;
     maintainers = with maintainers; [ mpcsh ];
   };
-}
+})

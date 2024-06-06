@@ -1,46 +1,79 @@
-{ stdenv
-, buildPythonPackage
-, fetchFromGitHub
-, fetchpatch
-, isPyPy
-, gmp
-, mpfr
-, libmpc
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  isPyPy,
+  pythonOlder,
+  setuptools,
+  gmp,
+  mpfr,
+  libmpc,
+  pytestCheckHook,
+  hypothesis,
+  cython,
+  mpmath,
+  # Reverse dependency
+  sage,
 }:
 
-let
+buildPythonPackage rec {
   pname = "gmpy2";
-  version = "2.1a4";
-in
+  version = "2.2.0a2";
+  pyproject = true;
 
-buildPythonPackage {
-  inherit pname version;
-
-  disabled = isPyPy;
+  disabled = isPyPy || pythonOlder "3.7";
 
   src = fetchFromGitHub {
     owner = "aleaxit";
     repo = "gmpy";
-    rev = "gmpy2-${version}";
-    sha256 = "1wg4w4q2l7n26ksrdh4rwqmifgfm32n7x29cgdvmmbv5lmilb5hz";
+    rev = "refs/tags/gmpy2-${version}";
+    hash = "sha256-luLEDEY1cezhzZo4fXmM/MUg2YyAaz7n0HwSpbNayP8=";
   };
 
-  patches = [
-    # Backport of two bugfixes (including a segfault):
-    # https://github.com/aleaxit/gmpy/pull/217
-    # https://github.com/aleaxit/gmpy/pull/218
-    (fetchpatch {
-      name = "bugfixes.patch";
-      url = "https://git.sagemath.org/sage.git/plain/build/pkgs/gmpy2/patches/PR217_PR218_conversion_methods.patch?id=b7fbb9a4dac5d6882f6b83a57447dd79ecafb84c";
-      sha256 = "1x3gwvqac36k4ypclxq37fcvi6p790k4xdpm2bj2b3xsvjb80ycz";
-    })
+  build-system = [ setuptools ];
+
+  buildInputs = [
+    gmp
+    mpfr
+    libmpc
   ];
 
-  buildInputs = [ gmp mpfr libmpc ];
+  # make relative imports in tests work properly
+  preCheck = ''
+    rm gmpy2 -r
+  '';
 
-  meta = with stdenv.lib; {
-    description = "GMP/MPIR, MPFR, and MPC interface to Python 2.6+ and 3.x";
-    homepage = https://github.com/aleaxit/gmpy/;
-    license = licenses.gpl3Plus;
+  nativeCheckInputs = [
+    pytestCheckHook
+    hypothesis
+    cython
+    mpmath
+  ];
+
+  disabledTests =
+    lib.optionals (stdenv.isLinux && stdenv.isAarch64) [
+      # issue with some overflow logic
+      "test_mpz_to_bytes"
+      "test_mpz_from_bytes"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # TypeError: mpq() requires numeric or string argument
+      # not sure why it only fails on Darwin
+      "test_mpq_from_Decimal"
+    ];
+
+  pythonImportsCheck = [ "gmpy2" ];
+
+  passthru.tests = {
+    inherit sage;
+  };
+
+  meta = {
+    changelog = "https://github.com/aleaxit/gmpy/blob/${src.rev}/docs/history.rst";
+    description = "Interface to GMP, MPFR, and MPC for Python 3.7+";
+    homepage = "https://github.com/aleaxit/gmpy/";
+    license = lib.licenses.lgpl3Plus;
+    maintainers = with lib.maintainers; [ tomasajt ];
   };
 }

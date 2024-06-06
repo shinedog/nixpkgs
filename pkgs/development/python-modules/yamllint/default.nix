@@ -1,26 +1,61 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, nose, pyyaml, pathspec }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  pathspec,
+  pytestCheckHook,
+  pythonOlder,
+  pyyaml,
+}:
 
 buildPythonPackage rec {
   pname = "yamllint";
-  version = "1.15.0";
+  version = "1.35.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8f25759997acb42e52b96bf3af0b4b942e6516b51198bebd3402640102006af7";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "adrienverge";
+    repo = "yamllint";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-+7Q2cPl4XElI2IfLAkteifFVTrGkj2IjZk7nPuc6eYM=";
   };
 
-  checkInputs = [ nose ];
+  nativeBuildInputs = [ setuptools ];
 
-  propagatedBuildInputs = [  pyyaml pathspec ];
+  propagatedBuildInputs = [
+    pyyaml
+    pathspec
+  ];
 
-  # Two test failures
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  disabledTests =
+    [
+      # test failure reported upstream: https://github.com/adrienverge/yamllint/issues/373
+      "test_find_files_recursively"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # locale tests are broken on BSDs; see https://github.com/adrienverge/yamllint/issues/307
+      "test_locale_accents"
+      "test_locale_case"
+      "test_run_with_locale"
+    ];
+
+  pythonImportsCheck = [ "yamllint" ];
+
+  meta = with lib; {
     description = "A linter for YAML files";
-    homepage = https://github.com/adrienverge/yamllint;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ mikefaille ];
+    mainProgram = "yamllint";
+    homepage = "https://github.com/adrienverge/yamllint";
+    changelog = "https://github.com/adrienverge/yamllint/blob/v${version}/CHANGELOG.rst";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [
+      jonringer
+      mikefaille
+    ];
   };
 }

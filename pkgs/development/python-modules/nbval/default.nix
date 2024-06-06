@@ -1,41 +1,74 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, coverage
-, ipykernel
-, jupyter_client
-, nbformat
-, pytest
-, six
-, glibcLocales
-, matplotlib
-, sympy
-, pytestcov
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  coverage,
+  ipykernel,
+  jupyter-client,
+  nbformat,
+  pytestCheckHook,
+  pytest,
+  glibcLocales,
+  matplotlib,
+  sympy,
 }:
 
 buildPythonPackage rec {
   pname = "nbval";
-  version = "0.9.1";
+  version = "0.11.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "3f18b87af4e94ccd073263dd58cd3eebabe9f5e4d6ab535b39d3af64811c7eda";
+    hash = "sha256-d8lXl2B7CpaLq9JZfuNJQQLSXDrTdDXeu9rA5G43kJQ=";
   };
 
-  LC_ALL = "en_US.UTF-8";
-
   buildInputs = [ glibcLocales ];
-  checkInputs = [ matplotlib sympy pytestcov ];
-  propagatedBuildInputs = [ coverage ipykernel jupyter_client nbformat pytest six ];
 
-  checkPhase = ''
-    pytest tests --current-env --ignore tests/test_timeouts.py
-  '';
+  build-system = [ setuptools ];
+
+  dependencies = [
+    coverage
+    ipykernel
+    jupyter-client
+    nbformat
+    pytest
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    matplotlib
+    sympy
+  ];
+
+  disabledTestPaths = [
+    "tests/test_ignore.py"
+    # These are the main tests but they're fragile so skip them. They error
+    # whenever matplotlib outputs any unexpected warnings, e.g. deprecation
+    # warnings.
+    "tests/test_unit_tests_in_notebooks.py"
+    # Impure
+    "tests/test_timeouts.py"
+    # No value for us
+    "tests/test_coverage.py"
+    # nbdime marked broken
+    "tests/test_nbdime_reporter.py"
+  ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "nbval" ];
 
   meta = with lib; {
     description = "A py.test plugin to validate Jupyter notebooks";
-    homepage = https://github.com/computationalmodelling/nbval;
+    homepage = "https://github.com/computationalmodelling/nbval";
+    changelog = "https://github.com/computationalmodelling/nbval/releases/tag/${version}";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

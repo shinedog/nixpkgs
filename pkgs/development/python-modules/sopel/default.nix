@@ -1,40 +1,77 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
-, praw
-, xmltodict
-, pytz
-, pyenchant
-, pygeoip
-, python
-, isPyPy
-, isPy27
+{
+  lib,
+  buildPythonPackage,
+  dnspython,
+  fetchPypi,
+  geoip2,
+  ipython,
+  isPyPy,
+  praw,
+  pyenchant,
+  pygeoip,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  sqlalchemy,
+  xmltodict,
 }:
 
 buildPythonPackage rec {
   pname = "sopel";
-  version = "6.6.6";
+  version = "7.1.9";
+  format = "setuptools";
+
+  disabled = isPyPy || pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "dfb6d6c349cbdd463736e4be781cc005efeb1be91dbdc60cc76fda7cad142def";
+    hash = "sha256-IJ+ovLQv6/UU1oepmUQjzaWBG3Rdd3xvui7FjK85Urs=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ praw xmltodict pytz pyenchant pygeoip ];
+  patches = [
+    # https://github.com/sopel-irc/sopel/issues/2401
+    # https://github.com/sopel-irc/sopel/commit/596adc44330939519784389cbb927435305ef758.patch
+    # rewrite the patch because there are too many patches needed to apply the above patch.
+    ./python311-support.patch
+  ];
 
-  disabled = isPyPy || isPy27;
+  propagatedBuildInputs = [
+    dnspython
+    geoip2
+    ipython
+    praw
+    pyenchant
+    pygeoip
+    pytz
+    sqlalchemy
+    xmltodict
+  ];
 
-  checkPhase = ''
-    ${python.interpreter} test/*.py                                         #*/
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  postPatch = ''
+    substituteInPlace requirements.txt \
+      --replace "praw>=4.0.0,<6.0.0" "praw" \
+      --replace "sqlalchemy<1.4" "sqlalchemy" \
+      --replace "xmltodict==0.12" "xmltodict>=0.12"
   '';
 
-  meta = with stdenv.lib; {
+  preCheck = ''
+    export TESTDIR=$(mktemp -d)
+    cp -R ./test $TESTDIR
+    pushd $TESTDIR
+  '';
+
+  postCheck = ''
+    popd
+  '';
+
+  pythonImportsCheck = [ "sopel" ];
+
+  meta = with lib; {
     description = "Simple and extensible IRC bot";
-    homepage = "http://sopel.chat";
+    homepage = "https://sopel.chat";
     license = licenses.efl20;
     maintainers = with maintainers; [ mog ];
   };
-
 }

@@ -1,9 +1,10 @@
-{ fetchurl, fetchpatch, stdenv, gmpxx, perl, gnum4 }:
+{ fetchurl, fetchpatch, lib, stdenv, gmpxx, perl, gnum4 }:
 
 let version = "1.2"; in
 
-stdenv.mkDerivation rec {
-  name = "ppl-${version}";
+stdenv.mkDerivation {
+  pname = "ppl";
+  inherit version;
 
   src = fetchurl {
     url = "http://bugseng.com/products/ppl/download/ftp/releases/${version}/ppl-${version}.tar.bz2";
@@ -11,16 +12,23 @@ stdenv.mkDerivation rec {
   };
 
   patches = [(fetchpatch {
-    name = "ppl.patch";
-    url = "http://www.cs.unipr.it/git/gitweb.cgi?p=ppl/ppl.git;a=patch;h=c39f6a07b51f89e365b05ba4147aa2aa448febd7";
+    name = "clang5-support.patch";
+    url = "https://raw.githubusercontent.com/sagemath/sage/9.2/build/pkgs/ppl/patches/clang5-support.patch";
     sha256 = "1zj90hm25pkgvk4jlkfzh18ak9b98217gbidl3731fdccbw6hr87";
   })];
+
+  postPatch = lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace src/PIP_Tree.cc \
+      --replace "std::auto_ptr" "std::unique_ptr"
+    substituteInPlace src/Powerset_inlines.hh src/Pointset_Powerset_inlines.hh \
+      --replace "std::mem_fun_ref" "std::mem_fn"
+  '';
 
   nativeBuildInputs = [ perl gnum4 ];
   propagatedBuildInputs = [ gmpxx ];
 
   configureFlags = [ "--disable-watchdog" ] ++
-    stdenv.lib.optionals stdenv.isDarwin [
+    lib.optionals stdenv.isDarwin [
       "CPPFLAGS=-fexceptions"
       "--disable-ppl_lcdd" "--disable-ppl_lpsol" "--disable-ppl_pips"
     ];
@@ -50,11 +58,11 @@ stdenv.mkDerivation rec {
       version of the simplex algorithm.
     '';
 
-    homepage = http://bugseng.com/products/ppl/;
+    homepage = "http://bugseng.com/products/ppl/";
 
-    license = stdenv.lib.licenses.gpl3Plus;
+    license = lib.licenses.gpl3Plus;
 
     maintainers = [ ];
-    platforms = stdenv.lib.platforms.unix;
+    platforms = lib.platforms.unix;
   };
 }

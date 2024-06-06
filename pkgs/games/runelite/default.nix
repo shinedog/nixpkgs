@@ -1,53 +1,73 @@
-{ stdenv, fetchurl, makeWrapper, jre, makeDesktopItem, lib }:
+{ lib
+, fetchFromGitHub
+, makeDesktopItem
+, makeWrapper
+, maven
+, jdk17
+, jre
+, xorg
+, gitUpdater
+, libGL
+}:
 
-  stdenv.mkDerivation rec {
-  name = "runelite-${version}";
-  version = "1.6.0";
-
-  src = fetchurl {
-    url = "https://github.com/runelite/launcher/releases/download/${version}/RuneLite.jar";
-    sha256 = "0q2xx0wrnlg5mrv8nnmnh300r8mqfm8k2p028m7mr09kn18xvkzx";
+let
+  mavenJdk17 = maven.override {
+    jdk = jdk17;
   };
+in
+mavenJdk17.buildMavenPackage rec {
+  pname = "runelite";
+  version = "2.7.1";
 
-  icon = fetchurl {
-    url = "https://github.com/runelite/runelite/raw/master/runelite-client/src/main/resources/runelite.png";
-    sha256 = "0fxzkpsin09giqp7h8z0plxznk5d5j60sv34v1lw61p7d5y2izvr";
+  src = fetchFromGitHub {
+    owner = "runelite";
+    repo = "launcher";
+    rev = version;
+    hash = "sha256-7T9n23qMl4IJQL7yWLXKvRzYcMeXDUwkY8MBFc2t3Rw=";
   };
+  mvnHash = "sha256-bsJlsIXIIVzZyVgEF/SN+GgpZt6v0u800arO1c5QYHk=";
 
   desktop = makeDesktopItem {
     name = "RuneLite";
     type = "Application";
     exec = "runelite";
-    icon = "${icon}";
+    icon = "runelite";
     comment = "Open source Old School RuneScape client";
-    terminal = "false";
     desktopName = "RuneLite";
     genericName = "Oldschool Runescape";
-    categories = "Application;Game";
-    startupNotify = null;
+    categories = [ "Game" ];
   };
 
-  buildInputs = [ makeWrapper ];
-
-  # colon is bash form of no-op (do nothing)
-  unpackPhase = ":";
+  # tests require internet :(
+  mvnParameters = "-Dmaven.test.skip";
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
-    mkdir -p $out/share/runelite
+    mkdir -p $out/share/icons
     mkdir -p $out/share/applications
 
-    ln -s ${src} $out/share/runelite/RuneLite.jar
-    ln -s ${desktop}/share/applications/* $out/share/applications
+    cp target/RuneLite.jar $out/share
+    cp appimage/runelite.png $out/share/icons
+
+    ln -s ${desktop}/share/applications/RuneLite.desktop $out/share/applications/RuneLite.desktop
 
     makeWrapper ${jre}/bin/java $out/bin/runelite \
-    --add-flags "-jar $out/share/runelite/RuneLite.jar"
+      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ xorg.libXxf86vm libGL ]}" \
+      --add-flags "-jar $out/share/RuneLite.jar"
   '';
+
+  passthru.updateScript = gitUpdater { };
 
   meta = {
     description = "Open source Old School RuneScape client";
     homepage = "https://runelite.net/";
+    sourceProvenance = with lib.sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
     license = lib.licenses.bsd2;
-    maintainers = [ lib.maintainers.kmeakin ];
-    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [ kmeakin moody ];
+    platforms = [ "x86_64-linux" ];
+    mainProgram = "runelite";
   };
-  }
+}

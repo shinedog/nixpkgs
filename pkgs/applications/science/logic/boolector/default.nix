@@ -1,50 +1,67 @@
-{ stdenv, fetchFromGitHub
-, cmake, lingeling, btor2tools
+{ stdenv, fetchFromGitHub, lib, python3, fetchpatch
+, cmake, lingeling, btor2tools, gtest, gmp
 }:
 
 stdenv.mkDerivation rec {
-  name    = "boolector-${version}";
-  version = "3.0.0";
+  pname = "boolector";
+  version = "3.2.3";
 
   src = fetchFromGitHub {
     owner  = "boolector";
     repo   = "boolector";
-    rev    = "refs/tags/${version}";
-    sha256 = "15i3ni5klss423m57wcy1gx0m5wfrjmglapwg85pm7fb3jj1y7sz";
+    rev    = version;
+    hash   = "sha256-CdfpXUbU1+yEmrNyl+hvHlJfpzzzx356naim6vRafDg=";
   };
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ lingeling btor2tools ];
+  patches = [
+    # present in master - remove after 3.2.3
+    (fetchpatch {
+      name = "update-unit-tests-to-cpp-14.patch";
+      url = "https://github.com/Boolector/boolector/commit/cc13f371c0c5093d98638ddd213dc835ef3aadf3.patch";
+      hash = "sha256-h8DBhAvUu+wXBwmvwRhHnJv3XrbEpBpvX9D1FI/+avc=";
+    })
+  ];
+
+  nativeBuildInputs = [ cmake gtest ];
+  buildInputs = [ lingeling btor2tools gmp ];
 
   cmakeFlags =
-    [ "-DSHARED=ON"
+    [ "-DBUILD_SHARED_LIBS=ON"
       "-DUSE_LINGELING=YES"
-      "-DBTOR2_INCLUDE_DIR=${btor2tools.dev}/include"
-      "-DBTOR2_LIBRARIES=${btor2tools.lib}/lib/libbtor2parser.so"
-      "-DLINGELING_INCLUDE_DIR=${lingeling.dev}/include"
-      "-DLINGELING_LIBRARIES=${lingeling.lib}/lib/liblgl.a"
-    ];
+      "-DBtor2Tools_INCLUDE_DIR=${btor2tools.dev}/include/btor2parser"
+    ] ++ (lib.optional (gmp != null) "-DUSE_GMP=YES");
 
-  installPhase = ''
-    mkdir -p $out/bin $lib/lib $dev/include
+  nativeCheckInputs = [ python3 ];
+  doCheck = true;
+  preCheck =
+    let var = if stdenv.isDarwin then "DYLD_LIBRARY_PATH" else "LD_LIBRARY_PATH";
+    in
+      # tests modelgen and modelgensmt2 spawn boolector in another processes and
+      # macOS strips DYLD_LIBRARY_PATH, hardcode it for testing
+      lib.optionalString stdenv.isDarwin ''
+        cp -r bin bin.back
+        install_name_tool -change libboolector.dylib $(pwd)/lib/libboolector.dylib bin/boolector
+      '' + ''
+        export ${var}=$(readlink -f lib)
+        patchShebangs ..
+      '';
 
-    cp -vr bin/* $out/bin
-    cp -vr lib/* $lib/lib
-
-    rm -rf $out/bin/{examples,test}
-
-    cd ../src
-    find . -iname '*.h' -exec cp --parents '{}' $dev/include \;
-    rm -rf $dev/include/tests
+  postCheck = lib.optionalString stdenv.isDarwin ''
+    rm -rf bin
+    mv bin.back bin
   '';
 
-  outputs = [ "out" "dev" "lib" ];
+  # this is what haskellPackages.boolector expects
+  postInstall = ''
+    cp $out/include/boolector/boolector.h $out/include/boolector.h
+    cp $out/include/boolector/btortypes.h $out/include/btortypes.h
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An extremely fast SMT solver for bit-vectors and arrays";
-    homepage    = https://boolector.github.io;
+    homepage    = "https://boolector.github.io";
     license     = licenses.mit;
-    platforms   = platforms.linux;
+    platforms   = with platforms; linux ++ darwin;
     maintainers = with maintainers; [ thoughtpolice ];
   };
 }

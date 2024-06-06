@@ -1,12 +1,12 @@
-{ stdenv, fetchurl, perlPackages }:
+{ lib, fetchurl, perlPackages }:
 
 perlPackages.buildPerlPackage rec {
-  name = "egypt-${version}";
+  pname = "egypt";
   version = "1.10";
 
   src = fetchurl {
     sha256 = "0r0wj6v8z9fzlh9pb5617kyjdf92ppmlbzajaarrq729bbb6ln5m";
-    url = "https://www.gson.org/egypt/download/${name}.tar.gz";
+    url = "https://www.gson.org/egypt/download/${pname}-${version}.tar.gz";
   };
 
   outputs = [ "out" ];
@@ -15,8 +15,9 @@ perlPackages.buildPerlPackage rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Tool for making call graphs of C programmes";
+    mainProgram = "egypt";
     longDescription = ''
       Egypt is a simple tool for creating call graphs of C programs. It neither
       analyzes source code nor lays out graphs. Instead, it leaves the source
@@ -25,7 +26,7 @@ perlPackages.buildPerlPackage rec {
       Egypt is simply a very small Perl script that glues these existing tools
       together.
     '';
-    homepage = http://www.gson.org/egypt/;
+    homepage = "http://www.gson.org/egypt/";
     license = with licenses; [ artistic1 gpl1Plus ];
     platforms = platforms.unix;
   };

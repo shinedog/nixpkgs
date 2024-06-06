@@ -1,24 +1,30 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "jsondiff";
-  version = "1.1.2";
+  version = "2.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "7e18138aecaa4a8f3b7ac7525b8466234e6378dd6cae702b982c9ed851d2ae21";
+    hash = "sha256-J5WETvB17IorjThcTVn16kiwjnGA/OPLJ4e+DbALH7Q=";
   };
+
+  postPatch = ''
+    sed -e "/'jsondiff=jsondiff.cli:main_deprecated',/d" -i setup.py
+  '';
 
   # No tests
   doCheck = false;
 
   meta = {
     description = "Diff JSON and JSON-like structures in Python";
-    homepage = https://github.com/ZoomerAnalytics/jsondiff;
+    mainProgram = "jdiff";
+    homepage = "https://github.com/ZoomerAnalytics/jsondiff";
     license = lib.licenses.mit;
   };
-
 }

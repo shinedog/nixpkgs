@@ -1,24 +1,31 @@
-{ stdenv, fetchurl, openssl, zlib, windows }:
+{ lib, stdenv, fetchurl, openssl, zlib, windows }:
 
 stdenv.mkDerivation rec {
   pname = "libssh2";
-  version = "1.8.2";
+  version = "1.11.0";
 
   src = fetchurl {
-    url = "${meta.homepage}/download/${pname}-${version}.tar.gz";
-    sha256 = "0rqd37pc80nm2pz4sa2m9pfc48axys7jwq1l7z0vii5nyvchg0q8";
+    url = "https://www.libssh2.org/download/libssh2-${version}.tar.gz";
+    sha256 = "sha256-NzYWHkHiaTMk3rOMJs/cPv5iCdY0ukJY2xzs/2pa1GE=";
   };
+
+  patches = [
+    # fetchpatch cannot be used due to infinite recursion
+    # https://github.com/libssh2/libssh2/commit/d34d9258b8420b19ec3f97b4cc5bf7aa7d98e35a
+    ./CVE-2023-48795.patch
+  ];
 
   outputs = [ "out" "dev" "devdoc" ];
 
-  buildInputs = [ openssl zlib ]
-    ++ stdenv.lib.optional stdenv.hostPlatform.isMinGW windows.mingw_w64;
+  propagatedBuildInputs = [ openssl ]; # see Libs: in libssh2.pc
+  buildInputs = [ zlib ]
+    ++ lib.optional stdenv.hostPlatform.isMinGW windows.mingw_w64;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A client-side C library implementing the SSH2 protocol";
-    homepage = https://www.libssh2.org;
+    homepage = "https://www.libssh2.org";
     platforms = platforms.all;
-    license = licenses.bsd3;
-    maintainers = [ ];
+    license = with licenses; [ bsd3 libssh2 ];
+    maintainers = with maintainers; [ SuperSandro2000 ];
   };
 }

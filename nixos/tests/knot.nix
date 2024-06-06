@@ -1,4 +1,4 @@
-import ./make-test.nix ({ pkgs, lib, ...} :
+import ./make-test-python.nix ({ pkgs, lib, ...} :
 let
   common = {
     networking.firewall.enable = false;
@@ -28,12 +28,27 @@ let
     name = "knot-zones";
     paths = [ exampleZone delegatedZone ];
   };
+  # DO NOT USE pkgs.writeText IN PRODUCTION. This put secrets in the nix store!
+  tsigFile = pkgs.writeText "tsig.conf" ''
+    key:
+      - id: xfr_key
+        algorithm: hmac-sha256
+        secret: zOYgOgnzx3TGe5J5I/0kxd7gTcxXhLYMEq3Ek3fY37s=
+  '';
 in {
   name = "knot";
+  meta = with pkgs.lib.maintainers; {
+    maintainers = [ hexa ];
+  };
+
 
   nodes = {
-    master = { lib, ... }: {
+    primary = { lib, ... }: {
       imports = [ common ];
+
+      # trigger sched_setaffinity syscall
+      virtualisation.cores = 2;
+
       networking.interfaces.eth1 = {
         ipv4.addresses = lib.mkForce [
           { address = "192.168.0.1"; prefixLength = 24; }
@@ -44,51 +59,51 @@ in {
       };
       services.knot.enable = true;
       services.knot.extraArgs = [ "-v" ];
-      services.knot.extraConfig = ''
-        server:
-            listen: 0.0.0.0@53
-            listen: ::@53
+      services.knot.keyFiles = [ tsigFile ];
+      services.knot.settings = {
+        server = {
+          listen = [
+            "0.0.0.0@53"
+            "::@53"
+           ];
+          listen-quic = [
+            "0.0.0.0@853"
+            "::@853"
+           ];
+          automatic-acl = true;
+        };
 
-        acl:
-          - id: slave_acl
-            address: 192.168.0.2
-            action: transfer
+        acl.secondary_acl = {
+          address = "192.168.0.2";
+          key = "xfr_key";
+          action = "transfer";
+        };
 
-        remote:
-          - id: slave
-            address: 192.168.0.2@53
+        remote.secondary.address = "192.168.0.2@53";
 
-        template:
-          - id: default
-            storage: ${knotZonesEnv}
-            notify: [slave]
-            acl: [slave_acl]
-            dnssec-signing: on
-            # Input-only zone files
-            # https://www.knot-dns.cz/docs/2.8/html/operation.html#example-3
-            # prevents modification of the zonefiles, since the zonefiles are immutable
-            zonefile-sync: -1
-            zonefile-load: difference
-            journal-content: changes
-            # move databases below the state directory, because they need to be writable
-            journal-db: /var/lib/knot/journal
-            kasp-db: /var/lib/knot/kasp
-            timer-db: /var/lib/knot/timer
+        template.default = {
+          storage = knotZonesEnv;
+          notify = [ "secondary" ];
+          acl = [ "secondary_acl" ];
+          dnssec-signing = true;
+          # Input-only zone files
+          # https://www.knot-dns.cz/docs/2.8/html/operation.html#example-3
+          # prevents modification of the zonefiles, since the zonefiles are immutable
+          zonefile-sync = -1;
+          zonefile-load = "difference";
+          journal-content = "changes";
+        };
 
-        zone:
-          - domain: example.com
-            file: example.com.zone
+        zone = {
+          "example.com".file = "example.com.zone";
+          "sub.example.com".file = "sub.example.com.zone";
+        };
 
-          - domain: sub.example.com
-            file: sub.example.com.zone
-
-        log:
-          - target: syslog
-            any: info
-      '';
+        log.syslog.any = "info";
+      };
     };
 
-    slave = { lib, ... }: {
+    secondary = { lib, ... }: {
       imports = [ common ];
       networking.interfaces.eth1 = {
         ipv4.addresses = lib.mkForce [
@@ -99,46 +114,52 @@ in {
         ];
       };
       services.knot.enable = true;
+      services.knot.keyFiles = [ tsigFile ];
       services.knot.extraArgs = [ "-v" ];
-      services.knot.extraConfig = ''
-        server:
-            listen: 0.0.0.0@53
-            listen: ::@53
+      services.knot.settings = {
+        server = {
+          automatic-acl = true;
+        };
 
-        acl:
-          - id: notify_from_master
-            address: 192.168.0.1
-            action: notify
+        xdp = {
+          listen = [
+            "eth1"
+          ];
+          tcp = true;
+        };
 
-        remote:
-          - id: master
-            address: 192.168.0.1@53
+        remote.primary = {
+          address = "192.168.0.1@53";
+          key = "xfr_key";
+        };
 
-        template:
-          - id: default
-            master: master
-            acl: [notify_from_master]
-            # zonefileless setup
-            # https://www.knot-dns.cz/docs/2.8/html/operation.html#example-2
-            zonefile-sync: -1
-            zonefile-load: none
-            journal-content: all
-            # move databases below the state directory, because they need to be writable
-            journal-db: /var/lib/knot/journal
-            kasp-db: /var/lib/knot/kasp
-            timer-db: /var/lib/knot/timer
+        remote.primary-quic = {
+          address = "192.168.0.1@853";
+          key = "xfr_key";
+          quic = true;
+        };
 
-        zone:
-          - domain: example.com
-            file: example.com.zone
+        template.default = {
+          # zonefileless setup
+          # https://www.knot-dns.cz/docs/2.8/html/operation.html#example-2
+          zonefile-sync = "-1";
+          zonefile-load = "none";
+          journal-content = "all";
+        };
 
-          - domain: sub.example.com
-            file: sub.example.com.zone
+        zone = {
+          "example.com" = {
+            master = "primary";
+            file = "example.com.zone";
+          };
+          "sub.example.com" = {
+            master = "primary-quic";
+            file = "sub.example.com.zone";
+          };
+        };
 
-        log:
-          - target: syslog
-            any: info
-      '';
+        log.syslog.any = "debug";
+      };
     };
     client = { lib, nodes, ... }: {
       imports = [ common ];
@@ -151,47 +172,51 @@ in {
         ];
       };
       environment.systemPackages = [ pkgs.knot-dns ];
-    };    
+    };
   };
 
-  testScript = { nodes, ... }: let 
-    master4 = (lib.head nodes.master.config.networking.interfaces.eth1.ipv4.addresses).address;
-    master6 = (lib.head nodes.master.config.networking.interfaces.eth1.ipv6.addresses).address;
+  testScript = { nodes, ... }: let
+    primary4 = (lib.head nodes.primary.config.networking.interfaces.eth1.ipv4.addresses).address;
+    primary6 = (lib.head nodes.primary.config.networking.interfaces.eth1.ipv6.addresses).address;
 
-    slave4 = (lib.head nodes.slave.config.networking.interfaces.eth1.ipv4.addresses).address;
-    slave6 = (lib.head nodes.slave.config.networking.interfaces.eth1.ipv6.addresses).address;
+    secondary4 = (lib.head nodes.secondary.config.networking.interfaces.eth1.ipv4.addresses).address;
+    secondary6 = (lib.head nodes.secondary.config.networking.interfaces.eth1.ipv6.addresses).address;
   in ''
-    startAll;
+    import re
 
-    $client->waitForUnit("network.target");
-    $master->waitForUnit("knot.service");
-    $slave->waitForUnit("knot.service");
+    start_all()
 
-    sub assertResponse {
-      my ($knot, $query_type, $query, $expected) = @_;
-      my $out = $client->succeed("khost -t $query_type $query $knot");
-      $client->log("$knot replies with: $out");
-      chomp $out;
-      die "DNS query for $query ($query_type) against $knot gave '$out' instead of '$expected'"
-        if ($out !~ $expected);
-    }
+    client.wait_for_unit("network.target")
+    primary.wait_for_unit("knot.service")
+    secondary.wait_for_unit("knot.service")
 
-    foreach ("${master4}", "${master6}", "${slave4}", "${slave6}") {
-      subtest $_, sub {
-        assertResponse($_, "SOA", "example.com", qr/start of authority.*?noc\.example\.com/);
-        assertResponse($_, "A", "example.com", qr/has no [^ ]+ record/);
-        assertResponse($_, "AAAA", "example.com", qr/has no [^ ]+ record/);
+    for zone in ("example.com.", "sub.example.com."):
+        secondary.wait_until_succeeds(
+          f"knotc zone-status {zone} | grep -q 'serial: 2019031302'"
+        )
 
-        assertResponse($_, "A", "www.example.com", qr/address 192.0.2.1$/);
-        assertResponse($_, "AAAA", "www.example.com", qr/address 2001:db8::1$/);
+    def test(host, query_type, query, pattern):
+        out = client.succeed(f"khost -t {query_type} {query} {host}").strip()
+        client.log(f"{host} replied with: {out}")
+        assert re.search(pattern, out), f'Did not match "{pattern}"'
 
-        assertResponse($_, "NS", "sub.example.com", qr/nameserver is ns\d\.example\.com.$/);
-        assertResponse($_, "A", "sub.example.com", qr/address 192.0.2.2$/);
-        assertResponse($_, "AAAA", "sub.example.com", qr/address 2001:db8::2$/);
 
-        assertResponse($_, "RRSIG", "www.example.com", qr/RR set signature is/);
-        assertResponse($_, "DNSKEY", "example.com", qr/DNSSEC key is/);
-      };
-    }
+    for host in ("${primary4}", "${primary6}", "${secondary4}", "${secondary6}"):
+        with subtest(f"Interrogate {host}"):
+            test(host, "SOA", "example.com", r"start of authority.*noc\.example\.com\.")
+            test(host, "A", "example.com", r"has no [^ ]+ record")
+            test(host, "AAAA", "example.com", r"has no [^ ]+ record")
+
+            test(host, "A", "www.example.com", r"address 192.0.2.1$")
+            test(host, "AAAA", "www.example.com", r"address 2001:db8::1$")
+
+            test(host, "NS", "sub.example.com", r"nameserver is ns\d\.example\.com.$")
+            test(host, "A", "sub.example.com", r"address 192.0.2.2$")
+            test(host, "AAAA", "sub.example.com", r"address 2001:db8::2$")
+
+            test(host, "RRSIG", "www.example.com", r"RR set signature is")
+            test(host, "DNSKEY", "example.com", r"DNSSEC key is")
+
+    primary.log(primary.succeed("systemd-analyze security knot.service | grep -v '✓'"))
   '';
 })

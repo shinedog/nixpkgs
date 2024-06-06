@@ -1,22 +1,31 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 # this expression is mostly based on debian's packaging
-# https://tracker.debian.org/media/packages/u/udns/rules-0.4-1
+# https://tracker.debian.org/media/packages/u/udns/rules-0.5-1
 
 stdenv.mkDerivation rec {
-  name = "udns-${version}";
-  version = "0.4";
+  pname = "udns";
+  version = "0.5";
 
   configurePhase = "./configure --enable-ipv6";
 
   buildPhase = "make staticlib sharedlib rblcheck_s dnsget_s";
 
   src = fetchurl {
-    url = "http://www.corpit.ru/mjt/udns/${name}.tar.gz";
-    sha256 = "0447fv1hmb44nnchdn6p5pd9b44x8p5jn0ahw6crwbqsg7f0hl8i";
+    url = "http://www.corpit.ru/mjt/udns/${pname}-${version}.tar.gz";
+    sha256 = "sha256-A1v8EuOBnQq6j0DugiCpdLfpspwyWdMQlwzEstHCA8A=";
   };
 
+  # udns uses a very custom build and hardcodes a .so name in a few places.
+  # Instead of fighting with it to apply the standard dylib script, change
+  # the right place in the Makefile itself.
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace Makefile.in \
+      --replace --soname, -install_name,$out/lib/
+  '';
+
   installPhase = ''
+    runHook preInstall
     mkdir -p $out/bin
     mkdir -p $out/include
     mkdir -p $out/lib
@@ -30,17 +39,18 @@ stdenv.mkDerivation rec {
     ln -rs $out/lib/libudns.so.0 $out/lib/libudns.so
     cp dnsget.1 rblcheck.1 $out/share/man/man1
     cp udns.3 $out/share/man/man3
+    runHook postInstall
   '';
 
   # keep man3
   outputDevdoc = "out";
 
-  meta = with stdenv.lib; {
-    homepage = http://www.corpit.ru/mjt/udns.html;
+  meta = with lib; {
+    homepage = "http://www.corpit.ru/mjt/udns.html";
     description = "Async-capable DNS stub resolver library";
     license = licenses.lgpl21Plus;
     maintainers = [ maintainers.womfoo ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 
 }

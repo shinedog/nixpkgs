@@ -1,26 +1,27 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPyPy
-, pkgs
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPyPy,
+  pkgs,
 }:
 
 buildPythonPackage rec {
-  pname = "python-pyaudio";
-  version = "0.2.9";
+  pname = "pyaudio";
+  version = "0.2.14";
   disabled = isPyPy;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "bfd694272b3d1efc51726d0c27650b3c3ba1345f7f8fdada7e86c9751ce0f2a1";
+    pname = "PyAudio";
+    inherit version;
+    hash = "sha256-eN//OHm0mU0fT8ZIVkald1XG7jwZZHpJH3kKCJW9L4c=";
   };
 
   buildInputs = [ pkgs.portaudio ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Python bindings for PortAudio";
-    homepage = "http://people.csail.mit.edu/hubert/pyaudio/";
+    homepage = "https://people.csail.mit.edu/hubert/pyaudio/";
     license = licenses.mit;
   };
-
 }

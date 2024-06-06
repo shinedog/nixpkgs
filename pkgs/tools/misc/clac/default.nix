@@ -1,30 +1,29 @@
-{stdenv, fetchFromGitHub}:
+{ lib, stdenv, fetchFromGitHub }:
+
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "clac";
-  version = "0.0.0.20170503";
+  version = "0.3.3-unstable-2021-09-06";
 
   src = fetchFromGitHub {
     owner = "soveran";
     repo = "clac";
-    rev = "e92bd5cbab0d694cef945e3478820c9505e06f04";
-    sha256 = "0j8p1npgq32s377c9lw959h5i2csq4yb27cvg7av17bji46816bv";
+    rev = "beae8c4bc89912f4cd66bb875585fa471692cd54";
+    sha256 = "XaULDkFF9OZW7Hbh60wbGgvCJ6L+3gZNGQ9uQv3G0zU=";
   };
 
-  buildInputs = [];
-  makeFlags = ["PREFIX=$(out)"];
+  makeFlags = [ "PREFIX=$(out)" ];
 
   postInstall = ''
     mkdir -p "$out/share/doc/${pname}"
     cp README* LICENSE "$out/share/doc/${pname}"
   '';
 
-  meta = {
-    inherit version;
+  meta = with lib; {
     description = "Interactive stack-based calculator";
-    license = stdenv.lib.licenses.bsd2;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.unix;
-    homepage = https://github.com/soveran/clac;
+    homepage = "https://github.com/soveran/clac";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
+    mainProgram = "clac";
   };
 }

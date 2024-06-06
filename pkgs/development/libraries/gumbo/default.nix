@@ -1,25 +1,27 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool }:
+{ lib
+, stdenv
+, fetchFromGitea
+, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "gumbo-${version}";
-  version = "0.10.1";
+  pname = "gumbo";
+  version = "0.12.1";
 
-  src = fetchFromGitHub {
-    owner = "google";
+  src = fetchFromGitea {
+    domain = "codeberg.org";
+    owner = "gumbo-parser";
     repo = "gumbo-parser";
-    rev = "v${version}";
-    sha256 = "0xslckwdh2i0g2qjsb6rnm8mjmbagvziz0hjlf7d1lbljfms1iw1";
+    rev = version;
+    hash = "sha256-d4V4bI08Prmg3U0KGu4yIwpHcvTJT3NAd4lbzdBU/AE=";
   };
 
-  buildInputs = [ autoconf automake libtool ];
+  nativeBuildInputs = [ autoreconfHook ];
 
-  preConfigure = "./autogen.sh";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "C99 HTML parsing algorithm";
-    homepage = https://github.com/google/gumbo-parser;
+    homepage = "https://codeberg.org/gumbo-parser/gumbo-parser";
     maintainers = [ maintainers.nico202 ];
-    platforms = platforms.linux;
+    platforms = with platforms; linux ++ darwin;
     license = licenses.asl20;
   };
 }

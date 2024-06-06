@@ -1,29 +1,41 @@
-{ stdenv, fetchFromGitHub, rustPlatform, CoreServices, darwin }:
+{ lib, stdenv, fetchFromGitHub, nix, rustPlatform, CoreServices, installShellFiles }:
 
 rustPlatform.buildRustPackage rec {
-  name = "mdbook-${version}";
-  version = "0.1.8";
+  pname = "mdbook";
+  version = "0.4.37";
 
   src = fetchFromGitHub {
-    owner = "rust-lang-nursery";
+    owner = "rust-lang";
     repo = "mdBook";
-    rev = "v${version}";
-    sha256 = "1xmw4v19ff6mvimwk5l437wslzw5npy60zdb8r4319bjf32pw9pn";
+    rev = "refs/tags/v${version}";
+    sha256 = "sha256-A8ZSqIG+rGKwggs9ogvbMIi9gClFKe8gS6D5W426ebc=";
   };
 
-  cargoSha256 = "0kcc0b2644qbalz7dnqwxsjdmw1h57k0rjrvwqh8apj2sgl64gyv";
+  cargoHash = "sha256-8GQM4pHiFbyoRkOx3SXuIV118ndzL+O+eA+Gd2jbsdI=";
 
-  buildInputs = stdenv.lib.optionals stdenv.isDarwin [
-    CoreServices
-    # This is needed to avoid an undefined symbol error for "_CFURLResourceIsReachable"
-    darwin.cf-private
-  ];
+  nativeBuildInputs = [ installShellFiles ];
 
-  meta = with stdenv.lib; {
+  buildInputs = lib.optionals stdenv.isDarwin [ CoreServices ];
+
+  postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    installShellCompletion --cmd mdbook \
+      --bash <($out/bin/mdbook completions bash) \
+      --fish <($out/bin/mdbook completions fish) \
+      --zsh  <($out/bin/mdbook completions zsh )
+  '';
+
+  passthru = {
+    tests = {
+      inherit nix;
+    };
+  };
+
+  meta = with lib; {
     description = "Create books from MarkDown";
-    homepage = https://github.com/rust-lang-nursery/mdbook;
-    license = [ licenses.asl20 licenses.mit ];
-    maintainers = [ maintainers.havvy ];
-    platforms = platforms.all;
+    mainProgram = "mdbook";
+    homepage = "https://github.com/rust-lang/mdBook";
+    changelog = "https://github.com/rust-lang/mdBook/blob/v${version}/CHANGELOG.md";
+    license = [ licenses.mpl20 ];
+    maintainers = with maintainers; [ havvy Frostman matthiasbeyer ];
   };
 }

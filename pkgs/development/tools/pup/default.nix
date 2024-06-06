@@ -1,21 +1,23 @@
-{ lib, buildGoPackage, fetchgit }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "pup-${version}";
-  version = "0.4.0";
-  rev = "v${version}";
+buildGoModule rec {
+  pname = "pup";
+  version = "unstable-2022-03-06";
 
-  goPackagePath = "github.com/ericchiang/pup";
-
-  src = fetchgit {
-    inherit rev;
-    url = "https://${goPackagePath}";
-    sha256 = "0mnhw0yph5fvcnrcmj1kfbyw1a4lcg3k9f6y28kf44ihlq8h1dfz";
+  src = fetchFromGitHub {
+    owner = "ericchiang";
+    repo = "pup";
+    rev = "5a57cf111366c7c08999a34b2afd7ba36d58a96d";
+    hash = "sha256-Ledg3xPbu71L5qUY033bru/lw03jws3s4YlAarIuqaA=";
   };
 
+  vendorHash = "sha256-/MDSWIuSYNxKbTslqIooI2qKA8Pye0yJF2dY8g8qbWI=";
+
   meta = with lib; {
-    description = "Streaming HTML processor/selector";
+    description = "Parsing HTML at the command line";
+    mainProgram = "pup";
+    homepage = "https://github.com/ericchiang/pup";
     license = licenses.mit;
-    maintainers = with maintainers; [ yegortimoshenko ];
+    maintainers = with maintainers; [ yana ];
   };
 }

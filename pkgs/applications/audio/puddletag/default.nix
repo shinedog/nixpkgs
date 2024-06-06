@@ -1,37 +1,84 @@
-{ stdenv, fetchFromGitHub, python2Packages, chromaprint }:
+{ lib
+, fetchFromGitHub
+, fetchurl
+, python3
+, qtbase
+, qtwayland
+, wrapQtAppsHook
+}:
 
-python2Packages.buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "puddletag";
-  version = "1.2.0";
+  version = "2.3.0";
+  format = "setuptools";
 
   src = fetchFromGitHub {
-    owner  = "keithgg";
-    repo   = "puddletag";
-    rev    = "v${version}";
-    sha256 = "1g6wa91awy17z5b704yi9kfynnvfm9lkrvpfvwccscr1h8s3qmiz";
+    owner = "puddletag";
+    repo = "puddletag";
+    rev = "refs/tags/${version}";
+    hash = "sha256-oScT8YcQoDf2qZ+J7xKm22Sbfym3tkVUrWT5D2LU5e8=";
   };
 
-  setSourceRoot = ''
-    sourceRoot=$(echo */source)
+  patches = [
+    (fetchurl {
+      url = "https://github.com/puddletag/puddletag/commit/54074824adb05da42c03d7adfbba94d8e24982f0.patch";
+      hash = "sha256-DkgaFWgp2m2bRuhdXhHW+nxV/2GaCgeRNdwLMYAkcYQ=";
+      name = "fix_for_pyparsing_3_1_2.patch";
+    })
+  ];
+
+  pythonRelaxDeps = true;
+
+  pythonRemoveDeps = [
+    "chromaprint"
+    "pyqt5-qt5"
+  ];
+
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace share/pixmaps share/icons
   '';
 
-  disabled = python2Packages.isPy3k; # work to support python 3 has not begun
+  buildInputs = [
+    qtbase
+    qtwayland
+  ];
 
-  propagatedBuildInputs = [ chromaprint ] ++ (with python2Packages; [
+  nativeBuildInputs = [
+    python3.pkgs.pythonRelaxDepsHook
+    wrapQtAppsHook
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
     configobj
+    levenshtein
+    lxml
     mutagen
+    pyacoustid
     pyparsing
-    pyqt4
-  ]);
+    pyqt5
+    rapidfuzz
+    unidecode
+  ];
 
-  doCheck = false;   # there are no tests
-  dontStrip = true;  # we are not generating any binaries
+  # the file should be executable but it isn't so our wrapper doesn't run
+  preFixup = ''
+    chmod 555 $out/bin/puddletag
+    makeWrapperArgs+=("''${qtWrapperArgs[@]}")
+  '';
 
-  meta = with stdenv.lib; {
+  doCheck = false; # there are no tests
+
+  dontWrapQtApps = true; # to avoid double-wrapping
+
+  dontStrip = true; # we are not generating any binaries
+
+  meta = with lib; {
     description = "An audio tag editor similar to the Windows program, Mp3tag";
-    homepage    = https://docs.puddletag.net;
-    license     = licenses.gpl3;
-    maintainers = with maintainers; [ peterhoeg ];
-    platforms   = platforms.linux;
+    mainProgram = "puddletag";
+    homepage = "https://docs.puddletag.net";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ peterhoeg dschrempf ];
+    platforms = platforms.linux;
   };
 }

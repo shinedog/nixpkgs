@@ -1,34 +1,44 @@
-{ stdenv, lib, buildPythonPackage, fetchFromGitHub, augeas, cffi }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  buildPythonPackage,
+  unittestCheckHook,
+  pkg-config,
+  augeas,
+  cffi,
+  pkgs, # for libxml2
+}:
 buildPythonPackage rec {
-    pname = "augeas";
-    version = "1.0.3";
-    name = pname + "-" + version;
+  pname = "augeas";
+  version = "1.2.0";
+  format = "setuptools";
 
-    src = fetchFromGitHub {
-      owner = "hercules-team";
-      repo = "python-augeas";
-      rev = "v${version}";
-      sha256 = "1fb904ym8g8hkd82zlibzk6wrldnfd5v5d0rkynsy1zlhcylq4f6";
-    };
+  src = fetchFromGitHub {
+    owner = "hercules-team";
+    repo = "python-augeas";
+    rev = "v${version}";
+    hash = "sha256-Lq8ckra3sqN38zo1d5JsEq6U5TtLKRmqysoWNwR9J9A=";
+  };
 
-    # TODO: not very nice!
-    postPatch =
-      let libname = if stdenv.isDarwin then "libaugeas.dylib" else "libaugeas.so";
-      in
-      ''
-        substituteInPlace augeas/ffi.py \
-          --replace 'ffi.dlopen("augeas")' \
-                    'ffi.dlopen("${lib.makeLibraryPath [augeas]}/${libname}")'
-      '';
+  nativeBuildInputs = [ pkg-config ];
 
-    propagatedBuildInputs = [ cffi augeas ];
+  buildInputs = [
+    augeas
+    pkgs.libxml2
+  ];
 
-    doCheck = false;
+  propagatedBuildInputs = [ cffi ];
 
-    meta = with lib; {
-      description = "Pure python bindings for augeas";
-      homepage = https://github.com/hercules-team/python-augeas;
-      license = licenses.lgpl2Plus;
-      platforms = platforms.unix;
-    };
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  pythonImportsCheck = [ "augeas" ];
+
+  meta = with lib; {
+    changelog = "https://github.com/hercules-team/python-augeas/releases/tag/v${version}";
+    description = "Pure python bindings for augeas";
+    homepage = "https://github.com/hercules-team/python-augeas";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.unix;
+  };
 }

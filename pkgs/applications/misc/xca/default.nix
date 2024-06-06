@@ -1,33 +1,47 @@
-{ mkDerivation, lib, fetchFromGitHub, autoreconfHook, perl, pkgconfig
-, libtool, openssl, qtbase, qttools }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, wrapQtAppsHook
+, cmake
+, pkg-config
+, openssl
+, qtbase
+, qttools
+, sphinx
+}:
 
-mkDerivation rec {
-  name = "xca-${version}";
-  version = "2.1.2";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "xca";
+  version = "2.6.0";
 
   src = fetchFromGitHub {
-    owner  = "chris2511";
-    repo   = "xca";
-    rev    = "RELEASE.${version}";
-    sha256 = "0slfqmz0b01lwmrv4h78hmrsdrhcyc7sjzsxcw05ylgmhvdq3dw9";
+    owner = "chris2511";
+    repo = "xca";
+    rev = "RELEASE.${finalAttrs.version}";
+    hash = "sha256-E0Ap+JDK/oYTG+uaRHsdOxyLIywlYJ01T4ANQhNH220=";
   };
 
-  postPatch = ''
-    substituteInPlace doc/code2html \
-      --replace /usr/bin/perl ${perl}/bin/perl
-  '';
+  buildInputs = [ openssl qtbase ];
 
-  buildInputs = [ libtool openssl qtbase ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qttools
+    sphinx
+    wrapQtAppsHook
+  ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig qttools ];
+  # Needed for qcollectiongenerator (see https://github.com/NixOS/nixpkgs/pull/92710)
+  QT_PLUGIN_PATH = "${qtbase}/${qtbase.qtPluginPrefix}";
 
   enableParallelBuilding = true;
 
   meta = with lib; {
     description = "An x509 certificate generation tool, handling RSA, DSA and EC keys, certificate signing requests (PKCS#10) and CRLs";
-    homepage    = https://hohnstaedt.de/xca/;
-    license     = licenses.bsd3;
+    mainProgram = "xca";
+    homepage = "https://hohnstaedt.de/xca/";
+    license = licenses.bsd3;
     maintainers = with maintainers; [ offline peterhoeg ];
-    platforms   = platforms.all;
+    inherit (qtbase.meta) platforms;
   };
-}
+})

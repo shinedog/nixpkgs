@@ -1,30 +1,44 @@
-{ stdenv, fetchurl, pkgconfig, autoreconfHook, librep, gtk2 }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, gtk2-x11
+, librep
+, pkg-config
+}:
 
-with stdenv.lib;
-stdenv.mkDerivation rec {
-
-  name = "rep-gtk-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "rep-gtk";
   version = "0.90.8.3";
-  sourceName = "rep-gtk_${version}";
 
   src = fetchurl {
-    url = "https://download.tuxfamily.org/librep/rep-gtk/${sourceName}.tar.xz";
-    sha256 = "0hgkkywm8zczir3lqr727bn7ybgg71x9cwj1av8fykkr8pdpard9";
+    url = "https://download.tuxfamily.org/librep/rep-gtk/rep-gtk_${finalAttrs.version}.tar.xz";
+    hash = "sha256-qWV120V5Tu/QVkFylno47y1/7DriZExHjp99VLmf80E=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ ];
-  propagatedBuildInputs = [ librep gtk2 ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+    librep
+  ];
+
+  buildInputs = [
+    gtk2-x11
+    librep
+  ];
+
+  strictDeps = true;
 
   patchPhase = ''
     sed -e 's|installdir=$(repexecdir)|installdir=$(libdir)/rep|g' -i Makefile.in
   '';
 
   meta = {
-    description = "GTK+ bindings for librep";
-    homepage = http://sawfish.wikia.com;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.AndersonTorres ];
+    homepage = "http://sawfish.tuxfamily.org";
+    description = "GTK bindings for librep";
+    license = lib.licenses.gpl2Plus;
+    maintainers = [ lib.maintainers.AndersonTorres ];
+    platforms = lib.platforms.unix;
   };
-}
+})
 # TODO: investigate fetchFromGithub

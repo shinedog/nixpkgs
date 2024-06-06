@@ -1,28 +1,28 @@
-{ stdenv, fetchFromGitHub, rustPlatform, pkgconfig, openssl, Security }:
+{ lib, stdenv, fetchFromGitHub, rustPlatform, pkg-config, openssl, CoreServices, Security }:
 
 rustPlatform.buildRustPackage rec {
-  name = "synapse-bt-unstable-${version}";
-  version = "2018-10-17";
+  pname = "synapse-bt";
+  version = "unstable-2023-02-16";
 
   src = fetchFromGitHub {
     owner = "Luminarys";
     repo = "synapse";
-    rev = "76d5e9a23ad00c25cfd0469b1adb479b9ded113a";
-    sha256 = "1lsfvcsmbsg51v8c2hkpwkx0zg25sdjc3q7x72b5bwwnw9l0iglz";
+    rev = "2165fe22589d7255e497d196c1d42b4c2ace1408";
+    hash = "sha256-2irXNgEK9BjRuNu3DUMElmf2vIpGzwoFneAEe97GRh4=";
   };
 
-  cargoSha256 = "1sc8c0w2dbvcdv16idw02y35x0jx5ff6ddzij09pmqjx55zgsjf7";
+  cargoHash = "sha256-TwXouPYM7Hg1HEr2KnEPScYFkC52PcQ5kb5aGP1gj9U=";
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ openssl ] ++ stdenv.lib.optional stdenv.isDarwin Security;
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ openssl ]
+    ++ lib.optionals stdenv.isDarwin [ CoreServices Security ];
 
   cargoBuildFlags = [ "--all" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Flexible and fast BitTorrent daemon";
-    homepage = https://synapse-bt.org/;
+    homepage = "https://synapse-bt.org/";
     license = licenses.isc;
     maintainers = with maintainers; [ dywedir ];
-    platforms = platforms.all;
   };
 }

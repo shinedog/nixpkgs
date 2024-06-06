@@ -1,27 +1,31 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, lazygit, testers }:
 
-buildGoPackage rec {
-  name = "lazygit-${version}";
-  version = "0.7.2";
-
-  goPackagePath = "github.com/jesseduffield/lazygit";
+buildGoModule rec {
+  pname = "lazygit";
+  version = "0.42.0";
 
   src = fetchFromGitHub {
     owner = "jesseduffield";
-    repo = "lazygit";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "1b5mzmxw715cx7b0n22hvrpk0dbavzypljc7skwmh8k1nlx935jj";
+    hash = "sha256-w5QL+CuMYyTTnNAfWF8jQuQWfjxaw7bANK69Dc+onGk=";
   };
 
-  postPatch = ''
-    rm -rf scripts
-  '';
+  vendorHash = null;
+  subPackages = [ "." ];
 
-  meta = with stdenv.lib; {
-    inherit (src.meta) homepage;
+  ldflags = [ "-X main.version=${version}" "-X main.buildSource=nix" ];
+
+  passthru.tests.version = testers.testVersion {
+    package = lazygit;
+  };
+
+  meta = with lib; {
     description = "Simple terminal UI for git commands";
+    homepage = "https://github.com/jesseduffield/lazygit";
+    changelog = "https://github.com/jesseduffield/lazygit/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ fpletz ];
-    platforms = stdenv.lib.platforms.unix;
+    maintainers = with maintainers; [ Br1ght0ne equirosa paveloom starsep ];
+    mainProgram = "lazygit";
   };
 }

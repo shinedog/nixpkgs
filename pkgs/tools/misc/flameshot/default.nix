@@ -1,44 +1,52 @@
-{ stdenv, fetchFromGitHub, qtbase, qmake, qttools, qtsvg }:
+{ mkDerivation
+, lib
+, fetchFromGitHub
+, qtbase
+, cmake
+, qttools
+, qtsvg
+, nix-update-script
+, fetchpatch
+, kguiaddons
+}:
 
-# To use `flameshot gui`, you will also need to put flameshot in `services.dbus.packages`
-# in configuration.nix so that the daemon gets launched properly:
-#
-#   services.dbus.packages = [ pkgs.flameshot ];
-#   environment.systemPackages = [ pkgs.flameshot ];
-stdenv.mkDerivation rec {
-  name = "flameshot-${version}";
-  version = "0.6.0";
+mkDerivation rec {
+  pname = "flameshot";
+  version = "12.1.0";
 
   src = fetchFromGitHub {
-    owner = "lupoDharkael";
+    owner = "flameshot-org";
     repo = "flameshot";
     rev = "v${version}";
-    sha256 = "193szslh55v44jzxzx5g9kxhl8p8di7vbcnxlid4acfidhnvgazm";
+    sha256 = "sha256-omyMN8d+g1uYsEw41KmpJCwOmVWLokEfbW19vIvG79w=";
   };
 
-  nativeBuildInputs = [ qmake qttools qtsvg ];
-  buildInputs = [ qtbase ];
+  patches = [
+    # https://github.com/flameshot-org/flameshot/pull/3166
+    (fetchpatch {
+      name = "10-fix-wayland.patch";
+      url = "https://github.com/flameshot-org/flameshot/commit/5fea9144501f7024344d6f29c480b000b2dcd5a6.patch";
+      sha256 = "sha256-SnjVbFMDKD070vR4vGYrwLw6scZAFaQA4b+MbI+0W9E=";
+    })
+  ];
 
-  qmakeFlags = [ "PREFIX=${placeholder "out"}" ];
+  passthru = {
+    updateScript = nix-update-script { };
+  };
 
-  preConfigure = ''
-    # flameshot.pro assumes qmake is being run in a git checkout.
-    git() { echo ${version}; }
-    export -f git
-  '';
+  cmakeFlags = [
+    (lib.cmakeBool "USE_WAYLAND_CLIPBOARD" true)
+  ];
 
-  postFixup = ''
-    substituteInPlace $out/share/dbus-1/services/org.dharkael.Flameshot.service \
-      --replace "/usr/local" "$out"
-  '';
+  nativeBuildInputs = [ cmake qttools qtsvg ];
+  buildInputs = [ qtbase kguiaddons ];
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Powerful yet simple to use screenshot software";
-    homepage = https://github.com/lupoDharkael/flameshot;
-    maintainers = [ maintainers.scode ];
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/flameshot-org/flameshot";
+    mainProgram = "flameshot";
+    maintainers = with maintainers; [ scode oxalica ];
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

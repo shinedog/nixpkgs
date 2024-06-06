@@ -1,52 +1,80 @@
-{ stdenv, buildGoPackage, fetchFromGitHub
-, gpgme, libgpgerror, lvm2, btrfs-progs, pkgconfig, ostree, libselinux, libseccomp
-, go-md2man }:
+{ lib
+, stdenv
+, buildGoModule
+, fetchFromGitHub
+, go-md2man
+, installShellFiles
+, pkg-config
+, gpgme
+, lvm2
+, btrfs-progs
+, libapparmor
+, libselinux
+, libseccomp
+, testers
+, buildah
+}:
 
-let
-  version = "1.7.3";
+buildGoModule rec {
+  pname = "buildah";
+  version = "1.36.0";
 
   src = fetchFromGitHub {
-    rev = "v${version}";
     owner = "containers";
     repo = "buildah";
-    sha256 = "154zjkccinf6nvbz5a8rdlkgy7fi6yz11wi100jn9cmsjydspax8";
+    rev = "v${version}";
+    hash = "sha256-Ttz1D/jFbxFfpbT2VAkcao2AFwFRD8PLrH8yDSYt3AI=";
   };
-  goPackagePath = "github.com/containers/buildah";
 
-in buildGoPackage rec {
-  name = "buildah-${version}";
-  inherit src;
+  outputs = [ "out" "man" ];
 
-  outputs = [ "bin" "man" "out" ];
+  vendorHash = null;
 
-  inherit goPackagePath;
-  excludedPackages = [ "tests" ];
+  doCheck = false;
 
-  # Optimizations break compilation of libseccomp c bindings
-  hardeningDisable = [ "fortify" ];
+  nativeBuildInputs = [ go-md2man installShellFiles pkg-config ];
 
-  nativeBuildInputs = [ pkgconfig go-md2man.bin ];
-  buildInputs = [ gpgme libgpgerror lvm2 btrfs-progs ostree libselinux libseccomp ];
+  buildInputs = [
+    gpgme
+  ] ++ lib.optionals stdenv.isLinux [
+    btrfs-progs
+    libapparmor
+    libseccomp
+    libselinux
+    lvm2
+  ];
 
-  # Copied from the skopeo package, doesn’t seem to make a difference?
-  # If something related to these libs failed, uncomment these lines.
-  /*preBuild = with lib; ''
-    export CGO_CFLAGS="-I${getDev gpgme}/include -I${getDev libgpgerror}/include -I${getDev devicemapper}/include -I${getDev btrfs-progs}/include"
-    export CGO_LDFLAGS="-L${getLib gpgme}/lib -L${getLib libgpgerror}/lib -L${getLib devicemapper}/lib"
-  '';*/
-
-  postBuild = ''
-    # depends on buildGoPackage not changing …
-    pushd ./go/src/${goPackagePath}/docs
-    make docs
-    make install PREFIX="$man"
-    popd
+  buildPhase = ''
+    runHook preBuild
+    patchShebangs .
+    make bin/buildah
+    make -C docs GOMD2MAN="go-md2man"
+    runHook postBuild
   '';
 
-  meta = {
+  installPhase = ''
+    runHook preInstall
+    install -Dm755 bin/buildah $out/bin/buildah
+    installShellCompletion --bash contrib/completions/bash/buildah
+    make -C docs install PREFIX="$man"
+    runHook postInstall
+  '';
+
+  passthru.tests.version = testers.testVersion {
+    package = buildah;
+    command = ''
+      XDG_DATA_HOME="$TMPDIR" XDG_CACHE_HOME="$TMPDIR" XDG_CONFIG_HOME="$TMPDIR" \
+      buildah --version
+    '';
+  };
+
+  meta = with lib; {
     description = "A tool which facilitates building OCI images";
-    homepage = https://github.com/containers/buildah;
-    maintainers = with stdenv.lib.maintainers; [ Profpatsch vdemeester ];
-    license = stdenv.lib.licenses.asl20;
+    mainProgram = "buildah";
+    homepage = "https://buildah.io/";
+    changelog = "https://github.com/containers/buildah/releases/tag/v${version}";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ ] ++ teams.podman.members;
   };
 }
+

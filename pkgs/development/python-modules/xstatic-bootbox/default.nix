@@ -1,25 +1,26 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
-  pname = "XStatic-Bootbox";
-  version = "4.4.0.1";
+  pname = "xstatic-bootbox";
+  version = "5.5.1.1";
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "1g00q38g1k576lxjlwglv4w3fj4z0z8lxlwpc66wyhjglj4r4bwd";
+    pname = "XStatic-Bootbox";
+    inherit version;
+    sha256 = "4b2120bb33a1d8ada8f9e0532ad99987aa03879b17b08bfdc6b8326d6eb7c205";
   };
 
   # no tests implemented
   doCheck = false;
 
-  meta = with lib;{
-    homepage = http://bootboxjs.com;
+  meta = with lib; {
+    homepage = "http://bootboxjs.com";
     description = "Bootboxjs packaged static files for python";
     license = licenses.mit;
     maintainers = with maintainers; [ makefu ];
   };
-
 }

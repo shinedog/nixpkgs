@@ -1,12 +1,14 @@
-{ stdenv
-, buildPythonPackage
-, fetchurl
-, sphinx
+{
+  lib,
+  buildPythonPackage,
+  fetchurl,
+  sphinx,
 }:
 
 buildPythonPackage rec {
   pname = "tracing";
   version = "0.8";
+  format = "setuptools";
 
   src = fetchurl {
     url = "http://code.liw.fi/debian/pool/main/p/python-tracing/python-tracing_${version}.orig.tar.gz";
@@ -18,11 +20,10 @@ buildPythonPackage rec {
   # error: invalid command 'test'
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = http://liw.fi/tracing/;
+  meta = with lib; {
+    homepage = "https://liw.fi/tracing/";
     description = "Python debug logging helper";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ rickynils ];
+    maintainers = [ ];
   };
-
 }

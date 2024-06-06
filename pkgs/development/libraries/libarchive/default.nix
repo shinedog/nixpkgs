@@ -1,73 +1,128 @@
-{
-  fetchurl, fetchpatch, stdenv, pkgconfig,
-  acl, attr, bzip2, e2fsprogs, libxml2, lzo, openssl, sharutils, xz, zlib,
+{ lib
+, stdenv
+, fetchFromGitHub
+, acl
+, attr
+, autoreconfHook
+, bzip2
+, e2fsprogs
+, glibcLocalesUtf8
+, lzo
+, openssl
+, pkg-config
+, sharutils
+, xz
+, zlib
+, zstd
+# Optional but increases closure only negligibly. Also, while libxml2 builds
+# fine on windows, libarchive has trouble linking windows things it depends on
+# for some reason.
+, xarSupport ? stdenv.hostPlatform.isUnix, libxml2
 
-  # Optional but increases closure only negligibly.
-  xarSupport ? true,
+# for passthru.tests
+, cmake
+, nix
+, samba
 }:
 
 assert xarSupport -> libxml2 != null;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libarchive";
+  version = "3.7.4";
 
-stdenv.mkDerivation rec {
-  name = "libarchive-${version}";
-  version = "3.3.3";
-
-  src = fetchurl {
-    url = "${meta.homepage}/downloads/${name}.tar.gz";
-    sha256 = "0bhfncid058p7n1n8v29l6wxm3mhdqfassscihbsxfwz3iwb2zms";
+  src = fetchFromGitHub {
+    owner = "libarchive";
+    repo = "libarchive";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-czNKXHoEn1x4deNErnqp/NZfCglF1CxNoLtZ8tcl394=";
   };
-
-  patches = [
-    (fetchpatch {
-      # details: https://github.com/libarchive/libarchive/pull/1105
-      name = "cve-2018-1000877.diff"; # CVE-2018-1000877..80
-      url = "https://github.com/libarchive/libarchive/pull/1105.diff";
-      sha256 = "0mxcawfdy9m40mykzwhkl39a6vnh4ypgy0ipcz74qm4bi72x0gyf";
-    })
-    (fetchpatch {
-      # details: https://github.com/libarchive/libarchive/pull/1120
-      name = "cve-2019-1000019_cve-2019-1000020.diff";
-      url = "https://github.com/libarchive/libarchive/pull/1120.diff";
-      sha256 = "1mgx92v8hm7hw9j34nbfriqfkxshh3cy25rhavr7kl7lz4x5a6g4";
-    })
-  ];
 
   outputs = [ "out" "lib" "dev" ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ sharutils zlib bzip2 openssl xz lzo ]
-    ++ stdenv.lib.optionals stdenv.isLinux [ e2fsprogs attr acl ]
-    ++ stdenv.lib.optional xarSupport libxml2;
+  postPatch = let
+    skipTestPaths = [
+      # test won't work in nix sandbox
+      "libarchive/test/test_write_disk_perms.c"
+      # the filesystem does not necessarily have sparse capabilities
+      "libarchive/test/test_sparse_basic.c"
+      # the filesystem does not necessarily have hardlink capabilities
+      "libarchive/test/test_write_disk_hardlink.c"
+      # access-time-related tests flakey on some systems
+      "cpio/test/test_option_a.c"
+      "cpio/test/test_option_t.c"
+    ] ++ lib.optionals (stdenv.isAarch64 && stdenv.isLinux) [
+      # only on some aarch64-linux systems?
+      "cpio/test/test_basic.c"
+      "cpio/test/test_format_newc.c"
+    ];
+    removeTest = testPath: ''
+      substituteInPlace Makefile.am --replace-fail "${testPath}" ""
+      rm "${testPath}"
+    '';
+  in ''
+    substituteInPlace Makefile.am --replace-fail '/bin/pwd' "$(type -P pwd)"
 
-  # Without this, pkgconfig-based dependencies are unhappy
-  propagatedBuildInputs = stdenv.lib.optionals stdenv.isLinux [ attr acl ];
+    ${lib.concatStringsSep "\n" (map removeTest skipTestPaths)}
+  '';
 
-  configureFlags = stdenv.lib.optional (!xarSupport) "--without-xml2";
+  nativeBuildInputs = [
+    autoreconfHook
+    glibcLocalesUtf8 # test_I test requires an UTF-8 locale
+    pkg-config
+  ];
 
-  preBuild = if stdenv.isCygwin then ''
+  buildInputs =  [
+    bzip2
+    lzo
+    openssl
+    xz
+    zlib
+    zstd
+  ] ++ lib.optional stdenv.hostPlatform.isUnix sharutils
+    ++ lib.optionals stdenv.isLinux [ acl attr e2fsprogs ]
+    ++ lib.optional xarSupport libxml2;
+
+  # Without this, pkg-config-based dependencies are unhappy
+  propagatedBuildInputs = lib.optionals stdenv.isLinux [ attr acl ];
+
+  configureFlags = lib.optional (!xarSupport) "--without-xml2";
+
+  preBuild = lib.optionalString stdenv.isCygwin ''
     echo "#include <windows.h>" >> config.h
-  '' else null;
+  '';
 
-  doCheck = false; # fails
+  # https://github.com/libarchive/libarchive/issues/1475
+  doCheck = !stdenv.hostPlatform.isMusl;
+
+  preCheck = ''
+    # Need an UTF-8 locale for test_I test.
+    export LANG=en_US.UTF-8
+  '';
 
   preFixup = ''
     sed -i $lib/lib/libarchive.la \
-      -e 's|-lcrypto|-L${openssl.out}/lib -lcrypto|' \
+      -e 's|-lcrypto|-L${lib.getLib openssl}/lib -lcrypto|' \
       -e 's|-llzo2|-L${lzo}/lib -llzo2|'
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with lib; {
+    homepage = "http://libarchive.org";
     description = "Multi-format archive and compression library";
     longDescription = ''
-      This library has code for detecting and reading many archive formats and
-      compressions formats including (but not limited to) tar, shar, cpio, zip, and
-      compressed with gzip, bzip2, lzma, xz, ...
+      The libarchive project develops a portable, efficient C library that can
+      read and write streaming archives in a variety of formats. It also
+      includes implementations of the common tar, cpio, and zcat command-line
+      tools that use the libarchive library.
     '';
-    homepage = http://libarchive.org;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = with stdenv.lib.platforms; all;
-    maintainers = with stdenv.lib.maintainers; [ jcumming ];
+    changelog = "https://github.com/libarchive/libarchive/releases/tag/v${finalAttrs.version}";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ jcumming AndersonTorres ];
+    platforms = platforms.all;
   };
-}
+
+  passthru.tests = {
+    inherit cmake nix samba;
+  };
+})

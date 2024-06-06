@@ -1,33 +1,42 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, taglib
-, cython
-, pytest
-, glibcLocales
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  taglib,
+  cython,
+  pytestCheckHook,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
-  pname   = "pytaglib";
-  version = "1.4.5";
+  pname = "pytaglib";
+  version = "2.1.0";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "8aec64bc146a9f72778a0d2d1f3448f58be6ebea68f64b0ff88ea8e0f4dc5d8f";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "supermihi";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-b3ODsG5rdSJ1Tq/0DARf99gHgWWGaArBFAjqeK3mvsY=";
   };
 
-  buildInputs = [ taglib cython ];
+  buildInputs = [
+    cython
+    taglib
+  ];
 
-  checkInputs = [ pytest glibcLocales ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    LC_ALL=en_US.utf-8 pytest .
-  '';
+  pythonImportsCheck = [ "taglib" ];
 
-  meta = {
-    homepage = https://github.com/supermihi/pytaglib;
-    description = "Python 2.x/3.x bindings for the Taglib audio metadata library";
-    license = lib.licenses.gpl3;
-    maintainers = [ lib.maintainers.mrkkrp ];
+  meta = with lib; {
+    description = "Python bindings for the Taglib audio metadata library";
+    mainProgram = "pyprinttags";
+    homepage = "https://github.com/supermihi/pytaglib";
+    changelog = "https://github.com/supermihi/pytaglib/blob/v${version}/CHANGELOG.md";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ mrkkrp ];
   };
 }

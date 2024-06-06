@@ -1,20 +1,17 @@
-{ stdenv, fetchzip }:
+{ lib, stdenv, fetchzip }:
 
 stdenv.mkDerivation rec {
-  name = "abcMIDI-${version}";
-  version = "2019.04.22";
+  pname = "abcMIDI";
+  version = "2024.04.30";
 
   src = fetchzip {
-    url = "https://ifdo.ca/~seymour/runabc/${name}.zip";
-    sha256 = "18w6sny8hc9yswqxqw5rvv5j07a50q8aaih73d74asm3nwf71rl1";
+    url = "https://ifdo.ca/~seymour/runabc/${pname}-${version}.zip";
+    hash = "sha256-Yw/EQZlGTYxouRL1Tf4TDSNWMleB7vKzWg4n6sw5d4Q=";
   };
 
-  # There is also a file called "makefile" which seems to be preferred by the standard build phase
-  makefile = "Makefile";
-
-  meta = with stdenv.lib; {
-    homepage = http://abc.sourceforge.net/abcMIDI/;
-    downloadPage = https://ifdo.ca/~seymour/runabc/top.html;
+  meta = with lib; {
+    homepage = "https://abc.sourceforge.net/abcMIDI/";
+    downloadPage = "https://ifdo.ca/~seymour/runabc/top.html";
     license = licenses.gpl2Plus;
     description = "Utilities for converting between abc and MIDI";
     platforms = platforms.unix;

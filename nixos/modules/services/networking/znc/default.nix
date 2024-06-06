@@ -62,9 +62,9 @@ let
       concatStringsSep "\n" (toLines cfg.config);
 
   semanticTypes = with types; rec {
-    zncAtom = nullOr (either (either int bool) str);
+    zncAtom = nullOr (oneOf [ int bool str ]);
     zncAttr = attrsOf (nullOr zncConf);
-    zncAll = either (either zncAtom (listOf zncAtom)) zncAttr;
+    zncAll = oneOf [ zncAtom (listOf zncAtom) zncAttr ];
     zncConf = attrsOf (zncAll // {
       # Since this is a recursive type and the description by default contains
       # the description of its subtypes, infinite recursion would occur without
@@ -103,8 +103,8 @@ in
       };
 
       dataDir = mkOption {
-        default = "/var/lib/znc/";
-        example = "/home/john/.znc/";
+        default = "/var/lib/znc";
+        example = "/home/john/.znc";
         type = types.path;
         description = ''
           The state directory for ZNC. The config and the modules will be linked
@@ -118,14 +118,14 @@ in
         description = ''
           Whether to open ports in the firewall for ZNC. Does work with
           ports for listeners specified in
-          <option>services.znc.config.Listener</option>.
+          {option}`services.znc.config.Listener`.
         '';
       };
 
       config = mkOption {
         type = semanticTypes.zncConf;
         default = {};
-        example = literalExample ''
+        example = literalExpression ''
           {
             LoadModule = [ "webadmin" "adminlog" ];
             User.paul = {
@@ -133,8 +133,8 @@ in
               Nick = "paul";
               AltNick = "paul1";
               LoadModule = [ "chansaver" "controlpanel" ];
-              Network.freenode = {
-                Server = "chat.freenode.net +6697";
+              Network.libera = {
+                Server = "irc.libera.chat +6697";
                 LoadModule = [ "simple_away" ];
                 Chan = {
                   "#nixos" = { Detached = false; };
@@ -151,43 +151,38 @@ in
         '';
         description = ''
           Configuration for ZNC, see
-          <link xlink:href="https://wiki.znc.in/Configuration"/> for details. The
+          <https://wiki.znc.in/Configuration> for details. The
           Nix value declared here will be translated directly to the xml-like
           format ZNC expects. This is much more flexible than the legacy options
-          under <option>services.znc.confOptions.*</option>, but also can't do
+          under {option}`services.znc.confOptions.*`, but also can't do
           any type checking.
-          </para>
-          <para>
-          You can use <command>nix-instantiate --eval --strict '&lt;nixpkgs/nixos&gt;' -A config.services.znc.config</command>
+
+          You can use {command}`nix-instantiate --eval --strict '<nixpkgs/nixos>' -A config.services.znc.config`
           to view the current value. By default it contains a listener for port
           5000 with SSL enabled.
-          </para>
-          <para>
-          Nix attributes called <literal>extraConfig</literal> will be inserted
+
+          Nix attributes called `extraConfig` will be inserted
           verbatim into the resulting config file.
-          </para>
-          <para>
-          If <option>services.znc.useLegacyConfig</option> is turned on, the
-          option values in <option>services.znc.confOptions.*</option> will be
+
+          If {option}`services.znc.useLegacyConfig` is turned on, the
+          option values in {option}`services.znc.confOptions.*` will be
           gracefully be applied to this option.
-          </para>
-          <para>
+
           If you intend to update the configuration through this option, be sure
-          to enable <option>services.znc.mutable</option>, otherwise none of the
+          to disable {option}`services.znc.mutable`, otherwise none of the
           changes here will be applied after the initial deploy.
         '';
       };
 
       configFile = mkOption {
         type = types.path;
-        example = "~/.znc/configs/znc.conf";
+        example = literalExpression "~/.znc/configs/znc.conf";
         description = ''
           Configuration file for ZNC. It is recommended to use the
-          <option>config</option> option instead.
-          </para>
-          <para>
+          {option}`config` option instead.
+
           Setting this option will override any auto-generated config file
-          through the <option>confOptions</option> or <option>config</option>
+          through the {option}`confOptions` or {option}`config`
           options.
         '';
       };
@@ -195,7 +190,7 @@ in
       modulePackages = mkOption {
         type = types.listOf types.package;
         default = [ ];
-        example = literalExample "[ pkgs.zncModules.fish pkgs.zncModules.push ]";
+        example = literalExpression "[ pkgs.zncModules.fish pkgs.zncModules.push ]";
         description = ''
           A list of global znc module packages to add to znc.
         '';
@@ -206,15 +201,13 @@ in
         type = types.bool;
         description = ''
           Indicates whether to allow the contents of the
-          <literal>dataDir</literal> directory to be changed by the user at
+          `dataDir` directory to be changed by the user at
           run-time.
-          </para>
-          <para>
+
           If enabled, modifications to the ZNC configuration after its initial
           creation are not overwritten by a NixOS rebuild. If disabled, the
           ZNC configuration is rebuilt on every NixOS rebuild.
-          </para>
-          <para>
+
           If the user wants to manage the ZNC service using the web admin
           interface, this option should be enabled.
         '';
@@ -239,7 +232,7 @@ in
     services.znc = {
       configFile = mkDefault (pkgs.writeText "znc-generated.conf" semanticString);
       config = {
-        Version = (builtins.parseDrvName pkgs.znc.name).version;
+        Version = lib.getVersion pkgs.znc;
         Listener.l.Port = mkDefault 5000;
         Listener.l.SSL = mkDefault true;
       };
@@ -250,6 +243,7 @@ in
     systemd.services.znc = {
       description = "ZNC Server";
       wantedBy = [ "multi-user.target" ];
+      wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       serviceConfig = {
         User = cfg.user;
@@ -258,6 +252,34 @@ in
         ExecStart = "${pkgs.znc}/bin/znc --foreground --datadir ${cfg.dataDir} ${escapeShellArgs cfg.extraFlags}";
         ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
         ExecStop = "${pkgs.coreutils}/bin/kill -INT $MAINPID";
+        # Hardening
+        CapabilityBoundingSet = [ "" ];
+        DevicePolicy = "closed";
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        NoNewPrivileges = true;
+        PrivateDevices = true;
+        PrivateTmp = true;
+        PrivateUsers = true;
+        ProcSubset = "pid";
+        ProtectClock = true;
+        ProtectControlGroups = true;
+        ProtectHome = true;
+        ProtectHostname = true;
+        ProtectKernelLogs = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        ProtectProc = "invisible";
+        ProtectSystem = "strict";
+        ReadWritePaths = [ cfg.dataDir ];
+        RemoveIPC = true;
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+        SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+        UMask = "0027";
       };
       preStart = ''
         mkdir -p ${cfg.dataDir}/configs
@@ -271,9 +293,8 @@ in
         # Ensure essential files exist.
         if [[ ! -f ${cfg.dataDir}/configs/znc.conf ]]; then
             echo "No znc.conf file found in ${cfg.dataDir}. Creating one now."
-            cp --no-clobber ${cfg.configFile} ${cfg.dataDir}/configs/znc.conf
+            cp --no-preserve=ownership --no-clobber ${cfg.configFile} ${cfg.dataDir}/configs/znc.conf
             chmod u+rw ${cfg.dataDir}/configs/znc.conf
-            chown ${cfg.user} ${cfg.dataDir}/configs/znc.conf
         fi
 
         if [[ ! -f ${cfg.dataDir}/znc.pem ]]; then
@@ -287,20 +308,22 @@ in
       '';
     };
 
-    users.users = optional (cfg.user == defaultUser)
-      { name = defaultUser;
-        description = "ZNC server daemon owner";
-        group = defaultUser;
-        uid = config.ids.uids.znc;
-        home = cfg.dataDir;
-        createHome = true;
+    users.users = optionalAttrs (cfg.user == defaultUser) {
+      ${defaultUser} =
+        { description = "ZNC server daemon owner";
+          group = defaultUser;
+          uid = config.ids.uids.znc;
+          home = cfg.dataDir;
+          createHome = true;
+        };
       };
 
-    users.groups = optional (cfg.user == defaultUser)
-      { name = defaultUser;
-        gid = config.ids.gids.znc;
-        members = [ defaultUser ];
-      };
+    users.groups = optionalAttrs (cfg.user == defaultUser) {
+      ${defaultUser} =
+        { gid = config.ids.gids.znc;
+          members = [ defaultUser ];
+        };
+    };
 
   };
 }

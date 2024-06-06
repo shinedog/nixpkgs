@@ -1,32 +1,35 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, pkgconfig
-, gtk3
-, gobject-introspection
-, pygtk
-, pygobject3
-, goocanvas2
-, isPy3k
- }:
-
-with stdenv.lib;
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  gobject-introspection,
+  goocanvas2,
+  gtk3,
+  pkg-config,
+  pygobject3,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
-  pname = "GooCalendar";
-  version = "0.4";
+  pname = "goocalendar";
+  version = "0.8.0";
+  format = "setuptools";
 
-  disabled = isPy3k;
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "ca3950c2728916d9fb703c886f3940ac9b76739f99ec840b0e1c2c282510e1ab";
+    pname = "GooCalendar";
+    inherit version;
+    hash = "sha256-LwL5TLRkD6ALucabLUeB0k4rIX+O/aW2ebS2rZPjIUs=";
   };
-  nativeBuildInputs = [ pkgconfig gobject-introspection ];
-  propagatedBuildInputs = [
-    pygtk
-    pygobject3
+
+  nativeBuildInputs = [
+    pkg-config
+    gobject-introspection
   ];
+
+  propagatedBuildInputs = [ pygobject3 ];
+
   buildInputs = [
     gtk3
     goocanvas2
@@ -35,10 +38,13 @@ buildPythonPackage rec {
   # No upstream tests available
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "A calendar widget for GTK using PyGoocanvas.";
-    homepage    = https://goocalendar.tryton.org/;
-    license     = licenses.gpl2;
-    maintainers = [ maintainers.udono ];
+  pythonImportsCheck = [ "goocalendar" ];
+
+  meta = with lib; {
+    description = "A calendar widget for GTK using PyGoocanvas";
+    homepage = "https://goocalendar.tryton.org/";
+    changelog = "https://foss.heptapod.net/tryton/goocalendar/-/blob/${version}/CHANGELOG";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ udono ];
   };
 }

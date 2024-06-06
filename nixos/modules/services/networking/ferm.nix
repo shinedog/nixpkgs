@@ -30,15 +30,10 @@ in {
       config = mkOption {
         description = "Verbatim ferm.conf configuration.";
         default = "";
-        defaultText = "empty firewall, allows any traffic";
+        defaultText = literalMD "empty firewall, allows any traffic";
         type = types.lines;
       };
-      package = mkOption {
-        description = "The ferm package.";
-        type = types.package;
-        default = pkgs.ferm;
-        defaultText = "pkgs.ferm";
-      };
+      package = mkPackageOption pkgs "ferm" { };
     };
   };
 

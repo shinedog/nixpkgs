@@ -1,39 +1,63 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, nose
-, webob
-, six
-, beautifulsoup4
-, waitress
-, mock
-, pyquery
-, wsgiproxy2
-, PasteDeploy
+{
+  lib,
+  beautifulsoup4,
+  buildPythonPackage,
+  fetchPypi,
+  fetchpatch,
+  pastedeploy,
+  pyquery,
+  pytestCheckHook,
+  pythonOlder,
+  six,
+  waitress,
+  webob,
+  wsgiproxy2,
 }:
 
 buildPythonPackage rec {
-  version = "2.0.32";
   pname = "webtest";
+  version = "3.0.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     pname = "WebTest";
     inherit version;
-    sha256 = "4221020d502ff414c5fba83c1213985b83219cb1cc611fe58aa4feaf96b5e062";
+    hash = "sha256-VL2WlyWDjZhhqfon+Nlx950nXZSuJV9cUB9Tu22ZKes=";
   };
 
-  preConfigure = ''
-    substituteInPlace setup.py --replace "nose<1.3.0" "nose"
-  '';
+  patches = [
+    (fetchpatch {
+      # Replace deprecated unittest aliases for Python 3.12
+      name = "webtest-python312-compat.patch";
+      url = "https://github.com/Pylons/webtest/commit/d82ec5bd2cf3c7109a1d49ad9fa802ae1eae1763.patch";
+      hash = "sha256-hSwxAxAI3Eo28I8S+r2k/hFG8TlzrVYup3MuTsE+xXk=";
+    })
+  ];
 
-  propagatedBuildInputs = [ webob six beautifulsoup4 waitress ];
+  propagatedBuildInputs = [
+    beautifulsoup4
+    six
+    waitress
+    webob
+  ];
 
-  checkInputs = [ nose mock PasteDeploy wsgiproxy2 pyquery ];
+  nativeCheckInputs = [
+    pastedeploy
+    pyquery
+    pytestCheckHook
+    wsgiproxy2
+  ];
 
-  meta = with stdenv.lib; {
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "webtest" ];
+
+  meta = with lib; {
     description = "Helper to test WSGI applications";
-    homepage = https://webtest.readthedocs.org/en/latest/;
+    homepage = "https://webtest.readthedocs.org/";
     license = licenses.mit;
+    maintainers = with maintainers; [ fab ];
   };
-
 }

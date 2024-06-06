@@ -1,29 +1,120 @@
-{ buildPythonPackage, lib, fetchFromGitHub
-, cython
-, numpy, affine, attrs, cligj, click-plugins, snuggs, gdal
-, pytest, pytestcov, packaging, hypothesis, boto3
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  stdenv,
+  testers,
+
+  affine,
+  attrs,
+  boto3,
+  certifi,
+  click,
+  click-plugins,
+  cligj,
+  cython,
+  gdal,
+  hypothesis,
+  ipython,
+  matplotlib,
+  numpy,
+  packaging,
+  pytest-randomly,
+  setuptools,
+  shapely,
+  snuggs,
+  wheel,
+
+  rasterio, # required to run version test
 }:
 
 buildPythonPackage rec {
   pname = "rasterio";
-  version = "1.0.22";
+  version = "1.3.10";
+  format = "pyproject";
 
-  # Pypi doesn't ship the tests, so we fetch directly from GitHub
+  disabled = pythonOlder "3.8";
+
   src = fetchFromGitHub {
-    owner = "mapbox";
+    owner = "rasterio";
     repo = "rasterio";
-    rev = version;
-    sha256 = "1gx48qjiahlwflmjlkndp3ricd03jmzfx7i9ffgq7a2i6gcm36zp";
+    rev = "refs/tags/${version}";
+    hash = "sha256-FidUaSpbTR8X1/Cqy/IwApkOOl2RRtPqYJaSISRPThI=";
   };
 
-  checkInputs = [ boto3 pytest pytestcov packaging hypothesis ];
-  nativeBuildInputs = [ cython gdal ];
-  propagatedBuildInputs = [ gdal numpy attrs affine cligj click-plugins snuggs ];
+  postPatch = ''
+    # remove useless import statement requiring distutils to be present at the runtime
+    substituteInPlace rasterio/rio/calc.py \
+      --replace-fail "from distutils.version import LooseVersion" ""
+
+    # relax dependency on yet non-packaged, RC version of numpy
+    substituteInPlace pyproject.toml \
+      --replace-fail "numpy==2.0.0rc1" "numpy"
+  '';
+
+  nativeBuildInputs = [
+    cython
+    gdal
+    numpy
+    setuptools
+    wheel
+  ];
+
+  propagatedBuildInputs = [
+    affine
+    attrs
+    certifi
+    click
+    click-plugins
+    cligj
+    numpy
+    snuggs
+  ];
+
+  passthru.optional-dependencies = {
+    ipython = [ ipython ];
+    plot = [ matplotlib ];
+    s3 = [ boto3 ];
+  };
+
+  nativeCheckInputs = [
+    boto3
+    hypothesis
+    packaging
+    pytestCheckHook
+    pytest-randomly
+    shapely
+  ];
+
+  doCheck = true;
+
+  preCheck = ''
+    rm -r rasterio # prevent importing local rasterio
+  '';
+
+  pytestFlagsArray = [ "-m 'not network'" ];
+
+  disabledTests = [
+    # flaky
+    "test_outer_boundless_pixel_fidelity"
+  ] ++ lib.optionals stdenv.isDarwin [ "test_reproject_error_propagation" ];
+
+  pythonImportsCheck = [ "rasterio" ];
+
+  passthru.tests.version = testers.testVersion {
+    package = rasterio;
+    version = version;
+    command = "${rasterio}/bin/rio --version";
+  };
 
   meta = with lib; {
     description = "Python package to read and write geospatial raster data";
+    mainProgram = "rio";
+    homepage = "https://rasterio.readthedocs.io/";
+    changelog = "https://github.com/rasterio/rasterio/blob/${version}/CHANGES.txt";
     license = licenses.bsd3;
-    homepage = https://rasterio.readthedocs.io/en/latest/;
-    maintainers = with maintainers; [ mredaelli ];
+    maintainers = teams.geospatial.members;
   };
 }

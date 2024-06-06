@@ -1,21 +1,35 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cairomm, cmake, lv2, libpthreadstubs, libXdmcp, libXft, ntk, pcre, fftwFloat, zita-resampler }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, cairomm
+, cmake
+, lv2
+, libpthreadstubs
+, libXdmcp
+, libXft
+, ntk
+, pcre
+, fftwFloat
+, zita-resampler
+}:
 
 stdenv.mkDerivation rec {
-  name = "infamousPlugins-${version}";
-  version = "0.3.0";
+  pname = "infamousPlugins";
+  version = "0.3.2";
 
   src = fetchFromGitHub {
     owner = "ssj71";
     repo = "infamousPlugins";
     rev = "v${version}";
-    sha256 = "1r72agk5nxf5k0mghcc2j90z43j5d9i7rqjmf49jfyqnd443isip";
+    sha256 = "sha256-AhW4hLmCxz7yHMdxM6kOvtCXk1jEg/XtyPgt4yk1xqs=";
   };
 
-  nativeBuildInputs = [ pkgconfig cmake ];
+  nativeBuildInputs = [ pkg-config cmake ];
   buildInputs = [ cairomm lv2 libpthreadstubs libXdmcp libXft ntk pcre fftwFloat zita-resampler ];
 
-  meta = with stdenv.lib; {
-    homepage = https://ssj71.github.io/infamousPlugins;
+  meta = with lib; {
+    homepage = "https://ssj71.github.io/infamousPlugins";
     description = "A collection of open-source LV2 plugins";
     longDescription = ''
       These are audio plugins in the LV2 format, developed for linux. Most are suitable for live use.
@@ -33,5 +47,6 @@ stdenv.mkDerivation rec {
     license = licenses.gpl2;
     maintainers = [ maintainers.magnetophon ];
     platforms = platforms.linux;
+    mainProgram = "infamous-rule";
   };
 }

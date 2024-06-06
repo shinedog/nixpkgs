@@ -1,31 +1,79 @@
-{ stdenv, fetchurl, symlinkJoin, gfortran, perl, procps
-, libyaml, libxc, fftw, openblas, gsl, netcdf, arpack
+{ lib
+, stdenv
+, fetchFromGitLab
+, cmake
+, pkg-config
+, ninja
+, gfortran
+, which
+, perl
+, procps
+, libvdwxc
+, libyaml
+, libxc
+, fftw
+, blas
+, lapack
+, gsl
+, netcdf
+, arpack
+, spglib
+, metis
+, scalapack
+, mpi
+, enableMpi ? true
+, python3
 }:
 
-let
-  version = "8.4";
-  fftwAll = symlinkJoin { name ="ftw-dev-out"; paths = [ fftw.dev fftw.out ]; };
+assert (!blas.isILP64) && (!lapack.isILP64);
+assert (blas.isILP64 == arpack.isILP64);
 
-in stdenv.mkDerivation {
-  name = "octopus-${version}";
+stdenv.mkDerivation rec {
+  pname = "octopus";
+  version = "14.1";
 
-  src = fetchurl {
-    url = "http://www.tddft.org/programs/octopus/down.php?file=${version}/octopus-${version}.tar.gz";
-    sha256 = "1fx5ssnf65b9ld7xs9rvvg8i80pblxpyhqkir0a7xshkk1g60z55";
+  src = fetchFromGitLab {
+    owner = "octopus-code";
+    repo = "octopus";
+    rev = version;
+    sha256 = "sha256-8wZR+bYdxJFsUPMWbIGYxRdNzjLgHm+KFLjY7fSN7io=";
   };
 
-  nativeBuildInputs = [ perl procps fftw.dev ];
-  buildInputs = [ libyaml gfortran libxc openblas gsl fftw.out netcdf arpack ];
-
-  configureFlags = [
-    "--with-yaml-prefix=${libyaml}"
-    "--with-blas=-lopenblas"
-    "--with-lapack=-lopenblas"
-    "--with-fftw-prefix=${fftwAll}"
-    "--with-gsl-prefix=${gsl}"
-    "--with-libxc-prefix=${libxc}"
+  nativeBuildInputs = [
+    which
+    perl
+    procps
+    cmake
+    gfortran
+    pkg-config
+    ninja
   ];
 
+  buildInputs = [
+    libyaml
+    libxc
+    blas
+    lapack
+    gsl
+    fftw
+    netcdf
+    arpack
+    libvdwxc
+    spglib
+    metis
+    (python3.withPackages (ps: [ ps.pyyaml ]))
+  ] ++ lib.optional enableMpi scalapack;
+
+  propagatedBuildInputs = lib.optional enableMpi mpi;
+  propagatedUserEnvPkgs = lib.optional enableMpi mpi;
+
+  cmakeFlags = [
+    (lib.cmakeBool "OCTOPUS_MPI" enableMpi)
+    (lib.cmakeBool "OCTOPUS_ScaLAPACK" enableMpi)
+    (lib.cmakeBool "OCTOPUS_OpenMP" true)
+  ];
+
+  nativeCheckInputs = lib.optional.enableMpi mpi;
   doCheck = false;
   checkTarget = "check-short";
 
@@ -39,11 +87,13 @@ in stdenv.mkDerivation {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  passthru = lib.attrsets.optionalAttrs enableMpi { inherit mpi; };
+
+  meta = with lib; {
     description = "Real-space time dependent density-functional theory code";
-    homepage = http://octopus-code.org;
+    homepage = "https://octopus-code.org";
     maintainers = with maintainers; [ markuskowa ];
-    license = licenses.gpl2;
+    license = with licenses; [ gpl2Only asl20 lgpl3Plus bsd3 ];
     platforms = [ "x86_64-linux" ];
   };
 }
