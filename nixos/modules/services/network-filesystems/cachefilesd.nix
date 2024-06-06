@@ -43,17 +43,23 @@ in
 
   config = mkIf cfg.enable {
 
+    boot.kernelModules = [ "cachefiles" ];
+
     systemd.services.cachefilesd = {
       description = "Local network file caching management daemon";
       wantedBy = [ "multi-user.target" ];
-      path = [ pkgs.kmod pkgs.cachefilesd ];
-      script = ''
-        modprobe -qab cachefiles
-        mkdir -p ${cfg.cacheDir}
-        chmod 700 ${cfg.cacheDir}
-        exec cachefilesd -n -f ${cfgFile}
-      '';
+      serviceConfig = {
+        Type = "exec";
+        ExecStart = "${pkgs.cachefilesd}/bin/cachefilesd -n -f ${cfgFile}";
+        Restart = "on-failure";
+        PrivateTmp = true;
+      };
     };
 
+    systemd.tmpfiles.settings."10-cachefilesd".${cfg.cacheDir}.d = {
+      user = "root";
+      group = "root";
+      mode = "0700";
+    };
   };
 }

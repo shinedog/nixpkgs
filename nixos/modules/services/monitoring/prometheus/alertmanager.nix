@@ -6,10 +6,12 @@ let
   cfg = config.services.prometheus.alertmanager;
   mkConfigFile = pkgs.writeText "alertmanager.yml" (builtins.toJSON cfg.configuration);
 
-  checkedConfig = file: pkgs.runCommand "checked-config" { buildInputs = [ cfg.package ]; } ''
-    ln -s ${file} $out
-    amtool check-config $out
-  '';
+  checkedConfig = file:
+    if cfg.checkConfig then
+      pkgs.runCommand "checked-config" { nativeBuildInputs = [ cfg.package ]; } ''
+        ln -s ${file} $out
+        amtool check-config $out
+      '' else file;
 
   alertmanagerYml = let
     yml = if cfg.configText != null then
@@ -18,27 +20,31 @@ let
     in checkedConfig yml;
 
   cmdlineArgs = cfg.extraFlags ++ [
-    "--config.file ${alertmanagerYml}"
+    "--config.file /tmp/alert-manager-substituted.yaml"
     "--web.listen-address ${cfg.listenAddress}:${toString cfg.port}"
     "--log.level ${cfg.logLevel}"
+    "--storage.path /var/lib/alertmanager"
+    (toString (map (peer: "--cluster.peer ${peer}:9094") cfg.clusterPeers))
     ] ++ (optional (cfg.webExternalUrl != null)
       "--web.external-url ${cfg.webExternalUrl}"
     ) ++ (optional (cfg.logFormat != null)
       "--log.format ${cfg.logFormat}"
   );
 in {
+  imports = [
+    (mkRemovedOptionModule [ "services" "prometheus" "alertmanager" "user" ] "The alertmanager service is now using systemd's DynamicUser mechanism which obviates a user setting.")
+    (mkRemovedOptionModule [ "services" "prometheus" "alertmanager" "group" ] "The alertmanager service is now using systemd's DynamicUser mechanism which obviates a group setting.")
+    (mkRemovedOptionModule [ "services" "prometheus" "alertmanagerURL" ] ''
+      Due to incompatibility, the alertmanagerURL option has been removed,
+      please use 'services.prometheus.alertmanagers' instead.
+    '')
+  ];
+
   options = {
     services.prometheus.alertmanager = {
       enable = mkEnableOption "Prometheus Alertmanager";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.prometheus-alertmanager;
-        defaultText = "pkgs.alertmanager";
-        description = ''
-          Package that should be used for alertmanager.
-        '';
-      };
+      package = mkPackageOption pkgs "prometheus-alertmanager" { };
 
       configuration = mkOption {
         type = types.nullOr types.attrs;
@@ -56,6 +62,20 @@ in {
           defines the text that is written to alertmanager.yml. If null, the
           contents of alertmanager.yml is generated from the structured config
           options.
+        '';
+      };
+
+      checkConfig = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Check configuration with `amtool check-config`. The call to `amtool` is
+          subject to sandboxing by Nix.
+
+          If you use credentials stored in external files
+          (`environmentFile`, etc),
+          they will not be visible to `amtool`
+          and it will report errors, despite a correct configuration.
         '';
       };
 
@@ -96,7 +116,7 @@ in {
       };
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 9093;
         description = ''
           Port to listen on for the web interface and API.
@@ -111,11 +131,31 @@ in {
         '';
       };
 
+      clusterPeers = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = ''
+          Initial peers for HA cluster.
+        '';
+      };
+
       extraFlags = mkOption {
         type = types.listOf types.str;
         default = [];
         description = ''
           Extra commandline options when launching the Alertmanager.
+        '';
+      };
+
+      environmentFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        example = "/root/alertmanager.env";
+        description = ''
+          File to load as environment file. Environment variables
+          from this file will be interpolated into the config file
+          using envsubst with this syntax:
+          `$ENVIRONMENT ''${VARIABLE}`
         '';
       };
     };
@@ -134,10 +174,17 @@ in {
 
       systemd.services.alertmanager = {
         wantedBy = [ "multi-user.target" ];
-        after    = [ "network.target" ];
+        wants    = [ "network-online.target" ];
+        after    = [ "network-online.target" ];
+        preStart = ''
+           ${lib.getBin pkgs.envsubst}/bin/envsubst -o "/tmp/alert-manager-substituted.yaml" \
+                                                    -i "${alertmanagerYml}"
+        '';
         serviceConfig = {
           Restart  = "always";
-          DynamicUser = true;
+          StateDirectory = "alertmanager";
+          DynamicUser = true; # implies PrivateTmp
+          EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
           WorkingDirectory = "/tmp";
           ExecStart = "${cfg.package}/bin/alertmanager" +
             optionalString (length cmdlineArgs != 0) (" \\\n  " +

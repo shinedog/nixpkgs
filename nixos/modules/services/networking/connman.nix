@@ -1,119 +1,140 @@
 { config, lib, pkgs, ... }:
 
-with pkgs;
-with lib;
-
 let
-  cfg = config.networking.connman;
+  cfg = config.services.connman;
   configFile = pkgs.writeText "connman.conf" ''
     [General]
-    NetworkInterfaceBlacklist=${concatStringsSep "," cfg.networkInterfaceBlacklist}
+    NetworkInterfaceBlacklist=${lib.concatStringsSep "," cfg.networkInterfaceBlacklist}
 
     ${cfg.extraConfig}
   '';
+  enableIwd = cfg.wifi.backend == "iwd";
 in {
+  meta.maintainers = with lib.maintainers; [ AndersonTorres ];
+
+  imports = [
+    (lib.mkRenamedOptionModule [ "networking" "connman" ] [ "services" "connman" ])
+  ];
 
   ###### interface
 
   options = {
-
-    networking.connman = {
-
-      enable = mkOption {
-        type = types.bool;
+    services.connman = {
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = false;
         description = ''
           Whether to use ConnMan for managing your network connections.
         '';
       };
 
-      enableVPN = mkOption {
-        type = types.bool;
+      package = lib.mkOption {
+        type = lib.types.package;
+        description = "The connman package / build flavor";
+        default = pkgs.connman;
+        defaultText = lib.literalExpression "pkgs.connman";
+        example = lib.literalExpression "pkgs.connmanFull";
+      };
+
+      enableVPN = lib.mkOption {
+        type = lib.types.bool;
         default = true;
         description = ''
           Whether to enable ConnMan VPN service.
         '';
       };
 
-      extraConfig = mkOption {
-        type = types.lines;
-        default = ''
-        '';
+      extraConfig = lib.mkOption {
+        type = lib.types.lines;
+        default = "";
         description = ''
           Configuration lines appended to the generated connman configuration file.
         '';
       };
 
-      networkInterfaceBlacklist = mkOption {
-        type = with types; listOf string;
+      networkInterfaceBlacklist = lib.mkOption {
+        type = with lib.types; listOf str;
         default = [ "vmnet" "vboxnet" "virbr" "ifb" "ve" ];
         description = ''
           Default blacklisted interfaces, this includes NixOS containers interfaces (ve).
         '';
       };
 
-      extraFlags = mkOption {
-        type = with types; listOf string;
+      wifi = {
+        backend = lib.mkOption {
+          type = lib.types.enum [ "wpa_supplicant" "iwd" ];
+          default = "wpa_supplicant";
+          description = ''
+            Specify the Wi-Fi backend used.
+            Currently supported are {option}`wpa_supplicant` or {option}`iwd`.
+          '';
+        };
+      };
+
+      extraFlags = lib.mkOption {
+        type = with lib.types; listOf str;
         default = [ ];
         example = [ "--nodnsproxy" ];
         description = ''
           Extra flags to pass to connmand
         '';
       };
-
     };
-
   };
 
   ###### implementation
 
-  config = mkIf cfg.enable {
-
+  config = lib.mkIf cfg.enable {
     assertions = [{
       assertion = !config.networking.useDHCP;
-      message = "You can not use services.networking.connman with services.networking.useDHCP";
+      message = "You can not use services.connman with networking.useDHCP";
     }{
-      assertion = config.networking.wireless.enable;
-      message = "You must use services.networking.connman with services.networking.wireless";
-    }{
+      # TODO: connman seemingly can be used along network manager and
+      # connmanFull supports this - so this should be worked out somehow
       assertion = !config.networking.networkmanager.enable;
-      message = "You can not use services.networking.connman with services.networking.networkmanager";
+      message = "You can not use services.connman with networking.networkmanager";
     }];
 
-    environment.systemPackages = [ connman ];
+    environment.systemPackages = [ cfg.package ];
 
-    systemd.services."connman" = {
+    systemd.services.connman = {
       description = "Connection service";
       wantedBy = [ "multi-user.target" ];
-      after = [ "syslog.target" ];
+      after = [ "syslog.target" ] ++ lib.optional enableIwd "iwd.service";
+      requires = lib.optional enableIwd "iwd.service";
       serviceConfig = {
         Type = "dbus";
         BusName = "net.connman";
         Restart = "on-failure";
-        ExecStart = "${pkgs.connman}/sbin/connmand --config=${configFile} --nodaemon ${toString cfg.extraFlags}";
+        ExecStart = toString ([
+          "${cfg.package}/sbin/connmand"
+          "--config=${configFile}"
+          "--nodaemon"
+        ] ++ lib.optional enableIwd "--wifi=iwd_agent"
+          ++ cfg.extraFlags);
         StandardOutput = "null";
       };
     };
 
-    systemd.services."connman-vpn" = mkIf cfg.enableVPN {
+    systemd.services.connman-vpn = lib.mkIf cfg.enableVPN {
       description = "ConnMan VPN service";
       wantedBy = [ "multi-user.target" ];
       after = [ "syslog.target" ];
-      before = [ "connman" ];
+      before = [ "connman.service" ];
       serviceConfig = {
         Type = "dbus";
         BusName = "net.connman.vpn";
-        ExecStart = "${pkgs.connman}/sbin/connman-vpnd -n";
+        ExecStart = "${cfg.package}/sbin/connman-vpnd -n";
         StandardOutput = "null";
       };
     };
 
-    systemd.services."net-connman-vpn" = mkIf cfg.enableVPN {
+    systemd.services.net-connman-vpn = lib.mkIf cfg.enableVPN {
       description = "D-BUS Service";
       serviceConfig = {
         Name = "net.connman.vpn";
-        before = [ "connman" ];
-        ExecStart = "${pkgs.connman}/sbin/connman-vpnd -n";
+        before = [ "connman.service" ];
+        ExecStart = "${cfg.package}/sbin/connman-vpnd -n";
         User = "root";
         SystemdService = "connman-vpn.service";
       };
@@ -121,7 +142,13 @@ in {
 
     networking = {
       useDHCP = false;
-      wireless.enable = true;
+      wireless = {
+        enable = lib.mkIf (!enableIwd) true;
+        dbusControlled = true;
+        iwd = lib.mkIf enableIwd {
+          enable = true;
+        };
+      };
       networkmanager.enable = false;
     };
   };

@@ -1,16 +1,14 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, docutils
-, requests
-, requests_download
-, zipfile36
-, pythonOlder
-, pytest
-, testpath
-, responses
-, pytoml
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  docutils,
+  requests,
+  pytestCheckHook,
+  testpath,
+  responses,
+  flit-core,
+  tomli-w,
 }:
 
 # Flit is actually an application to build universal wheels.
@@ -20,29 +18,46 @@
 
 buildPythonPackage rec {
   pname = "flit";
-  version = "1.3";
+  version = "3.9.0";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "6f6f0fb83c51ffa3a150fa41b5ac118df9ea4a87c2c06dff4ebf9adbe7b52b36";
+  src = fetchFromGitHub {
+    owner = "takluyver";
+    repo = "flit";
+    rev = version;
+    hash = "sha256-yl2+PcKr7xRW4oIBWl+gzh/nKhSNu5GH9fWKRGgaNHU=";
   };
 
-  disabled = !isPy3k;
-  propagatedBuildInputs = [ docutils requests requests_download pytoml ]
-    ++ lib.optional (pythonOlder "3.6") zipfile36;
+  nativeBuildInputs = [ flit-core ];
 
-  checkInputs = [ pytest testpath responses ];
+  propagatedBuildInputs = [
+    docutils
+    requests
+    flit-core
+    tomli-w
+  ];
 
-  # Disable test that needs some ini file.
-  # Disable test that wants hg
-  checkPhase = ''
-    HOME=$(mktemp -d) pytest -k "not test_invalid_classifier and not test_build_sdist"
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    testpath
+    responses
+  ];
 
-  meta = {
+  disabledTests = [
+    # needs some ini file.
+    "test_invalid_classifier"
+    # calls pip directly. disabled for PEP 668
+    "test_install_data_dir"
+    "test_install_module_pep621"
+    "test_symlink_data_dir"
+    "test_symlink_module_pep621"
+  ];
+
+  meta = with lib; {
+    changelog = "https://github.com/pypa/flit/blob/${version}/doc/history.rst";
     description = "A simple packaging tool for simple packages";
-    homepage = https://github.com/takluyver/flit;
-    license = lib.licenses.bsd3;
-    maintainers = [ lib.maintainers.fridh ];
+    mainProgram = "flit";
+    homepage = "https://github.com/pypa/flit";
+    license = licenses.bsd3;
   };
 }

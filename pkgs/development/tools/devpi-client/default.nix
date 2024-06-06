@@ -1,47 +1,80 @@
-{ stdenv
-, pythonPackages
-, glibcLocales
-, devpi-server
-, git
-, mercurial
-} :
+{
+  lib,
+  devpi-server,
+  git,
+  glibcLocales,
+  python3,
+  fetchPypi,
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "${pname}-${version}";
+python3.pkgs.buildPythonApplication rec {
   pname = "devpi-client";
-  version = "4.1.0";
+  version = "7.0.3";
+  pyproject = true;
 
-  src = pythonPackages.fetchPypi {
-    inherit pname version;
-    sha256 = "0f5jkvxx9fl8v5vwbwmplqhjsdfgiib7j3zvn0zxd8krvi2s38fq";
+  src = fetchPypi {
+    pname = "devpi_client";
+    inherit version;
+    hash = "sha256-5aF6EIFnhfywDeAfWSN+eZUpaO6diPCP5QHT11Y/IQI=";
   };
 
-  checkInputs = with pythonPackages; [
-                    pytest pytest-flakes webtest mock
-                    devpi-server tox
-                    sphinx wheel git mercurial detox
-                    setuptools
-                    ];
-  checkPhase = ''
-    export PATH=$PATH:$out/bin
-    export HOME=$TMPDIR # fix tests failing in sandbox due to "/homeless-shelter"
+  build-system = with python3.pkgs; [
+    setuptools
+    setuptools-changelog-shortener
+  ];
 
-    # setuptools do not get propagated into the tox call (cannot import setuptools)
-    rm testing/test_test.py
+  buildInputs = [ glibcLocales ];
 
-    # test_pypi_index_attributes tries to connect to upstream pypi
-    py.test -k 'not test_pypi_index_attributes' testing
+  dependencies = with python3.pkgs; [
+    build
+    check-manifest
+    devpi-common
+    iniconfig
+    pkginfo
+    pluggy
+    platformdirs
+  ];
+
+  nativeCheckInputs =
+    [
+      devpi-server
+      git
+    ]
+    ++ (with python3.pkgs; [
+      mercurial
+      mock
+      pypitoken
+      pytestCheckHook
+      sphinx
+      virtualenv
+      webtest
+      wheel
+    ]);
+
+  preCheck = ''
+    export HOME=$(mktemp -d);
   '';
 
+  pytestFlagsArray = [
+    # --fast skips tests which try to start a devpi-server improperly
+    "--fast"
+  ];
+
   LC_ALL = "en_US.UTF-8";
-  buildInputs = with pythonPackages; [ glibcLocales pkginfo check-manifest ];
-  propagatedBuildInputs = with pythonPackages; [ py devpi-common pluggy setuptools ];
 
-  meta = with stdenv.lib; {
-    homepage = http://doc.devpi.net;
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "devpi" ];
+
+  meta = with lib; {
     description = "Client for devpi, a pypi index server and packaging meta tool";
+    homepage = "http://doc.devpi.net";
+    changelog = "https://github.com/devpi/devpi/blob/client-${version}/client/CHANGELOG";
     license = licenses.mit;
-    maintainers = with maintainers; [ lewo makefu ];
+    maintainers = with maintainers; [
+      lewo
+      makefu
+    ];
+    mainProgram = "devpi";
   };
-
 }

@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -14,6 +13,9 @@ static bool log_alloc_success = true;
 static void add_log(struct xkb_context *ctx, enum xkb_log_level level,
                     const char *fmt, va_list args)
 {
+    size_t buflen;
+    va_list tmpargs;
+
     log_buffer_size++;
 
     if (log_buffer == NULL)
@@ -28,11 +30,24 @@ static void add_log(struct xkb_context *ctx, enum xkb_log_level level,
         return;
     }
 
-    if (vasprintf(&log_buffer[log_buffer_size - 1], fmt, args) == -1) {
+    /* Unfortunately, vasprintf() is a GNU extension and thus not very
+     * portable, so let's first get the required buffer size using a dummy
+     * vsnprintf and afterwards allocate the returned amount of bytes.
+     *
+     * We also need to make a copy of the args, because the value of the args
+     * will be indeterminate after the return.
+     */
+    va_copy(tmpargs, args);
+    buflen = vsnprintf(NULL, 0, fmt, tmpargs);
+    va_end(tmpargs);
+
+    log_buffer[log_buffer_size - 1] = malloc(++buflen);
+
+    if (vsnprintf(log_buffer[log_buffer_size - 1], buflen, fmt, args) == -1) {
         perror("log line alloc");
         log_alloc_success = false;
-        return;
     }
+    va_end(args);
 }
 
 static void print_logs(void)
@@ -106,10 +121,10 @@ int main(int argc, char **argv)
 
     rdef = malloc(sizeof(struct xkb_rule_names));
 
-    TRY_KEYMAP(model,   argv[1], "xkbModel");
-    TRY_KEYMAP(layout,  argv[2], "layout");
-    TRY_KEYMAP(variant, argv[3], "xkbVariant");
-    TRY_KEYMAP(options, argv[4], "xkbOptions");
+    TRY_KEYMAP(model,   argv[1], "xkb.model");
+    TRY_KEYMAP(layout,  argv[2], "xkb.layout");
+    TRY_KEYMAP(variant, argv[3], "xkb.variant");
+    TRY_KEYMAP(options, argv[4], "xkb.options");
 
     free_logs();
     rdef->model = argv[1];

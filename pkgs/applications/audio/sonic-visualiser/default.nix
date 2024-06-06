@@ -1,23 +1,26 @@
 # TODO add plugins having various licenses, see http://www.vamp-plugins.org/download.html
 
-{ stdenv, fetchurl, alsaLib, bzip2, fftw, libjack2, libX11, liblo
-, libmad, libogg, librdf, librdf_raptor, librdf_rasqal, libsamplerate
-, libsndfile, pkgconfig, libpulseaudio, qtbase, redland
-, qmake, rubberband, serd, sord, vampSDK, fftwFloat
+{ lib, stdenv, fetchurl, alsa-lib, bzip2, fftw, libjack2, libX11, liblo
+, libmad, lrdf, librdf_raptor, librdf_rasqal, libsamplerate
+, libsndfile, pkg-config, libpulseaudio, qtbase, qtsvg, redland
+, rubberband, serd, sord, vamp-plugin-sdk, fftwFloat
+, capnproto, liboggz, libfishsound, libid3tag, opusfile
+, wrapQtAppsHook, meson, ninja, cmake
 }:
 
 stdenv.mkDerivation rec {
-  name = "sonic-visualiser-${version}";
-  version = "2.4.1";
+  pname = "sonic-visualiser";
+  version = "4.5.1";
 
   src = fetchurl {
-    url = "https://code.soundsoftware.ac.uk/attachments/download/1185/${name}.tar.gz";
-    sha256 = "06nlha70kgrby16nyhngrv5q846xagnxdinv608v7ga7vpywwmyb";
+    url = "https://code.soundsoftware.ac.uk/attachments/download/2841/${pname}-${version}.tar.gz";
+    sha256 = "1sgg4m3035a03ldipgysz7zqfa9pqaqa4j024gyvvcwh4ml8iasr";
   };
 
+  nativeBuildInputs = [ meson ninja cmake pkg-config wrapQtAppsHook ];
   buildInputs =
-    [ libsndfile qtbase fftw fftwFloat bzip2 librdf rubberband
-      libsamplerate vampSDK alsaLib librdf_raptor librdf_rasqal redland
+    [ libsndfile qtbase qtsvg fftw fftwFloat bzip2 lrdf rubberband
+      libsamplerate vamp-plugin-sdk alsa-lib librdf_raptor librdf_rasqal redland
       serd
       sord
       # optional
@@ -25,32 +28,22 @@ stdenv.mkDerivation rec {
       # portaudio
       libpulseaudio
       libmad
-      libogg # ?
-      # fishsound
+      libfishsound
       liblo
       libX11
+      capnproto
+      liboggz
+      libid3tag
+      opusfile
     ];
 
-  nativeBuildInputs = [ pkgconfig qmake ];
+  enableParallelBuilding = true;
 
-  configurePhase = ''
-    for i in sonic-visualiser svapp svcore svgui;
-      do cd $i && qmake PREFIX=$out && cd ..;
-    done
-  '';
-
-  installPhase = ''
-    mkdir -p $out/{bin,share/sonic-visualiser}
-    cp sonic-visualiser $out/bin/
-    cp -r samples $out/share/sonic-visualiser/
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "View and analyse contents of music audio files";
-    homepage = http://www.sonicvisualiser.org/;
+    homepage = "https://www.sonicvisualiser.org/";
     license = licenses.gpl2Plus;
     maintainers = [ maintainers.goibhniu maintainers.marcweber ];
     platforms = platforms.linux;
-    broken = true;
   };
 }

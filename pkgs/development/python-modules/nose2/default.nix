@@ -1,31 +1,51 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, six
-, pythonOlder
-, mock
-, coverage
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # optional-dependencies
+  coverage,
+
+  # tests
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "nose2";
-  version = "0.8.0";
+  version = "0.14.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9052f2b46807b63d9bdf68e0768da1f8386368889b50043fd5d0889c470258f3";
+    hash = "sha256-f48Dohyd4sMwFZM6/O9yv45KLV3+w7QAkih95uQbCTo=";
   };
 
-  propagatedBuildInputs = [ six coverage ]
-    ++ stdenv.lib.optionals (pythonOlder "3.4") [ mock ];
+  nativeBuildInputs = [ setuptools ];
 
-  # AttributeError: 'module' object has no attribute 'collector'
-  doCheck = false;
+  passthru.optional-dependencies = {
+    coverage = [ coverage ];
+  };
 
-  meta = with stdenv.lib; {
-    description = "nose2 is the next generation of nicer testing for Python";
-    homepage = https://github.com/nose-devs/nose2;
+  pythonImportsCheck = [ "nose2" ];
+
+  __darwinAllowLocalNetworking = true;
+
+  nativeCheckInputs = [
+    unittestCheckHook
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  meta = with lib; {
+    changelog = "https://github.com/nose-devs/nose2/blob/${version}/docs/changelog.rst";
+    description = "Test runner for Python";
+    mainProgram = "nose2";
+    homepage = "https://github.com/nose-devs/nose2";
     license = licenses.bsd0;
+    maintainers = with maintainers; [ ];
   };
-
 }

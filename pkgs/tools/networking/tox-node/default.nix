@@ -1,43 +1,28 @@
-{ stdenv, rustPlatform, fetchFromGitHub
-, libsodium, openssl
-, pkgconfig
-}:
+{ lib, rustPlatform, fetchFromGitHub, nix-update-script }:
 
-with rustPlatform;
-
-buildRustPackage rec {
-  name = "tox-node-${version}";
-  version = "0.0.7";
+rustPlatform.buildRustPackage rec {
+  pname = "tox-node";
+  version = "0.2.0";
 
   src = fetchFromGitHub {
     owner = "tox-rs";
-    repo = "tox-node";
+    repo = "tox";
     rev = "v${version}";
-    sha256 = "0p1k4glqm3xasck66fywkyg42lbccad9rc6biyvi24rn76qip4jm";
+    sha256 = "sha256-3ZRpri3WxwHjMq88TxRJAaTXMui8N1uLek+q8g5PGD4=";
   };
 
-  buildInputs = [ libsodium openssl ];
-  nativeBuildInputs = [ pkgconfig ];
+  buildAndTestSubdir = "tox_node";
 
-  SODIUM_USE_PKG_CONFIG = "yes";
+  cargoSha256 = "sha256-L5IvYA32W8cTnuWjeljge5X+LZ912ugtcvEKXLqYZ+k=";
 
-  installPhase = ''
-    runHook preInstall
+  passthru.updateScript = nix-update-script { };
 
-    install -D target/release/tox-node $out/bin/tox-node
-
-    runHook postInstall
-  '';
-
-  doCheck = false;
-
-  cargoSha256 = "18w1ycvj2q4q8lj81wn5lfljh5wa7b230ahqdz30w20pv1cazsv2";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A server application to run tox node written in pure Rust";
-    homepage = https://github.com/tox-rs/tox-node;
-    license = [ licenses.mit ];
+    homepage = "https://github.com/tox-rs/tox";
+    license = [ licenses.gpl3Plus ];
     platforms = platforms.linux;
-    maintainers = with maintainers; [ suhr ];
+    maintainers = with maintainers; [ suhr kurnevsky ];
+    mainProgram = "tox-node";
   };
 }

@@ -1,48 +1,70 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, botocore
-, jmespath
-, s3transfer
-, futures
-, docutils
-, nose
-, mock
-, isPy3k
+{
+  lib,
+  botocore,
+  buildPythonPackage,
+  fetchFromGitHub,
+  jmespath,
+  pytest-xdist,
+  pytestCheckHook,
+  pythonOlder,
+  pythonRelaxDepsHook,
+  s3transfer,
+  setuptools,
 }:
 
 buildPythonPackage rec {
-  pname =  "boto3";
-  version = "1.9.96"; # N.B: if you change this, change botocore too
+  pname = "boto3";
+  version = "1.34.58"; # N.B: if you change this, change botocore and awscli to a matching version
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "c103241394d396ee08548b03d5d1f0f89a7ad1dfa7ccca88a47131f329cca093";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "boto";
+    repo = "boto3";
+    rev = "refs/tags/${version}";
+    hash = "sha256-2L4pHjrDoy7dPZm0nx+NXZV/K3ZVx7FrNGYZTMrwAs4=";
   };
 
-  propagatedBuildInputs = [ botocore jmespath s3transfer ] ++ lib.optionals (!isPy3k) [ futures ];
-  checkInputs = [ docutils nose mock ];
+  nativeBuildInputs = [
+    pythonRelaxDepsHook
+    setuptools
+  ];
 
-  checkPhase = ''
-    runHook preCheck
-    # This method is not in mock. It might have appeared in some versions.
-    sed -i 's/action.assert_called_once()/self.assertEqual(action.call_count, 1)/' \
-      tests/unit/resources/test_factory.py
-    nosetests -d tests/unit --verbose
-    runHook postCheck
-  '';
+  pythonRelaxDeps = [ "s3transfer" ];
 
-  # Network access
-  doCheck = false;
+  propagatedBuildInputs = [
+    botocore
+    jmespath
+    s3transfer
+  ];
 
-  meta = {
-    homepage = https://github.com/boto/boto3;
-    license = lib.licenses.asl20;
+  nativeCheckInputs = [
+    pytest-xdist
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "boto3" ];
+
+  disabledTestPaths = [
+    # Integration tests require networking
+    "tests/integration"
+  ];
+
+  passthru.optional-dependencies = {
+    crt = [ botocore.optional-dependencies.crt ];
+  };
+
+  meta = with lib; {
     description = "AWS SDK for Python";
+    homepage = "https://github.com/boto/boto3";
+    changelog = "https://github.com/boto/boto3/blob/${version}/CHANGELOG.rst";
+    license = licenses.asl20;
     longDescription = ''
       Boto3 is the Amazon Web Services (AWS) Software Development Kit (SDK) for
       Python, which allows Python developers to write software that makes use of
       services like Amazon S3 and Amazon EC2.
     '';
+    maintainers = with maintainers; [ anthonyroussel ];
   };
 }

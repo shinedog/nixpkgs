@@ -1,19 +1,23 @@
-{stdenv, fetchzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  baseName = "gyre-fonts";
+stdenvNoCC.mkDerivation rec {
+  pname = "gyre-fonts";
   version = "2.005";
-in fetchzip {
-  name="${baseName}-${version}";
 
-  url = "http://www.gust.org.pl/projects/e-foundry/tex-gyre/whole/tg-${version}otf.zip";
+  src = fetchzip {
+    url = "http://www.gust.org.pl/projects/e-foundry/tex-gyre/whole/tg-${version}otf.zip";
+    stripRoot = false;
+    hash = "sha256-+6IufuFf+IoLXoZEPlfHUNgRhKrQNBEZ1OwPD9/uOjg=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts
-    unzip -j $downloadedFile \*.otf -d $out/share/fonts/truetype
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/share/fonts/truetype
+    cp *.otf $out/share/fonts/truetype
+
+    runHook postInstall
   '';
-
-  sha256 = "17amdpahs6kn7hk3dqxpff1s095cg1caxzij3mxjbbxp8zy0l111";
 
   meta = {
     description = "OpenType fonts from the Gyre project, suitable for use with (La)TeX";
@@ -25,8 +29,8 @@ in fetchzip {
       covering all modern European languages and then some
     '';
     homepage = "http://www.gust.org.pl/projects/e-foundry/tex-gyre/index_html#Readings";
-    license = stdenv.lib.licenses.lppl13c;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = with stdenv.lib.maintainers; [ bergey ];
+    license = lib.licenses.lppl13c;
+    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [ bergey ];
   };
 }

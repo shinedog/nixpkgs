@@ -1,24 +1,42 @@
-{ stdenv, python3Packages, fetchFromGitHub }:
+{ lib
+, fetchFromGitHub
+, python3
+}:
 
-python3Packages.buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "urlscan";
-  version = "0.9.2";
+  version = "1.0.2";
+  format = "pyproject";
 
   src = fetchFromGitHub {
     owner = "firecat53";
     repo = pname;
-    rev = version;
-    sha256 = "16cc1vvvhylrl9208d253k11rqzi95mg7hrf7xbd0bqxvd6rmxar";
+    rev = "refs/tags/${version}";
+    hash = "sha256-nyq4BrpfbZwK/nOnB8ZEN1wlM8CssYVRvV7ytpX7k40=";
   };
 
-  propagatedBuildInputs = [ python3Packages.urwid ];
+  nativeBuildInputs = with python3.pkgs; [
+    hatchling
+    hatch-vcs
+  ];
 
-  doCheck = false; # No tests available
+  propagatedBuildInputs = with python3.pkgs; [
+    urwid
+  ];
 
-  meta = with stdenv.lib; {
+  # No tests available
+  doCheck = false;
+
+  pythonImportsCheck = [
+    "urlscan"
+  ];
+
+  meta = with lib; {
     description = "Mutt and terminal url selector (similar to urlview)";
-    homepage = https://github.com/firecat53/urlscan;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ dpaetzel jfrankenau ];
+    homepage = "https://github.com/firecat53/urlscan";
+    changelog = "https://github.com/firecat53/urlscan/releases/tag/${version}";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ dpaetzel ];
+    mainProgram = "urlscan";
   };
 }

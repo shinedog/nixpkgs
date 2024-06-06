@@ -1,35 +1,36 @@
 config:
-{ stdenv, cmake, pkgconfig, which
+{ lib, stdenv, cmake, pkg-config, which
 
 # Xen
 , bison, bzip2, checkpolicy, dev86, figlet, flex, gettext, glib
-, iasl, libaio, libiconv, libuuid, ncurses, openssl, perl
-, python2Packages
-# python2Packages.python
+, acpica-tools, libaio, libiconv, libuuid, ncurses, openssl, perl
 , xz, yajl, zlib
+, python3Packages
 
 # Xen Optional
 , ocamlPackages
 
 # Scripts
 , coreutils, gawk, gnused, gnugrep, diffutils, multipath-tools
-, iproute, inetutils, iptables, bridge-utils, openvswitch, nbd, drbd
-, lvm2, utillinux, procps, systemd
+, iproute2, inetutils, iptables, bridge-utils, openvswitch, nbd, drbd
+, util-linux, procps, systemd
 
 # Documentation
-# python2Packages.markdown
-, transfig, ghostscript, texinfo, pandoc
+# python3Packages.markdown
+, fig2dev, ghostscript, texinfo, pandoc
+
+, binutils-unwrapped
 
 , ...} @ args:
 
-with stdenv.lib;
+with lib;
 
 let
   #TODO: fix paths instead
   scriptEnvPath = concatMapStringsSep ":" (x: "${x}/bin") [
     which perl
-    coreutils gawk gnused gnugrep diffutils utillinux multipath-tools
-    iproute inetutils iptables bridge-utils openvswitch nbd drbd
+    coreutils gawk gnused gnugrep diffutils util-linux multipath-tools
+    iproute2 inetutils iptables bridge-utils openvswitch nbd drbd
   ];
 
   withXenfiles = f: concatStringsSep "\n" (mapAttrsToList f config.xenfiles);
@@ -42,6 +43,17 @@ let
     }
     ( __do )
   '');
+
+  # We don't want to use the wrapped version, because this version of ld is
+  # only used for linking the Xen EFI binary, and the build process really
+  # needs control over the LDFLAGS used
+  efiBinutils = binutils-unwrapped.overrideAttrs (oldAttrs: {
+    name = "efi-binutils";
+    configureFlags = oldAttrs.configureFlags ++ [
+      "--enable-targets=x86_64-pep"
+    ];
+    doInstallCheck = false; # We get a spurious failure otherwise, due to host/target mis-match
+  });
 in
 
 stdenv.mkDerivation (rec {
@@ -53,22 +65,22 @@ stdenv.mkDerivation (rec {
 
   hardeningDisable = [ "stackprotector" "fortify" "pic" ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config cmake ];
   buildInputs = [
-    cmake which
+    which
 
     # Xen
-    bison bzip2 checkpolicy dev86 figlet flex gettext glib iasl libaio
-    libiconv libuuid ncurses openssl perl python2Packages.python xz yajl zlib
+    bison bzip2 checkpolicy dev86 figlet flex gettext glib acpica-tools libaio
+    libiconv libuuid ncurses openssl perl python3Packages.python xz yajl zlib
 
     # oxenstored
     ocamlPackages.findlib ocamlPackages.ocaml systemd
 
     # Python fixes
-    python2Packages.wrapPython
+    python3Packages.wrapPython
 
     # Documentation
-    python2Packages.markdown transfig ghostscript texinfo pandoc
+    python3Packages.markdown fig2dev ghostscript texinfo pandoc
 
     # Others
   ] ++ (concatMap (x: x.buildInputs or []) (attrValues config.xenfiles))
@@ -104,7 +116,7 @@ stdenv.mkDerivation (rec {
     # Remove in-tree qemu stuff in case we build from a tar-ball
     rm -rf tools/qemu-xen tools/qemu-xen-traditional
 
-    # Fix shebangs, mainly for build-scipts
+    # Fix shebangs, mainly for build-scripts
     # We want to do this before getting prefetched stuff to speed things up
     # (prefetched stuff has lots of files)
     find . -type f | xargs sed -i 's@/usr/bin/\(python\|perl\)@/usr/bin/env \1@g'
@@ -119,10 +131,8 @@ stdenv.mkDerivation (rec {
     '')}
   '';
 
-  patches = [ ./0000-fix-ipxe-src.patch
-              ./0000-fix-install-python.patch
-              ./acpica-utils-20180427.patch]
-         ++ (config.patches or []);
+  patches = [
+  ] ++ (config.patches or []);
 
   postPatch = ''
     ### Hacks
@@ -141,19 +151,12 @@ stdenv.mkDerivation (rec {
     substituteInPlace tools/libfsimage/common/fsimage_plugin.c \
       --replace /usr $out
 
-    substituteInPlace tools/blktap2/lvm/lvm-util.c \
-      --replace /usr/sbin/vgs ${lvm2}/bin/vgs \
-      --replace /usr/sbin/lvs ${lvm2}/bin/lvs
-
     substituteInPlace tools/misc/xenpvnetboot \
-      --replace /usr/sbin/mount ${utillinux}/bin/mount \
-      --replace /usr/sbin/umount ${utillinux}/bin/umount
+      --replace /usr/sbin/mount ${util-linux}/bin/mount \
+      --replace /usr/sbin/umount ${util-linux}/bin/umount
 
     substituteInPlace tools/xenmon/xenmon.py \
       --replace /usr/bin/pkill ${procps}/bin/pkill
-
-    substituteInPlace tools/xenstat/Makefile \
-      --replace /usr/include/curses.h ${ncurses.dev}/include/curses.h
 
     ${optionalString (builtins.compareVersions config.version "4.8" >= 0) ''
       substituteInPlace tools/hotplug/Linux/launch-xenstore.in \
@@ -186,12 +189,19 @@ stdenv.mkDerivation (rec {
       --replace /bin/ls ls
   '';
 
+  EFI_LD = "${efiBinutils}/bin/ld";
+  EFI_VENDOR = "nixos";
+
   # TODO: Flask needs more testing before enabling it by default.
-  #makeFlags = "XSM_ENABLE=y FLASK_ENABLE=y PREFIX=$(out) CONFIG_DIR=/etc XEN_EXTFILES_URL=\\$(XEN_ROOT)/xen_ext_files ";
+  #makeFlags = [ "XSM_ENABLE=y" "FLASK_ENABLE=y" "PREFIX=$(out)" "CONFIG_DIR=/etc" "XEN_EXTFILES_URL=\\$(XEN_ROOT)/xen_ext_files" ];
   makeFlags = [ "PREFIX=$(out) CONFIG_DIR=/etc" "XEN_SCRIPT_DIR=/etc/xen/scripts" ]
            ++ (config.makeFlags or []);
 
-  buildFlags = "xen tools";
+  preBuild = ''
+    ${config.preBuild or ""}
+  '';
+
+  buildFlags = [ "xen" "tools" ];
 
   postBuild = ''
     make -C docs man-pages
@@ -226,15 +236,30 @@ stdenv.mkDerivation (rec {
 
   # TODO(@oxij): Stop referencing args here
   meta = {
-    homepage = http://www.xen.org/;
+    homepage = "http://www.xen.org/";
     description = "Xen hypervisor and related components"
                 + optionalString (args ? meta && args.meta ? description)
                                  " (${args.meta.description})";
     longDescription = (args.meta.longDescription or "")
                     + "\nIncludes:\n"
-                    + withXenfiles (name: x: ''* ${name}: ${x.meta.description or "(No description)"}.'');
+                    + withXenfiles (name: x: "* ${name}: ${x.meta.description or "(No description)"}.");
     platforms = [ "x86_64-linux" ];
-    maintainers = with stdenv.lib.maintainers; [ eelco tstrobel oxij ];
-    license = stdenv.lib.licenses.gpl2;
+    maintainers = [ ];
+    license = lib.licenses.gpl2;
+    knownVulnerabilities = [
+      # https://www.openwall.com/lists/oss-security/2023/03/21/1
+      # Affects 3.2 (at *least*) - 4.17
+      "CVE-2022-42332"
+      # https://www.openwall.com/lists/oss-security/2023/03/21/2
+      # Affects 4.11 - 4.17
+      "CVE-2022-42333"
+      "CVE-2022-42334"
+      # https://www.openwall.com/lists/oss-security/2023/03/21/3
+      # Affects 4.15 - 4.17
+      "CVE-2022-42331"
+    # https://xenbits.xen.org/docs/unstable/support-matrix.html
+    ] ++ lib.optionals (lib.versionOlder version "4.15") [
+      "This version of Xen has reached its end of life. See https://xenbits.xen.org/docs/unstable/support-matrix.html"
+    ];
   } // (config.meta or {});
 } // removeAttrs config [ "xenfiles" "buildInputs" "patches" "postPatch" "meta" ])

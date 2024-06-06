@@ -1,26 +1,27 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+}:
 
-buildGoPackage rec {
+buildGoModule rec {
   pname = "powerline-go";
-  version = "1.12.1";
-  name = "${pname}-${version}";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/justjanne/powerline-go";
+  version = "1.24";
 
   src = fetchFromGitHub {
     owner = "justjanne";
     repo = pname;
-    inherit rev;
-    sha256 = "0r2n3hjgr7c7nwwcph7i2lv3709z9cyc8gmsinlzjwny998akyf4";
+    rev = "v${version}";
+    hash = "sha256-3IeyxAc+FRcVsL9AiVr6Jku5f5y3MTT9SXwVQW9MkNo=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-W7Lf9s689oJy4U5sQlkLt3INJwtvzU2pot3EFimp7Jw=";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Powerline like prompt for Bash, ZSH and Fish";
-    license = licenses.gpl3;
-    platforms = platforms.unix;
+    homepage = "https://github.com/justjanne/powerline-go";
+    changelog = "https://github.com/justjanne/powerline-go/releases/tag/v${version}";
+    license = licenses.gpl3Plus;
     maintainers = with maintainers; [ sifmelcara ];
+    mainProgram = "powerline-go";
   };
 }

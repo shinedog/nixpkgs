@@ -1,33 +1,74 @@
-{ lib, buildPythonPackage, fetchFromGitHub
-, protobuf
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  django,
+  dnspython,
+  fetchFromGitHub,
+  protobuf,
+  pythonOlder,
+  mysql80,
+  openssl,
+  pkgs,
 }:
 
 buildPythonPackage rec {
   pname = "mysql-connector";
-  version = "8.0.16";
+  version = "8.0.33";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
+
+  setupPyBuildFlags = [
+    "--with-mysql-capi=\"${mysql80}\""
+    "--with-openssl-include-dir=\"${openssl.dev}/include\""
+    "--with-openssl-lib-dir=\"${lib.getLib openssl}/lib\""
+    "-L \"${lib.getLib pkgs.zstd}/lib:${lib.getLib mysql80}/lib\""
+  ];
 
   src = fetchFromGitHub {
     owner = "mysql";
     repo = "mysql-connector-python";
     rev = version;
-    sha256 = "0yl3fkyws24lc2qrbvn42bqy72aqy8q5v8f0j5zy3mkh9a7wlxdp";
+    hash = "sha256-GtMq7E2qBqFu54hjUotzPyxScTKXNdEQcmgHnS7lBhc=";
   };
 
-  propagatedBuildInputs = [ protobuf ];
+  patches = [
+    # mysql-connector overrides MACOSX_DEPLOYMENT_TARGET to 11.
+    # This makes the installation with nixpkgs fail. I suspect, that's
+    # because stdenv.hostPlatform.darwinSdkVersion is (currently) set to
+    # 10.12. The patch reverts
+    # https://github.com/mysql/mysql-connector-python/commit/d1e89fd3d7391084cdf35b0806cb5d2a4b413654
+    ./0001-Revert-Fix-MacOS-wheels-platform-tag.patch
+  ];
 
-  # Tests are failing (TODO: unknown reason)
-  # TypeError: __init__() missing 1 required positional argument: 'string'
-  # But the library should be working as expected.
+  nativeBuildInputs = [ mysql80 ];
+
+  propagatedBuildInputs = [
+    dnspython
+    protobuf
+    mysql80
+    openssl
+    pkgs.zstd
+  ];
+
+  pythonImportsCheck = [ "mysql" ];
+
+  # Tests require a running MySQL instance
   doCheck = false;
 
-  meta = {
+  meta = with lib; {
     description = "A MySQL driver";
     longDescription = ''
       A MySQL driver that does not depend on MySQL C client libraries and
       implements the DB API v2.0 specification.
     '';
-    homepage = https://github.com/mysql/mysql-connector-python;
-    license = [ lib.licenses.gpl2 ];
-    maintainers = with lib.maintainers; [ primeos ];
+    homepage = "https://github.com/mysql/mysql-connector-python";
+    changelog = "https://raw.githubusercontent.com/mysql/mysql-connector-python/${version}/CHANGES.txt";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [
+      neosimsim
+      turion
+    ];
   };
 }

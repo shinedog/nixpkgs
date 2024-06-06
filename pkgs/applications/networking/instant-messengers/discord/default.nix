@@ -1,65 +1,104 @@
-{ stdenv, fetchurl, makeDesktopItem, wrapGAppsHook
-, alsaLib, atk, at-spi2-atk, cairo, cups, dbus, expat, fontconfig, freetype, gdk_pixbuf
-, glib, gtk3, libnotify, libX11, libXcomposite, libXcursor, libXdamage, libuuid
-, libXext, libXfixes, libXi, libXrandr, libXrender, libXtst, nspr, nss, libxcb
-, pango, systemd, libXScrnSaver, libcxx, libpulseaudio }:
-
-stdenv.mkDerivation rec {
-
-    pname = "discord";
-    version = "0.0.9";
-
-    src = fetchurl {
-        url = "https://cdn.discordapp.com/apps/linux/${version}/${pname}-${version}.tar.gz";
-        sha256 = "1i0f8id10rh2fx381hx151qckvvh8hbznfsfav8w0dfbd1bransf";
+{ branch ? "stable", callPackage, fetchurl, lib, stdenv }:
+let
+  versions =
+    if stdenv.isLinux then {
+      stable = "0.0.54";
+      ptb = "0.0.85";
+      canary = "0.0.402";
+      development = "0.0.19";
+    } else {
+      stable = "0.0.305";
+      ptb = "0.0.114";
+      canary = "0.0.510";
+      development = "0.0.41";
     };
-
-    nativeBuildInputs = [ wrapGAppsHook ];
-
-    dontWrapGApps = true;
-
-    libPath = stdenv.lib.makeLibraryPath [
-        libcxx systemd libpulseaudio
-        stdenv.cc.cc alsaLib atk at-spi2-atk cairo cups dbus expat fontconfig freetype
-        gdk_pixbuf glib gtk3 libnotify libX11 libXcomposite libuuid
-        libXcursor libXdamage libXext libXfixes libXi libXrandr libXrender
-        libXtst nspr nss libxcb pango systemd libXScrnSaver
-     ];
-
-    installPhase = ''
-        mkdir -p $out/{bin,opt/discord,share/pixmaps}
-        mv * $out/opt/discord
-
-        chmod +x $out/opt/discord/Discord
-        patchelf --set-interpreter ${stdenv.cc.bintools.dynamicLinker} \
-                 $out/opt/discord/Discord
-
-        wrapProgram $out/opt/discord/Discord \
-          "''${gappsWrapperArgs[@]}" \
-          --prefix XDG_DATA_DIRS : "${gtk3}/share/gsettings-schemas/${gtk3.name}/" \
-          --prefix LD_LIBRARY_PATH : ${libPath}
-
-        ln -s $out/opt/discord/Discord $out/bin/
-        ln -s $out/opt/discord/discord.png $out/share/pixmaps
-
-        ln -s "${desktopItem}/share/applications" $out/share/
-        '';
-
-    desktopItem = makeDesktopItem {
-      name = pname;
-      exec = "Discord";
-      icon = pname;
-      desktopName = "Discord";
-      genericName = meta.description;
-      categories = "Network;InstantMessaging;";
+  version = versions.${branch};
+  srcs = rec {
+    x86_64-linux = {
+      stable = fetchurl {
+        url = "https://dl.discordapp.net/apps/linux/${version}/discord-${version}.tar.gz";
+        hash = "sha256-ruaotzJ+dvqNUV/e4xpJ1rorGiC4Im57BSSiddP8ZF8=";
+      };
+      ptb = fetchurl {
+        url = "https://dl-ptb.discordapp.net/apps/linux/${version}/discord-ptb-${version}.tar.gz";
+        hash = "sha256-2RyilxldJX2wqKlEcrp6srj0O7UNHMxySRJD1xBfqMk=";
+      };
+      canary = fetchurl {
+        url = "https://dl-canary.discordapp.net/apps/linux/${version}/discord-canary-${version}.tar.gz";
+        hash = "sha256-YE+sHmEkUCHLflSUgf4aotWWdzhbFyzozc3vLcJ96yA=";
+      };
+      development = fetchurl {
+        url = "https://dl-development.discordapp.net/apps/linux/${version}/discord-development-${version}.tar.gz";
+        hash = "sha256-RP6SUM4DW3JhddSbJX6Xg8EE4iqCkSOgBL1oa7Zwp/E=";
+      };
     };
-
-    meta = with stdenv.lib; {
-        description = "All-in-one cross-platform voice and text chat for gamers";
-        homepage = https://discordapp.com/;
-        downloadPage = "https://github.com/crmarsh/discord-linux-bugs";
-        license = licenses.unfree;
-        maintainers = [ maintainers.ldesgoui maintainers.MP2E ];
-        platforms = [ "x86_64-linux" ];
+    x86_64-darwin = {
+      stable = fetchurl {
+        url = "https://dl.discordapp.net/apps/osx/${version}/Discord.dmg";
+        hash = "sha256-UEKsweUvtVKXZDrdIYuo3FPSPrnY3ECIilntBs9ZrGU=";
+      };
+      ptb = fetchurl {
+        url = "https://dl-ptb.discordapp.net/apps/osx/${version}/DiscordPTB.dmg";
+        hash = "sha256-ahCgJ1aSLL7Mhx5Jjkeuqqlis8gqxHbIhQvlbUK2wIU=";
+      };
+      canary = fetchurl {
+        url = "https://dl-canary.discordapp.net/apps/osx/${version}/DiscordCanary.dmg";
+        hash = "sha256-viWOmu1+6tpzNDN/q0kXRMo+rohOP6/L7ke2EeBEADg=";
+      };
+      development = fetchurl {
+        url = "https://dl-development.discordapp.net/apps/osx/${version}/DiscordDevelopment.dmg";
+        hash = "sha256-RiGyca/zjPpENgcq9KnRh5G4YArrUOQeueUdUBgZgjo=";
+      };
     };
-}
+    aarch64-darwin = x86_64-darwin;
+  };
+  src = srcs.${stdenv.hostPlatform.system}.${branch} or (throw "${stdenv.hostPlatform.system} not supported on ${branch}");
+
+  meta = with lib; {
+    description = "All-in-one cross-platform voice and text chat for gamers";
+    homepage = "https://discordapp.com/";
+    downloadPage = "https://discordapp.com/download";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = licenses.unfree;
+    maintainers = with maintainers; [ Scrumplex artturin infinidoge jopejoe1 ];
+    platforms = [ "x86_64-linux" "x86_64-darwin" "aarch64-darwin" ];
+    mainProgram = "discord";
+  };
+  package =
+    if stdenv.isLinux
+    then ./linux.nix
+    else ./darwin.nix;
+
+  packages = (
+    builtins.mapAttrs
+      (_: value:
+        callPackage package (value
+          // {
+          inherit src version branch;
+          meta = meta // { mainProgram = value.binaryName; };
+        }))
+      {
+        stable = rec {
+          pname = "discord";
+          binaryName = "Discord";
+          desktopName = "Discord";
+        };
+        ptb = rec {
+          pname = "discord-ptb";
+          binaryName = if stdenv.isLinux then "DiscordPTB" else desktopName;
+          desktopName = "Discord PTB";
+        };
+        canary = rec {
+          pname = "discord-canary";
+          binaryName = if stdenv.isLinux then "DiscordCanary" else desktopName;
+          desktopName = "Discord Canary";
+        };
+        development = rec {
+          pname = "discord-development";
+          binaryName = if stdenv.isLinux then "DiscordDevelopment" else desktopName;
+          desktopName = "Discord Development";
+        };
+      }
+  );
+in
+packages.${branch}

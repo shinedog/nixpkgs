@@ -1,28 +1,29 @@
-{ lib, buildPythonApplication, fetchFromGitHub, wrapGAppsHook
+{ lib, buildPythonApplication, fetchFromGitHub, wrapGAppsHook3
+, pytestCheckHook
 , gtk3, gobject-introspection, libappindicator-gtk3, librsvg
-, evdev, pygobject3, pylibacl, pytest, bluez
+, evdev, pygobject3, pylibacl, bluez, vdf
 , linuxHeaders
 , libX11, libXext, libXfixes, libusb1, udev
 }:
 
 buildPythonApplication rec {
   pname = "sc-controller";
-  version = "0.4.6.1";
+  version = "0.4.8.13";
 
   src = fetchFromGitHub {
-    owner  = "kozec";
+    owner  = "Ryochan7";
     repo   = pname;
-    rev    = "v${version}";
-    sha256 = "1kcqsnrlwl4s94j6ahgkz3w4sy9hsr95y624zab6g10w0fl5sqrc";
+    rev = "refs/tags/v${version}";
+    sha256 = "sha256-vK/5S+GyqVfKTqn5PaPmOV/tXE9PIW57gqYxvhGaJSg=";
   };
 
-  nativeBuildInputs = [ wrapGAppsHook ];
+  nativeBuildInputs = [ wrapGAppsHook3 gobject-introspection ];
 
-  buildInputs = [ gtk3 gobject-introspection libappindicator-gtk3 librsvg ];
+  buildInputs = [ gtk3 libappindicator-gtk3 librsvg ];
 
-  propagatedBuildInputs = [ evdev pygobject3 pylibacl ];
+  propagatedBuildInputs = [ evdev pygobject3 pylibacl vdf ];
 
-  checkInputs = [ pytest ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
   postPatch = ''
     substituteInPlace scc/paths.py --replace sys.prefix "'$out'"
@@ -34,9 +35,6 @@ buildPythonApplication rec {
 
   preFixup = ''
     gappsWrapperArgs+=(--prefix LD_LIBRARY_PATH : "$LD_LIBRARY_PATH")
-    # gdk-pixbuf setup hook can not choose between propagated librsvg
-    # and our librsvg with GObject introspection.
-    GDK_PIXBUF_MODULE_FILE=$(echo ${librsvg}/lib/gdk-pixbuf-2.0/*/loaders.cache)
   '';
 
   postFixup = ''
@@ -48,12 +46,8 @@ buildPythonApplication rec {
     )
   '';
 
-  checkPhase = ''
-    PYTHONPATH=. py.test
-  '';
-
   meta = with lib; {
-    homepage    = https://github.com/kozec/sc-controller;
+    homepage    = "https://github.com/Ryochan7/sc-controller";
     # donations: https://www.patreon.com/kozec
     description = "User-mode driver and GUI for Steam Controller and other controllers";
     license     = licenses.gpl2;

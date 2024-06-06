@@ -1,27 +1,38 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, python, django, dj-database-url }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  django,
+  dj-database-url,
+}:
 
 buildPythonPackage rec {
   pname = "django-polymorphic";
-  version = "2.0.3";
+  version = "3.1";
+  format = "setuptools";
 
-  # PyPI tarball is missing some test files
   src = fetchFromGitHub {
-    owner = pname;
-    repo = pname;
+    owner = "django-polymorphic";
+    repo = "django-polymorphic";
     rev = "v${version}";
-    sha256 = "08qk3rbk0xlphwalkigbhqpmfaqjk1sxmlfh8zy8s8dw7fw1myk4";
+    hash = "sha256-JJY+FoMPSnWuSsNIas2JedGJpdm6RfPE3E1VIjGuXIc=";
   };
 
-  checkInputs = [ dj-database-url ];
   propagatedBuildInputs = [ django ];
+
+  nativeCheckInputs = [ dj-database-url ];
 
   checkPhase = ''
     ${python.interpreter} runtests.py
   '';
 
-  meta = {
-    homepage = https://github.com/django-polymorphic/django-polymorphic;
+  pythonImportsCheck = [ "polymorphic" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/django-polymorphic/django-polymorphic";
     description = "Improved Django model inheritance with automatic downcasting";
-    license = stdenv.lib.licenses.bsd3;
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

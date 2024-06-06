@@ -1,26 +1,27 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pillow
-, isPy27
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pillow,
+  isPy27,
 }:
 
 buildPythonPackage rec {
-  pname = "ModestMaps";
+  pname = "modestmaps";
   version = "1.4.7";
   disabled = !isPy27;
 
   src = fetchPypi {
-    inherit pname version;
+    pname = "ModestMaps";
+    inherit version;
     sha256 = "698442a170f02923f8ea55f18526b56c17178162e44304f896a8a5fd65ab4457";
   };
 
   propagatedBuildInputs = [ pillow ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library for building interactive maps";
-    homepage = http://modestmaps.com;
-    license = stdenv.lib.licenses.bsd3;
+    homepage = "http://modestmaps.com";
+    license = licenses.bsd3;
   };
-
 }

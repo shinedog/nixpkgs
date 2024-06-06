@@ -1,11 +1,13 @@
-{ stdenv
-, buildPythonPackage
-, fetchFromGitHub
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
 }:
 
 buildPythonPackage rec {
   pname = "repocheck";
   version = "2015-08-05";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     sha256 = "1jc4v5zy7z7xlfmbfzvyzkyz893f5x2k6kvb3ni3rn2df7jqhc81";
@@ -14,10 +16,10 @@ buildPythonPackage rec {
     owner = "kynikos";
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "Check the status of code repositories under a root directory";
+    mainProgram = "repocheck";
     license = licenses.gpl3Plus;
   };
-
 }

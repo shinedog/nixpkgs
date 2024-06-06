@@ -1,24 +1,37 @@
-{ stdenv, fetchurl, unzip }:
+{ lib
+, stdenv
+, fetchurl
+, unzip
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "gocd-server-${version}-${rev}";
-  version = "16.9.0";
-  rev = "4001";
+  pname = "gocd-server";
+  version = "23.1.0";
+  rev = "16079";
 
   src = fetchurl {
     url = "https://download.go.cd/binaries/${version}-${rev}/generic/go-server-${version}-${rev}.zip";
-    sha256 = "0x5pmjbhrka6p27drkrca7872vgsjxaa5j0cbxsa2ds02wrn57a7";
+    sha256 = "sha256-//d6izGm1odE25H/PI5pn51FfUL4/6GbLwKUKAqZ3Kw=";
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A continuous delivery server specializing in advanced workflow modeling and visualization";
-    homepage = http://www.go.cd;
+    homepage = "http://www.go.cd";
     license = licenses.asl20;
     platforms = platforms.all;
+    sourceProvenance = with sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
     maintainers = with maintainers; [ grahamc swarren83 ];
   };
 
-  buildInputs = [ unzip ];
+  nativeBuildInputs = [ unzip ];
+
+  passthru.tests = {
+    inherit (nixosTests) gocd-server;
+  };
 
   buildCommand = "
     unzip $src -d $out

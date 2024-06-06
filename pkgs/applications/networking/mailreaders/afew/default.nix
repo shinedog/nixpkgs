@@ -1,38 +1,61 @@
-{ stdenv, pythonPackages, notmuch }:
+{ lib, python3Packages, fetchPypi, pkgs, testers, afew }:
 
-pythonPackages.buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   pname = "afew";
-  version = "1.3.0";
+  version = "3.0.1";
+  pyproject = true;
 
-  src = pythonPackages.fetchPypi {
+  src = fetchPypi {
     inherit pname version;
-    sha256 = "0105glmlkpkjqbz350dxxasvlfx9dk0him9vwbl86andzi106ygz";
+    sha256 = "0wpfqbqjlfb9z0hafvdhkm7qw56cr9kfy6n8vb0q42dwlghpz1ff";
   };
 
-  nativeBuildInputs = with pythonPackages; [ sphinx setuptools_scm ];
-
-  propagatedBuildInputs = with pythonPackages; [
-    pythonPackages.notmuch chardet dkimpy
-  ] ++ stdenv.lib.optional (!pythonPackages.isPy3k) subprocess32;
-
-  postBuild =  ''
-    make -C docs man
-  '';
-
-  postInstall = ''
-    mandir="$out/share/man/man1"
-    mkdir -p "$mandir"
-    cp docs/build/man/* "$mandir"
-  '';
-
-  makeWrapperArgs = [
-    ''--prefix PATH ':' "${notmuch}/bin"''
+  nativeBuildInputs = with python3Packages; [
+    sphinxHook
+    setuptools
+    setuptools-scm
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/afewmail/afew;
+  sphinxBuilders = [
+    "html"
+    "man"
+  ];
+
+  propagatedBuildInputs = with python3Packages; [
+    chardet
+    dkimpy
+    notmuch
+    setuptools
+  ];
+
+  nativeCheckInputs = [
+    pkgs.notmuch
+  ] ++ (with python3Packages; [
+    freezegun
+    pytestCheckHook
+  ]);
+
+  makeWrapperArgs = [
+    ''--prefix PATH ':' "${pkgs.notmuch}/bin"''
+  ];
+
+  outputs = [
+    "out"
+    "doc"
+    "man"
+  ];
+
+  passthru.tests = {
+    version = testers.testVersion {
+      package = afew;
+    };
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/afewmail/afew";
     description = "An initial tagging script for notmuch mail";
+    mainProgram = "afew";
     license = licenses.isc;
-    maintainers = with maintainers; [ garbas andir flokli ];
+    maintainers = with maintainers; [ flokli ];
   };
 }

@@ -1,48 +1,52 @@
-{ stdenv, fetchurl, pkgconfig, systemd, utillinux, coreutils, wall, hostname, man
+{ lib, stdenv, fetchurl, pkg-config, systemd, util-linux, coreutils, wall, hostname, man
 , enableCgiScripts ? true, gd
+, nixosTests
 }:
 
 assert enableCgiScripts -> gd != null;
 
 stdenv.mkDerivation rec {
   pname = "apcupsd";
-  name = "${pname}-3.14.14";
+  version = "3.14.14";
 
   src = fetchurl {
-    url = "mirror://sourceforge/${pname}/${name}.tar.gz";
+    url = "mirror://sourceforge/${pname}/${pname}-${version}.tar.gz";
     sha256 = "0rwqiyzlg9p0szf3x6q1ppvrw6f6dbpn2rc5z623fk3bkdalhxyv";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ utillinux man ] ++ stdenv.lib.optional enableCgiScripts gd;
+  nativeBuildInputs = [ pkg-config man util-linux ];
+  buildInputs = lib.optional enableCgiScripts gd;
 
   prePatch = ''
     sed -e "s,\$(INSTALL_PROGRAM) \$(STRIP),\$(INSTALL_PROGRAM)," \
         -i ./src/apcagent/Makefile ./autoconf/targets.mak
   '';
 
+  preConfigure = ''
+    sed -i 's|/bin/cat|${coreutils}/bin/cat|' configure
+  '';
+
   # ./configure ignores --prefix, so we must specify some paths manually
   # There is no real reason for a bin/sbin split, so just use bin.
-  preConfigure = ''
-    export ac_cv_path_SHUTDOWN=${systemd}/sbin/shutdown
-    export ac_cv_path_WALL=${wall}/bin/wall
-    sed -i 's|/bin/cat|${coreutils}/bin/cat|' configure
-    export configureFlags="\
-        --bindir=$out/bin \
-        --sbindir=$out/bin \
-        --sysconfdir=$out/etc/apcupsd \
-        --mandir=$out/share/man \
-        --with-halpolicydir=$out/share/halpolicy \
-        --localstatedir=/var/ \
-        --with-nologin=/run \
-        --with-log-dir=/var/log/apcupsd \
-        --with-pwrfail-dir=/run/apcupsd \
-        --with-lock-dir=/run/lock \
-        --with-pid-dir=/run \
-        --enable-usb \
-        ${stdenv.lib.optionalString enableCgiScripts "--enable-cgi --with-cgi-bin=$out/libexec/cgi-bin"}
-        "
-  '';
+  configureFlags = [
+    "--bindir=${placeholder "out"}/bin"
+    "--sbindir=${placeholder "out"}/bin"
+    "--sysconfdir=${placeholder "out"}/etc/apcupsd"
+    "--mandir=${placeholder "out"}/share/man"
+    "--with-halpolicydir=${placeholder "out"}/share/halpolicy"
+    "--localstatedir=/var"
+    "--with-nologin=/run"
+    "--with-log-dir=/var/log/apcupsd"
+    "--with-pwrfail-dir=/run/apcupsd"
+    "--with-lock-dir=/run/lock"
+    "--with-pid-dir=/run"
+    "--enable-usb"
+    "ac_cv_path_SHUTDOWN=${systemd}/sbin/shutdown"
+    "ac_cv_path_WALL=${wall}/bin/wall"
+  ] ++ lib.optionals enableCgiScripts [
+    "--enable-cgi"
+    "--with-cgi-bin=${placeholder "out"}/libexec/cgi-bin"
+  ];
 
   postInstall = ''
     for file in "$out"/etc/apcupsd/*; do
@@ -52,10 +56,12 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests.smoke = nixosTests.apcupsd;
+
+  meta = with lib; {
     description = "Daemon for controlling APC UPSes";
-    homepage = http://www.apcupsd.com/;
-    license = licenses.gpl2;
+    homepage = "http://www.apcupsd.com/";
+    license = licenses.gpl2Only;
     platforms = platforms.linux;
     maintainers = [ maintainers.bjornfor ];
   };

@@ -1,34 +1,55 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, persistent
-, zope_interface
-, transaction
-, zope_testrunner
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  persistent,
+  zope-interface,
+  transaction,
+  zope-testrunner,
+  python,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
-  pname = "BTrees";
-  version = "4.5.1";
+  pname = "btrees";
+  version = "5.2";
+  format = "setuptools";
 
-  buildInputs = [ transaction ];
-  propagatedBuildInputs = [ persistent zope_interface ];
-  checkInputs = [ zope_testrunner ];
-
-  # disable a failing test that looks broken
-  postPatch = ''
-    substituteInPlace BTrees/tests/common.py \
-      --replace "testShortRepr" "no_testShortRepr"
-  '';
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "dcc096c3cf92efd6b9365951f89118fd30bc209c9af83bf050a28151a9992786";
+    pname = "BTrees";
+    inherit version;
+    hash = "sha256-bkoK8BpLvslan5Mbr1xUWXn0NBoTp2Yf+KSXr089g4E=";
   };
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    persistent
+    zope-interface
+  ];
+
+  nativeCheckInputs = [
+    transaction
+    zope-testrunner
+  ];
+
+  checkPhase = ''
+    runHook preCheck
+    ${python.interpreter} -m zope.testrunner --test-path=src --auto-color --auto-progress
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [
+    "BTrees.OOBTree"
+    "BTrees.IOBTree"
+    "BTrees.IIBTree"
+    "BTrees.IFBTree"
+  ];
+
+  meta = with lib; {
     description = "Scalable persistent components";
-    homepage = http://packages.python.org/BTrees;
+    homepage = "http://packages.python.org/BTrees";
     license = licenses.zpl21;
+    maintainers = with maintainers; [ ];
   };
 }

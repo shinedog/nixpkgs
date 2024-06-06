@@ -1,26 +1,54 @@
-{ stdenv, buildPythonPackage, fetchPypi,
-  m2r, setuptools_scm, six, attrs }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  attrs,
+  pytest-benchmark,
+  pytestCheckHook,
+  setuptools-scm,
+  six,
+}:
 
-buildPythonPackage rec {
-  version = "0.7.0";
-  pname = "Automat";
+let
+  automat = buildPythonPackage rec {
+    version = "22.10.0";
+    format = "setuptools";
+    pname = "automat";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "cbd78b83fa2d81fe2a4d23d258e1661dd7493c9a50ee2f1a5b2cac61c1793b0e";
+    src = fetchPypi {
+      pname = "Automat";
+      inherit version;
+      hash = "sha256-5WvrhO2tGdzBHTDo2biV913ute9elrhKRnBms7hLsE4=";
+    };
+
+    nativeBuildInputs = [ setuptools-scm ];
+
+    propagatedBuildInputs = [
+      six
+      attrs
+    ];
+
+    nativeCheckInputs = [
+      pytest-benchmark
+      pytestCheckHook
+    ];
+
+    # escape infinite recursion with twisted
+    doCheck = false;
+
+    passthru.tests = {
+      check = automat.overridePythonAttrs (_: {
+        doCheck = true;
+      });
+    };
+
+    meta = with lib; {
+      homepage = "https://github.com/glyph/Automat";
+      description = "Self-service finite-state machines for the programmer on the go";
+      mainProgram = "automat-visualize";
+      license = licenses.mit;
+      maintainers = with maintainers; [ ];
+    };
   };
-
-  buildInputs = [ m2r setuptools_scm ];
-  propagatedBuildInputs = [ six attrs ];
-
-  # Some tests require twisetd, but twisted requires Automat to build.
-  # this creates a circular dependency.
-  doCheck = false;
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/glyph/Automat;
-    description = "Self-service finite-state machines for the programmer on the go";
-    license = licenses.mit;
-    maintainers = [ ];
-  };
-}
+in
+automat

@@ -1,45 +1,112 @@
-{ stdenv, fetchurl, gettext, intltool, pkgconfig, python2
-, avahi, bluez, boost, eigen, fftw, glib, glib-networking
-, glibmm, gsettings-desktop-schemas, gtkmm2, libjack2
-, ladspaH, libav, librdf, libsndfile, lilv, lv2, serd, sord, sratom
-, wrapGAppsHook, zita-convolver, zita-resampler, curl, wafHook
+{ lib
+, stdenv
+, fetchFromGitHub
+, avahi
+, bluez
+, boost
+, curl
+, eigen
+, faust
+, fftw
+, gettext
+, glib
+, glib-networking
+, glibmm
+, gnome
+, gsettings-desktop-schemas
+, gtk3
+, gtkmm3
+, hicolor-icon-theme
+, intltool
+, ladspaH
+, libjack2
+, libsndfile
+, lilv
+, lrdf
+, lv2
+, pkg-config
+, python3
+, sassc
+, serd
+, sord
+, sratom
+, wafHook
+, wrapGAppsHook3
+, zita-convolver
+, zita-resampler
 , optimizationSupport ? false # Enable support for native CPU extensions
 }:
 
 let
-  inherit (stdenv.lib) optional;
+  inherit (lib) optional;
 in
 
-stdenv.mkDerivation rec {
-  name = "guitarix-${version}";
-  version = "0.38.1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "guitarix";
+  version = "0.46.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/guitarix/guitarix2-${version}.tar.xz";
-    sha256 = "0bw7xnrx062nwb1bfj9x660h7069ncmz77szcs8icpqxrvhs7z80";
+  src = fetchFromGitHub {
+    owner = "brummer10";
+    repo = "guitarix";
+    rev = "V${finalAttrs.version}";
+    fetchSubmodules = true;
+    hash = "sha256-AftC6fQEDzG/3C/83YbK/++bRgP7vPD0E2X6KEWpowc=";
   };
 
-  nativeBuildInputs = [ gettext intltool wrapGAppsHook pkgconfig python2 wafHook ];
+  sourceRoot = "${finalAttrs.src.name}/trunk";
+
+  nativeBuildInputs = [
+    gettext
+    hicolor-icon-theme
+    intltool
+    pkg-config
+    python3
+    wafHook
+    wrapGAppsHook3
+  ];
 
   buildInputs = [
-    avahi bluez boost eigen fftw glib glibmm glib-networking.out
-    gsettings-desktop-schemas gtkmm2 libjack2 ladspaH libav librdf
-    libsndfile lilv lv2 serd sord sratom zita-convolver
-    zita-resampler curl
+    avahi
+    bluez
+    boost
+    curl
+    eigen
+    faust
+    fftw
+    glib
+    glib-networking.out
+    glibmm
+    gnome.adwaita-icon-theme
+    gsettings-desktop-schemas
+    gtk3
+    gtkmm3
+    ladspaH
+    libjack2
+    libsndfile
+    lilv
+    lrdf
+    lv2
+    sassc
+    serd
+    sord
+    sratom
+    zita-convolver
+    zita-resampler
   ];
 
   wafConfigureFlags = [
+    "--no-font-cache-update"
     "--shared-lib"
     "--no-desktop-update"
     "--enable-nls"
-    "--no-faust" # todo: find out why --faust doesn't work
     "--install-roboto-font"
-    "--includeresampler"
-    "--convolver-ffmpeg"
   ] ++ optional optimizationSupport "--optimization";
 
-  meta = with stdenv.lib; {
+  env.NIX_CFLAGS_COMPILE = toString [ "-fpermissive" ];
+
+  meta = with lib; {
     description = "A virtual guitar amplifier for Linux running with JACK";
+    mainProgram = "guitarix";
     longDescription = ''
         guitarix is a virtual guitar amplifier for Linux running with
       JACK (Jack Audio Connection Kit). It is free as in speech and
@@ -62,9 +129,9 @@ stdenv.mkDerivation rec {
       clean-sounds, nice overdrive, fat distortion and a diversity of
       crazy sounds never heard before.
     '';
-    homepage = http://guitarix.sourceforge.net/;
+    homepage = "https://github.com/brummer10/guitarix";
     license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ astsmtl goibhniu ];
+    maintainers = with maintainers; [ astsmtl goibhniu lord-valen ];
     platforms = platforms.linux;
   };
-}
+})

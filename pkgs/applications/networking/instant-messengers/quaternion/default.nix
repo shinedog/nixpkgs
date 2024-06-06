@@ -1,42 +1,69 @@
-{ stdenv, lib, fetchFromGitHub, cmake
-, qtbase, qtquickcontrols, qtkeychain, qtmultimedia, qttools
-, libqmatrixclient_0_4, libqmatrixclient_0_5 }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+, wrapQtAppsHook
+, qtbase
+, qtquickcontrols2 ? null # only a separate package on qt5
+, qtkeychain
+, qtmultimedia
+, qttools
+, libquotient
+, libsecret
+, olm
+}:
 
 let
-  generic = version: sha256: prefix: library: stdenv.mkDerivation rec {
-    name = "quaternion-${version}";
+  inherit (lib) cmakeBool;
 
-    src = fetchFromGitHub {
-      owner = "QMatrixClient";
-      repo  = "Quaternion";
-      rev   = "${prefix}${version}";
-      inherit sha256;
-    };
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "quaternion";
+  version = "0.0.96.1";
 
-    buildInputs = [ qtbase qtmultimedia qtquickcontrols qtkeychain qttools library ];
+  src = fetchFromGitHub {
+    owner = "quotient-im";
+    repo = "Quaternion";
+    rev = finalAttrs.version;
+    hash = "sha256-lRCSEb/ldVnEv6z0moU4P5rf0ssKb9Bw+4QEssLjuwI=";
+  };
 
-    nativeBuildInputs = [ cmake ];
+  buildInputs = [
+    libquotient
+    libsecret
+    olm
+    qtbase
+    qtkeychain
+    qtmultimedia
+    qtquickcontrols2
+  ];
 
-    postInstall = if stdenv.isDarwin then ''
+  nativeBuildInputs = [ cmake qttools wrapQtAppsHook ];
+
+  # qt6 needs UTF
+  env.LANG = "C.UTF-8";
+
+  cmakeFlags = [
+    # drop this from 0.0.97 onwards as it will be qt6 only
+    (cmakeBool "BUILD_WITH_QT6" ((lib.versions.major qtbase.version) == "6"))
+  ];
+
+  postInstall =
+    if stdenv.isDarwin then ''
       mkdir -p $out/Applications
       mv $out/bin/quaternion.app $out/Applications
       rmdir $out/bin || :
     '' else ''
-      substituteInPlace $out/share/applications/quaternion.desktop \
+      substituteInPlace $out/share/applications/com.github.quaternion.desktop \
         --replace 'Exec=quaternion' "Exec=$out/bin/quaternion"
     '';
 
-    meta = with lib; {
-      description = "Cross-platform desktop IM client for the Matrix protocol";
-      homepage    = https://matrix.org/docs/projects/client/quaternion.html;
-      license     = licenses.gpl3;
-      maintainers = with maintainers; [ peterhoeg ];
-      inherit (qtbase.meta) platforms;
-      inherit version;
-    };
+  meta = with lib; {
+    description = "Cross-platform desktop IM client for the Matrix protocol";
+    mainProgram = "quaternion";
+    homepage = "https://matrix.org/ecosystem/clients/quaternion/";
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ peterhoeg ];
+    inherit (qtbase.meta) platforms;
   };
-
-in rec {
-  quaternion     = generic "0.0.9.4"     "12mkwiqqbi4774kwl7gha72jyf0jf547acy6rw8ry249zl4lja54" "" libqmatrixclient_0_5;
-  quaternion-git = quaternion;
-}
+})

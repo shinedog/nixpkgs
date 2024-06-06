@@ -1,88 +1,63 @@
-{
-  alsaLib, atk, cairo, cups, dbus, dpkg, expat, fetchurl, fontconfig, freetype,
-  gdk_pixbuf, glib, gnome2, libX11, libXScrnSaver, libXcomposite, libXcursor,
-  libXdamage, libXext, libXfixes, libXi, libXrandr, libXrender, libXtst,
-  libxcb, nspr, nss, stdenv, udev
-}:
+{ lib, stdenv, electron, buildNpmPackage, fetchFromGitHub, fetchpatch }:
 
-  let
-    rpath = stdenv.lib.makeLibraryPath ([
-    alsaLib
-    atk
-    cairo
-    cups
-    dbus
-    expat
-    fontconfig
-    freetype
-    gdk_pixbuf
-    glib
-    gnome2.GConf
-    gnome2.gtk
-    gnome2.pango
-    libX11
-    libXScrnSaver
-    libXcomposite
-    libXcursor
-    libXdamage
-    libXext
-    libXfixes
-    libXi
-    libXrandr
-    libXrender
-    libXtst
-    libxcb
-    nspr
-    nss
-    stdenv.cc.cc
-    udev
-    ]);
-  in stdenv.mkDerivation rec {
-    name = "webtorrent-desktop-${version}";
-    version = "0.20.0";
+buildNpmPackage {
+  pname = "webtorrent-desktop";
+  version = "0.25-pre-1eb612";
+  src = fetchFromGitHub {
+    owner = "webtorrent";
+    repo = "webtorrent-desktop";
+    rev = "1eb61201d6360698a2cc4ea72bf0fa7ee78b457c";
+    sha256 = "sha256-DBEFOamncyidMXypvKNnUmDIPUq1LzYjDgox7fa4+Gg=";
+  };
+  patches = [
+    # electron 27 fix
+    (fetchpatch {
+      url = "https://github.com/webtorrent/webtorrent-desktop/pull/2388.patch";
+      hash = "sha256-gam5oAZtsaiCNFwecA5ff0nhraySLx3SOHlb/js+cPM=";
+    })
+    # startup fix
+    (fetchpatch {
+      url = "https://github.com/webtorrent/webtorrent-desktop/pull/2389.patch";
+      hash = "sha256-hBJGLNNjcGRhYOFlLm/RL0po+70tEeJtR6Y/CfacPAI=";
+    })
+  ];
+  npmDepsHash = "sha256-tqhp3jDb1xtyV/n9kJtzkiznLQfqeYWeZiTnTVV0ibE=";
+  makeCacheWritable = true;
+  npmRebuildFlags = [ "--ignore-scripts" ];
+  installPhase = ''
+    ## Rebuild node_modules for production
+    ## after babel compile has finished
+    rm -r node_modules
+    export NODE_ENV=production
+    npm ci --ignore-scripts
 
-    src =
-      if stdenv.hostPlatform.system == "x86_64-linux" then
-        fetchurl {
-          url = "https://github.com/webtorrent/webtorrent-desktop/releases/download/v0.20.0/webtorrent-desktop_${version}-1_amd64.deb";
-          sha256 = "1kkrnbimiip5pn2nwpln35bbdda9gc3cgrjwphq4fqasbjf2781k";
-        }
-        else
-          throw "Webtorrent is not currently supported on ${stdenv.hostPlatform.system}";
-    phases = [ "unpackPhase" "installPhase" ];
-    nativeBuildInputs = [ dpkg ];
-    unpackPhase = "dpkg-deb -x $src .";
-    installPhase = ''
-      mkdir -p $out
-      cp -R opt $out
+    ## delete unused files
+    rm -r test
 
-      mv ./usr/share $out/share
-      mv $out/opt/webtorrent-desktop $out/libexec
-      chmod +x $out/libexec/WebTorrent
-      rmdir $out/opt
+    ## delete config for build time cache
+    npm config delete cache
 
-      chmod -R g-w $out
+    ## add script wrapper and desktop files; icons
+    mkdir -p $out/lib $out/bin $out/share/applications
+    cp -r . $out/lib/webtorrent-desktop
+    cat > $out/bin/WebTorrent <<EOF
+    #! ${stdenv.shell}
+    set -eu
+    exec ${electron}/bin/electron --no-sandbox $out/lib/webtorrent-desktop "\$@"
+    EOF
+    chmod +x $out/bin/WebTorrent
+    cp -r static/linux/share/icons $out/share/
+    sed "s#/opt/webtorrent-desktop#$out/bin#" \
+      < static/linux/share/applications/webtorrent-desktop.desktop \
+      > $out/share/applications/webtorrent-desktop.desktop
+  '';
 
-      # Patch WebTorrent
-      patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-               --set-rpath ${rpath}:$out/libexec $out/libexec/WebTorrent
+  meta = with lib; {
+    description = "Streaming torrent app for Mac, Windows, and Linux";
+    homepage = "https://webtorrent.io/desktop";
+    license = licenses.mit;
+    maintainers = [ maintainers.bendlas ];
+    mainProgram = "WebTorrent";
+  };
 
-      # Symlink to bin
-      mkdir -p $out/bin
-      ln -s $out/libexec/WebTorrent $out/bin/WebTorrent
-
-      # Fix the desktop link
-      substituteInPlace $out/share/applications/webtorrent-desktop.desktop \
-        --replace /opt/webtorrent-desktop $out/bin
-    '';
-
-    meta = with stdenv.lib; {
-      description = "Streaming torrent app for Mac, Windows, and Linux.";
-      homepage = https://webtorrent.io/desktop;
-      license = licenses.mit;
-      maintainers = [ maintainers.flokli ];
-      platforms = [
-        "x86_64-linux"
-      ];
-    };
-  }
+}

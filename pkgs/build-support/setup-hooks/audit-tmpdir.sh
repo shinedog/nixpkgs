@@ -7,16 +7,16 @@
 # the moment that would produce too many spurious errors (e.g. debug
 # info or assertion messages that refer to $TMPDIR).
 
-fixupOutputHooks+=('if [ -z "$noAuditTmpdir" -a -e "$prefix" ]; then auditTmpdir "$prefix"; fi')
+fixupOutputHooks+=('if [[ -z "${noAuditTmpdir-}" && -e "$prefix" ]]; then auditTmpdir "$prefix"; fi')
 
 auditTmpdir() {
     local dir="$1"
     [ -e "$dir" ] || return 0
 
-    header "checking for references to $TMPDIR/ in $dir..."
+    echo "checking for references to $TMPDIR/ in $dir..."
 
     local i
-    while IFS= read -r -d $'\0' i; do
+    find "$dir" -type f -print0 | while IFS= read -r -d $'\0' i; do
         if [[ "$i" =~ .build-id ]]; then continue; fi
 
         if isELF "$i"; then
@@ -35,7 +35,5 @@ auditTmpdir() {
             fi
         fi
 
-    done < <(find "$dir" -type f -print0)
-
-    stopNest
+    done
 }

@@ -1,30 +1,48 @@
-{ lib, stdenv, fetchurl, pkgconfig, libftdi, pciutils }:
+{ fetchurl
+, stdenv
+, installShellFiles
+, lib
+, libftdi1
+, libjaylink
+, libusb1
+, pciutils
+, pkg-config
+, jlinkSupport ? false
+}:
 
 stdenv.mkDerivation rec {
-  name = "flashrom-${version}";
-  version = "1.0.1";
+  pname = "flashrom";
+  version = "1.3.0";
 
   src = fetchurl {
     url = "https://download.flashrom.org/releases/flashrom-v${version}.tar.bz2";
-    sha256 = "0i6yrrl69hrqmwd7azj7x3j46m0qpvzmk3b5basym7mnlpfzhyfm";
+    hash = "sha256-oFMjRFPM0BLnnzRDvcxhYlz5e3/Xy0zdi/v/vosUliM=";
   };
 
-  # Newer versions of libusb deprecate some API flashrom uses.
-  #postPatch = ''
-  #  substituteInPlace Makefile \
-  #    --replace "-Werror" "-Werror -Wno-error=deprecated-declarations -Wno-error=unused-const-variable="
-  #'';
+  nativeBuildInputs = [ pkg-config installShellFiles ];
+  buildInputs = [ libftdi1 libusb1 ]
+    ++ lib.optionals (!stdenv.isDarwin) [ pciutils ]
+    ++ lib.optional jlinkSupport libjaylink;
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libftdi pciutils ];
+  postPatch = ''
+    substituteInPlace util/flashrom_udev.rules \
+      --replace 'GROUP="plugdev"' 'TAG+="uaccess", TAG+="udev-acl"'
+  '';
 
-  preConfigure = "export PREFIX=$out";
+  makeFlags = [ "PREFIX=$(out)" "libinstall" ]
+    ++ lib.optional jlinkSupport "CONFIG_JLINK_SPI=yes"
+    ++ lib.optionals (stdenv.isDarwin && stdenv.isx86_64) [ "CONFIG_INTERNAL_X86=no" "CONFIG_INTERNAL_DMI=no" "CONFIG_RAYER_SPI=no" ];
+
+  postInstall = ''
+    install -Dm644 util/flashrom_udev.rules $out/lib/udev/rules.d/flashrom.rules
+  '';
 
   meta = with lib; {
-    homepage = http://www.flashrom.org;
+    homepage = "https://www.flashrom.org";
     description = "Utility for reading, writing, erasing and verifying flash ROM chips";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ funfunctor fpletz ];
-    platforms = with platforms; linux;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ fpletz felixsinger ];
+    platforms = platforms.all;
+    mainProgram = "flashrom";
   };
 }

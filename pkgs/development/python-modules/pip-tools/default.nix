@@ -1,45 +1,81 @@
-{ stdenv, fetchurl, buildPythonPackage, pip, pytest, click, six, first
-, setuptools_scm, git, glibcLocales, mock }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  build,
+  click,
+  fetchPypi,
+  pep517,
+  pip,
+  pytest-xdist,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  setuptools-scm,
+  tomli,
+  tomli-w,
+  wheel,
+}:
 
 buildPythonPackage rec {
   pname = "pip-tools";
-  version = "3.3.2";
-  name = pname + "-" + version;
+  version = "7.4.1";
+  format = "pyproject";
 
-  src = fetchurl {
-    url = "mirror://pypi/p/pip-tools/${name}.tar.gz";
-    sha256 = "100496b15463155f4da3df04c2ca0068677e1ee74d346ebade2d85eef4de8cda";
+  disabled = pythonOlder "3.8";
+
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-hkgm9Qc4ZEUOJNvuuFzjkgzfsJhIo9aev1N7Uh8UvMk=";
   };
 
-  LC_ALL = "en_US.UTF-8";
-  checkInputs = [ pytest git glibcLocales mock ];
-  propagatedBuildInputs = [ pip click six first setuptools_scm ];
+  patches = [ ./fix-setup-py-bad-syntax-detection.patch ];
 
-  disabledTests = stdenv.lib.concatMapStringsSep " and " (s: "not " + s) [
-    # Depend on network tests:
-    "test_editable_package_vcs"
-    "test_generate_hashes_all_platforms"
-    "test_generate_hashes_without_interfering_with_each_other"
-    "test_realistic_complex_sub_dependencies"
-    "test_generate_hashes_with_editable"
-    "test_filter_pip_markes"
-    "test_get_hashes_local_repository_cache_miss"
-    # Expect specific version of "six":
-    "test_editable_package"
-    "test_input_file_without_extension"
-    "test_locally_available_editable_package_is_not_archived_in_cache_dir"
-    "test_no_candidates"
-    "test_no_candidates_pre"
+  nativeBuildInputs = [ setuptools-scm ];
+
+  propagatedBuildInputs = [
+    build
+    click
+    pep517
+    pip
+    setuptools
+    wheel
+  ] ++ lib.optionals (pythonOlder "3.11") [ tomli ];
+
+  __darwinAllowLocalNetworking = true;
+
+  nativeCheckInputs = [
+    pytest-xdist
+    pytestCheckHook
+    tomli-w
   ];
 
-  checkPhase = ''
-    export HOME=$(mktemp -d) VIRTUAL_ENV=1
-    py.test -k "${disabledTests}"
+  preCheck = lib.optionalString (stdenv.isDarwin && stdenv.isAarch64) ''
+    # https://github.com/python/cpython/issues/74570#issuecomment-1093748531
+    export no_proxy='*';
   '';
 
-  meta = with stdenv.lib; {
+  disabledTests = [
+    # Tests require network access
+    "network"
+    "test_direct_reference_with_extras"
+    "test_local_duplicate_subdependency_combined"
+    "test_bad_setup_file"
+    # Assertion error
+    "test_compile_recursive_extras"
+    "test_combine_different_extras_of_the_same_package"
+    "test_diff_should_not_uninstall"
+    "test_cli_compile_all_extras_with_multiple_packages"
+    # Deprecations
+    "test_error_in_pyproject_toml"
+  ];
+
+  pythonImportsCheck = [ "piptools" ];
+
+  meta = with lib; {
     description = "Keeps your pinned dependencies fresh";
-    homepage = https://github.com/jazzband/pip-tools/;
+    homepage = "https://github.com/jazzband/pip-tools/";
+    changelog = "https://github.com/jazzband/pip-tools/releases/tag/${version}";
     license = licenses.bsd3;
     maintainers = with maintainers; [ zimbatm ];
   };

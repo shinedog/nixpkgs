@@ -1,37 +1,46 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
-, six
-, decorator
+{
+  lib,
+  buildPythonPackage,
+  decorator,
+  fetchPypi,
+  invocations,
+  invoke,
+  pytest,
+  pytestCheckHook,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
-  version = "1.1.4";
   pname = "pytest-relaxed";
+  version = "2.0.2";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "511ac473252baa67d5451f7864516e2e8f1acedf0cef71f79d2ed916ee04e146";
+    hash = "sha256-lW6gKOww27+2gN2Oe0p/uPgKI5WV6Ius4Bi/LA1xgkg=";
   };
 
-  propagatedBuildInputs = [ pytest six decorator ];
+  buildInputs = [ pytest ];
 
-  patchPhase = ''
-    sed -i "s/pytest>=3,<3.3/pytest/g" setup.py
-  '';
+  propagatedBuildInputs = [ decorator ];
 
-  # skip tests due to dir requirements
-  doCheck = false;
+  nativeCheckInputs = [
+    invocations
+    invoke
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    pytest tests
-  '';
+  pytestFlagsArray = [ "tests" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://pytest-relaxed.readthedocs.io/;
+  pythonImportsCheck = [ "pytest_relaxed" ];
+
+  meta = with lib; {
+    homepage = "https://pytest-relaxed.readthedocs.io/";
     description = "Relaxed test discovery/organization for pytest";
+    changelog = "https://github.com/bitprophet/pytest-relaxed/blob/${version}/docs/changelog.rst";
     license = licenses.bsd0;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

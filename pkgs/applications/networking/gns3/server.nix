@@ -1,77 +1,104 @@
-{ stable, branch, version, sha256Hash }:
+{ channel
+, version
+, hash
+}:
 
-{ stdenv, python3, fetchFromGitHub, fetchpatch }:
+{ lib
+, python3Packages
+, fetchFromGitHub
+, pkgsStatic
+, stdenv
+, nixosTests
+, testers
+, util-linux
+, gns3-server
+}:
 
-let
-  python = if stable then python3.override {
-    packageOverrides = self: super: {
-      async-timeout = super.async-timeout.overridePythonAttrs (oldAttrs: rec {
-        version = "2.0.1";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "1l3kg062m02mph6rf9rdv8r5c5n356clxa6b6mrn0i77vk9g9kq0";
-        };
-      });
-      aiohttp = super.aiohttp.overridePythonAttrs (oldAttrs: rec {
-        version = "2.3.10";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "8adda6583ba438a4c70693374e10b60168663ffa6564c5c75d3c7a9055290964";
-        };
-        propagatedBuildInputs = with self; [ async-timeout attrs chardet multidict yarl idna-ssl ];
-        doCheck = false;
-      });
-      aiohttp-cors = super.aiohttp-cors.overridePythonAttrs (oldAttrs: rec {
-        version = "0.5.3";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "11b51mhr7wjfiikvj3nc5s8c7miin2zdhl3yrzcga4mbpkj892in";
-        };
-        propagatedBuildInputs = with self; [ aiohttp ]
-          ++ stdenv.lib.optional (pythonOlder "3.5") typing;
-      });
-    };
-  } else python3;
-
-in python.pkgs.buildPythonPackage {
+python3Packages.buildPythonApplication {
   pname = "gns3-server";
   inherit version;
 
   src = fetchFromGitHub {
+    inherit hash;
     owner = "GNS3";
     repo = "gns3-server";
-    rev = "v${version}";
-    sha256 = sha256Hash;
+    rev = "refs/tags/v${version}";
   };
 
-  postPatch = ''
-    # "typing" is only required for Python 3.4 and breaks Python 3.7:
-    sed -iE "s/.*typing.*//" requirements.txt
+  # GNS3 2.3.26 requires a static BusyBox for the Docker integration
+  prePatch = ''
+    cp ${pkgsStatic.busybox}/bin/busybox gns3server/compute/docker/resources/bin/busybox
   '';
 
-  propagatedBuildInputs = with python.pkgs; [
-    aiohttp-cors yarl aiohttp multidict
-    jinja2 psutil zipstream raven jsonschema
-    (python.pkgs.callPackage ../../../development/python-modules/prompt_toolkit/1.nix {})
-  ] ++ stdenv.lib.optional (!stable) [ distro async_generator aiofiles ];
+  propagatedBuildInputs = with python3Packages; [
+    aiofiles
+    aiohttp
+    aiohttp-cors
+    async-generator
+    distro
+    jinja2
+    jsonschema
+    multidict
+    platformdirs
+    prompt-toolkit
+    psutil
+    py-cpuinfo
+    sentry-sdk
+    setuptools
+    truststore
+    yarl
+  ] ++ lib.optionals (pythonOlder "3.9") [
+    importlib-resources
+  ];
 
-  # Requires network access
-  doCheck = false;
-
-  postInstall = ''
-    rm $out/bin/gns3loopback # For Windows only
+  postInstall = lib.optionalString (!stdenv.hostPlatform.isWindows) ''
+    rm $out/bin/gns3loopback
   '';
 
-  meta = with stdenv.lib; {
-    description = "Graphical Network Simulator 3 server (${branch} release)";
+  # util-linux (script program) is required for Docker support
+  makeWrapperArgs = [ "--suffix PATH : ${lib.makeBinPath [ util-linux ]}" ];
+
+  doCheck = true;
+
+  # Otherwise tests will fail to create directory
+  # Permission denied: '/homeless-shelter'
+  preCheck = ''
+    export HOME=$(mktemp -d)
+  '';
+
+  checkInputs = with python3Packages; [
+    pytest-aiohttp
+    pytest-rerunfailures
+    (pytestCheckHook.override { pytest = pytest_7; })
+  ];
+
+  pytestFlagsArray = [
+    # fails on ofborg because of lack of cpu vendor information
+    "--deselect=tests/controller/gns3vm/test_virtualbox_gns3_vm.py::test_cpu_vendor_id"
+    # Rerun failed tests up to three times (flaky tests)
+    "--reruns 3"
+  ];
+
+  passthru.tests = {
+    inherit (nixosTests) gns3-server;
+    version = testers.testVersion {
+      package = gns3-server;
+      command = "${lib.getExe gns3-server} --version";
+    };
+  };
+
+  meta = with lib; {
+    description = "Graphical Network Simulator 3 server (${channel} release)";
     longDescription = ''
       The GNS3 server manages emulators such as Dynamips, VirtualBox or
       Qemu/KVM. Clients like the GNS3 GUI control the server using a HTTP REST
       API.
     '';
-    homepage = https://www.gns3.com/;
+    homepage = "https://www.gns3.com/";
+    changelog = "https://github.com/GNS3/gns3-server/releases/tag/v${version}";
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ primeos ];
+    maintainers = with maintainers; [ anthonyroussel ];
+    mainProgram = "gns3server";
   };
 }

@@ -1,33 +1,64 @@
-{ stdenv, buildPythonPackage, fetchPypi, pytest, glibcLocales, tox, pytestcov, parso }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  parso,
+
+  # tests
+  attrs,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "jedi";
-  version = "0.13.3";
+  version = "0.19.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "2bb0603e3506f708e792c7f4ad8fc2a7a9d9c2d292a358fbbd58da531695595b";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "davidhalter";
+    repo = "jedi";
+    rev = "v${version}";
+    hash = "sha256-MD7lIKwAwULZp7yLE6jiao2PU6h6RIl0SQ/6b4Lq+9I=";
+    fetchSubmodules = true;
   };
 
-  postPatch = ''
-    substituteInPlace requirements.txt --replace "parso==0.1.0" "parso"
-  '';
-
-  checkInputs = [ pytest glibcLocales tox pytestcov ];
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [ parso ];
 
-  checkPhase = ''
-    LC_ALL="en_US.UTF-8" py.test test
+  nativeCheckInputs = [
+    attrs
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
   '';
 
-  # tox required for tests: https://github.com/davidhalter/jedi/issues/808
-  doCheck = false;
+  disabledTests =
+    [
+      # sensitive to platform, causes false negatives on darwin
+      "test_import"
+    ]
+    ++ lib.optionals (stdenv.isAarch64 && pythonOlder "3.9") [
+      # AssertionError: assert 'foo' in ['setup']
+      "test_init_extension_module"
+    ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/davidhalter/jedi;
+  meta = with lib; {
     description = "An autocompletion tool for Python that can be used for text editors";
-    license = licenses.lgpl3Plus;
-    maintainers = with maintainers; [ garbas ];
+    homepage = "https://github.com/davidhalter/jedi";
+    changelog = "https://github.com/davidhalter/jedi/blob/${version}/CHANGELOG.rst";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

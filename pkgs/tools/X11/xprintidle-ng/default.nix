@@ -1,11 +1,24 @@
-{ stdenv, fetchFromGitHub, libX11, libXScrnSaver, libXext, gnulib
-  , autoconf, automake, libtool, gettext, pkgconfig
-  , git, perl, texinfo, help2man
+{ lib
+, stdenv
+, fetchFromGitHub
+, libX11
+, libXScrnSaver
+, libXext
+, gnulib
+, autoconf
+, automake
+, libtool
+, gettext
+, pkg-config
+, git
+, perl
+, texinfo
+, help2man
 }:
 
 stdenv.mkDerivation rec {
   pname = "xprintidle-ng";
-  version = "git-2015-09-01";
+  version = "unstable-2015-09-01";
 
   src = fetchFromGitHub {
     owner = "taktoa";
@@ -14,33 +27,46 @@ stdenv.mkDerivation rec {
     sha256 = "0a5024vimpfrpj6w60j1ad8qvjkrmxiy8w1yijxfwk917ag9rkpq";
   };
 
+  patches = [
+    ./fix-config_h-includes-should-be-first.patch
+  ];
+
   postPatch = ''
     substituteInPlace configure.ac \
-      --replace "AC_PREREQ([2.62])" "AC_PREREQ([2.63])"
+      --replace "AC_PREREQ([2.62])" "AC_PREREQ([2.64])"
   '';
 
-  nativeBuildInputs = [ 
-    autoconf automake gettext git gnulib
-    help2man libtool perl pkgconfig texinfo
+  nativeBuildInputs = [
+    autoconf
+    automake
+    gettext
+    git
+    gnulib
+    help2man
+    libtool
+    perl
+    pkg-config
+    texinfo
   ];
 
   configurePhase = ''
-    cp -r "${gnulib}" gnulib
-    chmod a+rX,u+w -R gnulib
-    ./bootstrap --gnulib-srcdir=gnulib
+    ./bootstrap --gnulib-srcdir=${gnulib}
     ./configure --prefix="$out"
   '';
 
   buildInputs = [
-    libX11 libXScrnSaver libXext  
+    libX11
+    libXScrnSaver
+    libXext
   ];
 
   meta = {
-    inherit  version;
-    description = ''A command-line tool to print idle time from libXss'';
-    homepage = http://taktoa.me/xprintidle-ng/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+    inherit version;
+    description = "A command-line tool to print idle time from libXss";
+    homepage = "https://github.com/taktoa/xprintidle-ng";
+    license = lib.licenses.gpl2Only;
+    maintainers = [ lib.maintainers.raskin ];
+    platforms = lib.platforms.linux;
+    mainProgram = "xprintidle-ng";
   };
 }

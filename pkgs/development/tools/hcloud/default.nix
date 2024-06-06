@@ -1,40 +1,43 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, installShellFiles
+}:
 
-buildGoPackage rec {
-  name = "hcloud-${version}";
-  version = "1.11.0";
-  
-  goPackagePath = "github.com/hetznercloud/cli";
+buildGoModule rec {
+  pname = "hcloud";
+  version = "1.43.1";
 
   src = fetchFromGitHub {
     owner = "hetznercloud";
     repo = "cli";
-    rev = "v${version}";
-    sha256 = "0iknw14728l2mynrvb3fiqm7y893ppp22gbb3mppi6iy3as94f1f";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-XPDaywSCvXc9jo8bNxaF9Pj6Vs+Hz0MxDPbbnRNW3VI=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-pN+HMsZ2FpxwF/yPfYGwJNj9i4fgnE3cKo3mti3KoR0=";
 
-  buildFlagsArray = [ "-ldflags=" "-w -X github.com/hetznercloud/cli/cli.Version=${version}" ];
+  ldflags = [
+    "-s"
+    "-w"
+    "-X=github.com/hetznercloud/cli/internal/version.Version=${version}"
+  ];
+
+  nativeBuildInputs = [ installShellFiles ];
 
   postInstall = ''
-    mkdir -p \
-      $bin/etc/bash_completion.d \
-      $bin/share/zsh/vendor-completions
-
-    # Add bash completions
-    $bin/bin/hcloud completion bash > "$bin/etc/bash_completion.d/hcloud"
-
-    # Add zsh completions
-    echo "#compdef hcloud" > "$bin/share/zsh/vendor-completions/_hcloud"
-    $bin/bin/hcloud completion zsh >> "$bin/share/zsh/vendor-completions/_hcloud"
+    for shell in bash fish zsh; do
+      $out/bin/hcloud completion $shell > hcloud.$shell
+      installShellCompletion hcloud.$shell
+    done
   '';
 
-  meta = {
+  meta = with lib; {
+    changelog = "https://github.com/hetznercloud/cli/releases/tag/v${version}";
     description = "A command-line interface for Hetzner Cloud, a provider for cloud virtual private servers";
-    homepage = https://github.com/hetznercloud/cli;
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.zauberpony ];
+    mainProgram = "hcloud";
+    homepage = "https://github.com/hetznercloud/cli";
+    license = licenses.mit;
+    maintainers = with maintainers; [ zauberpony techknowlogick ];
   };
 }

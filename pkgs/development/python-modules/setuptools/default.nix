@@ -1,45 +1,46 @@
-{ stdenv
-, fetchPypi
-, python
-, wrapPython
-, unzip
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  wheel,
 }:
 
-# Should use buildPythonPackage here somehow
-stdenv.mkDerivation rec {
+buildPythonPackage rec {
   pname = "setuptools";
-  version = "41.0.1";
-  name = "${python.libPrefix}-${pname}-${version}";
+  version = "69.5.1";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    extension = "zip";
-    sha256 = "a222d126f5471598053c9a77f4b5d4f26eaa1f150ad6e01dcf1a42e185d05613";
+  src = fetchFromGitHub {
+    owner = "pypa";
+    repo = "setuptools";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-X0ntFlDIhUjxtWzz0LxybQSuxhRpHlMeBYtOGwqDl4A=";
   };
 
-  nativeBuildInputs = [ unzip wrapPython python.pythonForBuild ];
-  doCheck = false;  # requires pytest
-  installPhase = ''
-      dst=$out/${python.sitePackages}
-      mkdir -p $dst
-      export PYTHONPATH="$dst:$PYTHONPATH"
-      ${python.pythonForBuild.interpreter} setup.py install --prefix=$out
-      wrapPythonPrograms
+  patches = [
+    ./tag-date.patch
+    ./setuptools-distutils-C++.patch
+  ];
+
+  nativeBuildInputs = [ wheel ];
+
+  preBuild = lib.optionalString (!stdenv.hostPlatform.isWindows) ''
+    export SETUPTOOLS_INSTALL_WINDOWS_SPECIFIC_FILES=0
   '';
 
-  pythonPath = [];
+  # Requires pytest, causing infinite recursion.
+  doCheck = false;
 
-  dontPatchShebangs = true;
-
-  # Python packages built through cross-compilation are always for the host platform.
-  disallowedReferences = stdenv.lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [ python.pythonForBuild ];
-
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Utilities to facilitate the installation of Python packages";
-    homepage = https://pypi.python.org/pypi/setuptools;
-    license = with licenses; [ psfl zpl20 ];
+    homepage = "https://github.com/pypa/setuptools";
+    changelog = "https://setuptools.pypa.io/en/stable/history.html#v${
+      replaceStrings [ "." ] [ "-" ] version
+    }";
+    license = with licenses; [ mit ];
     platforms = python.meta.platforms;
-    priority = 10;
+    maintainers = teams.python.members;
   };
 }

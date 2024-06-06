@@ -1,18 +1,18 @@
-{ stdenv, fetchurl, libtool }:
+{ lib, stdenv, fetchurl, libtool }:
 
 stdenv.mkDerivation rec {
-  name = "libtommath-${version}";
-  version = "1.1.0";
+  pname = "libtommath";
+  version = "1.3.0";
 
   src = fetchurl {
     url = "https://github.com/libtom/libtommath/releases/download/v${version}/ltm-${version}.tar.xz";
-    sha256 = "1bbyagqzfdbg37k1n08nsqzdf44z8zsnjjinqbsyj7rxg246qilh";
+    sha256 = "sha256-KWJy2TQ1mRMI63NgdgDANLVYgHoH6CnnURQuZcz6nQg=";
   };
 
   nativeBuildInputs = [ libtool ];
 
   postPatch = ''
-    substituteInPlace makefile.shared --replace "LT:=glibtool" "LT:=libtool"
+    substituteInPlace makefile.shared --replace glibtool libtool
     substituteInPlace makefile_include.mk --replace "shell arch" "shell uname -m"
   '';
 
@@ -24,10 +24,12 @@ stdenv.mkDerivation rec {
 
   makefile = "makefile.shared";
 
+  env.NIX_CFLAGS_COMPILE = lib.optionalString (stdenv.isDarwin && stdenv.isAarch64) "-DTARGET_OS_IPHONE=0";
+
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://www.libtom.net/LibTomMath/;
+  meta = with lib; {
+    homepage = "https://www.libtom.net/LibTomMath/";
     description = "A library for integer-based number-theoretic applications";
     license = with licenses; [ publicDomain wtfpl ];
     platforms = platforms.unix;

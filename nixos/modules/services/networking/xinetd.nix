@@ -27,7 +27,7 @@ let
         ${optionalString srv.unlisted "type        = UNLISTED"}
         ${optionalString (srv.flags != "") "flags = ${srv.flags}"}
         socket_type = ${if srv.protocol == "udp" then "dgram" else "stream"}
-        ${if srv.port != 0 then "port        = ${toString srv.port}" else ""}
+        ${optionalString (srv.port != 0) "port        = ${toString srv.port}"}
         wait        = ${if srv.protocol == "udp" then "yes" else "no"}
         user        = ${srv.user}
         server      = ${srv.server}
@@ -44,16 +44,11 @@ in
 
   options = {
 
-    services.xinetd.enable = mkOption {
-      default = false;
-      description = ''
-        Whether to enable the xinetd super-server daemon.
-      '';
-    };
+    services.xinetd.enable = mkEnableOption "the xinetd super-server daemon";
 
     services.xinetd.extraDefaults = mkOption {
       default = "";
-      type = types.string;
+      type = types.lines;
       description = ''
         Additional configuration lines added to the default section of xinetd's configuration.
       '';
@@ -70,45 +65,44 @@ in
         options = {
 
           name = mkOption {
-            type = types.string;
+            type = types.str;
             example = "login";
             description = "Name of the service.";
           };
 
           protocol = mkOption {
-            type = types.string;
+            type = types.str;
             default = "tcp";
-            description =
-              "Protocol of the service.  Usually <literal>tcp</literal> or <literal>udp</literal>.";
+            description = "Protocol of the service.  Usually `tcp` or `udp`.";
           };
 
           port = mkOption {
-            type = types.int;
+            type = types.port;
             default = 0;
             example = 123;
             description = "Port number of the service.";
           };
 
           user = mkOption {
-            type = types.string;
+            type = types.str;
             default = "nobody";
             description = "User account for the service";
           };
 
           server = mkOption {
-            type = types.string;
+            type = types.str;
             example = "/foo/bin/ftpd";
             description = "Path of the program that implements the service.";
           };
 
           serverArgs = mkOption {
-            type = types.string;
+            type = types.separatedString " ";
             default = "";
             description = "Command-line arguments for the server program.";
           };
 
           flags = mkOption {
-            type = types.string;
+            type = types.str;
             default = "";
             description = "";
           };
@@ -118,7 +112,7 @@ in
             default = false;
             description = ''
               Whether this server is listed in
-              <filename>/etc/services</filename>.  If so, the port
+              {file}`/etc/services`.  If so, the port
               number can be omitted.
             '';
           };
@@ -146,7 +140,7 @@ in
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       path = [ pkgs.xinetd ];
-      script = "xinetd -syslog daemon -dontfork -stayalive -f ${configFile}";
+      script = "exec xinetd -syslog daemon -dontfork -stayalive -f ${configFile}";
     };
   };
 }

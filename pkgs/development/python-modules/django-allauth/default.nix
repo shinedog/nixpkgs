@@ -1,31 +1,93 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, requests, requests_oauthlib
-, django, python3-openid, mock, coverage }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+  python,
+
+  # build-system
+  setuptools,
+
+  # build-time dependencies
+  gettext,
+
+  # dependencies
+  django,
+  python3-openid,
+  requests,
+  requests-oauthlib,
+  pyjwt,
+
+  # optional-dependencies
+  python3-saml,
+  qrcode,
+
+  # tests
+  pillow,
+  pytestCheckHook,
+  pytest-django,
+
+  # passthru tests
+  dj-rest-auth,
+}:
 
 buildPythonPackage rec {
   pname = "django-allauth";
-  version = "0.39.1";
+  version = "0.61.1";
+  pyproject = true;
 
-  # no tests on PyPI
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "pennersr";
-    repo = pname;
-    rev = version;
-    sha256 = "1kplkanhj26z3i6p0l1r5lczha4pavcx96vj3kpcp1rvyk1v0f7r";
+    repo = "django-allauth";
+    rev = "refs/tags/${version}";
+    hash = "sha256-C9SYlL1yMnSb+Zpi2opvDw1stxAHuI9/XKHyvkM36Cg=";
   };
 
-  propagatedBuildInputs = [ requests requests_oauthlib django python3-openid ];
+  nativeBuildInputs = [
+    gettext
+    setuptools
+  ];
 
-  checkInputs = [ coverage mock ];
+  propagatedBuildInputs = [
+    django
+    pyjwt
+    python3-openid
+    requests
+    requests-oauthlib
+  ] ++ pyjwt.optional-dependencies.crypto;
 
-  doCheck = false;
-  checkPhase = ''
-    cd $NIX_BUILD_TOP/$sourceRoot
-    coverage run manage.py test allauth
-  '';
+  preBuild = "${python.interpreter} -m django compilemessages";
 
-  meta = with stdenv.lib; {
+  passthru.optional-dependencies = {
+    saml = [ python3-saml ];
+    mfa = [ qrcode ];
+  };
+
+  pythonImportsCheck = [ "allauth" ];
+
+  nativeCheckInputs = [
+    pillow
+    pytestCheckHook
+    pytest-django
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  disabledTests = [
+    # Tests require network access
+    "test_login"
+  ];
+
+  passthru.tests = {
+    inherit dj-rest-auth;
+  };
+
+  meta = with lib; {
+    changelog = "https://github.com/pennersr/django-allauth/blob/${version}/ChangeLog.rst";
     description = "Integrated set of Django applications addressing authentication, registration, account management as well as 3rd party (social) account authentication";
-    homepage = https://www.intenct.nl/projects/django-allauth;
+    downloadPage = "https://github.com/pennersr/django-allauth";
+    homepage = "https://www.intenct.nl/projects/django-allauth";
     license = licenses.mit;
+    maintainers = with maintainers; [ derdennisop ];
   };
 }

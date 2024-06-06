@@ -1,23 +1,72 @@
-{ lib, buildPythonPackage, fetchPypi, mock, testscenarios, docutils, lockfile }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  docutils,
+  lockfile,
+  pytestCheckHook,
+  testscenarios,
+  testtools,
+  twine,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "python-daemon";
-  version = "2.2.3";
+  version = "3.0.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "affeca9e5adfce2666a63890af9d6aff79f670f7511899edaddca7f96593cc25";
+    sha256 = "sha256-bFdFI3L36v9Ak0ocA60YJr9eeTVY6H/vSRMeZGS02uU=";
   };
 
-  # A test fail within chroot builds.
-  doCheck = false;
+  nativeBuildInputs = [ twine ];
 
-  buildInputs = [ mock testscenarios ];
-  propagatedBuildInputs = [ docutils lockfile ];
+  propagatedBuildInputs = [
+    docutils
+    lockfile
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    testscenarios
+    testtools
+  ];
+
+  disabledTests = [
+    "begin_with_TestCase"
+    "changelog_TestCase"
+    "ChangeLogEntry"
+    "DaemonContext"
+    "file_descriptor"
+    "get_distribution_version_info_TestCase"
+    "InvalidFormatError_TestCase"
+    "make_year_range_TestCase"
+    "ModuleExceptions_TestCase"
+    "test_metaclass_not_called"
+    "test_passes_specified_object"
+    "test_returns_expected"
+    "value_TestCase"
+    "YearRange_TestCase"
+  ];
+
+  pythonImportsCheck = [
+    "daemon"
+    "daemon.daemon"
+    "daemon.pidfile"
+  ];
 
   meta = with lib; {
     description = "Library to implement a well-behaved Unix daemon process";
-    homepage = https://alioth.debian.org/projects/python-daemon/;
-    license = [ licenses.gpl3Plus licenses.asl20 ];
+    homepage = "https://pagure.io/python-daemon/";
+    # See "Copying" section in https://pagure.io/python-daemon/blob/main/f/README
+    license = with licenses; [
+      gpl3Plus
+      asl20
+    ];
+    maintainers = with maintainers; [ ];
   };
 }

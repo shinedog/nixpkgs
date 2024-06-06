@@ -1,25 +1,27 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, nixosTests }:
 
-buildGoPackage rec {
-  name = "nginx_exporter-${version}";
-  version = "0.1.0";
-
-  goPackagePath = "github.com/discordianfish/nginx_exporter";
+buildGoModule rec {
+  pname = "nginx_exporter";
+  version = "1.2.0";
 
   src = fetchFromGitHub {
+    owner = "nginxinc";
+    repo = "nginx-prometheus-exporter";
     rev = "v${version}";
-    owner = "discordianfish";
-    repo = "nginx_exporter";
-    sha256 = "1xwxnvkzslaj44r44ag24a9qfzjdxwz67hhpkdq42193zqpnlim7";
+    sha256 = "sha256-VzgcAyXR9TKpK6CJzKoqN5EgO9rWnZBhwv5Km/k8cK0=";
   };
 
-  goDeps = ./nginx-exporter_deps.nix;
+  vendorHash = "sha256-HoRE9hvnyPkLpwc+FfUmithd5UDEJ0TnoDfcifa/0o0=";
 
-  meta = with stdenv.lib; {
-    description = "Metrics relay from nginx stats to Prometheus";
-    homepage = https://github.com/discordianfish/nginx_exporter;
-    license = licenses.mit;
-    maintainers = with maintainers; [ benley fpletz willibutz ];
-    platforms = platforms.unix;
+  ldflags = [ "-s" "-w" "-X main.version=${version}" ];
+
+  passthru.tests = { inherit (nixosTests.prometheus-exporters) nginx; };
+
+  meta = with lib; {
+    description = "NGINX Prometheus Exporter for NGINX and NGINX Plus";
+    mainProgram = "nginx-prometheus-exporter";
+    homepage = "https://github.com/nginxinc/nginx-prometheus-exporter";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ benley fpletz willibutz globin ];
   };
 }

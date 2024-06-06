@@ -1,31 +1,42 @@
-{ stdenv, fetchurl, pkgconfig, libGLU, epoxy, libX11, libdrm, mesa_noglu }:
-
+{ lib, stdenv, fetchurl, meson, ninja, pkg-config, python3
+, libGLU, libepoxy, libX11, libdrm, mesa
+, vaapiSupport ? true, libva
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-
-  name = "virglrenderer-${version}";
-  version = "0.7.0";
+  pname = "virglrenderer";
+  version = "1.0.1";
 
   src = fetchurl {
-    url = "https://www.freedesktop.org/software/virgl/${name}.tar.bz2";
-    sha256 = "041agg1d6i8hg250y30f08n3via0hs9rbijxdrfifb8ara805v0m";
+    url = "https://gitlab.freedesktop.org/virgl/virglrenderer/-/archive/${version}/virglrenderer-${version}.tar.bz2";
+    hash = "sha256-U8uPrdCPUmDuV4M/wkiFZUgUOLx6jjTz4RTRLMnZ25o=";
   };
 
-  buildInputs = [ libGLU epoxy libX11 libdrm mesa_noglu ];
+  separateDebugInfo = true;
 
-  nativeBuildInputs = [ pkgconfig ];
+  buildInputs = [ libGLU libepoxy libX11 libdrm mesa ]
+    ++ lib.optionals vaapiSupport [ libva ];
 
-  # Fix use of fd_set without proper include
-  prePatch = ''
-    sed -e '1i#include <sys/select.h>' -i vtest/util.c
-  '';
+  nativeBuildInputs = [ meson ninja pkg-config python3 ];
 
-  meta = with stdenv.lib; {
+  mesonFlags= [
+    (lib.mesonBool "video" vaapiSupport)
+  ];
+
+  passthru = {
+    updateScript = gitUpdater {
+      url = "https://gitlab.freedesktop.org/virgl/virglrenderer.git";
+      rev-prefix = "virglrenderer-";
+    };
+  };
+
+  meta = with lib; {
     description = "A virtual 3D GPU library that allows a qemu guest to use the host GPU for accelerated 3D rendering";
-    homepage = https://virgil3d.github.io/;
+    mainProgram = "virgl_test_server";
+    homepage = "https://virgil3d.github.io/";
     license = licenses.mit;
     platforms = platforms.linux;
     maintainers = [ maintainers.xeji ];
   };
-
 }

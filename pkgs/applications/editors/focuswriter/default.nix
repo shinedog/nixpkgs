@@ -1,27 +1,39 @@
-{ stdenv, fetchurl, pkgconfig, qmake, qttools, hunspell, qtbase, qtmultimedia }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, cmake
+, hunspell
+, qtbase
+, qtmultimedia
+, qttools
+, qt5compat
+, qtwayland
+, wrapQtAppsHook
+}:
 
 stdenv.mkDerivation rec {
-  name = "focuswriter-${version}";
-  version = "1.7.2";
+  pname = "focuswriter";
+  version = "1.8.8";
 
-  src = fetchurl {
-    url = "https://gottcode.org/focuswriter/focuswriter-${version}-src.tar.bz2";
-    sha256 = "1qsfcrscm3s0h7wcl6qn8zi0irr70zdacjxsdk73kpk1dhl2j85k";
+  src = fetchFromGitHub {
+    owner = "gottcode";
+    repo = "focuswriter";
+    rev = "v${version}";
+    hash = "sha256-6DUUY7pqhmalxTq/LnJteQkd5Z001+kyQb/cUtmuZI4=";
   };
 
-  nativeBuildInputs = [ pkgconfig qmake qttools ];
-  buildInputs = [ hunspell qtbase qtmultimedia ];
+  nativeBuildInputs = [ pkg-config cmake qttools wrapQtAppsHook ];
+  buildInputs = [ hunspell qtbase qtmultimedia qt5compat qtwayland ];
 
-  enableParallelBuilding = true;
-
-  qmakeFlags = [ "PREFIX=/" ];
   installFlags = [ "INSTALL_ROOT=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Simple, distraction-free writing environment";
     license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ madjar ];
+    maintainers = with maintainers; [ madjar kashw2 ];
     platforms = platforms.linux;
-    homepage = https://gottcode.org/focuswriter/;
+    homepage = "https://gottcode.org/focuswriter/";
+    mainProgram = "focuswriter";
   };
 }

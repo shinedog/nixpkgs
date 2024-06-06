@@ -1,62 +1,86 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, pytest-repeat
-, pytest-faulthandler
-, pytest-timeout
-, mock
-, joblib
-, click
-, cloudpickle
-, dask
-, msgpack
-, psutil
-, six
-, sortedcontainers
-, tblib
-, toolz
-, tornado
-, zict
-, pyyaml
-, isPy3k
-, futures
-, singledispatch
-, mpi4py
-, bokeh
+{
+  lib,
+  buildPythonPackage,
+  click,
+  cloudpickle,
+  dask,
+  fetchFromGitHub,
+  jinja2,
+  locket,
+  msgpack,
+  packaging,
+  psutil,
+  pythonOlder,
+  pythonRelaxDepsHook,
+  pyyaml,
+  setuptools,
+  setuptools-scm,
+  sortedcontainers,
+  tblib,
+  toolz,
+  tornado,
+  urllib3,
+  versioneer,
+  zict,
 }:
 
 buildPythonPackage rec {
   pname = "distributed";
-  version = "1.27.1";
+  version = "2024.5.0";
+  pyproject = true;
 
-  # get full repository need conftest.py to run tests
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "117q16ha03m8y9ydxg5svwx2cv1r2703hcy4a0zgjh5nhx4rfhiy";
+  disabled = pythonOlder "3.9";
+
+  src = fetchFromGitHub {
+    owner = "dask";
+    repo = "distributed";
+    rev = "refs/tags/${version}";
+    hash = "sha256-9W5BpBQHw1ZXCOWiFPeIlMns/Yys1gtdwQ4Lhd7qjK8=";
   };
 
-  checkInputs = [ pytest pytest-repeat pytest-faulthandler pytest-timeout mock joblib ];
-  propagatedBuildInputs = [
-      click cloudpickle dask msgpack psutil six
-      sortedcontainers tblib toolz tornado zict pyyaml mpi4py bokeh
-  ] ++ lib.optionals (!isPy3k) [ futures singledispatch ];
-
-  # tests take about 10-15 minutes
-  # ignore 5 cli tests out of 1000 total tests that fail due to subprocesses
-  # these tests are not critical to the library (only the cli)
-  checkPhase = ''
-    py.test distributed -m "not avoid-travis" -r s --timeout-method=thread --timeout=0 --durations=20 --ignore="distributed/cli/tests"
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace "versioneer[toml]==" "versioneer[toml]>=" \
+      --replace 'dynamic = ["version"]' 'version = "${version}"'
   '';
 
-  # when tested random tests would fail and not repeatably
+  build-system = [
+    pythonRelaxDepsHook
+    setuptools
+    setuptools-scm
+    versioneer
+  ] ++ versioneer.optional-dependencies.toml;
+
+  pythonRelaxDeps = [ "dask" ];
+
+  dependencies = [
+    click
+    cloudpickle
+    dask
+    jinja2
+    locket
+    msgpack
+    packaging
+    psutil
+    pyyaml
+    sortedcontainers
+    tblib
+    toolz
+    tornado
+    urllib3
+    zict
+  ];
+
+  # When tested random tests would fail and not repeatably
   doCheck = false;
 
-  meta = {
-    description = "Distributed computation in Python.";
-    homepage = http://distributed.readthedocs.io/en/latest/;
-    license = lib.licenses.bsd3;
-    platforms = lib.platforms.x86; # fails on aarch64
-    maintainers = with lib.maintainers; [ teh costrouc ];
+  pythonImportsCheck = [ "distributed" ];
+
+  meta = with lib; {
+    description = "Distributed computation in Python";
+    homepage = "https://distributed.readthedocs.io/";
+    changelog = "https://github.com/dask/distributed/blob/${version}/docs/source/changelog.rst";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ teh ];
   };
 }

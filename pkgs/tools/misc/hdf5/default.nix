@@ -1,59 +1,123 @@
-{ stdenv
+{ lib
+, stdenv
 , fetchurl
+, cmake
 , removeReferencesTo
-, cpp ? false
-, gfortran ? null
-, zlib ? null
-, szip ? null
-, mpi ? null
-, enableShared ? true
+, cppSupport ? true
+, fortranSupport ? false
+, fortran
+, zlibSupport ? true
+, zlib
+, szipSupport ? false
+, szip
+, mpiSupport ? false
+, mpi
+, enableShared ? !stdenv.hostPlatform.isStatic
+, enableStatic ? stdenv.hostPlatform.isStatic
+, javaSupport ? false
+, jdk
+, usev110Api ? false
+, threadsafe ? false
+, python3
 }:
 
 # cpp and mpi options are mutually exclusive
 # (--enable-unsupported could be used to force the build)
-assert !cpp || mpi == null;
+assert !cppSupport || !mpiSupport;
 
-let inherit (stdenv.lib) optional optionals; in
+let inherit (lib) optional optionals; in
 
 stdenv.mkDerivation rec {
-  version = "1.10.5";
-  name = "hdf5-${version}";
+  version = "1.14.3";
+  pname = "hdf5"
+    + lib.optionalString cppSupport "-cpp"
+    + lib.optionalString fortranSupport "-fortran"
+    + lib.optionalString mpiSupport "-mpi"
+    + lib.optionalString threadsafe "-threadsafe";
+
   src = fetchurl {
-    url = "https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-1.10/${name}/src/${name}.tar.bz2";
-    sha256 = "0i3g6v521vigzbx8wpd32ibsiiw92r65ca3qdbn0d8fj8f4fmmk8";
+    url =
+      let
+        majorMinor = lib.versions.majorMinor version;
+        majorMinorPatch = with lib.versions; "${major version}.${minor version}.${patch version}";
+      in
+      "https://support.hdfgroup.org/ftp/HDF5/releases/hdf5-${majorMinor}/hdf5-${majorMinorPatch}/src/hdf5-${version}.tar.bz2";
+    sha256 = "sha256-lCXyJO110SgLtG1vJpI92Tj5BA5+rr9X5m7HNXwI+Rc=";
   };
 
   passthru = {
-    mpiSupport = (mpi != null);
-    inherit mpi;
+    inherit
+      cppSupport
+      fortranSupport
+      fortran
+      zlibSupport
+      zlib
+      szipSupport
+      szip
+      mpiSupport
+      mpi
+      ;
   };
 
-  nativeBuildInputs = [ removeReferencesTo ];
+  outputs = [ "out" "dev" "bin" ];
 
-  buildInputs = []
-    ++ optional (gfortran != null) gfortran
-    ++ optional (szip != null) szip;
+  nativeBuildInputs = [ removeReferencesTo cmake ]
+    ++ optional fortranSupport fortran;
 
-  propagatedBuildInputs = []
-    ++ optional (zlib != null) zlib
-    ++ optional (mpi != null) mpi;
+  buildInputs = optional fortranSupport fortran
+    ++ optional szipSupport szip
+    ++ optional javaSupport jdk;
 
-  configureFlags = []
-    ++ optional cpp "--enable-cxx"
-    ++ optional (gfortran != null) "--enable-fortran"
-    ++ optional (szip != null) "--with-szlib=${szip}"
-    ++ optionals (mpi != null) ["--enable-parallel" "CC=${mpi}/bin/mpicc"]
-    ++ optional enableShared "--enable-shared";
+  propagatedBuildInputs = optional zlibSupport zlib
+    ++ optional mpiSupport mpi;
 
-  patches = [
-    ./bin-mv.patch
-  ];
+  cmakeFlags = [
+    "-DHDF5_INSTALL_CMAKE_DIR=${placeholder "dev"}/lib/cmake"
+    "-DBUILD_STATIC_LIBS=${lib.boolToString enableStatic}"
+  ] ++ lib.optional stdenv.isDarwin "-DHDF5_BUILD_WITH_INSTALL_NAME=ON"
+    ++ lib.optional cppSupport "-DHDF5_BUILD_CPP_LIB=ON"
+    ++ lib.optional fortranSupport "-DHDF5_BUILD_FORTRAN=ON"
+    ++ lib.optional szipSupport "-DHDF5_ENABLE_SZIP_SUPPORT=ON"
+    ++ lib.optionals mpiSupport [ "-DHDF5_ENABLE_PARALLEL=ON" ]
+    ++ lib.optional enableShared "-DBUILD_SHARED_LIBS=ON"
+    ++ lib.optional javaSupport "-DHDF5_BUILD_JAVA=ON"
+    ++ lib.optional usev110Api "-DDEFAULT_API_VERSION=v110"
+    ++ lib.optionals threadsafe [ "-DDHDF5_ENABLE_THREADSAFE:BOOL=ON" "-DHDF5_BUILD_HL_LIB=OFF" ]
+  ;
 
   postInstall = ''
     find "$out" -type f -exec remove-references-to -t ${stdenv.cc} '{}' +
+    moveToOutput 'bin/' "''${!outputBin}"
+    moveToOutput 'bin/h5cc' "''${!outputDev}"
+    moveToOutput 'bin/h5c++' "''${!outputDev}"
+    moveToOutput 'bin/h5fc' "''${!outputDev}"
+    moveToOutput 'bin/h5pcc' "''${!outputDev}"
+    moveToOutput 'bin/h5hlcc' "''${!outputDev}"
+    moveToOutput 'bin/h5hlc++' "''${!outputDev}"
+  '' + lib.optionalString enableShared
+  # The shared build creates binaries with -shared suffixes,
+  # so we remove these suffixes.
+  ''
+    pushd ''${!outputBin}/bin
+    for file in *-shared; do
+      mv "$file" "''${file%%-shared}"
+    done
+    popd
+  '' + lib.optionalString fortranSupport
+  ''
+    mv $out/mod/shared $dev/include
+    rm -r $out/mod
+
+    find "$out" -type f -exec remove-references-to -t ${fortran} '{}' +
   '';
 
-  meta = {
+  enableParallelBuilding = true;
+
+  passthru.tests = {
+    inherit (python3.pkgs) h5py;
+  };
+
+  meta = with lib; {
     description = "Data model, library, and file format for storing and managing data";
     longDescription = ''
       HDF5 supports an unlimited variety of datatypes, and is designed for flexible and efficient
@@ -61,9 +125,9 @@ stdenv.mkDerivation rec {
       applications to evolve in their use of HDF5. The HDF5 Technology suite includes tools and
       applications for managing, manipulating, viewing, and analyzing data in the HDF5 format.
     '';
-    license = stdenv.lib.licenses.bsd3; # Lawrence Berkeley National Labs BSD 3-Clause variant
-    homepage = https://www.hdfgroup.org/HDF5/;
-    platforms = stdenv.lib.platforms.unix;
-    broken = (gfortran != null) && stdenv.isDarwin;
+    license = licenses.bsd3; # Lawrence Berkeley National Labs BSD 3-Clause variant
+    maintainers = [ maintainers.markuskowa ];
+    homepage = "https://www.hdfgroup.org/HDF5/";
+    platforms = platforms.unix;
   };
 }

@@ -1,26 +1,29 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "gandom-fonts";
-  version = "0.6";
+  version = "0.8";
 
   src = fetchFromGitHub {
     owner = "rastikerdar";
     repo = "gandom-font";
     rev = "v${version}";
-    sha256 = "1pdbqhvcsz6aq3qgarhfd05ip0wmh7bxqkmxrwa0kgxsly6zxz9x";
+    hash = "sha256-nez8T0TtRLyXxIIR69LrVGde5ThCvA0fLXkYLyYQRV8=";
   };
 
   installPhase = ''
-    mkdir -p $out/share/fonts/gandom-fonts
-    cp -v $( find . -name '*.ttf') $out/share/fonts/gandom-fonts
+    runHook preInstall
+
+    find . -name '*.ttf' -exec install -m444 -Dt $out/share/fonts/gandom-fonts {} \;
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/rastikerdar/gandom-font;
+  meta = with lib; {
+    homepage = "https://github.com/rastikerdar/gandom-font";
     description = "A Persian (Farsi) Font - فونت (قلم) فارسی گندم";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [ maintainers.linarcx ];
+    maintainers = [ ];
   };
 }

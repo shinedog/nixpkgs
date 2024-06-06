@@ -1,6 +1,6 @@
-{ stdenv, runCommand, ruby, lib
+{ stdenv, runCommand, ruby, lib, rsync
 , defaultGemConfig, buildRubyGem, buildEnv
-, makeWrapper
+, makeBinaryWrapper
 , bundler
 }@defs:
 
@@ -13,21 +13,33 @@
 , lockfile ? null
 , gemset ? null
 , ruby ? defs.ruby
+, copyGemFiles ? false # Copy gem files instead of symlinking
 , gemConfig ? defaultGemConfig
 , postBuild ? null
 , document ? []
 , meta ? {}
 , groups ? null
 , ignoreCollisions ? false
+, nativeBuildInputs ? []
 , buildInputs ? []
+, extraConfigPaths ? []
 , ...
 }@args:
 
 assert name == null -> pname != null;
 
-with  import ./functions.nix { inherit lib gemConfig; };
-
 let
+  functions = import ./functions.nix { inherit lib gemConfig; };
+
+  inherit (functions)
+    applyGemConfigs
+    bundlerFiles
+    composeGemAttrs
+    filterGemset
+    genStubsScript
+    pathDerivation
+    ;
+
   gemFiles = bundlerFiles args;
 
   importedGemset = if builtins.typeOf gemFiles.gemset != "set"
@@ -37,7 +49,7 @@ let
   filteredGemset = filterGemset { inherit ruby groups; } importedGemset;
 
   configuredGemset = lib.flip lib.mapAttrs filteredGemset (name: attrs:
-    applyGemConfigs (attrs // { inherit ruby; gemName = name; })
+    applyGemConfigs (attrs // { inherit ruby document; gemName = name; })
   );
 
   hasBundler = builtins.hasAttr "bundler" filteredGemset;
@@ -52,10 +64,10 @@ let
     name
   else
     let
-      gem = gems."${pname}";
-      version = gem.version;
+      gem = gems.${pname};
+      suffix = gem.suffix;
     in
-      "${pname}-${version}";
+      "${pname}-${suffix}";
 
   pname' = if pname != null then
     pname
@@ -63,16 +75,16 @@ let
     name;
 
   copyIfBundledByPath = { bundledByPath ? false, ...}:
-  (if bundledByPath then
-      assert gemFiles.gemdir != null; "cp -a ${gemFiles.gemdir}/* $out/" #*/
-    else ""
+  (lib.optionalString bundledByPath (
+      assert gemFiles.gemdir != null; "cp -a ${gemFiles.gemdir}/* $out/") #*/
   );
 
-  maybeCopyAll = pkgname: if pkgname == null then "" else
-  let
-    mainGem = gems."${pkgname}" or (throw "bundlerEnv: gem ${pkgname} not found");
-  in
-    copyIfBundledByPath mainGem;
+  maybeCopyAll = pkgname: lib.optionalString (pkgname != null) (
+    let
+      mainGem = gems.${pkgname} or (throw "bundlerEnv: gem ${pkgname} not found");
+    in
+      copyIfBundledByPath mainGem
+  );
 
   # We have to normalize the Gemfile.lock, otherwise bundler tries to be
   # helpful by doing so at run time, causing executables to immediately bail
@@ -82,6 +94,8 @@ let
     ${maybeCopyAll mainGemName}
     cp ${gemFiles.gemfile} $out/Gemfile || ls -l $out/Gemfile
     cp ${gemFiles.lockfile} $out/Gemfile.lock || ls -l $out/Gemfile.lock
+
+    ${lib.concatMapStringsSep "\n" (path: "cp -r ${path} $out/") extraConfigPaths}
   '';
 
   buildGem = name: attrs: (
@@ -96,8 +110,9 @@ let
 
   envPaths = lib.attrValues gems ++ lib.optional (!hasBundler) bundler;
 
-  basicEnv = buildEnv {
-    inherit buildInputs ignoreCollisions;
+
+  basicEnvArgs = {
+    inherit nativeBuildInputs buildInputs ignoreCollisions;
 
     name = name';
 
@@ -111,23 +126,38 @@ let
 
     meta = { platforms = ruby.meta.platforms; } // meta;
 
-    passthru = rec {
+    passthru = (lib.optionalAttrs (pname != null) {
+      inherit (gems.${pname}) gemType;
+    } // rec {
       inherit ruby bundler gems confFiles envPaths;
 
       wrappedRuby = stdenv.mkDerivation {
         name = "wrapped-ruby-${pname'}";
-        nativeBuildInputs = [ makeWrapper ];
-        buildCommand = ''
+
+        nativeBuildInputs = [ makeBinaryWrapper ];
+
+        dontUnpack = true;
+
+        buildPhase = ''
           mkdir -p $out/bin
           for i in ${ruby}/bin/*; do
             makeWrapper "$i" $out/bin/$(basename "$i") \
               --set BUNDLE_GEMFILE ${confFiles}/Gemfile \
-              --set BUNDLE_PATH ${basicEnv}/${ruby.gemPath} \
+              --unset BUNDLE_PATH \
               --set BUNDLE_FROZEN 1 \
               --set GEM_HOME ${basicEnv}/${ruby.gemPath} \
               --set GEM_PATH ${basicEnv}/${ruby.gemPath}
           done
         '';
+
+        dontInstall = true;
+
+        doCheck = true;
+        checkPhase = ''
+          $out/bin/ruby --help > /dev/null
+        '';
+
+        inherit (ruby) meta;
       };
 
       env = let
@@ -152,7 +182,19 @@ let
             exit 1
           '';
         };
-    };
+    });
   };
+
+  basicEnv =
+    if copyGemFiles then
+      runCommand name' basicEnvArgs ''
+        mkdir -p $out
+        for i in $paths; do
+          ${rsync}/bin/rsync -a $i/lib $out/
+        done
+        eval "$postBuild"
+      ''
+    else
+      buildEnv basicEnvArgs;
 in
   basicEnv

@@ -1,37 +1,91 @@
-{ stdenv, fetchFromGitHub, pkgconfig, ncurses, readline }:
-
-stdenv.mkDerivation rec {
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, gcc-arm-embedded
+, readline
+, bzip2
+, openssl
+, jansson
+, gd
+, whereami
+, lua
+, lz4
+, Foundation
+, AppKit
+, withGui ? true, wrapQtAppsHook, qtbase
+, withPython ? true, python3
+, withBlueshark ? false, bluez5
+, withGeneric ? false
+, withSmall ? false
+, withoutFunctions ? []
+, hardwarePlatform ? if withGeneric then "PM3GENERIC" else "PM3RDV4"
+, hardwarePlatformExtras ? lib.optionalString withBlueshark "BTADDON"
+, standalone ? "LF_SAMYRUN"
+}:
+assert withBlueshark -> stdenv.hostPlatform.isLinux;
+stdenv.mkDerivation (finalAttrs: {
   pname = "proxmark3";
-  version = "3.1.0";
+  version = "4.18589";
 
   src = fetchFromGitHub {
-    owner = "Proxmark";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "1qw28n1bhhl91ix77lv50qcr919fq3hjc8zhhqphwxal2svgx2jf";
+    owner = "RfidResearchGroup";
+    repo = "proxmark3";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-e/FoyaHU/uH2yovEqtkrCXwHMlF94Acxl2lUA422Pig=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ ncurses readline ];
+  patches = [
+    # Don't check for DISPLAY env variable on Darwin. pm3 uses this to test if
+    # XQuartz is installed, however it is not actually required for GUI features
+    ./darwin-always-gui.patch
+  ];
 
   postPatch = ''
-    substituteInPlace client/Makefile --replace '-ltermcap' ' '
-    substituteInPlace liblua/Makefile --replace '-ltermcap' ' '
+    # Remove hardcoded paths on Darwin
+    substituteInPlace Makefile.defs \
+      --replace "/usr/bin/ar" "ar" \
+      --replace "/usr/bin/ranlib" "ranlib"
+    # Replace hardcoded path to libwhereami
+    substituteInPlace client/Makefile \
+      --replace "/usr/include/whereami.h" "${whereami}/include/whereami.h"
   '';
 
-  preBuild = ''
-    cd client
-  '';
+  nativeBuildInputs = [
+    pkg-config
+    gcc-arm-embedded
+  ] ++ lib.optional withGui wrapQtAppsHook;
+  buildInputs = [
+    readline
+    bzip2
+    openssl
+    jansson
+    gd
+    lz4
+    whereami
+    lua
+  ] ++ lib.optional withGui qtbase
+    ++ lib.optional withPython python3
+    ++ lib.optional withBlueshark bluez5
+    ++ lib.optionals stdenv.hostPlatform.isDarwin [ Foundation AppKit ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp proxmark3 $out/bin
-  '';
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+    "UDEV_PREFIX=${placeholder "out"}/etc/udev/rules.d"
+    "PLATFORM=${hardwarePlatform}"
+    "PLATFORM_EXTRAS=${hardwarePlatformExtras}"
+    "STANDALONE=${standalone}"
+    "USE_BREW=0"
+  ] ++ lib.optional withSmall "PLATFORM_SIZE=256"
+    ++ map (x: "SKIP_${x}=1") withoutFunctions;
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    description = "Client for proxmark3,  powerful general purpose RFID tool";
-    homepage = http://www.proxmark.org;
-    license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ fpletz ];
+  meta = with lib; {
+    description = "Client for proxmark3, powerful general purpose RFID tool";
+    homepage = "https://github.com/RfidResearchGroup/proxmark3";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ nyanotech emilytrau ];
+    platforms = platforms.unix;
+    mainProgram = "pm3";
   };
-}
+})

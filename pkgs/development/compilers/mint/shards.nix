@@ -1,74 +1,52 @@
 {
   admiral = {
-    owner = "jwaldrip";
-    repo = "admiral.cr";
-    rev = "v1.7.3";
-    sha256 = "0b98qjy43wsrc08am7lkhcdsxc7gplf9hcmbvd4p3dw4g107rk91";
+    url = "https://github.com/jwaldrip/admiral.cr.git";
+    rev = "v1.12.1";
+    sha256 = "0x8v9i8ixs7xcwz35kdlqvz0pfm1cqzm6gvwdjfrps0drisk7f6i";
   };
   ameba = {
-    owner = "veelenga";
-    repo = "ameba";
-    rev = "v0.9.1";
-    sha256 = "05q2ki9dpg23pllalv5p27f1m287kiicp97ziz0z7vv0vg1r8smj";
+    url = "https://github.com/crystal-ameba/ameba.git";
+    rev = "v1.5.0";
+    sha256 = "1idivsbpmi40aqvs82fsv37nrgikirprxrj3ls9chsb876fq9p2d";
+  };
+  ansi-escapes = {
+    url = "https://github.com/gtramontina/ansi-escapes.cr.git";
+    rev = "v1.0.0";
+    sha256 = "106cy7bq0j438cfs0zqcxhj84msjj9dybxlcjr8qhs1fpm02s00b";
+  };
+  backtracer = {
+    url = "https://github.com/sija/backtracer.cr.git";
+    rev = "v1.2.2";
+    sha256 = "1rknyylsi14m7i77x7c3138wdw27i4f6sd78m3srw851p47bwr20";
   };
   baked_file_system = {
-    owner = "schovi";
-    repo = "baked_file_system";
-    rev = "v0.9.7";
-    sha256 = "1fi6zag1a6h4xwrfizy01dls3hhraqw0cmpwj7rjv1qcddjgig5z";
-  };
-  diff = {
-    owner = "MakeNowJust";
-    repo = "crystal-diff";
-    rev = "51962dc36f9bbb1b926d557f7cb8993a6c73cc63";
-    sha256 = "1nwnsxm8srfw8jg0yfi2v19x6j3dadx62hq0xpxra40qcqz9dbnp";
+    url = "https://github.com/schovi/baked_file_system.git";
+    rev = "v0.10.0";
+    sha256 = "10f25sby8ipps5c2jj4j2q30kscgv4g1s5nhdddmldhg9isj0jli";
   };
   dotenv = {
-    owner = "gdotdesign";
-    repo = "cr-dotenv";
-    rev = "v0.2.0";
-    sha256 = "0zi2y1j2546xjhdzn7icmry0cjv82cx2cqmpgx5ml37c2pnb7kp7";
+    url = "https://github.com/gdotdesign/cr-dotenv.git";
+    rev = "v1.0.0";
+    sha256 = "00pdawysns1w1iqwh6j3shilpwh41ljz1chsqkacn6dj2yn21n0r";
   };
   exception_page = {
-    owner = "crystal-loot";
-    repo = "exception_page";
-    rev = "v0.1.2";
-    sha256 = "0j5ishhyriq9p339yaawrmawl9wgmp1paniq30a8d6a0568h3avq";
+    url = "https://github.com/crystal-loot/exception_page.git";
+    rev = "v0.3.1";
+    sha256 = "00fpkhwaf94mz9d9qiinsa7hdbs3x2yqjwwzvbjwv86dv8s5008n";
   };
   kemal = {
-    owner = "kemalcr";
-    repo = "kemal";
-    rev = "v0.25.1";
-    sha256 = "1334i905xj6vlmp8acyybwwlaxsgmf90b59da7brzpnf28wci782";
+    url = "https://github.com/kemalcr/kemal.git";
+    rev = "v1.4.0";
+    sha256 = "0pmcnbfzb0bqrnwbqikci4j0hbxsabmkz8a879vprf5gswnr7b63";
   };
-  kilt = {
-    owner = "jeromegn";
-    repo = "kilt";
-    rev = "v0.4.0";
-    sha256 = "1w9ib6j4xhwxdxx58nzc06gw7ci7vga03vgj1z1bnklamb0b0l0k";
+  markd = {
+    url = "https://github.com/icyleaf/markd.git";
+    rev = "v0.5.0";
+    sha256 = "1a677z57kwjq6lp4ws7br1ga8jgpgi8990glhd1r8756bdyd8mg0";
   };
   radix = {
-    owner = "luislavena";
-    repo = "radix";
-    rev = "v0.3.9";
-    sha256 = "19pksfr7ddc31hvikb433jg0zav1ar93k6zmsgaf3vsrjnvia3ix";
-  };
-  string_inflection = {
-    owner = "mosop";
-    repo = "string_inflection";
-    rev = "v0.2.1";
-    sha256 = "10vkr28h7n53ijjv57ldxhh473086qg313lzs55a7wsh0zgc104m";
-  };
-  time_format = {
-    owner = "vladfaust";
-    repo = "time_format.cr";
-    rev = "v0.1.1";
-    sha256 = "0mmssnabf476i07sajm7s3rlvfcav4lkh0n8g12rybxr6c9f683v";
-  };
-  tree_template = {
-    owner = "anykeyh";
-    repo = "tree_template";
-    rev = "3fcb71ee6852040077dd1a2c8c55c67f4a95ba4e";
-    sha256 = "04w89wpnkna4ipyy3pxshqqwgk965hz1d31vqp0mrb0ilmpsywdk";
+    url = "https://github.com/luislavena/radix.git";
+    rev = "v0.4.1";
+    sha256 = "1l08cydkdidq9yyil1wl240hvk41iycv04jrg6nx5mkvzw4z1bzg";
   };
 }

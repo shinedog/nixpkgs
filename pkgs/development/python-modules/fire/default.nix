@@ -1,27 +1,55 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, six, hypothesis, mock
-, python-Levenshtein, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  six,
+  hypothesis,
+  mock,
+  levenshtein,
+  pytestCheckHook,
+  termcolor,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "fire";
-  version = "0.1.3";
+  version = "0.5.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "python-fire";
-    rev = "v${version}";
-    sha256 = "0kdcmzr3sgzjsw5fmvdylgrn8akqjbs433jbgqzp498njl9cc6qx";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-cwY1RRNtpAn6LnBASQLTNf4XXSPnfhOa1WgglGEM2/s=";
   };
 
-  propagatedBuildInputs = [ six ];
+  patches = [
+    # https://github.com/google/python-fire/pull/440
+    (fetchpatch {
+      name = "remove-asyncio-coroutine.patch";
+      url = "https://github.com/google/python-fire/pull/440/commits/30b775a7b36ce7fbc04656c7eec4809f99d3e178.patch";
+      hash = "sha256-GDAAlvZKbJl3OhajsEO0SZvWIXcPDi3eNKKVgbwSNKk=";
+    })
+  ];
 
-  checkInputs = [ hypothesis mock python-Levenshtein pytest ];
+  propagatedBuildInputs = [
+    six
+    termcolor
+  ];
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [
+    hypothesis
+    mock
+    levenshtein
+    pytestCheckHook
+  ];
 
+  pythonImportsCheck = [ "fire" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library for automatically generating command line interfaces";
     longDescription = ''
       Python Fire is a library for automatically generating command line
@@ -41,6 +69,8 @@ buildPythonPackage rec {
         REPL with the modules and variables you'll need already imported
         and created.
     '';
+    homepage = "https://github.com/google/python-fire";
+    changelog = "https://github.com/google/python-fire/releases/tag/v${version}";
     license = licenses.asl20;
     maintainers = with maintainers; [ leenaars ];
   };

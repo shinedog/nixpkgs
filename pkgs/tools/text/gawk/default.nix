@@ -1,7 +1,8 @@
-{ stdenv, fetchurl
+{ lib, stdenv, fetchurl
 # TODO: links -lsigsegv but loses the reference for some reason
 , withSigsegv ? (false && stdenv.hostPlatform.system != "x86_64-cygwin"), libsigsegv
 , interactive ? false, readline
+, autoreconfHook # no-pma fix
 
 /* Test suite broke on:
        stdenv.isCygwin # XXX: `test-dup2' segfaults on Cygwin 6.1
@@ -15,33 +16,41 @@
 
 assert (doCheck && stdenv.isLinux) -> glibcLocales != null;
 
-let
-  inherit (stdenv.lib) optional;
-in
 stdenv.mkDerivation rec {
-  name = "gawk-4.2.1";
+  pname = "gawk" + lib.optionalString interactive "-interactive";
+  version = "5.2.2";
 
   src = fetchurl {
-    url = "mirror://gnu/gawk/${name}.tar.xz";
-    sha256 = "0lam2zf3n7ak4pig8w46lhx9hzx50kj2v2yj1616mm26wy2rf4fi";
+    url = "mirror://gnu/gawk/gawk-${version}.tar.xz";
+    hash = "sha256-PB/OFEa0y+4c0nO9fsZLyH2J9hU3RxzT4F4zqWWiUOk=";
   };
 
+  # PIE is incompatible with the "persistent malloc" ("pma") feature.
+  # While build system attempts to pass -no-pie to gcc. nixpkgs' `ld`
+  # wrapped still passes `-pie` flag to linker and breaks linkage.
+  # Let's disable "pie" until `ld` is fixed to do the right thing.
+  hardeningDisable = [ "pie" ];
+
   # When we do build separate interactive version, it makes sense to always include man.
-  outputs = [ "out" "info" ] ++ optional (!interactive) "man";
+  outputs = [ "out" "info" ]
+    ++ lib.optional (!interactive) "man";
 
-  nativeBuildInputs = optional (doCheck && stdenv.isLinux) glibcLocales;
+  # no-pma fix
+  nativeBuildInputs = [ autoreconfHook ]
+    ++ lib.optional (doCheck && stdenv.isLinux) glibcLocales;
 
-  buildInputs =
-       optional withSigsegv libsigsegv
-    ++ optional interactive readline
-    ++ optional stdenv.isDarwin locale;
+  buildInputs = lib.optional withSigsegv libsigsegv
+    ++ lib.optional interactive readline
+    ++ lib.optional stdenv.isDarwin locale;
 
   configureFlags = [
     (if withSigsegv then "--with-libsigsegv-prefix=${libsigsegv}" else "--without-libsigsegv")
     (if interactive then "--with-readline=${readline.dev}" else "--without-readline")
   ];
 
-  makeFlags = "AR=${stdenv.cc.targetPrefix}ar";
+  makeFlags = [
+    "AR=${stdenv.cc.targetPrefix}ar"
+  ];
 
   inherit doCheck;
 
@@ -54,10 +63,9 @@ stdenv.mkDerivation rec {
     libsigsegv = if withSigsegv then libsigsegv else null; # for stdenv bootstrap
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://www.gnu.org/software/gawk/;
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/gawk/";
     description = "GNU implementation of the Awk programming language";
-
     longDescription = ''
       Many computer users need to manipulate text files: extract and then
       operate on data from parts of certain lines while discarding the rest,
@@ -71,12 +79,9 @@ stdenv.mkDerivation rec {
       makes it possible to handle many data-reformatting jobs with just a few
       lines of code.
     '';
-
     license = licenses.gpl3Plus;
-
     platforms = platforms.unix ++ platforms.windows;
-
     maintainers = [ ];
+    mainProgram = "gawk";
   };
 }
-

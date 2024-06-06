@@ -1,29 +1,48 @@
-{ lib, fetchFromGitHub, python3Packages, lilypond }:
+{ lib, stdenv, buildPythonApplication, fetchFromGitHub, python3Packages, pyqtwebengine, lilypond }:
 
-python3Packages.buildPythonApplication rec {
-  name = "frescobaldi-${version}";
-  version = "3.0.0";
+buildPythonApplication rec {
+  pname = "frescobaldi";
+  version = "3.3.0";
 
   src = fetchFromGitHub {
     owner = "wbsoft";
     repo = "frescobaldi";
-    rev = "v${version}";
-    sha256 = "1yn18pwsjxpxz5j3yfysmaif8k0vqahj5c7ays9cxsylpg9hl7jd";
+    rev = "refs/tags/v${version}";
+    sha256 = "sha256-Q6ruthNcpjLlYydUetkuTECiCIzu055bw40O8BPGq/A=";
   };
 
   propagatedBuildInputs = with python3Packages; [
-    lilypond pygame python-ly sip
-    pyqt5_with_qtwebkit (poppler-qt5.override { pyqt5 = pyqt5_with_qtwebkit; })
+    qpageview
+    lilypond
+    pygame
+    python-ly
+    sip4
+    pyqt5
+    poppler-qt5
+    pyqtwebengine
   ];
+
+  nativeBuildInputs = [ pyqtwebengine.wrapQtAppsHook ];
+
+  # Needed because source is fetched from git
+  preBuild = ''
+    make -C i18n
+    make -C linux
+  '';
 
   # no tests in shipped with upstream
   doCheck = false;
 
+  dontWrapQtApps = true;
+  makeWrapperArgs = [
+    "\${qtWrapperArgs[@]}"
+  ];
+
   meta = with lib; {
-    homepage = http://frescobaldi.org/;
-    description = ''Frescobaldi is a LilyPond sheet music text editor'';
+    homepage = "https://frescobaldi.org/";
+    description = "A LilyPond sheet music text editor";
     longDescription = ''
-      Powerful text editor with syntax highlighting and automatic completion, 
+      Powerful text editor with syntax highlighting and automatic completion,
       Music view with advanced Point & Click, Midi player to proof-listen
       LilyPond-generated MIDI files, Midi capturing to enter music,
       Powerful Score Wizard to quickly setup a music score, Snippet Manager
@@ -35,7 +54,9 @@ python3Packages.buildPythonApplication rec {
       fonts and keyboard shortcuts
     '';
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ sepi ma27 ];
+    maintainers = with maintainers; [ sepi ];
     platforms = platforms.all;
+    broken = stdenv.isDarwin; # never built on Hydra https://hydra.nixos.org/job/nixpkgs/trunk/frescobaldi.x86_64-darwin
+    mainProgram = "frescobaldi";
   };
 }

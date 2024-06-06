@@ -1,27 +1,27 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "nms-${version}";
-  version = "0.3.3";
+  pname = "nms";
+  version = "1.0.1";
 
   src = fetchFromGitHub {
     owner = "bartobri";
     repo = "no-more-secrets";
     rev = "v${version}";
-    sha256 = "1zfv4qabikf8w9winsr4brxrdvs3f0d7xvydksyx8bydadsm2v2h";
+    sha256 = "sha256-QVCEpplsZCSQ+Fq1LBtCuPBvnzgLsmLcSrxR+e4nA5I=";
   };
 
   buildFlags = [ "nms" "sneakers" ];
   installFlags = [ "prefix=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/bartobri/no-more-secrets";
     description = ''
       A command line tool that recreates the famous data decryption
       effect seen in the 1992 movie Sneakers.
     '';
     license = licenses.gpl3;
-    maintainers = [ maintainers.infinisil ];
+    maintainers = [ ];
     platforms = platforms.unix;
   };
 }

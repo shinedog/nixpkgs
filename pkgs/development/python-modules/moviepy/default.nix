@@ -1,53 +1,97 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pythonAtLeast
-, numpy
-, decorator
-, imageio
-, imageio-ffmpeg
-, isPy3k
-, proglog
-, requests
-, tqdm
-# Advanced image processing (triples size of output)
-, advancedProcessing ? false
-, opencv ? null
-, scikitimage ? null
-, scikitlearn ? null
-, scipy ? null
-, matplotlib ? null
-, youtube-dl ? null
+{
+  lib,
+  buildPythonPackage,
+  decorator,
+  fetchFromGitHub,
+  imageio,
+  imageio-ffmpeg,
+  matplotlib,
+  numpy,
+  proglog,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  scikit-image,
+  scikit-learn,
+  scipy,
+  setuptools,
+  tqdm,
+  youtube-dl,
 }:
-
-assert advancedProcessing -> (
-  opencv != null && scikitimage != null && scikitlearn != null
-  && scipy != null && matplotlib != null && youtube-dl != null);
 
 buildPythonPackage rec {
   pname = "moviepy";
-  version = "1.0.0";
+  version = "1.0.3";
+  pyproject = true;
 
-  disabled = !(pythonAtLeast "3.4");
+  disabled = pythonOlder "3.7";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "16c7ffca23d90c76dd7b163f648c8166dfd589b7c180b8ff75aa327ae0a2fc6d";
+  src = fetchFromGitHub {
+    owner = "Zulko";
+    repo = "moviepy";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-l7AwzAKSaEV+pPbltKgwllK6X54oruU2w0AvoCsrESE=";
   };
 
-  # No tests, require network connection
-  doCheck = false;
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace-fail "decorator>=4.0.2,<5.0" "decorator>=4.0.2,<6.0"
+  '';
 
-  propagatedBuildInputs = [
-    numpy decorator imageio imageio-ffmpeg tqdm requests proglog
-  ] ++ (stdenv.lib.optionals advancedProcessing [
-    opencv scikitimage scikitlearn scipy matplotlib youtube-dl
-  ]);
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  dependencies = [
+    decorator
+    imageio
+    imageio-ffmpeg
+    numpy
+    proglog
+    requests
+    tqdm
+  ];
+
+  passthru.optional-dependencies = {
+    optionals = [
+      matplotlib
+      scikit-image
+      scikit-learn
+      scipy
+      youtube-dl
+    ];
+  };
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  pythonImportsCheck = [ "moviepy" ];
+
+  disabledTests = [
+    "test_cuts1"
+    "test_issue"
+    "test_PR"
+    "test_setup"
+    "test_subtitles"
+    "test_sys_write_flush"
+  ];
+
+  disabledTestPaths = [
+    "tests/test_compositing.py"
+    "tests/test_fx.py"
+    "tests/test_ImageSequenceClip.py"
+    "tests/test_resourcerelease.py"
+    "tests/test_resourcereleasedemo.py"
+    "tests/test_TextClip.py"
+    "tests/test_VideoClip.py"
+    "tests/test_Videos.py"
+    "tests/test_videotools.py"
+  ];
+
+  meta = with lib; {
     description = "Video editing with Python";
-    homepage = http://zulko.github.io/moviepy/;
+    homepage = "https://zulko.github.io/moviepy/";
+    changelog = "https://github.com/Zulko/moviepy/blob/v${version}/CHANGELOG.md";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
-
 }

@@ -1,36 +1,69 @@
-{ stdenv, autoconf, automake, libtool, wrapGAppsHook, fetchFromGitHub, pkgconfig
-, intltool, gtk3, json-glib, curl, glib, autoconf-archive, appstream-glib
-, hicolor-icon-theme }:
-
+{ lib
+, stdenv
+, appstream-glib
+, curl
+, desktop-file-utils
+, fetchFromGitHub
+, geoip
+, gettext
+, glib
+, glib-networking
+, gtk3
+, json-glib
+, libappindicator
+, libmrss
+, libproxy
+, libsoup_3
+, meson
+, ninja
+, pkg-config
+, wrapGAppsHook3
+}:
 
 stdenv.mkDerivation rec {
-  name = "transmission-remote-gtk-${version}";
-  version = "1.4.1";
+  pname = "transmission-remote-gtk";
+  version = "1.6.0";
 
   src = fetchFromGitHub {
     owner = "transmission-remote-gtk";
     repo = "transmission-remote-gtk";
-    rev = "${version}";
-    sha256 = "1pipc1f94jdppv597mqmcj2kw2rdvaqcbl512v7z8vir76p1a7gk";
+    rev = "refs/tags/${version}";
+    hash = "sha256-/syZI/5LhuYLvXrNknnpbGHEH0z5iHeye2YRNJFWZJ0=";
   };
 
-  preConfigure = "./autogen.sh";
-
-  nativeBuildInputs= [
-    autoconf automake libtool wrapGAppsHook
-    pkgconfig intltool autoconf-archive
+  nativeBuildInputs = [
     appstream-glib
+    desktop-file-utils
+    meson
+    ninja
+    pkg-config
+    wrapGAppsHook3
   ];
 
-  buildInputs = [ gtk3 json-glib curl glib hicolor-icon-theme ];
+  buildInputs = [
+    curl
+    geoip
+    gettext
+    glib
+    gtk3
+    json-glib
+    libappindicator
+    libmrss
+    libproxy
+    libsoup_3
+    # For TLS support.
+    glib-networking
+  ];
 
-  doCheck = false; # fails with style validation error
+  doCheck = false; # Requires network access
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "GTK remote control for the Transmission BitTorrent client";
-    homepage = https://github.com/ajf8/transmission-remote-gtk;
+    mainProgram = "transmission-remote-gtk";
+    homepage = "https://github.com/transmission-remote-gtk/transmission-remote-gtk";
+    changelog = "https://github.com/transmission-remote-gtk/transmission-remote-gtk/releases/tag/${version}";
     license = licenses.gpl2;
-    maintainers = [ maintainers.ehmry ];
+    maintainers = with maintainers; [ ehmry ];
     platforms = platforms.linux;
   };
 }

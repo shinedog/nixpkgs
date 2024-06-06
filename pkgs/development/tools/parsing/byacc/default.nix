@@ -1,18 +1,22 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+}:
 
-stdenv.mkDerivation rec {
-  name = "byacc-${version}";
-  version = "20180609";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "byacc";
+  version = "20240109";
 
   src = fetchurl {
     urls = [
-      "ftp://ftp.invisible-island.net/byacc/${name}.tgz"
-      "https://invisible-mirror.net/archives/byacc/${name}.tgz"
+      "https://invisible-mirror.net/archives/byacc/byacc-${finalAttrs.version}.tgz"
+      "ftp://ftp.invisible-island.net/byacc/byacc-${finalAttrs.version}.tgz"
     ];
-    sha256 = "173l9yai5yndbyn8nzdl6q11wv4x959bd0w392i82nfsqcz0pfsv";
+    hash = "sha256-8ol3eQFxifGpR1dwXvb24V3JII7wee6n8oq+xXfghEY=";
   };
 
   configureFlags = [
+    # change yacc to byacc
     "--program-transform-name='s,^,b,'"
   ];
 
@@ -22,10 +26,23 @@ stdenv.mkDerivation rec {
     ln -s $out/bin/byacc $out/bin/yacc
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
+    homepage = "https://invisible-island.net/byacc/byacc.html";
     description = "Berkeley YACC";
-    homepage = https://invisible-island.net/byacc/byacc.html;
-    license = licenses.publicDomain;
-    platforms = platforms.unix;
+    longDescription = ''
+      Berkeley Yacc (byacc) is generally conceded to be the best yacc variant
+      available. In contrast to bison, it is written to avoid dependencies upon
+      a particular compiler.
+
+      Byacc was written around 1990 by Robert Corbett who is the original author
+      of bison. Byacc is noted in Lex & Yacc by John Levine et al (O'Reilly,
+      1992) for its compatibility with the original yacc program.
+
+      Nowadays byacc is maintained by Thomas E. Dickey.
+    '';
+    changelog = "https://invisible-island.net/byacc/CHANGES.html";
+    license = lib.licenses.publicDomain;
+    maintainers = with lib.maintainers; [ AndersonTorres ];
+    platforms = lib.platforms.unix;
   };
-}
+})

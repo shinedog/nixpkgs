@@ -1,28 +1,28 @@
-{ stdenv, fetchurl, qt4, qmake4Hook }:
+{ lib, mkDerivation, fetchurl, qtbase, qmake }:
 
-let version = "0.6.4"; in
-stdenv.mkDerivation {
-  name = "confclerk-${version}";
+mkDerivation rec {
+  pname = "confclerk";
+  version = "0.7.2";
 
   src = fetchurl {
     url = "https://www.toastfreeware.priv.at/tarballs/confclerk/confclerk-${version}.tar.gz";
-    sha256 = "10rhg44px4nvbkd3p341cmp2ds43jn8r4rvgladda9v8zmsgr2b3";
+    sha256 = "sha256-GgWvPHcQnQrK9SOC8U9F2P8kuPCn8I2EhoWEEMtKBww=";
   };
 
-  buildInputs = [ qt4 ];
+  buildInputs = [ qtbase ];
+  nativeBuildInputs = [ qmake ];
 
-  nativeBuildInputs = [ qmake4Hook ];
-
-  installPhase = ''
+  postInstall = ''
     mkdir -p $out/bin
-    cp src/bin/confclerk $out/bin
+    mv $out/confclerk $out/bin/
   '';
 
   meta = {
     description = "Offline conference schedule viewer";
-    homepage = http://www.toastfreeware.priv.at/confclerk;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [ ehmry ];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "confclerk";
+    homepage = "http://www.toastfreeware.priv.at/confclerk";
+    license = lib.licenses.gpl2;
+    maintainers = with lib.maintainers; [ ehmry ];
+    platforms = lib.platforms.linux;
   };
 }

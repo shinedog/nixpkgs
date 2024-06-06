@@ -1,33 +1,38 @@
-{ stdenv, buildGoModule, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, installShellFiles, nixosTests }:
 
 buildGoModule rec {
   pname = "miniflux";
-  version = "2.0.15";
+  version = "2.1.3";
 
   src = fetchFromGitHub {
-    owner = pname;
-    repo = pname;
-    rev = version;
-    sha256 = "1k53dkmd41x5h81arb2fs5s9yb6sy6113nbbzls6dc179slfg9zj";
+    owner = "miniflux";
+    repo = "v2";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Q43ru/n7cY1DIT/JJP1sTbnXcgtbIh16fTDL9eV0YDE=";
   };
 
-  modSha256 = "0n5j4rns2w1klgrf5jz0bng9cih9aifjx55hhkf4dfj1x4wsxjdj";
+  vendorHash = "sha256-WCb0DxicVuJDm52GidivQPZb09LvZqJmgR5BoK8iZ7s=";
 
-  doCheck = true;
+  nativeBuildInputs = [ installShellFiles ];
 
-  buildFlagsArray = ''
-    -ldflags=-X miniflux.app/version.Version=${version}
-  '';
+  checkFlags = [ "-skip=TestClient" ]; # skip client tests as they require network access
+
+  ldflags = [
+    "-s" "-w" "-X miniflux.app/v2/internal/version.Version=${version}"
+  ];
 
   postInstall = ''
     mv $out/bin/miniflux.app $out/bin/miniflux
+    installManPage miniflux.1
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests = nixosTests.miniflux;
+
+  meta = with lib; {
     description = "Minimalist and opinionated feed reader";
-    homepage = https://miniflux.app/;
+    homepage = "https://miniflux.app/";
     license = licenses.asl20;
-    maintainers = with maintainers; [ rvolosatovs benpye ];
+    maintainers = with maintainers; [ rvolosatovs benpye emilylange ];
+    mainProgram = "miniflux";
   };
 }
-

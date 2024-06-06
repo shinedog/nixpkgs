@@ -18,21 +18,16 @@ in {
 
         The service must be manually started for each user with
         "systemctl --user start offlineimap" or globally through
-        <varname>services.offlineimap.enable</varname>.
+        {var}`services.offlineimap.enable`.
       '';
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.offlineimap;
-      defaultText = "pkgs.offlineimap";
-      description = "Offlineimap derivation to use.";
-    };
+    package = mkPackageOption pkgs "offlineimap" { };
 
     path = mkOption {
       type = types.listOf types.path;
       default = [];
-      example = literalExample "[ pkgs.pass pkgs.bash pkgs.notmuch ]";
+      example = literalExpression "[ pkgs.pass pkgs.bash pkgs.notmuch ]";
       description = "List of derivations to put in Offlineimap's path.";
     };
 

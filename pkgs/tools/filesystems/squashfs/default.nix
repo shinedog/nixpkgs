@@ -1,50 +1,66 @@
-{ stdenv, fetchFromGitHub, zlib, xz
-, lz4 ? null
-, lz4Support ? false
+{ lib
+, stdenv
+, fetchFromGitHub
+, help2man
+, lz4
+, lzo
+, nixosTests
+, which
+, xz
+, zlib
 , zstd
 }:
 
-assert lz4Support -> (lz4 != null);
-
 stdenv.mkDerivation rec {
-  name = "squashfs-${version}";
-  version = "4.4dev_20180612";
+  pname = "squashfs";
+  version = "4.6.1";
 
   src = fetchFromGitHub {
     owner = "plougher";
     repo = "squashfs-tools";
-    sha256 = "1y53z8dkph3khdyhkmkmy0sg9p1n8czv3vj4l324nj8kxyih3l2c";
-    rev = "6e242dc95485ada8d1d0b3dd9346c5243d4a517f";
+    rev = version;
+    hash = "sha256-C/awQpp1Q/0adx3YVNTq6ruEAzcjL5G7SkOCgpvAA50=";
   };
 
   patches = [
-    # These patches ensures that mksquashfs output is reproducible.
-    # See also https://reproducible-builds.org/docs/system-images/
-    # and https://github.com/NixOS/nixpkgs/issues/40144.
-    ./0001-If-SOURCE_DATE_EPOCH-is-set-override-timestamps-with.patch
-    ./0002-If-SOURCE_DATE_EPOCH-is-set-also-clamp-content-times.patch
-    ./0003-remove-frag-deflator-thread.patch
-
     # This patch adds an option to pad filesystems (increasing size) in
     # exchange for better chunking / binary diff calculation.
-    ./squashfs-tools-4.3-4k-align.patch
-  ] ++ stdenv.lib.optional stdenv.isDarwin ./darwin.patch;
+    ./4k-align.patch
+  ];
 
-  buildInputs = [ zlib xz zstd ]
-    ++ stdenv.lib.optional lz4Support lz4;
+  strictDeps = true;
+  nativeBuildInputs = [ which ]
+    # when cross-compiling help2man cannot run the cross-compiled binary
+    ++ lib.optionals (stdenv.hostPlatform == stdenv.buildPlatform) [ help2man ];
+  buildInputs = [ zlib xz zstd lz4 lzo ];
 
-  preBuild = "cd squashfs-tools";
+  preBuild = ''
+    cd squashfs-tools
+  '' ;
 
-  installFlags = "INSTALL_DIR=\${out}/bin";
+  installFlags = [
+    "INSTALL_DIR=${placeholder "out"}/bin"
+    "INSTALL_MANPAGES_DIR=${placeholder "out"}/share/man/man1"
+  ];
 
-  makeFlags = [ "XZ_SUPPORT=1" "ZSTD_SUPPORT=1" ]
-    ++ stdenv.lib.optional lz4Support "LZ4_SUPPORT=1";
+  makeFlags = [
+    "XZ_SUPPORT=1"
+    "ZSTD_SUPPORT=1"
+    "LZ4_SUPPORT=1"
+    "LZMA_XZ_SUPPORT=1"
+    "LZO_SUPPORT=1"
+  ];
 
-  meta = {
-    homepage = http://squashfs.sourceforge.net/;
+  passthru.tests = {
+    nixos-iso-boots-and-verifies = nixosTests.boot.biosCdrom;
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/plougher/squashfs-tools";
     description = "Tool for creating and unpacking squashfs filesystems";
-    platforms = stdenv.lib.platforms.unix;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [ ruuda ];
+    platforms = platforms.unix;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ruuda ];
+    mainProgram = "mksquashfs";
   };
 }

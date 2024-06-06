@@ -1,23 +1,24 @@
-{ stdenv, fetchurl, pkgconfig, ncurses, ocamlPackages }:
+{ lib, stdenv, fetchurl, pkg-config, ncurses, ocamlPackages }:
 
 stdenv.mkDerivation rec {
-  name = "prooftree-${version}";
-  version = "0.13";
+  pname = "prooftree";
+  version = "0.14";
 
   src = fetchurl {
     url = "https://askra.de/software/prooftree/releases/prooftree-${version}.tar.gz";
-    sha256 = "0z1z4wqbqwgppkh2bm89fgy07a0y2m6g4lvcyzs09sm1ysklk2dh";
+    sha256 = "sha256-nekV2UnjibOk4h0jZ1jV7W5pE/hXWb3fUoLTJb3Jzc0=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ ncurses ] ++ (with ocamlPackages; [
-    ocaml findlib camlp5 lablgtk ]);
+  strictDeps = true;
 
-  dontAddPrefix = true;
-  configureFlags = [ "--prefix" "$(out)" ];
+  nativeBuildInputs = [ pkg-config ] ++ (with ocamlPackages; [ ocaml findlib camlp5 ]);
+  buildInputs = [ ncurses ] ++ (with ocamlPackages; [ lablgtk ]);
 
-  meta = with stdenv.lib; {
+  prefixKey = "--prefix ";
+
+  meta = with lib; {
     description = "A program for proof-tree visualization";
+    mainProgram = "prooftree";
     longDescription = ''
       Prooftree is a program for proof-tree visualization during interactive
       proof development in a theorem prover. It is currently being developed
@@ -35,7 +36,7 @@ stdenv.mkDerivation rec {
       below the tree (on single click) or in a separate window (on double or
       shift-click).
     '';
-    homepage = http://askra.de/software/prooftree;
+    homepage = "http://askra.de/software/prooftree";
     platforms = platforms.unix;
     maintainers = [ maintainers.jwiegley ];
     license = licenses.gpl3;

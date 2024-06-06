@@ -1,29 +1,25 @@
-{ buildGoPackage
-, lib
-, fetchFromGitHub
-}:
+{ lib, fetchFromGitHub, buildGoModule }:
 
-buildGoPackage rec {
-  name = "errcheck-${version}";
-  version = "1.1.0";
-
-  goPackagePath = "github.com/kisielk/errcheck";
-  excludedPackages = "\\(testdata\\)";
+buildGoModule rec {
+  pname = "errcheck";
+  version = "1.7.0";
 
   src = fetchFromGitHub {
     owner = "kisielk";
     repo = "errcheck";
     rev = "v${version}";
-    sha256 = "19vd4rxmqbk5lpiav3pf7df3yjlz0l0dwx9mn0gjq5f998iyhy6y";
+    hash = "sha256-hl1EbAO4okfTahl+1WDsFuVgm6Ba98Ji0hxqVe7jGbk=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-rO2FoFksN3OdKXwlJBuISs6FmCtepc4FDLdOa5AHvC4=";
+
+  subPackages = [ "." ];
 
   meta = with lib; {
-    description = "errcheck is a program for checking for unchecked errors in go programs.";
-    homepage = https://github.com/kisielk/errcheck;
+    description = "Checks for unchecked errors in go programs";
+    mainProgram = "errcheck";
+    homepage = "https://github.com/kisielk/errcheck";
     license = licenses.mit;
     maintainers = with maintainers; [ kalbasit ];
-    platforms = platforms.linux ++ platforms.darwin;
   };
 }

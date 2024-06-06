@@ -1,46 +1,76 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, fetchpatch
-, ipython
-, jupyter_client
-, traitlets
-, tornado
-, pythonOlder
-, pytest
-, nose
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  callPackage,
+  fetchPypi,
+  hatchling,
+  pythonOlder,
+  appnope,
+  comm,
+  debugpy,
+  ipython,
+  jupyter-client,
+  jupyter-core,
+  matplotlib-inline,
+  nest-asyncio,
+  packaging,
+  psutil,
+  pyzmq,
+  tornado,
+  traitlets,
+
+  # Reverse dependency
+  sage,
 }:
 
 buildPythonPackage rec {
   pname = "ipykernel";
-  version = "5.1.0";
-  disabled = pythonOlder "3.4";
+  version = "6.29.4";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0fc0bf97920d454102168ec2008620066878848fcfca06c22b669696212e292f";
+    hash = "sha256-PUQHAGD5R1rCCSt2ASP63xBdLiSTwkhItmkafE9Cr1w=";
   };
 
-  checkInputs = [ pytest nose ];
-  propagatedBuildInputs = [ ipython jupyter_client traitlets tornado ];
-
-  # https://github.com/ipython/ipykernel/pull/377
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/ipython/ipykernel/commit/a3bf849dbd368a1826deb9dfc94c2bd3e5ed04fe.patch";
-      sha256 = "1yhpwqixlf98a3n620z92mfips3riw6psijqnc5jgs2p58fgs2yc";
-    })
-  ];
-
-  # For failing tests, see https://github.com/ipython/ipykernel/issues/387
-  checkPhase = ''
-    HOME=$(mktemp -d) pytest ipykernel -k "not (test_sys_path or test_sys_path_profile_dir or test_complete)"
+  # debugpy is optional, see https://github.com/ipython/ipykernel/pull/767
+  postPatch = ''
+    sed -i "/debugpy/d" pyproject.toml
   '';
+
+  nativeBuildInputs = [ hatchling ];
+
+  propagatedBuildInputs = [
+    comm
+    debugpy
+    ipython
+    jupyter-client
+    jupyter-core
+    matplotlib-inline
+    nest-asyncio
+    packaging
+    psutil
+    pyzmq
+    tornado
+    traitlets
+  ] ++ lib.optionals stdenv.isDarwin [ appnope ];
+
+  # check in passthru.tests.pytest to escape infinite recursion with ipyparallel
+  doCheck = false;
+
+  passthru.tests = {
+    pytest = callPackage ./tests.nix { };
+    inherit sage;
+  };
 
   meta = {
     description = "IPython Kernel for Jupyter";
-    homepage = http://ipython.org/;
+    homepage = "https://ipython.org/";
+    changelog = "https://github.com/ipython/ipykernel/releases/tag/v${version}";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh ];
+    maintainers = lib.teams.jupyter.members;
   };
 }

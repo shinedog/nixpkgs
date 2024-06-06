@@ -1,56 +1,70 @@
-{ stdenv, rustPlatform, fetchurl, fetchpatch, stfl, sqlite, curl, gettext, pkgconfig, libxml2, json_c, ncurses
-, asciidoc, docbook_xml_dtd_45, libxslt, docbook_xsl, libiconv, Security, makeWrapper }:
+{ lib, stdenv, rustPlatform, fetchFromGitHub, stfl, sqlite, curl, gettext, pkg-config, libxml2, json_c, ncurses
+, asciidoctor, libiconv, Security, Foundation, makeWrapper, nix-update-script }:
 
 rustPlatform.buildRustPackage rec {
-  name = "newsboat-${version}";
-  version = "2.15";
+  pname = "newsboat";
+  version = "2.35";
 
-  src = fetchurl {
-    url = "https://newsboat.org/releases/${version}/${name}.tar.xz";
-    sha256 = "1dqdcp34jmphqf3d8ik0xdhg0s66nd5rky0y8y591nidq29wws6s";
+  src = fetchFromGitHub {
+    owner = "newsboat";
+    repo = "newsboat";
+    rev = "r${version}";
+    hash = "sha256-WbicKP46N8MVjUeerYUdcHJO5Qf7rQFyYCpxexd2wDY=";
   };
 
-  cargoSha256 = "05pf020jp20ffmvin6d1g8zbwf1zk03bm1cb99b7iqkk4r54g6dn";
+  cargoHash = "sha256-B6U+DxIRm9Sn4x+dZCfNKENNDsTUVZFT6i0Yz47gjTs=";
 
-  postPatch = ''
-    substituteInPlace Makefile --replace "|| true" ""
+  # TODO: Check if that's still needed
+  postPatch = lib.optionalString stdenv.isDarwin ''
     # Allow other ncurses versions on Darwin
     substituteInPlace config.sh \
       --replace "ncurses5.4" "ncurses"
   '';
 
-  nativeBuildInputs = [ pkgconfig asciidoc docbook_xml_dtd_45 libxslt docbook_xsl ]
-    ++ stdenv.lib.optional stdenv.isDarwin [ makeWrapper libiconv ];
+  nativeBuildInputs = [
+    pkg-config
+    asciidoctor
+    gettext
+  ] ++ lib.optionals stdenv.isDarwin [ makeWrapper ncurses ];
 
-  buildInputs = [ stfl sqlite curl gettext libxml2 json_c ncurses ]
-    ++ stdenv.lib.optional stdenv.isDarwin Security;
+  buildInputs = [ stfl sqlite curl libxml2 json_c ncurses ]
+    ++ lib.optionals stdenv.isDarwin [ Security Foundation libiconv gettext ];
 
   postBuild = ''
-    make
+    make -j $NIX_BUILD_CORES prefix="$out"
   '';
 
-  NIX_CFLAGS_COMPILE = "-Wno-error=sign-compare";
+  # https://github.com/NixOS/nixpkgs/pull/98471#issuecomment-703100014 . We set
+  # these for all platforms, since upstream's gettext crate behavior might
+  # change in the future.
+  GETTEXT_LIB_DIR = "${lib.getLib gettext}/lib";
+  GETTEXT_INCLUDE_DIR = "${lib.getDev gettext}/include";
+  GETTEXT_BIN_DIR = "${lib.getBin gettext}/bin";
 
   doCheck = true;
 
-  checkPhase = ''
-    make test
+  preCheck = ''
+    make -j $NIX_BUILD_CORES test
   '';
 
   postInstall = ''
-    make prefix="$out" install
-    cp -r contrib $out
-  '' + stdenv.lib.optionalString stdenv.isDarwin ''
+    make -j $NIX_BUILD_CORES prefix="$out" install
+  '' + lib.optionalString stdenv.isDarwin ''
     for prog in $out/bin/*; do
       wrapProgram "$prog" --prefix DYLD_LIBRARY_PATH : "${stfl}/lib"
     done
   '';
 
-  meta = with stdenv.lib; {
-    homepage    = https://newsboat.org/;
-    description = "A fork of Newsbeuter, an RSS/Atom feed reader for the text console.";
-    maintainers = with maintainers; [ dotlambda nicknovitski ];
-    license     = licenses.mit;
-    platforms   = platforms.unix;
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = {
+    homepage    = "https://newsboat.org/";
+    changelog   = "https://github.com/newsboat/newsboat/blob/${src.rev}/CHANGELOG.md";
+    description = "A fork of Newsbeuter, an RSS/Atom feed reader for the text console";
+    maintainers = with lib.maintainers; [ dotlambda nicknovitski ];
+    license     = lib.licenses.mit;
+    platforms   = lib.platforms.unix;
   };
 }

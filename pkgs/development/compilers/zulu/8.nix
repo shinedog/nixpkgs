@@ -1,82 +1,42 @@
-{ stdenv, lib, fetchurl, unzip, makeWrapper, setJavaClassPath
-, zulu, glib, libxml2, libav_0_8, ffmpeg, libxslt, libGL, alsaLib
-, fontconfig, freetype, gnome2, cairo, gdk_pixbuf, atk, xorg
-, swingSupport ? true }:
+{ callPackage
+, enableJavaFX ? false
+, ...
+}@args:
 
-let
-  version = "8.28.0.1";
-  openjdk = "8.0.163";
+callPackage ./common.nix ({
+  # Details from https://www.azul.com/downloads/?version=java-8-lts&package=jdk
+  # Note that the latest build may differ by platform
+  dists = {
+    x86_64-linux = {
+      zuluVersion = "8.76.0.17";
+      jdkVersion = "8.0.402";
+      hash =
+        if enableJavaFX then "sha256-29aDAu8WVYQFSpMUFq4gG64BBz/ei/VDMg72xrpB9w4="
+        else "sha256-34DI6O7T8iqDHsX63S3xk+BKDu8IHRRWNvtxpsnUJEk=";
+    };
 
-  sha256_linux = "1z8s3a948nvv92wybnhkyr27ipibcy45k0zv5h5gp37ynd91df45";
-  sha256_darwin = "0i0prjijsgg0yyycplpp9rlfl428126rqz7bb31pchrhi6jhk699";
+    aarch64-linux = {
+      zuluVersion = "8.74.0.17";
+      jdkVersion = "8.0.392";
+      hash =
+        if enableJavaFX then throw "JavaFX is not available for aarch64-linux"
+        else "sha256-xESdKEmfkiE657X/xclwsJR5M+P72BpWErtAcYMcK0Y=";
+    };
 
-  platform = if stdenv.isDarwin then "macosx" else "linux";
-  hash = if stdenv.isDarwin then sha256_darwin else sha256_linux;
-  extension = if stdenv.isDarwin then "zip" else "tar.gz";
+    x86_64-darwin = {
+      zuluVersion = "8.76.0.17";
+      jdkVersion = "8.0.402";
+      hash =
+        if enableJavaFX then "sha256-oqFpKeWwfiXr3oX78LGvAyDGAAS2GON2gAm6fHGH7Ow="
+        else "sha256-edZqDEsydQCDEwC1ZCDF/MjWVTnuQNWcKR2k/RjaIEI=";
+    };
 
-  libraries = [
-    stdenv.cc.libc glib libxml2 libav_0_8 ffmpeg libxslt libGL
-    xorg.libXxf86vm alsaLib fontconfig freetype gnome2.pango
-    gnome2.gtk cairo gdk_pixbuf atk
-  ] ++ (lib.optionals swingSupport (with xorg; [
-    xorg.libX11 xorg.libXext xorg.libXtst xorg.libXi xorg.libXp
-    xorg.libXt xorg.libXrender stdenv.cc.cc
-  ]));
-
-in stdenv.mkDerivation rec {
-  inherit version openjdk platform hash extension;
-
-  name = "zulu-${version}";
-
-  src = fetchurl {
-    url = "https://cdn.azul.com/zulu/bin/zulu${version}-jdk${openjdk}-${platform}_x64.${extension}";
-    sha256 = hash;
+    aarch64-darwin = {
+      zuluVersion = "8.76.0.17";
+      jdkVersion = "8.0.402";
+      hash =
+        if enableJavaFX then "sha256-UCWRXCz4v381IWzWPDYzwJwbhsmZOYxKPLGJBQGjPmc="
+        else "sha256-0VPlOuNB39gDnU+pK0DGTSUjTHTtYoxaRg3YD2LyLXg=";
+    };
   };
-
-  buildInputs = [ makeWrapper ] ++ lib.optional stdenv.isDarwin unzip;
-
-  installPhase = ''
-    mkdir -p $out
-    cp -r ./* "$out/"
-
-    jrePath="$out/jre"
-
-    rpath=$rpath''${rpath:+:}$jrePath/lib/amd64/jli
-    rpath=$rpath''${rpath:+:}$jrePath/lib/amd64/server
-    rpath=$rpath''${rpath:+:}$jrePath/lib/amd64/xawt
-    rpath=$rpath''${rpath:+:}$jrePath/lib/amd64
-
-    # set all the dynamic linkers
-    find $out -type f -perm -0100 \
-        -exec patchelf --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-        --set-rpath "$rpath" {} \;
-
-    find $out -name "*.so" -exec patchelf --set-rpath "$rpath" {} \;
-
-    mkdir -p $out/nix-support
-    printWords ${setJavaClassPath} > $out/nix-support/propagated-build-inputs
-
-    # Set JAVA_HOME automatically.
-    cat <<EOF >> $out/nix-support/setup-hook
-    if [ -z "\$JAVA_HOME" ]; then export JAVA_HOME=$out; fi
-    EOF
-  '';
-
-  rpath = stdenv.lib.strings.makeLibraryPath libraries;
-
-  passthru = {
-    home = "${zulu}";
-  };
-
-  meta = with stdenv.lib; {
-    homepage = https://www.azul.com/products/zulu/;
-    license = licenses.gpl2;
-    description = "Certified builds of OpenJDK";
-    longDescription = ''
-      Certified builds of OpenJDK that can be deployed across multiple
-      operating systems, containers, hypervisors and Cloud platforms.
-    '';
-    maintainers = with maintainers; [ nequissimus fpletz ];
-    platforms = [ "x86_64-linux" "x86_64-darwin" ];
-  };
-}
+} // builtins.removeAttrs args [ "callPackage" ])

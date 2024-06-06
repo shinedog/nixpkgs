@@ -1,45 +1,101 @@
-{ stdenv, fetchFromGitHub, wrapGAppsHook
-, autoconf, autoconf-archive, automake, gettext, intltool, libtool, pkgconfig
-, libICE, libSM, libXScrnSaver, libXtst, cheetah
-, gobject-introspection, glib, glibmm, gtkmm3, atk, pango, pangomm, cairo
-, cairomm , dbus, dbus-glib, gdome2, gstreamer, gst-plugins-base
-, gst-plugins-good, libsigcxx }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, wrapGAppsHook3
+, autoconf
+, autoconf-archive
+, automake
+, gettext
+, intltool
+, libtool
+, pkg-config
+, libICE
+, libSM
+, libXScrnSaver
+, libXtst
+, gobject-introspection
+, glib
+, glibmm
+, gtkmm3
+, atk
+, pango
+, pangomm
+, cairo
+, cairomm
+, dbus
+, dbus-glib
+, gdome2
+, gstreamer
+, gst-plugins-base
+, gst-plugins-good
+, libsigcxx
+, boost
+, jinja2
+}:
 
 stdenv.mkDerivation rec {
-  name = "workrave-${version}";
-  version = "1.10.31";
+  pname = "workrave";
+  version = "1.10.52";
 
-  src = let
-  in fetchFromGitHub {
-    sha256 = "0v2mx2idaxlsyv5w66b7pknlill9j9i2gqcs3vq54gak7ix9fj1p";
-    rev = with stdenv.lib;
-      "v" + concatStringsSep "_" (splitString "." version);
+  src = fetchFromGitHub {
     repo = "workrave";
     owner = "rcaelers";
+    rev = with lib;
+      "v" + concatStringsSep "_" (splitVersion version);
+    sha256 = "sha256-U39zr8XGIDbyY480bla2yTaRQLP3wMrL8RLWjlTa5uY=";
   };
 
   nativeBuildInputs = [
-    autoconf autoconf-archive automake gettext intltool libtool pkgconfig wrapGAppsHook
+    autoconf
+    autoconf-archive
+    automake
+    gettext
+    intltool
+    libtool
+    pkg-config
+    wrapGAppsHook3
+    jinja2
+    gobject-introspection
   ];
+
   buildInputs = [
-    libICE libSM libXScrnSaver libXtst cheetah
-    gobject-introspection glib glibmm gtkmm3 atk pango pangomm cairo cairomm
-    dbus dbus-glib gdome2 gstreamer gst-plugins-base gst-plugins-good libsigcxx
+    libICE
+    libSM
+    libXScrnSaver
+    libXtst
+    glib
+    glibmm
+    gtkmm3
+    atk
+    pango
+    pangomm
+    cairo
+    cairomm
+    dbus
+    dbus-glib
+    gdome2
+    gstreamer
+    gst-plugins-base
+    gst-plugins-good
+    libsigcxx
+    boost
   ];
 
   preConfigure = "./autogen.sh";
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    broken = (stdenv.isLinux && stdenv.isAarch64);
     description = "A program to help prevent Repetitive Strain Injury";
+    mainProgram = "workrave";
     longDescription = ''
       Workrave is a program that assists in the recovery and prevention of
       Repetitive Strain Injury (RSI). The program frequently alerts you to
       take micro-pauses, rest breaks and restricts you to your daily limit.
     '';
-    homepage = http://www.workrave.org/;
-    downloadPage = https://github.com/rcaelers/workrave/releases;
+    homepage = "http://www.workrave.org/";
+    downloadPage = "https://github.com/rcaelers/workrave/releases";
     license = licenses.gpl3;
     maintainers = with maintainers; [ prikhi ];
     platforms = platforms.linux;

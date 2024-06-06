@@ -1,23 +1,71 @@
-{ stdenv, lib, buildPythonPackage, isPy3k, fetchPypi
-, urllib3, python-dateutil , pytz, faker, mock, nose }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  argon2-cffi,
+  certifi,
+  urllib3,
+  pycryptodome,
+  typing-extensions,
+
+  # test
+  faker,
+  mock,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "minio";
-  version = "4.0.14";
+  version = "7.2.7";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "72c8ab7b1c25f875273e66762982816af8ada2ced88b6cd991e979f479c34875";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "minio";
+    repo = "minio-py";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Qb3KPwSODtIqwS4FfR+DHphx4duPsNdMlHt2rpdV2+Y=";
   };
 
-  disabled = !isPy3k;
+  postPatch = ''
+    substituteInPlace tests/unit/crypto_test.py \
+      --replace-fail "assertEquals" "assertEqual"
+  '';
 
-  checkInputs = [ faker mock nose ];
-  propagatedBuildInputs = [ urllib3 python-dateutil pytz ];
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    argon2-cffi
+    certifi
+    urllib3
+    pycryptodome
+    typing-extensions
+  ];
+
+  nativeCheckInputs = [
+    faker
+    mock
+    pytestCheckHook
+  ];
+
+  disabledTestPaths = [
+    # example credentials aren't present
+    "tests/unit/credentials_test.py"
+  ];
+
+  pythonImportsCheck = [ "minio" ];
 
   meta = with lib; {
     description = "Simple APIs to access any Amazon S3 compatible object storage server";
-    homepage = https://github.com/minio/minio-py;
+    homepage = "https://github.com/minio/minio-py";
+    changelog = "https://github.com/minio/minio-py/releases/tag/${version}";
     maintainers = with maintainers; [ peterromfeldhk ];
     license = licenses.asl20;
   };

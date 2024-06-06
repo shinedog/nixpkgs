@@ -1,31 +1,33 @@
-{ lib, stdenv, fetchFromGitHub, fuse }:
+{ lib, stdenv, fetchFromGitHub, pkg-config, fuse, gitUpdater }:
 
 stdenv.mkDerivation rec {
-  name = "9pfs-20150918";
+  pname = "9pfs";
+  version = "0.3";
 
   src = fetchFromGitHub {
-    owner = "mischief";
+    owner = "ftrvxmtrx";
     repo = "9pfs";
-    rev = "7f4ca4cd750d650c1215b92ac3cc2a28041960e4";
-    sha256 = "007s2idsn6bspmfxv1qabj39ggkgvn6gwdbhczwn04lb4c6gh3xc";
+    rev = version;
+    sha256 = "sha256-ywWG/H2ilt36mjlDSgIzYpardCFXpmbLiml6wy47XuA=";
   };
 
-  preConfigure =
-    ''
-      substituteInPlace Makefile --replace '-g bin' ""
-      installFlagsArray+=(BIN=$out/bin MAN=$out/share/man/man1)
-      mkdir -p $out/bin $out/share/man/man1
-    '';
+  postPatch = ''
+    substituteInPlace Makefile --replace "pkg-config" "$PKG_CONFIG"
+  '';
 
+  makeFlags = [ "BIN=$(out)/bin" "MAN=$(out)/share/man/man1" ];
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [ fuse ];
-
   enableParallelBuilding = true;
 
+  passthru.updateScript = gitUpdater { };
+
   meta = {
-    homepage = https://github.com/mischief/9pfs;
+    homepage = "https://github.com/ftrvxmtrx/9pfs";
     description = "FUSE-based client of the 9P network filesystem protocol";
+    mainProgram = "9pfs";
     maintainers = [ lib.maintainers.eelco ];
-    platforms = lib.platforms.linux;
+    platforms = lib.platforms.unix;
     license = with lib.licenses; [ lpl-102 bsd2 ];
   };
 }

@@ -1,22 +1,23 @@
-{ stdenv, fetchFromGitHub, python3Packages, ffmpeg, mplayer, vcdimager, cdrkit, dvdauthor
-, gtk3, gettext, wrapGAppsHook, gdk_pixbuf }:
+{ lib, fetchFromGitLab, python3Packages, ffmpeg, mplayer, vcdimager, cdrkit, dvdauthor
+, gtk3, gettext, wrapGAppsHook3, gdk-pixbuf, gobject-introspection }:
 
 let
-  inherit (python3Packages) dbus-python buildPythonApplication pygobject3 urllib3;
-
+  inherit (python3Packages) dbus-python buildPythonApplication pygobject3 urllib3 setuptools;
 in buildPythonApplication rec {
-  name = "devede-4.8.8";
+  pname = "devede";
+  version = "4.17.0";
   namePrefix = "";
 
-  src = fetchFromGitHub {
+  src = fetchFromGitLab {
     owner = "rastersoft";
     repo = "devedeng";
-    rev = "c518683fbcd793aa92249e4fecafc3c3fea7da68";
-    sha256 = "0ncb8nykchrjlllbzfjpvirmfvfaps9qhilc56kvcw3nzqrnkx8q";
+    rev = version;
+    sha256 = "sha256-CdntdD5DRA/eXTBRBRszkbYFeFxj+0odb8XHkAFdobU=";
   };
 
   nativeBuildInputs = [
-    gettext wrapGAppsHook
+    gettext wrapGAppsHook3
+    gobject-introspection
   ];
 
   buildInputs = [
@@ -24,7 +25,7 @@ in buildPythonApplication rec {
   ];
 
   propagatedBuildInputs = [
-    gtk3 pygobject3 gdk_pixbuf dbus-python ffmpeg mplayer dvdauthor vcdimager cdrkit urllib3
+    gtk3 pygobject3 gdk-pixbuf dbus-python ffmpeg mplayer dvdauthor vcdimager cdrkit urllib3 setuptools
   ];
 
   postPatch = ''
@@ -34,9 +35,9 @@ in buildPythonApplication rec {
       --replace "/usr/local/share" "$out/share"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "DVD Creator for Linux";
-    homepage = http://www.rastersoft.com/programas/devede.html;
+    homepage = "http://www.rastersoft.com/programas/devede.html";
     license = licenses.gpl3;
     maintainers = [ maintainers.bdimcheff ];
   };

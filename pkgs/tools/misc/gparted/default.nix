@@ -1,37 +1,62 @@
-{ stdenv, fetchurl, intltool, gettext, makeWrapper
-, parted, glib, libuuid, pkgconfig, gtkmm2, libxml2, hicolor-icon-theme
-, gpart, hdparm, procps, utillinux
+{ lib, stdenv, fetchurl, gettext, coreutils, gnused, gnome
+, gnugrep, parted, glib, libuuid, pkg-config, gtkmm3, libxml2
+, gpart, hdparm, procps, util-linux, polkit, wrapGAppsHook3, substituteAll
+, mtools, dosfstools
 }:
 
 stdenv.mkDerivation rec {
-  name = "gparted-0.33.0";
+  pname = "gparted";
+  version = "1.6.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/gparted/${name}.tar.gz";
-    sha256 = "1ml1ky3s75lbxr91p608q3prsdh9x899mw7nbgk252pqhg4vh8sh";
+    url = "mirror://sourceforge/gparted/${pname}-${version}.tar.gz";
+    sha256 = "sha256-m59Rs85JTdy1mlXhrmZ5wJQ2YE4zHb9aU21g3tbG6ls=";
   };
+
+  # Tries to run `pkexec --version` to get version.
+  # however the binary won't be suid so it returns
+  # an error preventing the program from detection
+  patches = [
+    (substituteAll {
+      src = ./polkit.patch;
+      polkit_version = polkit.version;
+    })
+  ];
+
+  enableParallelBuilding = true;
 
   configureFlags = [ "--disable-doc" ];
 
-  buildInputs = [ parted glib libuuid gtkmm2 libxml2 hicolor-icon-theme ];
-  nativeBuildInputs = [ intltool gettext makeWrapper pkgconfig ];
+  buildInputs = [ parted glib libuuid gtkmm3 libxml2 polkit.bin gnome.adwaita-icon-theme  ];
+  nativeBuildInputs = [ gettext pkg-config wrapGAppsHook3 ];
 
-  postInstall = ''
-    wrapProgram $out/bin/gparted \
-      --prefix PATH : "${procps}/bin"
-    wrapProgram $out/sbin/gpartedbin \
-      --prefix PATH : "${stdenv.lib.makeBinPath [ gpart hdparm utillinux ]}"
+  preConfigure = ''
+    # For ITS rules
+    addToSearchPath "XDG_DATA_DIRS" "${polkit.out}/share"
   '';
 
-  meta = with stdenv.lib; {
+  preFixup = ''
+    gappsWrapperArgs+=(
+       --prefix PATH : "${lib.makeBinPath [ gpart hdparm util-linux procps coreutils gnused gnugrep mtools dosfstools ]}"
+    )
+  '';
+
+  # Doesn't get installed automaticallly if PREFIX != /usr
+  postInstall = ''
+    install -D -m0644 org.gnome.gparted.policy \
+      $out/share/polkit-1/actions/org.gnome.gparted.policy
+  '';
+
+  meta = with lib; {
     description = "Graphical disk partitioning tool";
     longDescription = ''
       GNOME Partition Editor for creating, reorganizing, and deleting disk
       partitions. GParted enables you to change the partition organization
       while preserving the partition contents.
     '';
-    homepage = https://gparted.org;
+    homepage = "https://gparted.org";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
+    mainProgram = "gparted";
   };
 }

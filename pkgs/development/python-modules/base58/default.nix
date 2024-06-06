@@ -1,22 +1,40 @@
-{ stdenv, fetchPypi, buildPythonPackage, pytest, pyhamcrest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pyhamcrest,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "base58";
-  version = "1.0.3";
+  version = "2.1.1";
+  format = "setuptools";
+  disabled = pythonOlder "3.5";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9a793c599979c497800eb414c852b80866f28daaed5494703fc129592cc83e60";
+    sha256 = "c5d0cb3f5b6e81e8e35da5754388ddcc6d0d14b6c6a132cb93d69ed580a7278c";
   };
 
-  checkInputs = [ pytest pyhamcrest ];
-  checkPhase = ''
-    pytest
-  '';
+  nativeCheckInputs = [
+    pyhamcrest
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
+  disabledTests = [
+    # avoid dependency on pytest-benchmark
+    "test_decode_random"
+    "test_encode_random"
+  ];
+
+  pythonImportsCheck = [ "base58" ];
+
+  meta = with lib; {
     description = "Base58 and Base58Check implementation";
-    homepage = https://github.com/keis/base58;
+    mainProgram = "base58";
+    homepage = "https://github.com/keis/base58";
     license = licenses.mit;
     maintainers = with maintainers; [ nyanloutre ];
   };

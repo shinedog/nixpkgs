@@ -1,36 +1,56 @@
-{ stdenv, fetchurl, bison, flex }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, bison
+, flex
+}:
 
 stdenv.mkDerivation rec {
-  name = "acpica-tools-${version}";
-  version = "20190405";
+  pname = "acpica-tools";
+  version = "20240322";
 
-  src = fetchurl {
-    url = "https://acpica.org/sites/acpica/files/acpica-unix-${version}.tar.gz";
-    sha256 = "0d4hajb3d82laf74m2xa91kqkjwmym08r25jf0hly1jbbh7cl0fy";
+  src = fetchFromGitHub {
+    owner = "acpica";
+    repo = "acpica";
+    rev = "refs/tags/G${version}";
+    hash = "sha256-k5rDaRKYPwdP4SmEXlrqsA2NLZDlqXBclz1Lwmufa2M=";
   };
 
-  NIX_CFLAGS_COMPILE = "-O3";
-
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ bison flex ];
 
   buildFlags = [
     "acpibin"
     "acpidump"
+    "acpiexamples"
     "acpiexec"
     "acpihelp"
-    "acpinames"
+    "acpisrc"
     "acpixtract"
+    "iasl"
   ];
 
-  nativeBuildInputs = [ bison flex ];
+  env.NIX_CFLAGS_COMPILE = toString ([
+    "-O3"
+  ]);
 
-  installFlags = [ "PREFIX=$(out)" ];
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    description = "ACPICA Tools";
+  # i686 builds fail with hardening enabled (due to -Wformat-overflow). Disable
+  # -Werror altogether to make this derivation less fragile to toolchain
+  # updates.
+  NOWERROR = "TRUE";
+
+  # We can handle stripping ourselves.
+  # Unless we are on Darwin. Upstream makefiles degrade coreutils install to cp if _APPLE is detected.
+  INSTALLFLAGS = lib.optionals (!stdenv.isDarwin) "-m 555";
+
+  installFlags = [ "PREFIX=${placeholder "out"}" ];
+
+  meta = with lib; {
     homepage = "https://www.acpica.org/";
-    license = with licenses; [ gpl2 bsd3 ];
-    platforms = platforms.linux;
+    description = "ACPICA Tools";
+    license = with licenses; [ iasl gpl2Only bsd3 ];
     maintainers = with maintainers; [ tadfisher ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

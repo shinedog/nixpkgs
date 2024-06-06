@@ -1,49 +1,44 @@
-{ lib, stdenv, fetchhg, fetchurl, gtk2, glib, pkgconfig, unzip, ncurses, zip }:
+{ lib, stdenv, fetchFromGitHub, fetchurl, cmake
+, withQt ? true, qtbase, wrapQtAppsHook
+, withCurses ? false, ncurses
+}:
 stdenv.mkDerivation rec {
-  version = "10.2";
-  name = "textadept-${version}";
+  version = "12.4";
+  pname = "textadept";
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [
-    gtk2 ncurses glib unzip zip
-  ];
-
-  src = fetchhg {
-    url = http://foicica.com/hg/textadept;
+  src = fetchFromGitHub {
+    name = "textadept11";
+    owner = "orbitalquark";
+    repo = "textadept";
     rev = "textadept_${version}";
-    sha256 = "0fai8xqddkkprmbf0cf8wwgv7ccfdb1iyim30nppm2m16whkc8fl";
+    sha256 = "sha256-nPgpQeBq5Stv2o0Ke4W2Ltnx6qLe5TIC5a8HSYVkmfI=";
   };
 
-  preConfigure =
+  nativeBuildInputs = [ cmake ]
+  ++ lib.optionals withQt [ wrapQtAppsHook ];
+
+  buildInputs =
+     lib.optionals withQt [ qtbase ]
+  ++ lib.optionals withCurses ncurses;
+
+  cmakeFlags =
+     lib.optional withQt [ "-DQT=ON" ]
+  ++ lib.optional withCurses [ "-DCURSES=ON" "-DQT=OFF"];
+
+  preConfigure = ''
+    mkdir -p $PWD/build/_deps
+
+    '' +
     lib.concatStringsSep "\n" (lib.mapAttrsToList (name: params:
-      "ln -s ${fetchurl params} $PWD/src/${name}"
-    ) (import ./deps.nix)) + ''
+      "ln -s ${fetchurl params} $PWD/build/_deps/${name}"
+    ) (import ./deps.nix));
 
-    # work around trying to download stuff in `make deps`
-    function wget() { true; }
-    export -f wget
-
-    cd src
-    make deps
-  '';
-
-  postBuild = ''
-    make curses
-  '';
-
-  postInstall = ''
-    make curses install PREFIX=$out MAKECMDGOALS=curses
-  '';
-
-  makeFlags = [
-    "PREFIX=$(out)"
-  ];
-
-  meta = with stdenv.lib; {
-    description = "An extensible text editor based on Scintilla with Lua scripting";
-    homepage = http://foicica.com/textadept;
+  meta = with lib; {
+    description = "An extensible text editor based on Scintilla with Lua scripting.";
+    homepage = "http://foicica.com/textadept";
     license = licenses.mit;
-    maintainers = with maintainers; [ raskin mirrexagon ];
+    maintainers = with maintainers; [ raskin mirrexagon arcuru ];
     platforms = platforms.linux;
+    mainProgram = "textadept";
   };
 }

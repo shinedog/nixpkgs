@@ -1,36 +1,54 @@
-{ lib, stdenv, fetchurl, zlib, protobuf, ncurses, pkgconfig
-, makeWrapper, perlPackages, openssl, autoreconfHook, openssh, bash-completion
-, libutempter ? null, withUtempter ? stdenv.isLinux }:
+{ lib, stdenv, fetchFromGitHub, zlib, protobuf, ncurses, pkg-config
+, makeWrapper, perl, openssl, autoreconfHook, openssh, bash-completion, fetchpatch
+, withUtempter ? stdenv.isLinux && !stdenv.hostPlatform.isMusl, libutempter }:
 
 stdenv.mkDerivation rec {
-  name = "mosh-1.3.2";
+  pname = "mosh";
+  version = "1.4.0";
 
-  src = fetchurl {
-    url = "https://mosh.org/${name}.tar.gz";
-    sha256 = "05hjhlp6lk8yjcy59zywpf0r6s0h0b9zxq0lw66dh9x8vxrhaq6s";
+  src = fetchFromGitHub {
+    owner = "mobile-shell";
+    repo = pname;
+    rev = "mosh-${version}";
+    hash = "sha256-tlSsHu7JnXO+sorVuWWubNUNdb9X0/pCaiGG5Y0X/g8=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ protobuf ncurses zlib makeWrapper openssl bash-completion ]
-    ++ (with perlPackages; [ perl IOTty ])
+  nativeBuildInputs = [ autoreconfHook pkg-config makeWrapper protobuf perl ];
+  buildInputs = [ protobuf ncurses zlib openssl bash-completion perl ]
     ++ lib.optional withUtempter libutempter;
 
-  patches = [ ./ssh_path.patch ./utempter_path.patch ];
+  strictDeps = true;
+
+  enableParallelBuilding = true;
+
+  patches = [
+    ./ssh_path.patch
+    ./mosh-client_path.patch
+    # Fix build with bash-completion 2.10
+    ./bash_completion_datadir.patch
+
+    # Fixes build with protobuf3 23.x
+    (fetchpatch {
+      url = "https://github.com/mobile-shell/mosh/commit/eee1a8cf413051c2a9104e8158e699028ff56b26.patch";
+      hash = "sha256-CouLHWSsyfcgK3k7CvTK3FP/xjdb1pfsSXYYQj3NmCQ=";
+    })
+  ];
+
   postPatch = ''
     substituteInPlace scripts/mosh.pl \
-        --subst-var-by ssh "${openssh}/bin/ssh"
+      --subst-var-by ssh "${openssh}/bin/ssh" \
+      --subst-var-by mosh-client "$out/bin/mosh-client"
   '';
 
-  configureFlags = [ "--enable-completion" ] ++ lib.optional withUtempter "--with-utempter";
+  configureFlags = [ "--enable-completion" ]
+    ++ lib.optional withUtempter "--with-utempter";
 
   postInstall = ''
       wrapProgram $out/bin/mosh --prefix PERL5LIB : $PERL5LIB
   '';
 
-  CXXFLAGS = stdenv.lib.optionalString stdenv.cc.isClang "-std=c++11";
-
-  meta = {
-    homepage = https://mosh.org/;
+  meta = with lib; {
+    homepage = "https://mosh.org/";
     description = "Mobile shell (ssh replacement)";
     longDescription = ''
       Remote terminal application that allows roaming, supports intermittent
@@ -40,8 +58,8 @@ stdenv.mkDerivation rec {
       Mosh is a replacement for SSH. It's more robust and responsive,
       especially over Wi-Fi, cellular, and long-distance links.
     '';
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = stdenv.lib.platforms.unix;
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ viric ];
+    platforms = platforms.unix;
   };
 }

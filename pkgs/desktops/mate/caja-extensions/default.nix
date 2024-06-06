@@ -1,41 +1,64 @@
-{ stdenv, fetchurl, pkgconfig, intltool, gtk3, gupnp, mate, imagemagick, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, caja
+, glib
+, gst_all_1
+, gtk3
+, gupnp
+, imagemagick
+, mate-desktop
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "caja-extensions-${version}";
-  version = "1.22.0";
+  pname = "caja-extensions";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1h866jmdd3qpjzi7wjj11krwiaadnlf21844g1zqfb4jgrzj773p";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "0phsXgdAg1/icc+9WCPu6vAyka8XYyA/RwCruBCeMXU=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
-    wrapGAppsHook
+    pkg-config
+    gettext
+    wrapGAppsHook3
   ];
 
   buildInputs = [
+    caja
+    glib
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gst_all_1.gst-plugins-good
     gtk3
     gupnp
-    mate.caja
-    mate.mate-desktop
     imagemagick
+    mate-desktop
   ];
 
   postPatch = ''
     for f in image-converter/caja-image-{resizer,rotator}.c; do
-      substituteInPlace $f --replace "/usr/bin/convert" "${imagemagick}/bin/convert"
+      substituteInPlace $f --replace-fail 'argv[0] = "convert"' 'argv[0] = "${imagemagick}/bin/convert"'
     done
   '';
 
   configureFlags = [ "--with-cajadir=$$out/lib/caja/extensions-2.0" ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Set of extensions for Caja file manager";
-    homepage = https://mate-desktop.org;
-    license = licenses.gpl2;
+    mainProgram = "caja-sendto";
+    homepage = "https://mate-desktop.org";
+    license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

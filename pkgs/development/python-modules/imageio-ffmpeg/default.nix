@@ -1,28 +1,51 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  substituteAll,
+  ffmpeg_4,
+  python,
 }:
 
 buildPythonPackage rec {
   pname = "imageio-ffmpeg";
-  version = "0.3.0";
+  version = "0.4.9";
+  format = "setuptools";
 
   src = fetchPypi {
-    sha256 = "1hnn00xz9jyksnx1g0r1icv6ynbdnxq4cfnmb58ikg6ymi20al18";
     inherit pname version;
+    hash = "sha256-ObzRZgEY7zYPpAR0VlAQcTZGYaqdkCHT0mxY8e4ggfU=";
   };
 
-  disabled = !isPy3k;
+  patches = [
+    (substituteAll {
+      src = ./ffmpeg-path.patch;
+      ffmpeg = "${ffmpeg_4}/bin/ffmpeg";
+    })
+  ];
 
-  # No test infrastructure in repository.
-  doCheck = false;
+  # https://github.com/imageio/imageio-ffmpeg/issues/59
+  postPatch = ''
+    sed -i '/setup_requires=\["pip>19"\]/d' setup.py
+  '';
+
+  checkPhase = ''
+    runHook preCheck
+
+    ${python.interpreter} << EOF
+    from imageio_ffmpeg import get_ffmpeg_version
+    assert get_ffmpeg_version() == '${ffmpeg_4.version}'
+    EOF
+
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [ "imageio_ffmpeg" ];
 
   meta = with lib; {
     description = "FFMPEG wrapper for Python";
-    homepage = https://github.com/imageio/imageio-ffmpeg;
+    homepage = "https://github.com/imageio/imageio-ffmpeg";
     license = licenses.bsd2;
     maintainers = [ maintainers.pmiddend ];
   };
-
 }

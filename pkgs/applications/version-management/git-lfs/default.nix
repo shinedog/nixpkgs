@@ -1,32 +1,60 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, asciidoctor, installShellFiles, git, testers, git-lfs }:
 
-buildGoPackage rec {
-  name = "git-lfs-${version}";
-  version = "2.5.2";
-
-  goPackagePath = "github.com/git-lfs/git-lfs";
+buildGoModule rec {
+  pname = "git-lfs";
+  version = "3.5.1";
 
   src = fetchFromGitHub {
-    rev = "v${version}";
     owner = "git-lfs";
     repo = "git-lfs";
-    sha256 = "1y9l35j59d422v9hsbi117anm5d0177nspiy9r2zbjz3ygd9a4ck";
+    rev = "v${version}";
+    hash = "sha256-xSLXbAvIoY3c341qi89pTrjBZdXh/bPrweJD2O2gkjY=";
   };
 
+  vendorHash = "sha256-N8HB2qwBxjzfNucftHxmX2W9srCx62pjmkCWzwiCj/I=";
+
+  nativeBuildInputs = [ asciidoctor installShellFiles ];
+
+  ldflags = [
+    "-s"
+    "-w"
+    "-X github.com/git-lfs/git-lfs/v${lib.versions.major version}/config.Vendor=${version}"
+  ];
+
+  subPackages = [ "." ];
+
   preBuild = ''
-    pushd go/src/github.com/git-lfs/git-lfs
-    go generate ./commands
-    popd
+    GOARCH= go generate ./commands
+  '';
+
+  postBuild = ''
+    make man
+  '';
+
+  nativeCheckInputs = [ git ];
+
+  preCheck = ''
+    unset subPackages
   '';
 
   postInstall = ''
-    rm -v $bin/bin/{man,script,cmd}
+    installManPage man/man*/*
+    installShellCompletion --cmd git-lfs \
+      --bash <($out/bin/git-lfs completion bash) \
+      --fish <($out/bin/git-lfs completion fish) \
+      --zsh <($out/bin/git-lfs completion zsh)
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests.version = testers.testVersion {
+    package = git-lfs;
+  };
+
+  meta = with lib; {
     description = "Git extension for versioning large files";
-    homepage    = https://git-lfs.github.com/;
-    license     = [ licenses.mit ];
-    maintainers = [ maintainers.twey ];
+    homepage = "https://git-lfs.github.com/";
+    changelog = "https://github.com/git-lfs/git-lfs/raw/v${version}/CHANGELOG.md";
+    license = licenses.mit;
+    maintainers = with maintainers; [ twey ];
+    mainProgram = "git-lfs";
   };
 }

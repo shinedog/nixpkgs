@@ -1,29 +1,94 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, websocket_client, requests, six, pytest, codecov, coverage, mock, pytestcov, pytest-mock, responses, flake8 }:
+{
+  lib,
+  stdenv,
+  aiohttp,
+  boto3,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flask,
+  flask-sockets,
+  pythonOlder,
+  mock,
+  moto,
+  psutil,
+  pytest-mock,
+  pytestCheckHook,
+  requests,
+  responses,
+  sqlalchemy,
+  websockets,
+  websocket-client,
+}:
 
 buildPythonPackage rec {
-  pname = "python-slackclient";
-  version = "1.2.1";
+  pname = "slackclient";
+  version = "3.27.2";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchFromGitHub {
-    owner  = "slackapi";
-    repo   = pname;
-    rev    = "${version}";
-    sha256 = "073fwf6fm2sqdp5ms3vm1v3ljh0pldi69k048404rp6iy3cfwkp0";
+    owner = "slackapi";
+    repo = "python-slack-sdk";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-1I08OUseiwCN9vUd56f9IFzCSB9kGjTLojyWm2dIimE=";
   };
 
-  propagatedBuildInputs = [ websocket_client requests six ];
+  propagatedBuildInputs = [
+    aiohttp
+    websocket-client
+    requests
+  ];
 
-  checkInputs = [ pytest codecov coverage mock pytestcov pytest-mock responses flake8 ];
-  # test_server.py fails because it needs connection (I think);
-  checkPhase = ''
-    py.test --cov-report= --cov=slackclient tests --ignore=tests/test_server.py
+  nativeCheckInputs = [
+    boto3
+    flask
+    flask-sockets
+    mock
+    moto
+    psutil
+    pytest-mock
+    pytestCheckHook
+    responses
+    sqlalchemy
+    websockets
+  ];
+
+  pytestFlagsArray = [
+    # Exclude tests that requires network features
+    "--ignore=integration_tests"
+  ];
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
   '';
 
-  meta = with stdenv.lib; {
+  disabledTests =
+    [
+      "test_start_raises_an_error_if_rtm_ws_url_is_not_returned"
+      "test_interactions"
+      "test_send_message_while_disconnection"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # these fail with `ConnectionResetError: [Errno 54] Connection reset by peer`
+      "test_issue_690_oauth_access"
+      "test_issue_690_oauth_v2_access"
+      "test_send"
+      "test_send_attachments"
+      "test_send_blocks"
+      "test_send_dict"
+    ];
+
+  pythonImportsCheck = [ "slack" ];
+
+  meta = with lib; {
     description = "A client for Slack, which supports the Slack Web API and Real Time Messaging (RTM) API";
-    homepage = https://github.com/slackapi/python-slackclient;
+    homepage = "https://github.com/slackapi/python-slackclient";
+    changelog = "https://github.com/slackapi/python-slack-sdk/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ psyanticy ];
+    maintainers = with maintainers; [
+      flokli
+      psyanticy
+    ];
   };
 }
-

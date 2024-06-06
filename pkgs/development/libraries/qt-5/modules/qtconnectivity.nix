@@ -1,8 +1,13 @@
-{ qtModule, stdenv, qtbase, qtdeclarative, bluez, cf-private }:
+{ qtModule, lib, stdenv, qtbase, qtdeclarative, bluez, IOBluetooth }:
 
 qtModule {
-  name = "qtconnectivity";
-  qtInputs = [ qtbase qtdeclarative ];
-  buildInputs = if stdenv.isDarwin then [ cf-private ] else [ bluez ];
+  pname = "qtconnectivity";
+  buildInputs = lib.optional stdenv.isLinux bluez;
+  propagatedBuildInputs = [
+    qtbase
+    qtdeclarative
+  ] ++ lib.optionals stdenv.isDarwin [
+    IOBluetooth
+  ];
   outputs = [ "out" "dev" "bin" ];
 }

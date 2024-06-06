@@ -1,17 +1,16 @@
-{stdenv, fetchurl}:
+{ lib, stdenv, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "time-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "time";
   version = "1.9";
 
   src = fetchurl {
-    url = "mirror://gnu/time/${name}.tar.gz";
-    sha256 = "07jj7cz6lc13iqrpgn81ivqh8rkm73p4rnivwgrrshk23v4g1b7v";
+    url = "mirror://gnu/time/time-${finalAttrs.version}.tar.gz";
+    hash = "sha256-+6zwyB5iQp3z4zvaTO44dWYE8Y4B2XczjiMwaj47Uh4=";
   };
 
   meta = {
     description = "Tool that runs programs and summarizes the system resources they use";
-
     longDescription = ''
       The `time' command runs another program, then displays
       information about the resources used by that program, collected
@@ -25,9 +24,9 @@ stdenv.mkDerivation rec {
       do not provide much information about program resource use;
       `time' reports unavailable information as zero values.
     '';
-
-    license = stdenv.lib.licenses.gpl3Plus;
-    homepage = https://www.gnu.org/software/time/;
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.gpl3Plus;
+    homepage = "https://www.gnu.org/software/time/";
+    platforms = lib.platforms.unix;
+    mainProgram = "time";
   };
-}
+})

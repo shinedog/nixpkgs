@@ -1,11 +1,13 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "pyinotify";
   version = "0.9.6";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,11 +17,10 @@ buildPythonPackage rec {
   # No tests distributed
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/seb-m/pyinotify/wiki;
+  meta = with lib; {
+    homepage = "https://github.com/seb-m/pyinotify/wiki";
     description = "Monitor filesystems events on Linux platforms with inotify";
     license = licenses.mit;
     platforms = platforms.linux;
   };
-
 }

@@ -1,27 +1,57 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonAtLeast
-, flask, blinker, nose, mock, semantic-version }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  flask,
+  werkzeug,
+
+  # tests
+  asgiref,
+  blinker,
+  pytestCheckHook,
+  semantic-version,
+}:
 
 buildPythonPackage rec {
-  pname = "Flask-Login";
-  version = "0.4.1";
+  pname = "flask-login";
+  version = "0.6.3";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1v2j8zd558xfmgn3rfbw0xz4vizjcnk8kqw52q4f4d9ygfnc25f8";
+    pname = "Flask-Login";
+    inherit version;
+    hash = "sha256-XiPRSmB+8SgGxplZC4nQ8ODWe67sWZ11lHv5wUczAzM=";
   };
 
-  checkInputs = [ nose mock semantic-version ];
-  propagatedBuildInputs = [ flask blinker ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = "nosetests -d";
+  propagatedBuildInputs = [
+    flask
+    werkzeug
+  ];
 
-  doCheck = pythonAtLeast "3.3";
+  pythonImportsCheck = [ "flask_login" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/maxcountryman/flask-login;
+  nativeCheckInputs = [
+    asgiref
+    blinker
+    pytestCheckHook
+    semantic-version
+  ];
+
+  meta = with lib; {
+    changelog = "https://github.com/maxcountryman/flask-login/blob/${version}/CHANGES.md";
     description = "User session management for Flask";
+    homepage = "https://github.com/maxcountryman/flask-login";
     license = licenses.mit;
-    platforms = platforms.all;
     maintainers = with maintainers; [ abbradar ];
   };
 }

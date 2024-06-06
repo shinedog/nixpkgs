@@ -1,60 +1,59 @@
-{ stdenv
-, lib
+{ lib, stdenv
 , fetchFromGitHub
-, fetchpatch
 
 , cmake
 , gettext
-, wrapGAppsHook
-, pkgconfig
+, wrapGAppsHook3
+, pkg-config
 
+, alsa-lib
+, binutils
 , glib
 , gsettings-desktop-schemas
 , gtk3
-, hicolor-icon-theme
+, gtksourceview4
+, librsvg
 , libsndfile
 , libxml2
+, libzip
 , pcre
 , poppler
 , portaudio
 , zlib
-
-# Plugins don't appear to be working in this version, so disable them by not
-# building with Lua support by default. In a future version, try switching this
-# to 'true' and seeing if the top-level Plugin menu appears.
-, withLua ? false, lua
+# plugins
+, withLua ? true, lua
 }:
 
 stdenv.mkDerivation rec {
-  name = "xournalpp-${version}";
-  version = "1.0.8";
+  pname = "xournalpp";
+  version = "1.2.3";
 
   src = fetchFromGitHub {
     owner = "xournalpp";
     repo = "xournalpp";
-    rev = version;
-    sha256 = "01q84xjp9z1krna10gjj562km6i3wdq8cg7paxax1k6bh52ryvf6";
+    rev = "v${version}";
+    sha256 = "sha256-8UAAX/kixqiY9zEYs5eva0G2K2vlfnYd1yyVHMSfSeY=";
   };
 
-  patches = [
-    # This patch removes the unused 'xopp-recording.sh' file which breaks the
-    # cmake build; this patch isn't in a release yet, and should be removed at
-    # or after 1.0.9 is released.
-    (fetchpatch {
-      name = "remove-xopp-recording.sh.patch";
-      url = "https://github.com/xournalpp/xournalpp/commit/a17a3f2c80c607a22d0fdeb66d38358bea7e4d85.patch";
-      sha256 = "10pcpvklm6kr0lv2xrsbpg2037ni9j6dmxgjf56p466l3gz60iwy";
-    })
-  ];
+  postPatch = ''
+    substituteInPlace src/util/Stacktrace.cpp \
+      --replace-fail "addr2line" "${binutils}/bin/addr2line"
+  '';
 
-  nativeBuildInputs = [ cmake gettext pkgconfig wrapGAppsHook ];
+  nativeBuildInputs = [ cmake gettext pkg-config wrapGAppsHook3 ];
+
   buildInputs =
-    [ glib
+    lib.optionals stdenv.isLinux [
+      alsa-lib
+    ] ++ [
+      glib
       gsettings-desktop-schemas
       gtk3
-      hicolor-icon-theme
+      gtksourceview4
+      librsvg
       libsndfile
       libxml2
+      libzip
       pcre
       poppler
       portaudio
@@ -62,13 +61,15 @@ stdenv.mkDerivation rec {
     ]
     ++ lib.optional withLua lua;
 
-  enableParallelBuilding = true;
+  buildFlags = [ "translations" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Xournal++ is a handwriting Notetaking software with PDF annotation support";
-    homepage    = https://github.com/xournalpp/xournalpp;
-    license     = licenses.gpl2;
-    maintainers = with maintainers; [ andrew-d ];
-    platforms   = platforms.linux;
+    homepage    = "https://xournalpp.github.io/";
+    changelog   = "https://github.com/xournalpp/xournalpp/blob/v${version}/CHANGELOG.md";
+    license     = licenses.gpl2Plus;
+    maintainers = with maintainers; [ sikmir ];
+    platforms   = platforms.unix;
+    mainProgram = "xournalpp";
   };
 }

@@ -1,48 +1,51 @@
-{ stdenv, fetchurl, makeWrapper
-, pkgconfig, openssl, fuse, libxml2
+{ lib, stdenv, fetchurl, makeWrapper
+, pkg-config
 , cabextract ? null
 , cdrkit ? null
 , mtools ? null
+, fuse3 ? null
 , ntfs3g ? null
 , syslinux ? null
 }:
 
 stdenv.mkDerivation rec {
-  version = "1.13.0";
-  name = "wimlib-${version}";
+  version = "1.14.4";
+  pname = "wimlib";
 
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
-  buildInputs = [ openssl fuse libxml2 ntfs3g ];
+  nativeBuildInputs = [ pkg-config makeWrapper ];
+  buildInputs = [ ntfs3g ] ++ lib.optionals (!stdenv.isDarwin) [ fuse3 ];
 
   src = fetchurl {
-    url = "https://wimlib.net/downloads/${name}.tar.gz";
-    sha256 = "02wpsxjlw9vysj6x6q7kmvbcdkpvdzw201mmj5x0q670mapjrnai";
+    url = "https://wimlib.net/downloads/${pname}-${version}.tar.gz";
+    hash = "sha256-NjPbK2yLJV64bTvz3zBZeWvR8I5QuMlyjH62ZmLlEwA=";
   };
 
-  preBuild = ''
+  enableParallelBuilding = true;
+
+  preBuild = lib.optionalString (!stdenv.isDarwin) ''
     substituteInPlace programs/mkwinpeimg.in \
       --replace '/usr/lib/syslinux' "${syslinux}/share/syslinux"
   '';
 
   postInstall = let
-    path = stdenv.lib.makeBinPath  [ cabextract cdrkit mtools ntfs3g syslinux ];
+    path = lib.makeBinPath  ([ cabextract mtools ntfs3g ] ++ lib.optionals (!stdenv.isDarwin) [ cdrkit syslinux fuse3 ]);
   in ''
     for prog in $out/bin/*; do
-      wrapProgram $prog --prefix PATH : ${path}
+      wrapProgram $prog --prefix PATH : $out/bin:${path}
     done
   '';
 
-  doCheck = true;
+  doCheck = (!stdenv.isDarwin);
 
   preCheck = ''
     patchShebangs tests
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://wimlib.net;
+  meta = with lib; {
+    homepage = "https://wimlib.net";
     description = "A library and program to extract, create, and modify WIM files";
     platforms = platforms.unix;
-    maintainers = with maintainers; [ andir ];
-    license = with licenses; [ gpl3 lgpl3 cc0 ];
+    maintainers = with maintainers; [ ];
+    license = with licenses; [ gpl3 lgpl3 mit ];
   };
 }

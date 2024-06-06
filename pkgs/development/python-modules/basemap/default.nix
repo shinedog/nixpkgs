@@ -1,40 +1,68 @@
-{ stdenv
-, buildPythonPackage
-, fetchFromGitHub
-, numpy
-, matplotlib
-, pillow
-, setuptools
-, pyproj
-, pyshp
-, six
-, pkgs
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonAtLeast,
+  basemap-data,
+  cython,
+  geos,
+  numpy,
+  matplotlib,
+  pillow,
+  pyproj,
+  pyshp,
+  python,
+  pythonRelaxDepsHook,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "basemap";
-  version = "1.2.0";
+  version = "1.4.1";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "matplotlib";
     repo = "basemap";
-    rev = "v${version}rel";
-    sha256 = "1p3app8n65rlppkdbp1pb7fa4250kh7hi7lzdsryi2iv88np7193";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-0rTGsphwLy2yGvhO7bcmFqdgysIXXkDBmURwRVw3ZHY=";
   };
 
-  propagatedBuildInputs = [ numpy matplotlib pillow pyproj pyshp six ];
-  buildInputs = [ setuptools pkgs.geos ];
+  sourceRoot = "${src.name}/packages/basemap";
+
+  nativeBuildInputs = [
+    cython
+    geos
+    pythonRelaxDepsHook
+    setuptools
+  ];
+
+  pythonRelaxDeps = true;
+
+  propagatedBuildInputs = [
+    basemap-data
+    numpy
+    matplotlib
+    pillow # undocumented optional dependency
+    pyproj
+    pyshp
+  ];
 
   # Standard configurePhase from `buildPythonPackage` seems to break the setup.py script
-  configurePhase = ''
-    export GEOS_DIR=${pkgs.geos}
+  preBuild = ''
+    export GEOS_DIR=${geos}
   '';
 
-  # The 'check' target is not supported by the `setup.py` script.
-  # TODO : do the post install checks (`cd examples && ${python.interpreter} run_all.py`)
+  # test have various problems including requiring internet connection, permissions issues, problems with latest version of pillow
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  checkPhase = ''
+    cd ../../examples
+    export HOME=$TEMPDIR
+    ${python.interpreter} run_all.py
+  '';
+
+  meta = with lib; {
     homepage = "https://matplotlib.org/basemap/";
     description = "Plot data on map projections with matplotlib";
     longDescription = ''
@@ -42,7 +70,10 @@ buildPythonPackage rec {
       coastlines, lakes, rivers and political boundaries. See
       http://matplotlib.github.com/basemap/users/examples.html for examples of what it can do.
     '';
-    license = with licenses; [ mit gpl2 ];
+    maintainers = with maintainers; [ ];
+    license = with licenses; [
+      mit
+      lgpl21
+    ];
   };
-
 }

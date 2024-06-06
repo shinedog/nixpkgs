@@ -1,11 +1,14 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "power";
   version = "1.4";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,10 +18,10 @@ buildPythonPackage rec {
   # Tests can't work because there is no power information available.
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "Cross-platform system power status information";
-    homepage = https://github.com/Kentzo/Power;
+    homepage = "https://github.com/Kentzo/Power";
     license = licenses.mit;
   };
-
 }

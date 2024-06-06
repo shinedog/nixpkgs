@@ -8,22 +8,22 @@ with lib;
       enable = mkEnableOption "toxvpn running on startup";
 
       localip = mkOption {
-        type        = types.string;
+        type        = types.str;
         default     = "10.123.123.1";
         description = "your ip on the vpn";
       };
 
       port = mkOption {
-        type        = types.int;
+        type        = types.port;
         default     = 33445;
         description = "udp port for toxcore, port-forward to help with connectivity if you run many nodes behind one NAT";
       };
 
       auto_add_peers = mkOption {
-        type        = types.listOf types.string;
+        type        = types.listOf types.str;
         default     = [];
-        example     = ''[ "toxid1" "toxid2" ]'';
-        description = "peers to automacally connect to on startup";
+        example     = [ "toxid1" "toxid2" ];
+        description = "peers to automatically connect to on startup";
       };
     };
   };
@@ -59,10 +59,12 @@ with lib;
 
     users.users = {
       toxvpn = {
-        uid        = config.ids.uids.toxvpn;
+        isSystemUser = true;
+        group = "toxvpn";
         home       = "/var/lib/toxvpn";
         createHome = true;
       };
     };
+    users.groups.toxvpn = {};
   };
 }

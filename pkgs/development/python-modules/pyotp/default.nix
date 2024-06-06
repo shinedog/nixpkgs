@@ -1,17 +1,31 @@
-{ lib, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchPypi,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "pyotp";
-  version = "2.2.7";
+  version = "2.9.0";
+  disabled = pythonOlder "3.7";
+
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "00p69nw431f0s2ilg0hnd77p1l22m06p9rq4f8zfapmavnmzw3xy";
+    hash = "sha256-NGtmQuDb3eO0/1qTC2ZMqCq/oRY1btSMxCx9ZZDTb2M=";
   };
 
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  pythonImportsCheck = [ "pyotp" ];
+
   meta = with lib; {
+    changelog = "https://github.com/pyauth/pyotp/blob/v${version}/Changes.rst";
     description = "Python One Time Password Library";
-    homepage = https://github.com/pyotp/pyotp;
+    homepage = "https://github.com/pyauth/pyotp";
     license = licenses.mit;
     maintainers = with maintainers; [ dotlambda ];
   };

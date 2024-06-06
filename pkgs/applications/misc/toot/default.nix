@@ -1,31 +1,36 @@
-{ stdenv, fetchFromGitHub, python3Packages }:
+{ lib, fetchFromGitHub, python3Packages, nixosTests }:
 
 python3Packages.buildPythonApplication rec {
-  version = "0.21.0";
-  name    = "toot-${version}";
+  pname = "toot";
+  version = "0.42.0";
 
   src = fetchFromGitHub {
     owner  = "ihabunek";
     repo   = "toot";
-    rev    = "${version}";
-    sha256 = "03s81i9rz7dn33r13p7j2c7yw874hkm64x7myddiqw9lc21fyzql";
+    rev = "refs/tags/${version}";
+    sha256 = "sha256-FxA/loJzb/DBI1vWC71IFqdFcwjwIezhBJCGNeBzRoU=";
   };
 
-  checkInputs = with python3Packages; [ pytest ];
+  nativeCheckInputs = with python3Packages; [ pytest ];
 
   propagatedBuildInputs = with python3Packages;
-    [ requests beautifulsoup4 future wcwidth ];
+  [
+    requests beautifulsoup4 future wcwidth
+    urwid urwidgets psycopg2 tomlkit click
+  ];
 
   checkPhase = ''
     py.test
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests.toot = nixosTests.pleroma;
+
+  meta = with lib; {
     description = "Mastodon CLI interface";
+    mainProgram = "toot";
     homepage    = "https://github.com/ihabunek/toot";
-    license     = licenses.mit;
+    license     = licenses.gpl3;
     maintainers = [ maintainers.matthiasbeyer ];
   };
 
 }
-

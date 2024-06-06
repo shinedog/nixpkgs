@@ -12,9 +12,9 @@ let
     else "/bin/bash";
 
   path =
-    (if system == "i686-solaris" then [ "/usr/gnu" ] else []) ++
-    (if system == "i686-netbsd" then [ "/usr/pkg" ] else []) ++
-    (if system == "x86_64-solaris" then [ "/opt/local/gnu" ] else []) ++
+    (lib.optionals (system == "i686-solaris") [ "/usr/gnu" ]) ++
+    (lib.optionals (system == "i686-netbsd") [ "/usr/pkg" ]) ++
+    (lib.optionals (system == "x86_64-solaris") [ "/opt/local/gnu" ]) ++
     ["/" "/usr" "/usr/local"];
 
   prehookBase = ''
@@ -78,7 +78,7 @@ let
   # A function that builds a "native" stdenv (one that uses tools in
   # /usr etc.).
   makeStdenv =
-    { cc, fetchurl, extraPath ? [], overrides ? (self: super: { }) }:
+    { cc, fetchurl, extraPath ? [], overrides ? (self: super: { }), extraNativeBuildInputs ? [] }:
 
     import ../generic {
       buildPlatform = localSystem;
@@ -94,10 +94,10 @@ let
         if system == "x86_64-cygwin" then prehookCygwin else
         prehookBase;
 
-      extraNativeBuildInputs =
-        if system == "i686-cygwin" then extraNativeBuildInputsCygwin else
+      extraNativeBuildInputs = extraNativeBuildInputs ++
+        (if system == "i686-cygwin" then extraNativeBuildInputsCygwin else
         if system == "x86_64-cygwin" then extraNativeBuildInputsCygwin else
-        [];
+        []);
 
       initialPath = extraPath ++ path;
 
@@ -121,18 +121,18 @@ in
 
     cc = let
       nativePrefix = { # switch
-        "i686-solaris" = "/usr/gnu";
-        "x86_64-solaris" = "/opt/local/gcc47";
+        i686-solaris = "/usr/gnu";
+        x86_64-solaris = "/opt/local/gcc47";
       }.${system} or "/usr";
     in
     import ../../build-support/cc-wrapper {
       name = "cc-native";
       nativeTools = true;
       nativeLibc = true;
-      inherit nativePrefix;
+      inherit lib nativePrefix;
       bintools = import ../../build-support/bintools-wrapper {
         name = "bintools";
-        inherit stdenvNoCC nativePrefix;
+        inherit lib stdenvNoCC nativePrefix;
         nativeTools = true;
         nativeLibc = true;
       };
@@ -152,7 +152,10 @@ in
     inherit config overlays;
     stdenv = makeStdenv {
       inherit (prevStage) cc fetchurl;
-    } // { inherit (prevStage) fetchurl; };
+      overrides = self: super: { inherit (prevStage) fetchurl; };
+    } // {
+      inherit (prevStage) fetchurl;
+    };
   })
 
   # Using that, build a stdenv that adds the ‘xz’ command (which most systems
@@ -162,7 +165,8 @@ in
     stdenv = makeStdenv {
       inherit (prevStage.stdenv) cc fetchurl;
       extraPath = [ prevStage.xz ];
-      overrides = self: super: { inherit (prevStage) xz; };
+      overrides = self: super: { inherit (prevStage) fetchurl xz; };
+      extraNativeBuildInputs = if localSystem.isLinux then [ prevStage.patchelf ] else [];
     };
   })
 

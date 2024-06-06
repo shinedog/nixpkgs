@@ -1,24 +1,30 @@
-{stdenv, fetchzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  version = "11.0.3";
-in fetchzip {
-  name = "babelstone-han-${version}";
+stdenvNoCC.mkDerivation {
+  pname = "babelstone-han";
+  version = "13.0.3";
 
-  url = http://www.babelstone.co.uk/Fonts/Download/BabelStoneHan.zip;
-  postFetch = ''
+  src = fetchzip {
+    # upstream download links are unversioned, so hash changes
+    url = "https://web.archive.org/web/20200210125314/https://www.babelstone.co.uk/Fonts/Download/BabelStoneHan.zip";
+    hash = "sha256-LLhNtHu2hh5DY2XVSrLuVzzR6OtMdSSHetyA0k1IFs0=";
+  };
+
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
-    unzip $downloadedFile '*.ttf' -d $out/share/fonts/truetype
+    cp *.ttf $out/share/fonts/truetype
+
+    runHook postInstall
   '';
-  sha256 = "0c8s21kllyilwivrb8gywq818y67w3zpann34hz36vy0wyiswn1c";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Unicode CJK font with over 36000 Han characters";
-    homepage = http://www.babelstone.co.uk/Fonts/Han.html;
+    homepage = "https://www.babelstone.co.uk/Fonts/Han.html";
 
-    license = licenses.free;
+    license = licenses.arphicpl;
     platforms = platforms.all;
-    hydraPlatforms = [];
-    maintainers = [ maintainers.volth ];
+    maintainers = with maintainers; [ emily ];
   };
 }

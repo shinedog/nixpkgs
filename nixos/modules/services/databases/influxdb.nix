@@ -96,11 +96,8 @@ let
     };
   } cfg.extraConfig;
 
-  configFile = pkgs.runCommand "config.toml" {
-    buildInputs = [ pkgs.remarshal ];
-    preferLocalBuild = true;
-  } ''
-    remarshal -if json -of toml \
+  configFile = pkgs.runCommandLocal "config.toml" { } ''
+    ${pkgs.buildPackages.remarshal}/bin/remarshal -if json -of toml \
       < ${pkgs.writeText "config.json" (builtins.toJSON configOptions)} \
       > $out
   '';
@@ -119,23 +116,18 @@ in
         type = types.bool;
       };
 
-      package = mkOption {
-        default = pkgs.influxdb;
-        defaultText = "pkgs.influxdb";
-        description = "Which influxdb derivation to use";
-        type = types.package;
-      };
+      package = mkPackageOption pkgs "influxdb" { };
 
       user = mkOption {
         default = "influxdb";
         description = "User account under which influxdb runs";
-        type = types.string;
+        type = types.str;
       };
 
       group = mkOption {
         default = "influxdb";
         description = "Group under which influxdb runs";
-        type = types.string;
+        type = types.str;
       };
 
       dataDir = mkOption {
@@ -169,6 +161,7 @@ in
         ExecStart = ''${cfg.package}/bin/influxd -config "${configFile}"'';
         User = cfg.user;
         Group = cfg.group;
+        Restart = "on-failure";
       };
       postStart =
         let
@@ -182,15 +175,16 @@ in
         '';
     };
 
-    users.users = optional (cfg.user == "influxdb") {
-      name = "influxdb";
-      uid = config.ids.uids.influxdb;
-      description = "Influxdb daemon user";
+    users.users = optionalAttrs (cfg.user == "influxdb") {
+      influxdb = {
+        uid = config.ids.uids.influxdb;
+        group = "influxdb";
+        description = "Influxdb daemon user";
+      };
     };
 
-    users.groups = optional (cfg.group == "influxdb") {
-      name = "influxdb";
-      gid = config.ids.gids.influxdb;
+    users.groups = optionalAttrs (cfg.group == "influxdb") {
+      influxdb.gid = config.ids.gids.influxdb;
     };
   };
 

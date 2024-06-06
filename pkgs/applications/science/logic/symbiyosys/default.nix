@@ -1,37 +1,62 @@
-{ stdenv, fetchFromGitHub, yosys, python3 }:
+{ lib, stdenv, fetchFromGitHub
+, bash, python3, yosys
+, yices, boolector, z3, aiger
+}:
 
-stdenv.mkDerivation rec {
-  name = "symbiyosys-${version}";
-  version = "2019.04.18";
+stdenv.mkDerivation {
+  pname = "symbiyosys";
+  version = "2021.11.30";
 
   src = fetchFromGitHub {
-    owner  = "yosyshq";
-    repo   = "symbiyosys";
-    rev    = "b1de59032ef3de35e56fa420a914c2f14d2495e4";
-    sha256 = "0zci1n062csswl5xxjh9fwq09p9clv95ckag3yywxq06hnqzx0r7";
+    owner = "YosysHQ";
+    repo  = "SymbiYosys";
+    rev   = "b409b1179e36d2a3fff66c85b7d4e271769a2d9e";
+    hash  = "sha256-S7of2upntiMkSdh4kf1RsrjriS31Eh8iEcVvG36isQg=";
   };
 
-  buildInputs = [ python3 yosys ];
+  buildInputs = [ ];
+  patchPhase = ''
+    patchShebangs .
+
+    # Fix up Yosys imports
+    substituteInPlace sbysrc/sby.py \
+      --replace "##yosys-sys-path##" \
+                "sys.path += [p + \"/share/yosys/python3/\" for p in [\"$out\", \"${yosys}\"]]"
+
+    # Fix various executable references
+    substituteInPlace sbysrc/sby_core.py \
+      --replace '"/usr/bin/env", "bash"' '"${bash}/bin/bash"' \
+      --replace ', "btormc"'             ', "${boolector}/bin/btormc"' \
+      --replace ', "aigbmc"'             ', "${aiger}/bin/aigbmc"'
+
+    substituteInPlace sbysrc/sby_core.py \
+      --replace '##yosys-program-prefix##' '"${yosys}/bin/"'
+
+    substituteInPlace sbysrc/sby.py \
+      --replace '/usr/bin/env python3' '${python3}/bin/python'
+  '';
 
   buildPhase = "true";
+
   installPhase = ''
     mkdir -p $out/bin $out/share/yosys/python3
 
     cp sbysrc/sby_*.py $out/share/yosys/python3/
     cp sbysrc/sby.py $out/bin/sby
-    chmod +x $out/bin/sby
 
-    # Fix up shebang and Yosys imports
-    patchShebangs $out/bin/sby
-    substituteInPlace $out/bin/sby \
-      --replace "##yosys-sys-path##" \
-                "sys.path += [p + \"/share/yosys/python3/\" for p in [\"$out\", \"${yosys}\"]]"
+    chmod +x $out/bin/sby
   '';
+
+  doCheck = false; # not all provers are yet packaged...
+  nativeCheckInputs = [ python3 yosys boolector yices z3 aiger ];
+  checkPhase = "make test";
+
   meta = {
     description = "Tooling for Yosys-based verification flows";
-    homepage    = https://symbiyosys.readthedocs.io/;
-    license     = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ thoughtpolice ];
-    platforms   = stdenv.lib.platforms.unix;
+    homepage    = "https://symbiyosys.readthedocs.io/";
+    license     = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ thoughtpolice emily ];
+    mainProgram = "sby";
+    platforms   = lib.platforms.all;
   };
 }

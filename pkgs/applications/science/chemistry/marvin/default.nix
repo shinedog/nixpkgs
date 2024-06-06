@@ -1,16 +1,15 @@
-{ stdenv, fetchurl, dpkg, makeWrapper, coreutils, gawk, gnugrep, gnused, jre }:
+{ lib, stdenv, fetchurl, dpkg, makeWrapper, coreutils, gawk, gnugrep, gnused, openjdk17 }:
 
-with stdenv.lib;
+with lib;
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "marvin";
-  version = "19.1.0";
+  version = "23.17.0";
 
   src = fetchurl {
     name = "marvin-${version}.deb";
     url = "http://dl.chemaxon.com/marvin/${version}/marvin_linux_${versions.majorMinor version}.deb";
-    sha256 = "1ccsimfvms5q4prjyk6sg5hsc3hkcjjfq3gl7jjm8dgd2173zzyc";
+    hash = "sha256-zE/9EaOsNJwzE4Doasm9N8QG4t7wDOxqpV/Nhc4p7Ws=";
   };
 
   nativeBuildInputs = [ dpkg makeWrapper ];
@@ -22,7 +21,7 @@ stdenv.mkDerivation rec {
   installPhase = ''
     wrapBin() {
       makeWrapper $1 $out/bin/$(basename $1) \
-        --set INSTALL4J_JAVA_HOME "${jre}" \
+        --set INSTALL4J_JAVA_HOME "${openjdk17}" \
         --prefix PATH : ${makeBinPath [ coreutils gawk gnugrep gnused ]}
     }
     cp -r opt $out
@@ -41,7 +40,7 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "A chemical modelling, analysis and structure drawing program";
-    homepage = https://chemaxon.com/products/marvin;
+    homepage = "https://chemaxon.com/products/marvin";
     maintainers = with maintainers; [ fusion809 ];
     license = licenses.unfree;
     platforms = platforms.linux;

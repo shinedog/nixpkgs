@@ -1,27 +1,62 @@
-{ stdenv, fetchFromGitHub, zlib, tbb, python, perl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, perl
+, python3
+, tbb
+, zlib
+, runCommand
+, bowtie2
+}:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "bowtie2";
-  version = "2.3.5.1";
-  name = "${pname}-${version}";
+  version = "2.5.4";
 
   src = fetchFromGitHub {
     owner = "BenLangmead";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "1l1f0yhjqqvy4lpxfml1xwv7ayimwbpzazvp0281gb4jb5f5mr1a";
+    repo = "bowtie2";
+    rev = "refs/tags/v${finalAttrs.version}";
+    fetchSubmodules = true;
+    hash = "sha256-ZbmVOItfAgKdsMrvQIXgKiPtoQJZYfGblCGDoNPjvTU=";
   };
 
-  buildInputs = [ zlib tbb python perl ];
+  # because of this flag, gcc on aarch64 cannot find the Threads
+  # Could NOT find Threads (missing: Threads_FOUND)
+  # TODO: check with other distros and report upstream
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace "-m64" ""
+  '';
 
-  installFlags = [ "prefix=$(out)" ];
+  nativeBuildInputs = [ cmake ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ tbb zlib python3 perl ];
+
+  cmakeFlags = lib.optional (!stdenv.hostPlatform.isx86) ["-DCMAKE_CXX_FLAGS=-I${finalAttrs.src}/third_party"];
+
+  # ctest fails because of missing dependencies between tests
+  doCheck = false;
+
+  passthru.tests = {
+    ctest = runCommand "${finalAttrs.pname}-test" { } ''
+      mkdir $out
+      ${lib.getExe bowtie2} -x ${finalAttrs.src}/example/index/lambda_virus ${finalAttrs.src}/example/reads/longreads.fq -u 10
+      ${bowtie2}/bin/bowtie2-build-s -c GGGCGGCGACCTCGCGGGTTTTCGCTA $out/small
+      ${bowtie2}/bin/bowtie2-inspect-s $out/small
+      ${bowtie2}/bin/bowtie2-build-l -c GGGCGGCGACCTCGCGGGTTTTCGCTA $out/large
+      ${bowtie2}/bin/bowtie2-inspect-l $out/large
+    '';
+  };
+
+  meta = with lib; {
     description = "An ultrafast and memory-efficient tool for aligning sequencing reads to long reference sequences";
-    license = licenses.gpl3;
-    homepage = http://bowtie-bio.sf.net/bowtie2;
+    license = licenses.gpl3Plus;
+    homepage = "http://bowtie-bio.sf.net/bowtie2";
+    changelog = "https://github.com/BenLangmead/bowtie2/releases/tag/${finalAttrs.src.rev}";
     maintainers = with maintainers; [ rybern ];
     platforms = platforms.all;
-    broken = stdenv.isAarch64;
+    mainProgram = "bowtie2";
   };
-}
+})

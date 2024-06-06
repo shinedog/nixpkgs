@@ -1,27 +1,31 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+}:
 
-buildGoPackage rec {
-  name = "desync-${version}";
-  version = "0.4.0";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/folbricht/desync";
+buildGoModule rec {
+  pname = "desync";
+  version = "0.9.6";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "folbricht";
     repo = "desync";
-    sha256 = "17qh0g1paa7212j761q9z246k10a3xrwd8fgiizw3lr9adn50kdk";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-TwzD9WYi4cdDPKKV2XoqkGWJ9CzIwoxeFll8LqNWf/E=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-CBw5FFGQgvdYoOUZ6E1F/mxqzNKOwh2IZbsh0dAsLEE=";
 
-  meta = with stdenv.lib; {
+  # nix builder doesn't have access to test data; tests fail for reasons unrelated to binary being bad.
+  doCheck = false;
+
+  meta = with lib; {
     description = "Content-addressed binary distribution system";
+    mainProgram = "desync";
     longDescription = "An alternate implementation of the casync protocol and storage mechanism with a focus on production-readiness";
-    homepage = https://github.com/folbricht/desync;
+    homepage = "https://github.com/folbricht/desync";
+    changelog = "https://github.com/folbricht/desync/releases/tag/v${version}";
     license = licenses.bsd3;
-    platforms = platforms.unix; # *may* work on Windows, but varies between releases.
-    maintainers = [ maintainers.chaduffy ];
+    maintainers = with maintainers; [ chaduffy ];
   };
 }

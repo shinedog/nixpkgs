@@ -1,21 +1,35 @@
-{ lib, buildPythonPackage, fetchFromGitHub }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "unidiff";
-  version = "0.5.5";
+  version = "0.7.5";
+  format = "setuptools";
 
-  # PyPI tarball doesn't ship tests
-  src = fetchFromGitHub {
-    owner = "matiasb";
-    repo = "python-unidiff";
-    rev = "v${version}";
-    sha256 = "1nvi7s1nn5p7j6aql1nkn2kiadnfby98yla5m3jq8xwsx0aplwdm";
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "2e5f0162052248946b9f0970a40e9e124236bf86c82b70821143a6fc1dea2574";
   };
+
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  unittestFlagsArray = [
+    "-s"
+    "tests"
+  ];
+
+  pythonImportsCheck = [ "unidiff" ];
 
   meta = with lib; {
     description = "Unified diff python parsing/metadata extraction library";
-    homepage = https://github.com/matiasb/python-unidiff;
+    mainProgram = "unidiff";
+    homepage = "https://github.com/matiasb/python-unidiff";
+    changelog = "https://github.com/matiasb/python-unidiff/raw/v${version}/HISTORY";
     license = licenses.mit;
-    maintainers = [ maintainers.marsam ];
+    maintainers = [ maintainers.pbsds ];
   };
 }

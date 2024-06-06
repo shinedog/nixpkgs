@@ -1,41 +1,74 @@
-{ buildPythonPackage
-, fetchPypi
-, pythonOlder
-, stdenv
-, setuptools_scm
-, pytest
-, glibcLocales
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  setuptools-scm,
+  pytestCheckHook,
+  typing-extensions,
+  importlib-metadata,
+  sphinxHook,
+  sphinx-autodoc-typehints,
+  sphinx-rtd-theme,
+  glibcLocales,
 }:
 
 buildPythonPackage rec {
   pname = "typeguard";
-  version = "2.2.2";
+  version = "4.2.1";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b8ddc6e2e60bd64b7003f9a685a09ba387b74adf2f6bea7534a76d61892f573e";
+    hash = "sha256-xVahuVlIIwUQBwylP6A0H7CWRhG9BdWY2H+1IRXWX+4=";
   };
 
-  buildInputs = [ setuptools_scm ];
-  nativeBuildInputs = [ glibcLocales ];
+  outputs = [
+    "out"
+    "doc"
+  ];
 
-  LC_ALL="en_US.utf-8";
+  nativeBuildInputs = [
+    glibcLocales
+    setuptools
+    setuptools-scm
+    sphinxHook
+    sphinx-autodoc-typehints
+    sphinx-rtd-theme
+  ];
 
-  postPatch = ''
-    substituteInPlace setup.cfg --replace " --cov" ""
-  '';
+  propagatedBuildInputs = [
+    typing-extensions
+  ] ++ lib.optionals (pythonOlder "3.10") [ importlib-metadata ];
 
-  checkInputs = [ pytest ];
+  env.LC_ALL = "en_US.utf-8";
 
-  checkPhase = ''
-    py.test .
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  disabled = pythonOlder "3.3";
+  pythonImportsCheck = [ "typeguard" ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # mypy tests aren't passing with latest mypy
+    "tests/mypy"
+  ];
+
+  disabledTests = [
+    # AssertionError: 'type of argument "x" must be ' != 'None'
+    "TestPrecondition::test_precondition_ok_and_typeguard_fails"
+    # AttributeError: 'C' object has no attribute 'x'
+    "TestInvariant::test_invariant_ok_and_typeguard_fails"
+    # AttributeError: 'D' object has no attribute 'x'
+    "TestInheritance::test_invariant_ok_and_typeguard_fails"
+  ];
+
+  meta = with lib; {
     description = "This library provides run-time type checking for functions defined with argument type annotations";
-    homepage = https://github.com/agronholm/typeguard;
+    homepage = "https://github.com/agronholm/typeguard";
+    changelog = "https://github.com/agronholm/typeguard/releases/tag/${version}";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

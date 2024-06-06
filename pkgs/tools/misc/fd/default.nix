@@ -1,30 +1,44 @@
-{ stdenv, fetchFromGitHub, rustPlatform }:
+{ lib, rustPlatform, fetchFromGitHub, installShellFiles, rust-jemalloc-sys, testers, fd }:
 
 rustPlatform.buildRustPackage rec {
-  name = "fd-${version}";
-  version = "7.3.0";
+  pname = "fd";
+  version = "10.1.0";
 
   src = fetchFromGitHub {
     owner = "sharkdp";
     repo = "fd";
     rev = "v${version}";
-    sha256 = "0y4657w1pi4x9nmbv551dj00dyiv935m8ph7jlv00chwy3hrb3yi";
+    hash = "sha256-9fL2XV3Vre2uo8Co3tlHYIvpNHNOh5TuvZggkWOxm5A=";
   };
 
-  cargoSha256 = "0dfv6nia3v3f3rwbjh2h3zdqd48vw8gwilhq0z4n6xvjzk7qydj5";
+  cargoHash = "sha256-3TbsPfAn/GcGASc0RCcyAeUiD4RUtvTATdTYhKdBxvo=";
 
-  preFixup = ''
-    install -Dm644 "$src/doc/fd.1" "$out/man/man1/fd.1"
+  nativeBuildInputs = [ installShellFiles ];
 
-    install -Dm644 target/release/build/fd-find-*/out/fd.bash \
-      "$out/share/bash-completion/completions/fd.bash"
-    install -Dm644 target/release/build/fd-find-*/out/fd.fish \
-      "$out/share/fish/vendor_completions.d/fd.fish"
-    install -Dm644 target/release/build/fd-find-*/out/_fd \
-      "$out/share/zsh/site-functions/_fd"
+  buildInputs = [ rust-jemalloc-sys ];
+
+  # skip flaky test
+  checkFlags = [
+    "--skip=test_owner_current_group"
+    # Fails if the filesystem performs UTF-8 validation (such as ZFS with utf8only=on)
+    "--skip=test_exec_invalid_utf8"
+    "--skip=test_invalid_utf8"
+  ];
+
+  postInstall = ''
+    installManPage doc/fd.1
+
+    installShellCompletion --cmd fd \
+      --bash <($out/bin/fd --gen-completions bash) \
+      --fish <($out/bin/fd --gen-completions fish)
+    installShellCompletion --zsh contrib/completion/_fd
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests.version = testers.testVersion {
+    package = fd;
+  };
+
+  meta = with lib; {
     description = "A simple, fast and user-friendly alternative to find";
     longDescription = ''
       `fd` is a simple, fast and user-friendly alternative to `find`.
@@ -33,8 +47,9 @@ rustPlatform.buildRustPackage rec {
       it provides sensible (opinionated) defaults for 80% of the use cases.
     '';
     homepage = "https://github.com/sharkdp/fd";
+    changelog = "https://github.com/sharkdp/fd/blob/v${version}/CHANGELOG.md";
     license = with licenses; [ asl20 /* or */ mit ];
-    maintainers = with maintainers; [ dywedir ];
-    platforms = platforms.all;
+    maintainers = with maintainers; [ dywedir figsoda globin ma27 zowoq ];
+    mainProgram = "fd";
   };
 }

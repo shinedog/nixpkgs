@@ -1,21 +1,49 @@
-{ stdenv, fetchurl, python2Packages, root, makeWrapper, zlib, withRootSupport ? false }:
+{ lib
+, stdenv
+, fetchurl
+, python
+, root
+, makeWrapper
+, zlib
+, withRootSupport ? false
+}:
 
 stdenv.mkDerivation rec {
-  name = "yoda-${version}";
-  version = "1.7.4";
+  pname = "yoda";
+  version = "1.9.10";
 
   src = fetchurl {
     url = "https://www.hepforge.org/archive/yoda/YODA-${version}.tar.bz2";
-    sha256 = "0w9s3qv87hrmpq4dkrxcrl2hn2vcsbvy8ml99w85404wksw1dwrx";
+    hash = "sha256-CnCO6dcElF0zh8xDexX/3fOCxw/lurOe0r2/g8LCjG8=";
   };
 
-  pythonPath = []; # python wrapper support
+  nativeBuildInputs = with python.pkgs; [
+    cython
+    makeWrapper
+  ];
 
-  buildInputs = with python2Packages; [ python numpy matplotlib makeWrapper ]
-    ++ stdenv.lib.optional withRootSupport root;
-  propagatedBuildInputs = [ zlib ];
+  buildInputs = [
+    python
+  ] ++ (with python.pkgs; [
+    numpy
+    matplotlib
+  ]) ++ lib.optionals withRootSupport [
+    root
+  ];
+
+  propagatedBuildInputs = [
+    zlib
+  ];
 
   enableParallelBuilding = true;
+
+  postPatch = ''
+    touch pyext/yoda/*.{pyx,pxd}
+    patchShebangs .
+
+    substituteInPlace pyext/yoda/plotting/script_generator.py \
+      --replace '/usr/bin/env python' '${python.interpreter}'
+  '';
 
   postInstall = ''
     for prog in "$out"/bin/*; do
@@ -25,11 +53,16 @@ stdenv.mkDerivation rec {
 
   hardeningDisable = [ "format" ];
 
-  meta = {
+  doInstallCheck = true;
+
+  installCheckTarget = "check";
+
+  meta = with lib; {
     description = "Provides small set of data analysis (specifically histogramming) classes";
-    license     = stdenv.lib.licenses.gpl3;
-    homepage    = https://yoda.hepforge.org;
-    platforms   = stdenv.lib.platforms.unix;
-    maintainers = with stdenv.lib.maintainers; [ veprbl ];
+    license = licenses.gpl3Only;
+    homepage = "https://yoda.hepforge.org";
+    changelog = "https://gitlab.com/hepcedar/yoda/-/blob/yoda-${version}/ChangeLog";
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ veprbl ];
   };
 }

@@ -1,24 +1,28 @@
-{stdenv, fetchzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
+stdenvNoCC.mkDerivation rec {
+  pname = "stix-otf";
   version = "1.1.1";
-in fetchzip rec {
-  name = "stix-otf-${version}";
 
-  url = "mirror://sourceforge/stixfonts/STIXv${version}-word.zip";
+  src = fetchzip {
+    url = "https://sources.debian.org/src/fonts-stix/1.1.1-4.1/STIXv${version}-word.zip";
+    stripRoot = false;
+    hash = "sha256-M3STue+RPHi8JgZZupV0dVLZYKBiFutbBOlanuKkD08=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts
-    unzip -j $downloadedFile \*.otf -d $out/share/fonts/opentype
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 Fonts/STIX-Word/*.otf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  sha256 = "04d4qxq3i9fyapsmxk6d9v1xirjam8c74fyxs6n24d3gf2945zmw";
-
-  meta = with stdenv.lib; {
-    homepage = http://www.stixfonts.org/;
+  meta = with lib; {
+    homepage = "http://www.stixfonts.org/";
     description = "Fonts for Scientific and Technical Information eXchange";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

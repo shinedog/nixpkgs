@@ -1,57 +1,60 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, python
-, zope_testrunner
-, transaction
-, six
-, zope_interface
-, zodbpickle
-, zconfig
-, persistent
-, zc_lockfile
-, BTrees
-, manuel
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  python,
+  zope-testrunner,
+  transaction,
+  six,
+  zope-interface,
+  zodbpickle,
+  zconfig,
+  persistent,
+  zc-lockfile,
+  btrees,
+  manuel,
 }:
 
 buildPythonPackage rec {
+  pname = "zodb";
+  version = "6.0";
+
+  src = fetchPypi {
     pname = "ZODB";
-    version = "5.5.1";
+    inherit version;
+    hash = "sha256-5Rx5IRXF2q1OgGdXuvovdUwADCPmurw75eQHdf5Jtdw=";
+  };
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "20155942fa326e89ad8544225bafd74237af332ce9d7c7105a22318fe8269666";
-    };
+  # remove broken test
+  postPatch = ''
+    rm -vf src/ZODB/tests/testdocumentation.py
+  '';
 
-    # remove broken test
-    postPatch = ''
-      rm -vf src/ZODB/tests/testdocumentation.py
-    '';
+  propagatedBuildInputs = [
+    transaction
+    six
+    zope-interface
+    zodbpickle
+    zconfig
+    persistent
+    zc-lockfile
+    btrees
+  ];
 
-    propagatedBuildInputs = [
-      transaction
-      six
-      zope_interface
-      zodbpickle
-      zconfig
-      persistent
-      zc_lockfile
-      BTrees
-    ];
+  nativeCheckInputs = [
+    manuel
+    zope-testrunner
+  ];
 
-    checkInputs = [
-      manuel
-      zope_testrunner
-    ];
+  checkPhase = ''
+    ${python.interpreter} -m zope.testrunner --test-path=src []
+  '';
 
-    checkPhase = ''
-      ${python.interpreter} -m zope.testrunner --test-path=src []
-    '';
-
-    meta = with stdenv.lib; {
-      description = "Zope Object Database: object database and persistence";
-      homepage = https://pypi.python.org/pypi/ZODB;
-      license = licenses.zpl21;
-      maintainers = with maintainers; [ goibhniu ];
-    };
+  meta = with lib; {
+    description = "Zope Object Database: object database and persistence";
+    homepage = "https://zodb-docs.readthedocs.io/";
+    changelog = "https://github.com/zopefoundation/ZODB/blob/${version}/CHANGES.rst";
+    license = licenses.zpl21;
+    maintainers = with maintainers; [ goibhniu ];
+  };
 }

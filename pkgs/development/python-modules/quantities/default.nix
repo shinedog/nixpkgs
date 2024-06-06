@@ -1,28 +1,47 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, numpy
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  numpy,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  setuptools-scm,
 }:
 
 buildPythonPackage rec {
   pname = "quantities";
-  version = "0.12.3";
+  version = "0.15.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "582f3c7aeba897846761e966615e01202a5e5d06add304492931b05085d19883";
+    hash = "sha256-nqMeKg11F88k1UaxQUbe+SkmOZk6YWzKYbh173lrSys=";
   };
+
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+  ];
 
   propagatedBuildInputs = [ numpy ];
 
-  checkPhase = ''
-    ${python.interpreter} setup.py test -V 1
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = {
-    description = "Quantities is designed to handle arithmetic and";
-    homepage = http://python-quantities.readthedocs.io/;
-    license = lib.licenses.bsd2;
+  disabledTests = [
+    # test fails with numpy 1.24
+    "test_mul"
+  ];
+
+  pythonImportsCheck = [ "quantities" ];
+
+  meta = with lib; {
+    description = "Quantities is designed to handle arithmetic and conversions of physical quantities";
+    homepage = "https://python-quantities.readthedocs.io/";
+    changelog = "https://github.com/python-quantities/python-quantities/blob/v${version}/CHANGES.txt";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ ];
   };
 }

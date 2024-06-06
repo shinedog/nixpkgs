@@ -1,21 +1,72 @@
-{ stdenv, fetchurl, intltool, glib, pkgconfig, libgsf, libuuid, gcab, bzip2 }:
+{ lib
+, stdenv
+, fetchurl
+, meson
+, ninja
+, vala
+, gobject-introspection
+, perl
+, bison
+, gettext
+, glib
+, pkg-config
+, libgsf
+, gcab
+, bzip2
+, gnome
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.98";
-  name = "msitools-${version}";
+  pname = "msitools";
+  version = "0.103";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/msitools/${version}/${name}.tar.xz";
-    sha256 = "19wb3n3nwkpc6bjr0q3f1znaxsfaqgjbdxxnbx8ic8bb5b49hwac";
+    url = "mirror://gnome/sources/msitools/${lib.versions.majorMinor version}/msitools-${version}.tar.xz";
+    hash = "sha256-0XYi7rvzf6TAm1m+C8jbCLJr4wCmcxx02h684mK86Dk=";
   };
 
-  nativeBuildInputs = [ intltool pkgconfig ];
-  buildInputs = [ glib libgsf libuuid gcab bzip2 ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    vala
+    gobject-introspection
+    perl
+    bison
+    gettext
+    pkg-config
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    glib
+    libgsf
+    gcab
+    bzip2
+  ];
+
+  # WiX tests fail on darwin
+  doCheck = !stdenv.isDarwin;
+
+  postPatch = ''
+    patchShebangs subprojects/bats-core/{bin,libexec}
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+  };
+
+  meta = with lib; {
     description = "Set of programs to inspect and build Windows Installer (.MSI) files";
-    homepage = https://wiki.gnome.org/msitools;
-    license = [ licenses.gpl2 licenses.lgpl21 ];
+    homepage = "https://gitlab.gnome.org/GNOME/msitools";
+    license = with licenses; [
+      # Library
+      lgpl21Plus
+      # Tools
+      gpl2Plus
+    ];
+    maintainers = with maintainers; [ PlushBeaver ];
     platforms = platforms.unix;
   };
 }

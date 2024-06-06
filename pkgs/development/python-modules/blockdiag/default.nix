@@ -1,31 +1,75 @@
-{ stdenv, fetchurl, buildPythonPackage, pep8, nose, unittest2, docutils
-, pillow, webcolors, funcparserlib
+{
+  lib,
+  buildPythonPackage,
+  docutils,
+  ephem,
+  fetchFromGitHub,
+  fetchpatch,
+  funcparserlib,
+  pillow,
+  pynose,
+  pytestCheckHook,
+  pythonOlder,
+  reportlab,
+  setuptools,
+  webcolors,
 }:
 
 buildPythonPackage rec {
   pname = "blockdiag";
-  version = "1.5.3";
-  name = pname + "-" + version;
+  version = "3.0.0";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "https://bitbucket.org/blockdiag/blockdiag/get/${version}.tar.bz2";
-    sha256 = "0r0qbmv0ijnqidsgm2rqs162y9aixmnkmzgnzgk52hiy7ydm4k8f";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "blockdiag";
+    repo = "blockdiag";
+    rev = "refs/tags/${version}";
+    hash = "sha256-j8FoNUIJJOaahaol1MRPyY2jcPCEIlaAD4bmM2QKFFI=";
   };
 
-  buildInputs = [ pep8 nose unittest2 docutils ];
+  patches = [
+    # https://github.com/blockdiag/blockdiag/pull/179
+    (fetchpatch {
+      name = "pillow-10-compatibility.patch";
+      url = "https://github.com/blockdiag/blockdiag/commit/20d780cad84e7b010066cb55f848477957870165.patch";
+      hash = "sha256-t1zWFzAsLL2EUa0nD4Eui4Y5AhAZLRmp/yC9QpzzeUA=";
+    })
+  ];
 
-  propagatedBuildInputs = [ pillow webcolors funcparserlib ];
+  build-system = [ setuptools ];
 
-  # One test fails:
-  #   ...
-  #   FAIL: test_auto_font_detection (blockdiag.tests.test_boot_params.TestBootParams)
-  doCheck = false;
+  dependencies = [
+    docutils
+    funcparserlib
+    pillow
+    reportlab
+    webcolors
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    ephem
+    pynose
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [ "src/blockdiag/tests/" ];
+
+  disabledTests = [
+    # Test require network access
+    "test_app_cleans_up_images"
+  ];
+
+  pythonImportsCheck = [ "blockdiag" ];
+
+  meta = with lib; {
     description = "Generate block-diagram image from spec-text file (similar to Graphviz)";
-    homepage = http://blockdiag.com/;
+    homepage = "http://blockdiag.com/";
+    changelog = "https://github.com/blockdiag/blockdiag/blob/${version}/CHANGES.rst";
     license = licenses.asl20;
-    platforms = platforms.unix;
     maintainers = with maintainers; [ bjornfor ];
+    mainProgram = "blockdiag";
+    platforms = platforms.unix;
   };
 }

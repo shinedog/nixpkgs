@@ -1,42 +1,102 @@
-{ stdenv, fetchurl, autoreconfHook, pkgconfig, openssl, botan2, log4cplus
-, boost, python3, postgresql, mysql, gmp, bzip2 }:
+{ stdenv
+, lib
+, fetchurl
+
+# build time
+, autoreconfHook
+, pkg-config
+, python3Packages
+
+# runtime
+, withMysql ? stdenv.buildPlatform.system == stdenv.hostPlatform.system
+, withPostgres ? stdenv.buildPlatform.system == stdenv.hostPlatform.system
+, boost
+, libmysqlclient
+, log4cplus
+, openssl
+, postgresql
+, python3
+
+# tests
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "kea";
-  version = "1.5.0";
+  version = "2.6.0"; # only even minor versions are stable
 
   src = fetchurl {
-    url = "https://ftp.isc.org/isc/${pname}/${version}/${name}.tar.gz";
-    sha256 = "1v5a3prgrplw6dp9124f9gpy0kz0jrjwhnvzrw3zcynad2mlzkpd";
+    url = "https://ftp.isc.org/isc/${pname}/${version}/${pname}-${version}.tar.gz";
+    hash = "sha256-IHzq4z6zuB7E5qxWBSSahbk3eTM7YqrfOeSJ8R283I0=";
   };
 
-  patches = [ ./dont-create-var.patch ];
+  patches = [
+    ./dont-create-var.patch
+  ];
 
   postPatch = ''
     substituteInPlace ./src/bin/keactrl/Makefile.am --replace '@sysconfdir@' "$out/etc"
-    substituteInPlace ./src/bin/keactrl/Makefile.am --replace '@(sysconfdir)@' "$out/etc"
+    # darwin special-casing just causes trouble
+    substituteInPlace ./m4macros/ax_crypto.m4 --replace 'apple-darwin' 'nope'
   '';
 
-  configureFlags = [
-    "--localstatedir=/var"
-    "--with-pgsql=${postgresql}/bin/pg_config"
-    "--with-mysql=${mysql.connector-c}/bin/mysql_config"
+  outputs = [
+    "out"
+    "doc"
+    "man"
   ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  configureFlags = [
+    "--enable-perfdhcp"
+    "--enable-shell"
+    "--localstatedir=/var"
+    "--with-openssl=${lib.getDev openssl}"
+  ]
+  ++ lib.optional withPostgres "--with-pgsql=${postgresql}/bin/pg_config"
+  ++ lib.optional withMysql "--with-mysql=${lib.getDev libmysqlclient}/bin/mysql_config";
+
+  postConfigure = ''
+    # Mangle embedded paths to dev-only inputs.
+    sed -e "s|$NIX_STORE/[a-z0-9]\{32\}-|$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-|g" -i config.report
+  '';
+
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ] ++ (with python3Packages; [
+    sphinxHook
+    sphinx-rtd-theme
+  ]);
+
+  sphinxBuilders = [
+    "html"
+    "man"
+  ];
+  sphinxRoot = "doc/sphinx";
+
   buildInputs = [
-    openssl log4cplus boost python3 mysql.connector-c
-    botan2 gmp bzip2
+    boost
+    libmysqlclient
+    log4cplus
+    openssl
+    python3
   ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://kea.isc.org/;
+  passthru.tests = {
+    kea = nixosTests.kea;
+    prefix-delegation = nixosTests.systemd-networkd-ipv6-prefix-delegation;
+    networking-scripted = lib.recurseIntoAttrs { inherit (nixosTests.networking.scripted) dhcpDefault dhcpSimple dhcpOneIf; };
+    networking-networkd = lib.recurseIntoAttrs { inherit (nixosTests.networking.networkd) dhcpDefault dhcpSimple dhcpOneIf; };
+  };
+
+  meta = with lib; {
+    changelog = "https://downloads.isc.org/isc/kea/${version}/Kea-${version}-ReleaseNotes.txt";
+    homepage = "https://kea.isc.org/";
     description = "High-performance, extensible DHCP server by ISC";
     longDescription = ''
-      KEA is a new open source DHCPv4/DHCPv6 server being developed by
+      Kea is a new open source DHCPv4/DHCPv6 server being developed by
       Internet Systems Consortium. The objective of this project is to
       provide a very high-performance, extensible DHCP server engine for
       use by enterprises and service providers, either as is or with
@@ -44,6 +104,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.mpl20;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ fpletz ];
+    maintainers = with maintainers; [ fpletz hexa ];
   };
 }

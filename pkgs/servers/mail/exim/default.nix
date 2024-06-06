@@ -1,27 +1,47 @@
-{ coreutils, db, fetchurl, openssl, pcre, perl, pkgconfig, stdenv
+{ coreutils, db, fetchurl, openssl, pcre2, perl, pkg-config, lib, stdenv
+, libxcrypt
+, procps, killall
 , enableLDAP ? false, openldap
-, enableMySQL ? false, mysql, zlib
+, enableMySQL ? false, libmysqlclient, zlib
+, enablePgSQL ? false, postgresql
+, enableSqlite ? false, sqlite
 , enableAuthDovecot ? false, dovecot
 , enablePAM ? false, pam
+, enableSPF ? true, libspf2
+, enableDMARC ? true, opendmarc
+, enableRedis ? false, hiredis
+, enableJSON ? false, jansson
+, enableSRS ? false,
 }:
-
-stdenv.mkDerivation rec {
-  name = "exim-4.92";
+let
+  perl' = perl.withPackages (p: with p; [ FileFcntlLock ]);
+in stdenv.mkDerivation rec {
+  pname = "exim";
+  version = "4.97.1";
 
   src = fetchurl {
-    url = "https://ftp.exim.org/pub/exim/exim4/${name}.tar.xz";
-    sha256 = "0qhxxwl0nhzgp0w3pjkhx9z9lqfpk8id25q5ghf9ay2f90mydjba";
+    url = "https://ftp.exim.org/pub/exim/exim4/${pname}-${version}.tar.xz";
+    hash = "sha256-vXggV1CaeTWTUIUoWQYm0YXqFgzjLLNL7aJi6Zzv36k=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ coreutils db openssl perl pcre ]
-    ++ stdenv.lib.optional enableLDAP openldap
-    ++ stdenv.lib.optionals enableMySQL [ mysql zlib ]
-    ++ stdenv.lib.optional enableAuthDovecot dovecot
-    ++ stdenv.lib.optional enablePAM pam;
+  enableParallelBuilding = true;
 
-  preBuild = ''
-    ${stdenv.lib.optionalString enableMySQL "PKG_CONFIG_PATH=$PKG_CONFIG_PATH:${mysql}/share/mysql/pkgconfig/"}
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ coreutils db openssl perl' pcre2 libxcrypt ]
+    ++ lib.optional enableLDAP openldap
+    ++ lib.optionals enableMySQL [ libmysqlclient zlib ]
+    ++ lib.optional enablePgSQL postgresql
+    ++ lib.optionals enableSqlite [ sqlite sqlite.dev zlib ]
+    ++ lib.optional enableAuthDovecot dovecot
+    ++ lib.optional enablePAM pam
+    ++ lib.optional enableSPF libspf2
+    ++ lib.optional enableDMARC opendmarc
+    ++ lib.optional enableRedis hiredis
+    ++ lib.optional enableJSON jansson;
+
+  configurePhase = ''
+    runHook preConfigure
+
     sed '
       s:^\(BIN_DIRECTORY\)=.*:\1='"$out"'/bin:
       s:^\(CONFIGURE_FILE\)=.*:\1=/etc/exim.conf:
@@ -33,7 +53,7 @@ stdenv.mkDerivation rec {
       s:^\(FIXED_NEVER_USERS\)=root$:\1=0:
       s:^# \(WITH_CONTENT_SCAN\)=.*:\1=yes:
       s:^# \(AUTH_PLAINTEXT\)=.*:\1=yes:
-      s:^# \(SUPPORT_TLS\)=.*:\1=yes:
+      s:^# \(USE_OPENSSL\)=.*:\1=yes:
       s:^# \(USE_OPENSSL_PC=openssl\)$:\1:
       s:^# \(LOG_FILE_PATH=syslog\)$:\1:
       s:^# \(HAVE_IPV6=yes\)$:\1:
@@ -43,34 +63,82 @@ stdenv.mkDerivation rec {
       s:^# \(MV_COMMAND\)=.*:\1=${coreutils}/bin/mv:
       s:^# \(RM_COMMAND\)=.*:\1=${coreutils}/bin/rm:
       s:^# \(TOUCH_COMMAND\)=.*:\1=${coreutils}/bin/touch:
-      s:^# \(PERL_COMMAND\)=.*:\1=${perl}/bin/perl:
-      ${stdenv.lib.optionalString enableLDAP ''
+      s:^# \(PERL_COMMAND\)=.*:\1=${perl'}/bin/perl:
+      s:^# \(LOOKUP_DSEARCH=yes\)$:\1:
+      ${lib.optionalString enableLDAP ''
         s:^# \(LDAP_LIB_TYPE=OPENLDAP2\)$:\1:
         s:^# \(LOOKUP_LDAP=yes\)$:\1:
         s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lldap -llber:
         s:^# \(LOOKUP_LIBS\)=.*:\1=-lldap -llber:
       ''}
-      ${stdenv.lib.optionalString enableMySQL ''
+      ${lib.optionalString enableMySQL ''
         s:^# \(LOOKUP_MYSQL=yes\)$:\1:
-        s:^# \(LOOKUP_MYSQL_PC=mariadb\)$:\1:
-        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lmysqlclient:
-        s:^# \(LOOKUP_LIBS\)=.*:\1=-lmysqlclient:
-        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${mysql}/include/mysql/:
+        s:^# \(LOOKUP_MYSQL_PC=libmysqlclient\)$:\1:
+        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lmysqlclient -L${libmysqlclient}/lib/mysql -lssl -lm -lpthread -lz:
+        s:^# \(LOOKUP_LIBS\)=.*:\1=-lmysqlclient -L${libmysqlclient}/lib/mysql -lssl -lm -lpthread -lz:
+        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${libmysqlclient.dev}/include/mysql/:
       ''}
-      ${stdenv.lib.optionalString enableAuthDovecot ''
+      ${lib.optionalString enablePgSQL ''
+        s:^# \(LOOKUP_PGSQL=yes\)$:\1:
+        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lpq -L${postgresql.lib}/lib:
+        s:^# \(LOOKUP_LIBS\)=.*:\1=-lpq -L${postgresql.lib}/lib:
+        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${postgresql}/include:
+      ''}
+      ${lib.optionalString enableSqlite ''
+        s:^# \(LOOKUP_SQLITE=yes\)$:\1:
+        s:^# \(LOOKUP_SQLITE_PC=sqlite3\)$:\1:
+        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lsqlite3 -L${sqlite}/lib:
+        s:^# \(LOOKUP_LIBS\)=.*:\1=-lsqlite3 -L${sqlite}/lib -lssl -lm -lpthread -lz:
+        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${sqlite.dev}/include:
+      ''}
+      ${lib.optionalString enableAuthDovecot ''
         s:^# \(AUTH_DOVECOT\)=.*:\1=yes:
       ''}
-      ${stdenv.lib.optionalString enablePAM ''
+      ${lib.optionalString enableSRS ''
+        s:^# \(SUPPORT_SRS\)=.*:\1=yes:
+      ''}
+      ${lib.optionalString enablePAM ''
         s:^# \(SUPPORT_PAM\)=.*:\1=yes:
         s:^\(EXTRALIBS_EXIM\)=\(.*\):\1=\2 -lpam:
         s:^# \(EXTRALIBS_EXIM\)=.*:\1=-lpam:
       ''}
+      ${lib.optionalString enableSPF ''
+        s:^# \(SUPPORT_SPF\)=.*:\1=yes:
+        s:^# \(LDFLAGS += -lspf2\):\1:
+      ''}
+      ${lib.optionalString enableDMARC ''
+        s:^# \(SUPPORT_DMARC\)=.*:\1=yes:
+        s:^# \(LDFLAGS += -lopendmarc\):\1:
+      ''}
+      ${lib.optionalString enableRedis ''
+        s:^# \(LOOKUP_REDIS=yes\)$:\1:
+        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -lhiredis -L${hiredis}/lib/hiredis:
+        s:^# \(LOOKUP_LIBS\)=.*:\1=-lhiredis -L${hiredis}/lib/hiredis:
+        s:^\(LOOKUP_INCLUDE\)=\(.*\):\1=\2 -I${hiredis}/include/hiredis/:
+        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${hiredis}/include/hiredis/:
+      ''}
+      ${lib.optionalString enableJSON ''
+        s:^# \(LOOKUP_JSON=yes\)$:\1:
+        s:^\(LOOKUP_LIBS\)=\(.*\):\1=\2 -ljansson -L${jansson}/lib:
+        s:^# \(LOOKUP_LIBS\)=.*:\1=-ljansson -L${jansson}/lib:
+        s:^\(LOOKUP_INCLUDE\)=\(.*\):\1=\2 -I${jansson}/include:
+        s:^# \(LOOKUP_INCLUDE\)=.*:\1=-I${jansson}/include:
+      ''}
       #/^\s*#.*/d
       #/^\s*$/d
     ' < src/EDITME > Local/Makefile
+
+    {
+      echo EXIWHAT_PS_CMD=${procps}/bin/ps
+      echo EXIWHAT_MULTIKILL_CMD=${killall}/bin/killall
+    } >> Local/Makefile
+
+    runHook postConfigure
   '';
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/bin $out/share/man/man8
     cp doc/exim.8 $out/share/man/man8
 
@@ -84,13 +152,17 @@ stdenv.mkDerivation rec {
       for i in mailq newaliases rmail rsmtp runq sendmail; do
         ln -s exim $i
       done )
+
+    runHook postInstall
   '';
 
-  meta = {
-    homepage = http://exim.org/;
+  meta = with lib; {
+    homepage = "https://exim.org/";
     description = "A mail transfer agent (MTA)";
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.tv ];
+    license = with licenses; [ gpl2Plus bsd3 ];
+    mainProgram = "exim";
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ tv ] ++ teams.helsinki-systems.members;
+    changelog = "https://github.com/Exim/exim/blob/exim-${version}/doc/doc-txt/ChangeLog";
   };
 }

@@ -1,46 +1,62 @@
-{ lib, stdenv }:
+{ lib, stdenv, buildEnv }:
 
 # A special kind of derivation that is only meant to be consumed by the
 # nix-shell.
-{
-  inputsFrom ? [], # a list of derivations whose inputs will be made available to the environment
-  buildInputs ? [],
-  nativeBuildInputs ? [],
-  propagatedBuildInputs ? [],
-  propagatedNativeBuildInputs ? [],
-  ...
+{ name ? "nix-shell"
+, # a list of packages to add to the shell environment
+  packages ? [ ]
+, # propagate all the inputs from the given derivations
+  inputsFrom ? [ ]
+, buildInputs ? [ ]
+, nativeBuildInputs ? [ ]
+, propagatedBuildInputs ? [ ]
+, propagatedNativeBuildInputs ? [ ]
+, ...
 }@attrs:
 let
   mergeInputs = name:
-    let
-      op = item: sum: sum ++ item."${name}" or [];
-      nul = [];
-      list = [attrs] ++ inputsFrom;
-    in
-      lib.foldr op nul list;
+    (attrs.${name} or [ ]) ++
+    # 1. get all `{build,nativeBuild,...}Inputs` from the elements of `inputsFrom`
+    # 2. since that is a list of lists, `flatten` that into a regular list
+    # 3. filter out of the result everything that's in `inputsFrom` itself
+    # this leaves actual dependencies of the derivations in `inputsFrom`, but never the derivations themselves
+    (lib.subtractLists inputsFrom (lib.flatten (lib.catAttrs name inputsFrom)));
 
   rest = builtins.removeAttrs attrs [
+    "name"
+    "packages"
     "inputsFrom"
     "buildInputs"
     "nativeBuildInputs"
     "propagatedBuildInputs"
     "propagatedNativeBuildInputs"
+    "shellHook"
   ];
 in
 
 stdenv.mkDerivation ({
-  name = "nix-shell";
-  phases = ["nobuildPhase"];
+  inherit name;
 
   buildInputs = mergeInputs "buildInputs";
-  nativeBuildInputs = mergeInputs "nativeBuildInputs";
+  nativeBuildInputs = packages ++ (mergeInputs "nativeBuildInputs");
   propagatedBuildInputs = mergeInputs "propagatedBuildInputs";
   propagatedNativeBuildInputs = mergeInputs "propagatedNativeBuildInputs";
 
-  nobuildPhase = ''
-    echo
-    echo "This derivation is not meant to be built, aborting";
-    echo
-    exit 1
+  shellHook = lib.concatStringsSep "\n" (lib.catAttrs "shellHook"
+    (lib.reverseList inputsFrom ++ [ attrs ]));
+
+  phases = [ "buildPhase" ];
+
+  buildPhase = ''
+    { echo "------------------------------------------------------------";
+      echo " WARNING: the existence of this path is not guaranteed.";
+      echo " It is an internal implementation detail for pkgs.mkShell.";
+      echo "------------------------------------------------------------";
+      echo;
+      # Record all build inputs as runtime dependencies
+      export;
+    } >> "$out"
   '';
+
+  preferLocalBuild = true;
 } // rest)

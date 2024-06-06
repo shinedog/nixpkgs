@@ -5,8 +5,25 @@ with lib;
 let
 
   cfg = config.services.redshift;
+  lcfg = config.location;
 
 in {
+
+  imports = [
+    (mkChangedOptionModule [ "services" "redshift" "latitude" ] [ "location" "latitude" ]
+      (config:
+        let value = getAttrFromPath [ "services" "redshift" "latitude" ] config;
+        in if value == null then
+          throw "services.redshift.latitude is set to null, you can remove this"
+          else builtins.fromJSON value))
+    (mkChangedOptionModule [ "services" "redshift" "longitude" ] [ "location" "longitude" ]
+      (config:
+        let value = getAttrFromPath [ "services" "redshift" "longitude" ] config;
+        in if value == null then
+          throw "services.redshift.longitude is set to null, you can remove this"
+          else builtins.fromJSON value))
+    (mkRenamedOptionModule [ "services" "redshift" "provider" ] [ "location" "provider" ])
+  ];
 
   options.services.redshift = {
     enable = mkOption {
@@ -18,42 +35,13 @@ in {
       '';
     };
 
-    latitude = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = ''
-        Your current latitude, between
-        <literal>-90.0</literal> and <literal>90.0</literal>. Must be provided
-        along with longitude.
-      '';
-    };
-
-    longitude = mkOption {
-      type = types.nullOr types.str;
-      default = null;
-      description = ''
-        Your current longitude, between
-        between <literal>-180.0</literal> and <literal>180.0</literal>. Must be
-        provided along with latitude.
-      '';
-    };
-
-    provider = mkOption {
-      type = types.enum [ "manual" "geoclue2" ];
-      default = "manual";
-      description = ''
-        The location provider to use for determining your location. If set to
-        <literal>manual</literal> you must also provide latitude/longitude.
-      '';
-    };
-
     temperature = {
       day = mkOption {
         type = types.int;
         default = 5500;
         description = ''
           Colour temperature to use during the day, between
-          <literal>1000</literal> and <literal>25000</literal> K.
+          `1000` and `25000` K.
         '';
       };
       night = mkOption {
@@ -61,7 +49,7 @@ in {
         default = 3700;
         description = ''
           Colour temperature to use at night, between
-          <literal>1000</literal> and <literal>25000</literal> K.
+          `1000` and `25000` K.
         '';
       };
     };
@@ -72,7 +60,7 @@ in {
         default = "1";
         description = ''
           Screen brightness to apply during the day,
-          between <literal>0.1</literal> and <literal>1.0</literal>.
+          between `0.1` and `1.0`.
         '';
       };
       night = mkOption {
@@ -80,17 +68,19 @@ in {
         default = "1";
         description = ''
           Screen brightness to apply during the night,
-          between <literal>0.1</literal> and <literal>1.0</literal>.
+          between `0.1` and `1.0`.
         '';
       };
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.redshift;
-      defaultText = "pkgs.redshift";
+    package = mkPackageOption pkgs "redshift" { };
+
+    executable = mkOption {
+      type = types.str;
+      default = "/bin/redshift";
+      example = "/bin/redshift-gtk";
       description = ''
-        redshift derivation to use.
+        Redshift executable to use within the package.
       '';
     };
 
@@ -100,33 +90,25 @@ in {
       example = [ "-v" "-m randr" ];
       description = ''
         Additional command-line arguments to pass to
-        <command>redshift</command>.
+        {command}`redshift`.
       '';
     };
   };
 
   config = mkIf cfg.enable {
-    assertions = [ 
-      {
-        assertion = 
-          if cfg.provider == "manual"
-          then (cfg.latitude != null && cfg.longitude != null) 
-          else (cfg.latitude == null && cfg.longitude == null);
-        message = "Latitude and longitude must be provided together, and with provider set to null.";
-      }
-    ];
-
     # needed so that .desktop files are installed, which geoclue cares about
     environment.systemPackages = [ cfg.package ];
 
-    services.geoclue2.enable = mkIf (cfg.provider == "geoclue2") true;
+    services.geoclue2.appConfig.redshift = {
+      isAllowed = true;
+      isSystem = true;
+    };
 
-    systemd.user.services.redshift = 
+    systemd.user.services.redshift =
     let
-      providerString = 
-        if cfg.provider == "manual"
-        then "${cfg.latitude}:${cfg.longitude}"
-        else cfg.provider;
+      providerString = if lcfg.provider == "manual"
+        then "${toString lcfg.latitude}:${toString lcfg.longitude}"
+        else lcfg.provider;
     in
     {
       description = "Redshift colour temperature adjuster";
@@ -134,7 +116,7 @@ in {
       partOf = [ "graphical-session.target" ];
       serviceConfig = {
         ExecStart = ''
-          ${cfg.package}/bin/redshift \
+          ${cfg.package}${cfg.executable} \
             -l ${providerString} \
             -t ${toString cfg.temperature.day}:${toString cfg.temperature.night} \
             -b ${toString cfg.brightness.day}:${toString cfg.brightness.night} \

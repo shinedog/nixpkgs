@@ -1,26 +1,24 @@
 { stdenv, python }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   pname = "python-recursive-pth-loader";
   version = "1.0";
-  name = pname + "-" + version;
 
-  unpackPhase = "true";
+  dontUnpack = true;
 
   buildInputs = [ python ];
 
   patchPhase = "cat ${./sitecustomize.py} > sitecustomize.py";
 
-  buildPhase = "${python}/bin/${python.executable} -m compileall .";
+  buildPhase = "${python.pythonOnBuildForHost}/bin/${python.pythonOnBuildForHost.executable} -m compileall .";
 
-  installPhase =
-    ''
-      dst=$out/lib/${python.libPrefix}/site-packages
-      mkdir -p $dst
-      cp sitecustomize.* $dst/
-    '';
+  installPhase = ''
+    dst=$out/${python.sitePackages}
+    mkdir -p $dst
+    cp sitecustomize.* $dst/
+  '';
 
   meta = {
-      description = "Enable recursive processing of pth files anywhere in sys.path";
+    description = "Enable recursive processing of pth files anywhere in sys.path";
   };
 }

@@ -1,28 +1,50 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, passlib
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  importlib-metadata,
+  passlib,
+  python-dateutil,
+  pythonOlder,
+  scramp,
+  hatchling,
+  versioningit,
 }:
 
 buildPythonPackage rec {
   pname = "pg8000";
-  version = "1.13.1";
+  version = "1.31.1";
+  pyproject = true;
 
-  disabled = !isPy3k;
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "2208c7aaffe8d61f5c4ccbefeb74ba033003899e64aee37c0eb98aadae8b9c6b";
+    hash = "sha256-sREw1MYV3TBi6o/tgUMGSnl4t/5tRPFLciYdQ8jicIc=";
   };
 
-  propagatedBuildInputs = [ passlib ];
+  build-system = [
+    hatchling
+    versioningit
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/tlocke/pg8000;
-    description = "PostgreSQL interface library, for asyncio";
-    maintainers = with maintainers; [ garbas domenkozar ];
+  dependencies = [
+    passlib
+    python-dateutil
+    scramp
+  ] ++ lib.optionals (pythonOlder "3.8") [ importlib-metadata ];
+
+  # Tests require a running PostgreSQL instance
+  doCheck = false;
+
+  pythonImportsCheck = [ "pg8000" ];
+
+  meta = with lib; {
+    description = "Python driver for PostgreSQL";
+    homepage = "https://github.com/tlocke/pg8000";
+    changelog = "https://github.com/tlocke/pg8000#release-notes";
+    license = with licenses; [ bsd3 ];
+    maintainers = with maintainers; [ domenkozar ];
     platforms = platforms.unix;
   };
-
 }

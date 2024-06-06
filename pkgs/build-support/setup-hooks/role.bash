@@ -1,27 +1,23 @@
-# Since the same derivation can be depend on in multiple ways, we need to
+# Since the same derivation can be depended on in multiple ways, we need to
 # accumulate *each* role (i.e. host and target platforms relative the depending
 # derivation) in which the derivation is used.
 #
-# The role is intened to be use as part of other variables names like
-#  - $NIX_${role_pre}_SOMETHING
-#  - $NIX_SOMETHING_${role_post}
+# The role is intended to be used as part of other variables names like
+#  - $NIX_SOMETHING${role_post}
 
 function getRole() {
     case $1 in
         -1)
-            role_pre='BUILD_'
             role_post='_FOR_BUILD'
             ;;
         0)
-            role_pre=''
             role_post=''
             ;;
         1)
-            role_pre='TARGET_'
             role_post='_FOR_TARGET'
             ;;
         *)
-            echo "@name@: used as improper sort of dependency" >2
+            echo "@name@: used as improper sort of dependency" >&2
             return 1
             ;;
     esac
@@ -53,22 +49,22 @@ function getTargetRoleEnvHook() {
     getRole "$depTargetOffset"
 }
 
-# This variant is inteneded specifically for code-prodocing tool wrapper scripts
-# `NIX_@wrapperName@_@infixSalt@_TARGET_*` tracks this (needs to be an exported
+# This variant is intended specifically for code-producing tool wrapper scripts
+# `NIX_@wrapperName@_TARGET_*_@suffixSalt@` tracks this (needs to be an exported
 # env var so can't use fancier data structures).
 function getTargetRoleWrapper() {
     case $targetOffset in
         -1)
-            export NIX_@wrapperName@_@infixSalt@_TARGET_BUILD=1
+            export NIX_@wrapperName@_TARGET_BUILD_@suffixSalt@=1
             ;;
         0)
-            export NIX_@wrapperName@_@infixSalt@_TARGET_HOST=1
+            export NIX_@wrapperName@_TARGET_HOST_@suffixSalt@=1
             ;;
         1)
-            export NIX_@wrapperName@_@infixSalt@_TARGET_TARGET=1
+            export NIX_@wrapperName@_TARGET_TARGET_@suffixSalt@=1
             ;;
         *)
-            echo "@name@: used as improper sort of dependency" >2
+            echo "@name@: used as improper sort of dependency" >&2
             return 1
             ;;
     esac

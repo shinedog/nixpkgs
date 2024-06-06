@@ -8,13 +8,13 @@ with lib;
       enable = mkEnableOption "pptpd, the Point-to-Point Tunneling Protocol daemon";
 
       serverIp = mkOption {
-        type        = types.string;
+        type        = types.str;
         description = "The server-side IP address.";
         default     = "10.124.124.1";
       };
 
       clientIpRange = mkOption {
-        type        = types.string;
+        type        = types.str;
         description = "The range from which client IPs are drawn.";
         default     = "10.124.124.2-11";
       };
@@ -82,7 +82,7 @@ with lib;
       ppp-pptpd-wrapped = pkgs.stdenv.mkDerivation {
         name         = "ppp-pptpd-wrapped";
         phases       = [ "installPhase" ];
-        buildInputs  = with pkgs; [ makeWrapper ];
+        nativeBuildInputs  = with pkgs; [ makeWrapper ];
         installPhase = ''
           mkdir -p $out/bin
           makeWrapper ${pkgs.ppp}/bin/pppd $out/bin/pppd \
@@ -108,7 +108,7 @@ with lib;
         #username	pptpd	password	*
         EOF
 
-        chown root.root "$secrets"
+        chown root:root "$secrets"
         chmod 600 "$secrets"
       '';
 

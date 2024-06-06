@@ -1,31 +1,42 @@
-{ stdenv, fetchurl, python, bzip2, zlib, gmp, openssl, boost
+{ lib, stdenv, fetchurl, python3, bzip2, zlib, gmp, boost
 # Passed by version specific builders
-, baseVersion, revision, sha256
+, baseVersion, revision, hash
+, sourceExtension ? "tar.xz"
 , extraConfigureFlags ? ""
+, extraPatches ? [ ]
+, badPlatforms ? [ ]
 , postPatch ? null
-, darwin
+, knownVulnerabilities ? [ ]
+, CoreServices ? null
+, Security ? null
 , ...
 }:
 
 stdenv.mkDerivation rec {
-  name = "botan-${version}";
+  pname = "botan";
   version = "${baseVersion}.${revision}";
 
+  outputs = [ "out" "dev" ];
+
   src = fetchurl {
-    name = "Botan-${version}.tgz";
+    name = "Botan-${version}.${sourceExtension}";
     urls = [
-       "http://files.randombit.net/botan/v${baseVersion}/Botan-${version}.tgz"
-       "http://botan.randombit.net/releases/Botan-${version}.tgz"
+       "http://files.randombit.net/botan/v${baseVersion}/Botan-${version}.${sourceExtension}"
+       "http://botan.randombit.net/releases/Botan-${version}.${sourceExtension}"
     ];
-    inherit sha256;
+    inherit hash;
   };
+  patches = extraPatches;
   inherit postPatch;
 
-  buildInputs = [ python bzip2 zlib gmp openssl boost ]
-             ++ stdenv.lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.Security;
+  nativeBuildInputs = [ python3 ];
+  buildInputs = [ bzip2 zlib gmp boost ]
+    ++ lib.optionals stdenv.isDarwin [ CoreServices Security ];
 
   configurePhase = ''
-    python configure.py --prefix=$out --with-bzip2 --with-zlib ${if openssl != null then "--with-openssl" else ""} ${extraConfigureFlags}${if stdenv.cc.isClang then " --cc=clang" else "" }
+    runHook preConfigure
+    python configure.py --prefix=$out --with-bzip2 --with-zlib ${extraConfigureFlags}${lib.optionalString stdenv.cc.isClang " --cc=clang"} ${lib.optionalString stdenv.hostPlatform.isAarch64 " --cpu=aarch64"}
+    runHook postConfigure
   '';
 
   enableParallelBuilding = true;
@@ -41,12 +52,16 @@ stdenv.mkDerivation rec {
     ln -s botan-*.pc botan.pc || true
   '';
 
-  meta = with stdenv.lib; {
-    inherit version;
+  doCheck = true;
+
+  meta = with lib; {
     description = "Cryptographic algorithms library";
-    maintainers = with maintainers; [ raskin ];
-    platforms = ["x86_64-linux" "i686-linux" "x86_64-darwin"];
+    mainProgram = "botan";
+    maintainers = with maintainers; [ raskin thillux ];
+    platforms = platforms.unix;
     license = licenses.bsd2;
+    inherit badPlatforms;
+    inherit knownVulnerabilities;
   };
   passthru.updateInfo.downloadPage = "http://files.randombit.net/botan/";
 }

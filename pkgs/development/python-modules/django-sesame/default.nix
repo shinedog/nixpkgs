@@ -1,26 +1,49 @@
-{ lib, buildPythonPackage, fetchPypi
-, django }:
+{
+  lib,
+  buildPythonPackage,
+  django,
+  fetchFromGitHub,
+  poetry-core,
+  python,
+  pythonOlder,
+  ua-parser,
+}:
 
 buildPythonPackage rec {
   pname = "django-sesame";
-  version = "1.4";
+  version = "3.2.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "081q3vd9waiajiipg99flw0vlzk920sz07067v3n5774gx0qhbaa";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "aaugustin";
+    repo = "django-sesame";
+    rev = "refs/tags/${version}";
+    hash = "sha256-8jbYhD/PfPnutJZonmdrqLIQdXiUHF12w0M9tuyyDz0=";
   };
 
-  checkInputs = [ django ];
+  nativeBuildInputs = [ poetry-core ];
+
+  nativeCheckInputs = [
+    django
+    ua-parser
+  ];
+
+  pythonImportsCheck = [ "sesame" ];
 
   checkPhase = ''
-    PYTHONPATH="$(pwd):$PYTHONPATH" \
-    DJANGO_SETTINGS_MODULE=sesame.test_settings \
-      django-admin test sesame
+    runHook preCheck
+
+    ${python.interpreter} -m django test --settings=tests.settings
+
+    runHook postCheck
   '';
 
   meta = with lib; {
     description = "URLs with authentication tokens for automatic login";
-    homepage = https://github.com/aaugustin/django-sesame;
+    homepage = "https://github.com/aaugustin/django-sesame";
+    changelog = "https://github.com/aaugustin/django-sesame/blob/${version}/docs/changelog.rst";
     license = licenses.bsd3;
     maintainers = with maintainers; [ elohmeier ];
   };

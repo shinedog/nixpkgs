@@ -1,31 +1,56 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, nose
-, six
-, paste
-, PasteDeploy
-, cheetah
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  nose,
+  python,
+  pytestCheckHook,
+  six,
+  paste,
+  pastedeploy,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
-  version = "3.0.0";
-  pname = "PasteScript";
+  pname = "pastescript";
+  version = "3.6.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "d9d4d98df8606ad3bfa77be4722207d1a53a0fbcc714ee75d0fcd8a5c3f775c3";
+    pname = "PasteScript";
+    inherit version;
+    hash = "sha256-HCLSt81TUWRr7tKMb3DrSipLklZR2a/Ko1AdBsq7UXE=";
   };
 
-  buildInputs = [ nose ];
-  propagatedBuildInputs = [ six paste PasteDeploy cheetah ];
+  propagatedBuildInputs = [
+    paste
+    pastedeploy
+    six
+  ];
 
+  # test suite seems to unset PYTHONPATH
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "A pluggable command-line frontend, including commands to setup package file layouts";
-    homepage = http://pythonpaste.org/script/;
-    license = licenses.mit;
-  };
+  nativeCheckInputs = [
+    nose
+    pytestCheckHook
+  ];
 
+  disabledTestPaths = [ "appsetup/testfiles" ];
+
+  pythonImportsCheck = [
+    "paste.script"
+    "paste.deploy"
+    "paste.util"
+  ];
+
+  meta = with lib; {
+    description = "A pluggable command-line frontend, including commands to setup package file layouts";
+    mainProgram = "paster";
+    homepage = "https://github.com/cdent/pastescript/";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
+  };
 }

@@ -1,44 +1,38 @@
-{ stdenv, fetchFromGitHub, gettext, makeWrapper, tcl, which, writeScript
-, ncurses, perl , cyrus_sasl, gss, gpgme, kerberos, libidn, libxml2, notmuch, openssl
-, lmdb, libxslt, docbook_xsl, docbook_xml_dtd_42, mailcap, runtimeShell
+{ lib, stdenv, fetchFromGitHub, gettext, makeWrapper, tcl, which
+, ncurses, perl , cyrus_sasl, gss, gpgme, libkrb5, libidn2, libxml2, notmuch, openssl
+, lua, lmdb, libxslt, docbook_xsl, docbook_xml_dtd_42, w3m, mailcap, sqlite, zlib, lndir
+, pkg-config, zstd, enableZstd ? true, enableMixmaster ? false, enableLua ? false
+, withContrib ? true
 }:
 
-let
-  muttWrapper = writeScript "mutt" ''
-    #!${runtimeShell} -eu
-
-    echo 'The neomutt project has renamed the main binary from `mutt` to `neomutt`.'
-    echo ""
-    echo 'This wrapper is provided for compatibility purposes only. You should start calling `neomutt` instead.'
-    echo ""
-    read -p 'Press any key to launch NeoMutt...' -n1 -s
-    exec neomutt "$@"
-  '';
-
-in stdenv.mkDerivation rec {
-  version = "20180716";
-  name = "neomutt-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "neomutt";
+  version = "20240425";
 
   src = fetchFromGitHub {
     owner  = "neomutt";
     repo   = "neomutt";
-    rev    = "neomutt-${version}";
-    sha256 = "0im2kkahkr04q04irvcimfawxi531ld6wrsa92r2m7l10gmijkl8";
+    rev    = finalAttrs.version;
+    hash   = "sha256-QBqPFteoAm3AdQN0XTWpho8DEW2BFCCzBcHUZIiSxyQ=";
   };
 
   buildInputs = [
-    cyrus_sasl gss gpgme kerberos libidn ncurses
+    cyrus_sasl gss gpgme libkrb5 libidn2 ncurses
     notmuch openssl perl lmdb
-    mailcap
-  ];
+    mailcap sqlite
+  ]
+  ++ lib.optional enableZstd zstd
+  ++ lib.optional enableLua lua;
 
   nativeBuildInputs = [
-    docbook_xsl docbook_xml_dtd_42 gettext libxml2 libxslt.bin makeWrapper tcl which
+    docbook_xsl docbook_xml_dtd_42 gettext libxml2 libxslt.bin makeWrapper tcl which zlib w3m
+    pkg-config
   ];
 
   enableParallelBuilding = true;
 
   postPatch = ''
+    substituteInPlace auto.def --replace /usr/sbin/sendmail sendmail
     substituteInPlace contrib/smime_keys \
       --replace /usr/bin/openssl ${openssl}/bin/openssl
 
@@ -51,17 +45,12 @@ in stdenv.mkDerivation rec {
 
     # allow neomutt to map attachments to their proper mime.types if specified wrongly
     # and use a far more comprehensive list than the one shipped with neomutt
-    substituteInPlace sendlib.c \
+    substituteInPlace send/sendlib.c \
       --replace /etc/mime.types ${mailcap}/etc/mime.types
-
-    # The string conversion tests all fail with the first version of neomutt
-    # that has tests (20180223) as well as 20180716 so we disable them for now.
-    # I don't know if that is related to the tests or our build environment.
-    # Try again with a later release.
-    sed -i '/rfc2047/d' test/Makefile.autosetup test/main.c
   '';
 
   configureFlags = [
+    "--enable-autocrypt"
     "--gpgme"
     "--gss"
     "--lmdb"
@@ -70,29 +59,61 @@ in stdenv.mkDerivation rec {
     "--sasl"
     "--with-homespool=mailbox"
     "--with-mailpath="
-    # Look in $PATH at runtime, instead of hardcoding /usr/bin/sendmail
-    "ac_cv_path_SENDMAIL=sendmail"
-  ];
-
-  # Fix missing libidn in mutt;
-  # this fix is ugly since it links all binaries in mutt against libidn
-  # like pgpring, pgpewrap, ...
-  NIX_LDFLAGS = "-lidn";
+    # To make it not reference .dev outputs. See:
+    # https://github.com/neomutt/neomutt/pull/2367
+    "--disable-include-path-in-cflags"
+    "--zlib"
+  ]
+  ++ lib.optional enableZstd "--zstd"
+  ++ lib.optional enableLua "--lua"
+  ++ lib.optional enableMixmaster "--mixmaster";
 
   postInstall = ''
-    cp ${muttWrapper} $out/bin/mutt
     wrapProgram "$out/bin/neomutt" --prefix PATH : "$out/libexec/neomutt"
-  '';
+  ''
+  # https://github.com/neomutt/neomutt-contrib
+  # Contains vim-keys, keybindings presets and more.
+  + lib.optionalString withContrib "${lib.getExe lndir} ${finalAttrs.passthru.contrib} $out/share/doc/neomutt";
 
   doCheck = true;
 
-  checkTarget = "test";
+  preCheck = ''
+    cp -r ${finalAttrs.passthru.test-files} $(pwd)/test-files
 
-  meta = with stdenv.lib; {
-    description = "A small but very powerful text-based mail client";
-    homepage    = http://www.neomutt.org;
-    license     = licenses.gpl2Plus;
-    maintainers = with maintainers; [ cstrahan erikryb jfrankenau vrthra ];
-    platforms   = platforms.unix;
+    chmod -R +w test-files
+    (cd test-files && ./setup.sh)
+
+    export NEOMUTT_TEST_DIR=$(pwd)/test-files
+
+    # The test fails with: node_padding.c:135: Check rc == 15... failed
+    substituteInPlace test/main.c \
+      --replace-fail "NEOMUTT_TEST_ITEM(test_expando_node_padding)" ""
+  '';
+
+  passthru = {
+    test-files = fetchFromGitHub {
+      owner = "neomutt";
+      repo = "neomutt-test-files";
+      rev = "00efc8388110208e77e6ed9d8294dfc333753d54";
+      hash = "sha256-/ELowuMq67v56MAJBtO73g6OqV0DVwW4+x+0u4P5mB0=";
+    };
+    contrib = fetchFromGitHub {
+      owner = "neomutt";
+      repo = "neomutt-contrib";
+      rev = "8e97688693ca47ea1055f3d15055a4f4ecc5c832";
+      hash = "sha256-tx5Y819rNDxOpjg3B/Y2lPcqJDArAxVwjbYarVmJ79k=";
+    };
   };
-}
+
+  checkTarget = "test";
+  postCheck = "unset NEOMUTT_TEST_DIR";
+
+  meta = {
+    description = "Small but very powerful text-based mail client";
+    mainProgram = "neomutt";
+    homepage    = "https://www.neomutt.org";
+    license     = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ erikryb vrthra ma27 raitobezarius ];
+    platforms   = lib.platforms.unix;
+  };
+})

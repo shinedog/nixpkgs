@@ -1,29 +1,40 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pep8, coverage, logilab_common, requests }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  requests,
+  pytestCheckHook,
+  glibcLocalesUtf8,
+}:
 
 buildPythonPackage rec {
   pname = "bugzilla";
-  version = "2.2.0";
+  version = "3.2.0";
+  format = "setuptools";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0ikx21nm7cch4lz9agv5h1hx6zvg2alkpfdrl01khqgilhsicdhi";
+    pname = "python-${pname}";
+    inherit version;
+    sha256 = "TvyM+il4N8nk6rIg4ZcXZxW9Ye4zzsLBsPJ5DweGA4c=";
   };
 
-  patches = [ ./checkPhase-fix-cookie-compare.patch ];
-
-  buildInputs = [ pep8 coverage logilab_common ];
   propagatedBuildInputs = [ requests ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    glibcLocalesUtf8
+  ];
 
   preCheck = ''
     mkdir -p check-phase
     export HOME=$(pwd)/check-phase
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://fedorahosted.org/python-bugzilla/;
+  meta = with lib; {
+    homepage = "https://github.com/python-bugzilla/python-bugzilla";
     description = "Bugzilla XMLRPC access module";
-    license = licenses.gpl2;
+    mainProgram = "bugzilla";
+    license = licenses.gpl2Plus;
     platforms = platforms.all;
     maintainers = with maintainers; [ pierron ];
   };

@@ -3,6 +3,7 @@
 buildPythonPackage rec {
   pname = "iowait";
   version = "0.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -11,6 +12,6 @@ buildPythonPackage rec {
 
   meta = {
     description = "Platform-independent module for I/O completion events";
-    homepage = https://launchpad.net/python-iowait;
+    homepage = "https://launchpad.net/python-iowait";
   };
 }

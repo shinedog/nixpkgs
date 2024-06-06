@@ -1,63 +1,63 @@
-{ stdenv, fetchFromGitHub, pantheon, pkgconfig, meson, ninja, vala, python3
-, desktop-file-utils, gtk3, granite, libgee, clutter-gst, clutter-gtk, gst_all_1
-, gobject-introspection, elementary-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, nix-update-script
+, pkg-config
+, meson
+, ninja
+, vala
+, gtk3
+, granite
+, libgee
+, libhandy
+, gst_all_1
+, wrapGAppsHook3
+}:
 
 stdenv.mkDerivation rec {
-  pname = "videos";
-  version = "2.6.3";
-
-  name = "elementary-${pname}-${version}";
+  pname = "elementary-videos";
+  version = "3.0.0";
 
   src = fetchFromGitHub {
     owner = "elementary";
-    repo = pname;
+    repo = "videos";
     rev = version;
-    sha256 = "1ncm8kh6dcy83p8pmpilnk03b4dx3b1jm8w13izq2dkglfgdwvqx";
-  };
-
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-      attrPath = "elementary-${pname}";
-    };
+    sha256 = "sha256-O98478E3NlY2NYqjyy8mcXZ3lG+wIV+VrPzdzOp44yA=";
   };
 
   nativeBuildInputs = [
-    desktop-file-utils
-    gobject-introspection
     meson
     ninja
-    pkgconfig
-    python3
+    pkg-config
     vala
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
-  buildInputs = with gst_all_1; [
-    clutter-gst
-    clutter-gtk
-    elementary-icon-theme
+  buildInputs = [
     granite
+    gtk3
+    libgee
+    libhandy
+  ] ++ (with gst_all_1; [
     gst-libav
     gst-plugins-bad
     gst-plugins-base
-    gst-plugins-good
+    # https://github.com/elementary/videos/issues/356
+    (gst-plugins-good.override { gtkSupport = true; })
     gst-plugins-ugly
     gstreamer
-    gtk3
-    libgee
-  ];
+  ]);
 
-  postPatch = ''
-    chmod +x meson/post_install.py
-    patchShebangs meson/post_install.py
-  '';
+  passthru = {
+    updateScript = nix-update-script { };
+  };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Video player and library app designed for elementary OS";
-    homepage = https://github.com/elementary/videos;
+    homepage = "https://github.com/elementary/videos";
     license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+    maintainers = teams.pantheon.members;
+    mainProgram = "io.elementary.videos";
   };
 }

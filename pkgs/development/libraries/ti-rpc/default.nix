@@ -1,37 +1,36 @@
-{ fetchurl, stdenv, autoreconfHook, libkrb5 }:
+{ fetchurl, lib, stdenv, autoreconfHook, libkrb5 }:
 
 stdenv.mkDerivation rec {
-  name = "libtirpc-1.1.4";
+  pname = "libtirpc";
+  version = "1.3.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/libtirpc/${name}.tar.bz2";
-    sha256 = "07anqypf7c719x9y683qz65cxllmzlgmlab2hlahrqcj4bq2k99c";
+    url = "http://git.linux-nfs.org/?p=steved/libtirpc.git;a=snapshot;h=refs/tags/libtirpc-${lib.replaceStrings ["."] ["-"] version};sf=tgz";
+    sha256 = "sha256-fmZxpdyl98z+QBHpEccGB8A+YktuWONw6k0p06AImDw=";
+    name = "${pname}-${version}.tar.gz";
   };
 
   outputs = [ "out" "dev" ];
 
-  postPatch = ''
-    sed '1i#include <stdint.h>' -i src/xdr_sizeof.c
-  '' + stdenv.lib.optionalString stdenv.hostPlatform.isMusl ''
-    substituteInPlace tirpc/rpc/types.h \
-      --replace '#if defined __APPLE_CC__ || defined __FreeBSD__' \
-                '#if defined __APPLE_CC__ || defined __FreeBSD__ || !defined __GLIBC__'
-  '';
-
   KRB5_CONFIG = "${libkrb5.dev}/bin/krb5-config";
   nativeBuildInputs = [ autoreconfHook ];
   propagatedBuildInputs = [ libkrb5 ];
+  strictDeps = true;
 
   preConfigure = ''
     sed -es"|/etc/netconfig|$out/etc/netconfig|g" -i doc/Makefile.in tirpc/netconfig.h
   '';
 
-  preInstall = "mkdir -p $out/etc";
+  enableParallelBuilding = true;
+
+  preInstall = ''
+    mkdir -p $out/etc
+  '';
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://sourceforge.net/projects/libtirpc/;
+  meta = with lib; {
+    homepage = "https://sourceforge.net/projects/libtirpc/";
     description = "The transport-independent Sun RPC implementation (TI-RPC)";
     license = licenses.bsd3;
     platforms = platforms.linux;

@@ -1,8 +1,8 @@
-{ stdenv, buildDunePackage, zmq, ocaml_lwt }:
+{ buildDunePackage, zmq, lwt }:
 
-buildDunePackage rec {
+buildDunePackage {
   pname = "zmq-lwt";
   inherit (zmq) version src meta;
 
-  propagatedBuildInputs = [ zmq ocaml_lwt ];
+  propagatedBuildInputs = [ zmq lwt ];
 }

@@ -1,96 +1,129 @@
-{ config, stdenv, lib, fetchurl, fetchpatch
+{ stdenv
+, lib
+, fetchurl
 , perl
-, libcap, libtool, libxml2, openssl
-, enablePython ? config.bind.enablePython or false, python3 ? null
-, enableSeccomp ? false, libseccomp ? null, buildPackages
+, pkg-config
+, libcap
+, libidn2
+, libtool
+, libxml2
+, openssl
+, libuv
+, nghttp2
+, jemalloc
+, enablePython ? false
+, python3
+, enableGSSAPI ? true
+, libkrb5
+, buildPackages
+, nixosTests
+, cmocka
+, tzdata
+, gitUpdater
 }:
 
-assert enableSeccomp -> libseccomp != null;
-assert enablePython -> python3 != null;
-
-let version = "9.12.4-P1"; in
-
 stdenv.mkDerivation rec {
-  name = "bind-${version}";
+  pname = "bind";
+  version = "9.18.27";
 
   src = fetchurl {
-    url = "https://ftp.isc.org/isc/bind9/${version}/${name}.tar.gz";
-    sha256 = "1if7zc5gzrfd28csc63v9bjwrc0rgvm1x9yx058946hc5gp5lyp2";
+    url = "https://downloads.isc.org/isc/bind9/${version}/${pname}-${version}.tar.xz";
+    hash = "sha256-6j89jPovaueMhyJ1HQCPVLwXo67Svj9zmet79fTNqPE=";
   };
 
   outputs = [ "out" "lib" "dev" "man" "dnsutils" "host" ];
 
-  patches = [ ./dont-keep-configure-flags.patch ./remove-mkdir-var.patch ] ++
-    [
-      # Workaround for missing atomic operations on aarch64. Upstream added the
-      # below patch after the release. Can probably be dropped with the next
-      # version.
-      (fetchpatch {
-        name = "client-atomics-as-refcount.patch";
-        url = https://gitlab.isc.org/isc-projects/bind9/commit/d72f436b7d7c697b262968c48c2d7643069ab17f.diff;
-        sha256 = "0sidlab9wcv21751fbq3h9m4wy6hk7frag9ar2jndw8rn3axr2qy";
-      })
-    ] ++
-    stdenv.lib.optional stdenv.isDarwin ./darwin-openssl-linking-fix.patch;
+  patches = [
+    ./dont-keep-configure-flags.patch
+  ];
 
-  nativeBuildInputs = [ perl ];
-  buildInputs = [ libtool libxml2 openssl ]
+  nativeBuildInputs = [ perl pkg-config ];
+  buildInputs = [ libidn2 libtool libxml2 openssl libuv nghttp2 jemalloc ]
     ++ lib.optional stdenv.isLinux libcap
-    ++ lib.optional enableSeccomp libseccomp
+    ++ lib.optional enableGSSAPI libkrb5
     ++ lib.optional enablePython (python3.withPackages (ps: with ps; [ ply ]));
-
-  STD_CDEFINES = [ "-DDIG_SIGCHASE=1" ]; # support +sigchase
 
   depsBuildBuild = [ buildPackages.stdenv.cc ];
 
   configureFlags = [
     "--localstatedir=/var"
-    "--with-libtool"
-    "--with-libxml2=${libxml2.dev}"
-    "--with-openssl=${openssl.dev}"
-    (if enablePython then "--with-python" else "--without-python")
-    "--without-atf"
-    "--without-dlopen"
-    "--without-docbook-xsl"
-    "--without-gssapi"
-    "--without-idn"
-    "--without-idnlib"
     "--without-lmdb"
-    "--without-libjson"
-    "--without-pkcs11"
-    "--without-purify"
-    "--with-randomdev=/dev/random"
-    "--with-ecdsa"
-    "--with-gost"
-    "--without-eddsa"
-    "--with-aes"
-  ] ++ lib.optional stdenv.isLinux "--with-libcap=${libcap.dev}"
-    ++ lib.optional enableSeccomp "--enable-seccomp";
+    "--with-libidn2"
+  ] ++ lib.optional enableGSSAPI "--with-gssapi=${libkrb5.dev}/bin/krb5-config"
+  ++ lib.optional (stdenv.hostPlatform != stdenv.buildPlatform) "BUILD_CC=$(CC_FOR_BUILD)";
 
   postInstall = ''
     moveToOutput bin/bind9-config $dev
-    moveToOutput bin/isc-config.sh $dev
 
     moveToOutput bin/host $host
 
     moveToOutput bin/dig $dnsutils
+    moveToOutput bin/delv $dnsutils
     moveToOutput bin/nslookup $dnsutils
     moveToOutput bin/nsupdate $dnsutils
 
-    for f in "$lib/lib/"*.la "$dev/bin/"{isc-config.sh,bind*-config}; do
-      sed -i "$f" -e 's|-L${openssl.dev}|-L${openssl.out}|g'
+    for f in "$lib/lib/"*.la "$dev/bin/"bind*-config; do
+      sed -i "$f" -e 's|-L${openssl.dev}|-L${lib.getLib openssl}|g'
     done
+
+    cat <<EOF >$out/etc/rndc.conf
+    include "/etc/bind/rndc.key";
+    options {
+        default-key "rndc-key";
+        default-server 127.0.0.1;
+        default-port 953;
+    };
+    EOF
   '';
 
-  doCheck = false; # requires root and the net
+  enableParallelBuilding = true;
 
-  meta = {
-    homepage = https://www.isc.org/downloads/bind/;
+  doCheck = false;
+  # TODO: investigate failures; see this and linked discussions:
+  # https://github.com/NixOS/nixpkgs/pull/192962
+  /*
+  doCheck = with stdenv.hostPlatform; !isStatic && !(isAarch64 && isLinux)
+    # https://gitlab.isc.org/isc-projects/bind9/-/issues/4269
+    && !is32bit;
+  */
+  checkTarget = "unit";
+  checkInputs = [
+    cmocka
+  ] ++ lib.optionals (!stdenv.hostPlatform.isMusl) [
+    tzdata
+  ];
+  preCheck = lib.optionalString stdenv.hostPlatform.isMusl ''
+    # musl doesn't respect TZDIR, skip timezone-related tests
+    sed -i '/^ISC_TEST_ENTRY(isc_time_formatISO8601L/d' tests/isc/time_test.c
+  '' + lib.optionalString stdenv.hostPlatform.isDarwin ''
+    # Test timeouts on Darwin
+    sed -i '/^ISC_TEST_ENTRY(tcpdns_recv_one/d' tests/isc/netmgr_test.c
+  '';
+
+  passthru = {
+    tests = {
+      inherit (nixosTests) bind;
+      prometheus-exporter = nixosTests.prometheus-exporters.bind;
+      kubernetes-dns-single-node = nixosTests.kubernetes.dns-single-node;
+      kubernetes-dns-multi-node = nixosTests.kubernetes.dns-multi-node;
+    };
+
+    updateScript = gitUpdater {
+      # No nicer place to find latest stable release.
+      url = "https://gitlab.isc.org/isc-projects/bind9.git";
+      rev-prefix = "v";
+      # Avoid unstable 9.19 releases.
+      odd-unstable = true;
+    };
+  };
+
+  meta = with lib; {
+    homepage = "https://www.isc.org/bind/";
     description = "Domain name server";
-    license = stdenv.lib.licenses.mpl20;
-
-    maintainers = with stdenv.lib.maintainers; [peti];
-    platforms = with stdenv.lib.platforms; unix;
+    license = licenses.mpl20;
+    changelog = "https://downloads.isc.org/isc/bind9/cur/${lib.versions.majorMinor version}/CHANGES";
+    maintainers = with maintainers; [ globin ];
+    platforms = platforms.unix;
 
     outputsToInstall = [ "out" "dnsutils" "host" ];
   };

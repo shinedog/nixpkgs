@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "su-exec-${version}";
+  pname = "su-exec";
   version = "0.2";
 
   src = fetchFromGitHub {
@@ -16,8 +16,9 @@ stdenv.mkDerivation rec {
     cp -a su-exec $out/bin/su-exec
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "switch user and group id and exec";
+    mainProgram = "su-exec";
     homepage    = "https://github.com/ncopa/su-exec";
     license     = licenses.mit;
     maintainers = with maintainers; [ zimbatm ];

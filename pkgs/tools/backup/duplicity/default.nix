@@ -1,43 +1,157 @@
-{ stdenv, fetchurl, python2Packages, librsync, ncftp, gnupg, rsync, makeWrapper }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, python3
+, librsync
+, glib
+, ncftp
+, gnupg
+, gnutar
+, par2cmdline
+, util-linux
+, rsync
+, makeWrapper
+, wrapGAppsNoGuiHook
+, gettext
+, getconf
+, testers
+, nix-update-script
+}:
 
-python2Packages.buildPythonApplication rec {
-  name = "duplicity-${version}";
-  version = "0.7.19";
+let self = python3.pkgs.buildPythonApplication rec {
+  pname = "duplicity";
+  version = "2.2.3";
 
-  src = fetchurl {
-    url = "https://code.launchpad.net/duplicity/${stdenv.lib.versions.majorMinor version}-series/${version}/+download/${name}.tar.gz";
-    sha256 = "0ag9dknslxlasslwfjhqgcqbkb1mvzzx93ry7lch2lfzcdd91am6";
+  src = fetchFromGitLab {
+    owner = "duplicity";
+    repo = "duplicity";
+    rev = "rel.${version}";
+    hash = "sha256-4IwKqXlG7jh1siuPT5pVgiYB+KlmCzF6+OMPT3I3yTQ=";
   };
 
-  buildInputs = [ librsync makeWrapper python2Packages.wrapPython ];
-  propagatedBuildInputs = with python2Packages; [
-    boto cffi cryptography ecdsa enum idna pygobject3 fasteners
-    ipaddress lockfile paramiko pyasn1 pycrypto six
+  patches = [
+    ./keep-pythonpath-in-testing.patch
   ];
-  checkInputs = with python2Packages; [ lockfile mock pexpect ];
 
-  # lots of tests are failing, although we get a little further now with the bits in preCheck
-  doCheck = false;
+  postPatch = ''
+    patchShebangs duplicity/__main__.py
 
-  postInstall = ''
-    wrapProgram $out/bin/duplicity \
-      --prefix PATH : "${stdenv.lib.makeBinPath [ gnupg ncftp rsync ]}"
+    # don't try to use gtar on darwin/bsd
+    substituteInPlace testing/functional/test_restart.py \
+      --replace-fail 'tarcmd = "gtar"' 'tarcmd = "tar"'
+  '' + lib.optionalString stdenv.isDarwin ''
+    # tests try to access these files in the sandbox, but can't deal with EPERM
+    substituteInPlace testing/unit/test_globmatch.py \
+      --replace-fail /var/log /test/log
+    substituteInPlace testing/unit/test_selection.py \
+      --replace-fail /usr/bin /dev
+    # don't use /tmp/ in tests
+    substituteInPlace duplicity/backends/_testbackend.py \
+      --replace-fail '"/tmp/' 'os.environ.get("TMPDIR")+"/'
+  '';
 
-    wrapPythonPrograms
+  disabledTests = lib.optionals stdenv.isDarwin [
+    # uses /tmp/
+    "testing/unit/test_cli_main.py::CommandlineTest::test_intermixed_args"
+  ];
+
+  nativeBuildInputs = [
+    makeWrapper
+    gettext
+    python3.pkgs.wrapPython
+    wrapGAppsNoGuiHook
+    python3.pkgs.setuptools-scm
+  ];
+
+  buildInputs = [
+    librsync
+    # For Gio typelib
+    glib
+  ];
+
+  pythonPath = with python3.pkgs; [
+    b2sdk
+    boto3
+    cffi
+    cryptography
+    ecdsa
+    idna
+    pygobject3
+    fasteners
+    lockfile
+    paramiko
+    pyasn1
+    pycrypto
+    pydrive2
+    future
+  ];
+
+  nativeCheckInputs = [
+    gnupg # Add 'gpg' to PATH.
+    gnutar # Add 'tar' to PATH.
+    librsync # Add 'rdiff' to PATH.
+    par2cmdline # Add 'par2' to PATH.
+  ] ++ lib.optionals stdenv.isLinux [
+    util-linux # Add 'setsid' to PATH.
+  ] ++ lib.optionals stdenv.isDarwin [
+    getconf
+  ] ++ (with python3.pkgs; [
+    lockfile
+    mock
+    pexpect
+    pytest
+    pytest-runner
+    fasteners
+  ]);
+
+  # Prevent double wrapping, let the Python wrapper use the args in preFixup.
+  dontWrapGApps = true;
+
+  preFixup = let
+    binPath = lib.makeBinPath ([
+      gnupg
+      ncftp
+      rsync
+    ] ++ lib.optionals stdenv.isDarwin [
+      getconf
+    ]); in ''
+    makeWrapperArgsBak=("''${makeWrapperArgs[@]}")
+    makeWrapperArgs+=(
+      "''${gappsWrapperArgs[@]}"
+      --prefix PATH : "${binPath}"
+    )
+  '';
+
+  postFixup = ''
+    # Restore previous value for tests wrapping in preInstallCheck
+    makeWrapperArgs=("''${makeWrapperArgsBak[@]}")
   '';
 
   preCheck = ''
-    patchShebangs testing
+    # tests need writable $HOME
+    HOME=$PWD/.home
 
-    substituteInPlace testing/__init__.py \
-      --replace 'mkdir testfiles' 'mkdir -p testfiles'
+    wrapPythonProgramsIn "$PWD/testing/overrides/bin" "$pythonPath"
   '';
 
-  meta = with stdenv.lib; {
-    description = "Encrypted bandwidth-efficient backup using the rsync algorithm";
-    homepage = https://www.nongnu.org/duplicity;
-    license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ peti ];
-    platforms = platforms.unix;
+  doCheck = true;
+
+  passthru = {
+    updateScript = nix-update-script {
+      extraArgs = [ "--version-regex" "rel\.(.*)" ];
+    };
+
+    tests.version = testers.testVersion {
+      package = self;
+    };
   };
-}
+
+  meta = with lib; {
+    description = "Encrypted bandwidth-efficient backup using the rsync algorithm";
+    homepage = "https://duplicity.gitlab.io/duplicity-web/";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ corngood ];
+  };
+};
+
+in self

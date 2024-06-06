@@ -1,44 +1,42 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, nose
-, can
-, canmatrix }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools-scm,
+  can,
+  canmatrix,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "canopen";
-  version = "0.5.1";
+  version = "2.2.0";
+  format = "setuptools";
 
-  # use fetchFromGitHub until version containing test/sample.eds
-  # is available on PyPi
-  # https://github.com/christiansandberg/canopen/pull/57
+  disabled = pythonOlder "3.7";
 
-  src = fetchFromGitHub {
-    owner = "christiansandberg";
-    repo = "canopen";
-    rev = "b20575d84c3aef790fe7c38c5fc77601bade0ea4";
-    sha256 = "1qg47qrkyvyxiwi13sickrkk89jp9s91sly2y90bz0jhws2bxh64";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-XxhlG5325HabmILpafk0rnc+8kpFqrwzNLWGmCBI0Iw=";
   };
 
-  #src = fetchPypi {
-  #  inherit pname version;
-  #  sha256 = "0806cykarpjb9ili3mf82hsd9gdydbks8532nxgz93qzg4zdbv2g";
-  #};
+  nativeBuildInputs = [ setuptools-scm ];
 
-  # test_pdo failure https://github.com/christiansandberg/canopen/issues/58
-  doCheck = false;
+  propagatedBuildInputs = [
+    can
+    canmatrix
+  ];
 
-  propagatedBuildInputs =
-    [ can
-      canmatrix
-    ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkInputs = [ nose ];
+  pythonImportsCheck = [ "canopen" ];
 
   meta = with lib; {
-    homepage = https://github.com/christiansandberg/canopen/;
     description = "CANopen stack implementation";
-    license = licenses.lgpl3;
+    homepage = "https://github.com/christiansandberg/canopen/";
+    changelog = "https://github.com/christiansandberg/canopen/releases/tag/v${version}";
+    license = licenses.mit;
     maintainers = with maintainers; [ sorki ];
   };
 }

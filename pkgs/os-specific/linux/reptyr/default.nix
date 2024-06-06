@@ -1,20 +1,29 @@
-{ stdenv, lib, fetchFromGitHub, python2 }:
+{ stdenv, lib, fetchFromGitHub, python3 }:
 
-stdenv.mkDerivation rec {
-  version = "0.7.0";
-  name = "reptyr-${version}";
+let
+  python = python3.withPackages (p: [ p.pexpect ]);
+in stdenv.mkDerivation rec {
+  version = "0.10.0";
+  pname = "reptyr";
 
   src = fetchFromGitHub {
     owner = "nelhage";
     repo = "reptyr";
     rev = "reptyr-${version}";
-    sha256 = "1hnijfz1ab34j2h2cxc3f43rmbclyihgn9x9wxa7jqqgb2xm71hj";
+    sha256 = "sha256-jlO/ykrwGJkgKiPxfRQEX4TSksrbPQhkQs+QddwqaQ4=";
   };
 
   makeFlags = [ "PREFIX=" "DESTDIR=$(out)" ];
 
-  checkInputs = [ (python2.withPackages (p: [ p.pexpect ])) ];
-  doCheck = true;
+  nativeCheckInputs = [ python ];
+
+  # reptyr needs to do ptrace of a non-child process
+  # It can be neither used nor tested if the kernel is not told to allow this
+  doCheck = false;
+
+  checkFlags = [
+    "PYTHON_CMD=${python.interpreter}"
+  ];
 
   meta = {
     platforms = [
@@ -26,10 +35,12 @@ stdenv.mkDerivation rec {
       "armv6l-linux"
       "armv7l-linux"
       "aarch64-linux"
+      "riscv64-linux"
     ];
     maintainers = with lib.maintainers; [raskin];
     license = lib.licenses.mit;
     description = "Reparent a running program to a new terminal";
-    homepage = https://github.com/nelhage/reptyr;
+    mainProgram = "reptyr";
+    homepage = "https://github.com/nelhage/reptyr";
   };
 }

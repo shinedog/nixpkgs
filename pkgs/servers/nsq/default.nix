@@ -1,18 +1,26 @@
-{ buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "nsq-${version}";
-  version = "0.3.5";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/bitly/nsq";
+buildGoModule rec {
+  pname = "nsq";
+  version = "1.3.0";
 
   src = fetchFromGitHub {
-    inherit rev;
-    owner = "bitly";
+    owner = "nsqio";
     repo = "nsq";
-    sha256 = "1r7jgplzn6bgwhd4vn8045n6cmm4iqbzssbjgj7j1c28zbficy2f";
+    rev = "v${version}";
+    hash = "sha256-qoAp8yAc4lJmlnHHcZskRzkleZ3Q5Gu3Lhk9u1jMR4g=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-/5nH7zHg8zxWFgtVzSnfp7RZGvPWiuGSEyhx9fE2Pvo=";
+
+  excludedPackages = [ "bench" ];
+
+  ldflags = [ "-s" "-w" ];
+
+  meta = with lib; {
+    homepage = "https://nsq.io/";
+    description = "A realtime distributed messaging platform";
+    changelog = "https://github.com/nsqio/nsq/raw/v${version}/ChangeLog.md";
+    license = licenses.mit;
+  };
 }

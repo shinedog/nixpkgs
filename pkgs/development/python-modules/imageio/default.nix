@@ -1,57 +1,123 @@
-{ stdenv
-, buildPythonPackage
-, pathlib
-, fetchPypi
-, pillow
-, psutil
-, imageio-ffmpeg
-, pytest
-, numpy
-, isPy3k
-, ffmpeg
-, futures
-, enum34
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  isPyPy,
+  substituteAll,
+
+  # build-system
+  setuptools,
+
+  # native dependencies
+  libGL,
+
+  # dependencies
+  numpy,
+  pillow,
+
+  # optional-dependencies
+  astropy,
+  av,
+  imageio-ffmpeg,
+  pillow-heif,
+  psutil,
+  tifffile,
+
+  # tests
+  pytestCheckHook,
+  fsspec,
 }:
 
 buildPythonPackage rec {
   pname = "imageio";
-  version = "2.5.0";
+  version = "2.34.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    sha256 = "1bdcrr5190jvk0msw2lswj4pbdhrcggjpj8m6q2a2mrxzjnmmrj2";
-    inherit pname version;
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "imageio";
+    repo = "imageio";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-/VZUifiz8iImq+JLvckFDr7YMIqu0Xro2t3GFj0obg0=";
   };
 
-  checkInputs = [ pytest psutil ] ++ stdenv.lib.optionals isPy3k [
-    imageio-ffmpeg ffmpeg
-    ];
-  propagatedBuildInputs = [ numpy pillow ] ++ stdenv.lib.optionals (!isPy3k) [
-    futures
-    enum34
-    pathlib
+  patches = lib.optionals (!stdenv.isDarwin) [
+    (substituteAll {
+      src = ./libgl-path.patch;
+      libgl = "${libGL.out}/lib/libGL${stdenv.hostPlatform.extensions.sharedLibrary}";
+    })
   ];
 
-  checkPhase = ''
-    export IMAGEIO_USERDIR="$TMP"
-    export IMAGEIO_NO_INTERNET="true"
-    export HOME="$(mktemp -d)"
-    py.test
-  '';
+  build-system = [ setuptools ];
 
-  # For some reason, importing imageio also imports xml on Nix, see
-  # https://github.com/imageio/imageio/issues/395
+  dependencies = [
+    numpy
+    pillow
+  ];
 
-  # Also, there are tests that test the downloading of ffmpeg if it's not installed.
-  # "Uncomment" those by renaming.
-  postPatch = ''
-    substituteInPlace tests/test_meta.py --replace '"urllib",' "\"urllib\",\"xml\","
-    substituteInPlace tests/test_ffmpeg.py --replace 'test_get_exe_installed' 'get_exe_installed'
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats";
-    homepage = http://imageio.github.io/;
-    license = licenses.bsd2;
+  passthru.optional-dependencies = {
+    bsdf = [ ];
+    dicom = [ ];
+    feisem = [ ];
+    ffmpeg = [
+      imageio-ffmpeg
+      psutil
+    ];
+    fits = lib.optionals (!isPyPy) [ astropy ];
+    freeimage = [ ];
+    lytro = [ ];
+    numpy = [ ];
+    pillow = [ ];
+    simpleitk = [ ];
+    spe = [ ];
+    swf = [ ];
+    tifffile = [ tifffile ];
+    pyav = [ av ];
+    heif = [ pillow-heif ];
   };
 
+  nativeCheckInputs =
+    [
+      fsspec
+      psutil
+      pytestCheckHook
+    ]
+    ++ fsspec.optional-dependencies.github
+    ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  pytestFlagsArray = [ "-m 'not needs_internet'" ];
+
+  preCheck = ''
+    export IMAGEIO_USERDIR="$TMP"
+    export HOME=$TMPDIR
+  '';
+
+  disabledTestPaths = [
+    # tries to fetch fixtures over the network
+    "tests/test_freeimage.py"
+    "tests/test_pillow.py"
+    "tests/test_spe.py"
+    "tests/test_swf.py"
+  ];
+
+  disabledTests = lib.optionals stdenv.isDarwin [
+    # Segmentation fault
+    "test_bayer_write"
+    # RuntimeError: No valid H.264 encoder was found with the ffmpeg installation
+    "test_writer_file_properly_closed"
+    "test_writer_pixelformat_size_verbose"
+    "test_writer_ffmpeg_params"
+    "test_reverse_read"
+  ];
+
+  meta = with lib; {
+    description = "Library for reading and writing a wide range of image, video, scientific, and volumetric data formats";
+    homepage = "https://imageio.readthedocs.io";
+    changelog = "https://github.com/imageio/imageio/blob/v${version}/CHANGELOG.md";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ Luflosi ];
+  };
 }

@@ -1,33 +1,83 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, lib, darwin
-, six, protobuf, enum34, futures, isPy27, isPy34, pkgconfig
-, cython}:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  grpc,
+  six,
+  protobuf,
+  enum34 ? null,
+  futures ? null,
+  isPy27,
+  pkg-config,
+  cython,
+  c-ares,
+  openssl,
+  zlib,
+}:
 
-with stdenv.lib;
 buildPythonPackage rec {
   pname = "grpcio";
-  version = "1.18.0";
+  format = "setuptools";
+  version = "1.62.2";
 
-  src = fetchFromGitHub {
-    owner = "grpc";
-    repo = "grpc";
-    rev = "v${version}";
-    fetchSubmodules = true;
-    sha256 = "0cilbhk35gv46mk40jl5f3iqa94x14qyxbavpfq0kh0rld82nx4m";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-x3YYBx2Wt6i+LBBwGphTeCO5xluiVsC5Bn4FlM29lU0=";
   };
 
-  nativeBuildInputs = [ cython pkgconfig ]
-                    ++ optional stdenv.isDarwin darwin.cctools;
+  outputs = [
+    "out"
+    "dev"
+  ];
 
-  propagatedBuildInputs = [ six protobuf ]
-                        ++ lib.optionals (isPy27 || isPy34) [ enum34 ]
-                        ++ lib.optionals (isPy27) [ futures ];
+  nativeBuildInputs = [
+    cython
+    pkg-config
+  ];
 
-  preBuild = optionalString stdenv.isDarwin "unset AR";
+  buildInputs = [
+    c-ares
+    openssl
+    zlib
+  ];
+  propagatedBuildInputs =
+    [
+      six
+      protobuf
+    ]
+    ++ lib.optionals (isPy27) [
+      enum34
+      futures
+    ];
 
-  meta = with stdenv.lib; {
+  preBuild =
+    ''
+      export GRPC_PYTHON_BUILD_EXT_COMPILER_JOBS="$NIX_BUILD_CORES"
+      if [ -z "$enableParallelBuilding" ]; then
+        GRPC_PYTHON_BUILD_EXT_COMPILER_JOBS=1
+      fi
+    ''
+    + lib.optionalString stdenv.isDarwin ''
+      unset AR
+    '';
+
+  GRPC_BUILD_WITH_BORING_SSL_ASM = "";
+  GRPC_PYTHON_BUILD_SYSTEM_OPENSSL = 1;
+  GRPC_PYTHON_BUILD_SYSTEM_ZLIB = 1;
+  GRPC_PYTHON_BUILD_SYSTEM_CARES = 1;
+
+  # does not contain any tests
+  doCheck = false;
+
+  enableParallelBuilding = true;
+
+  pythonImportsCheck = [ "grpc" ];
+
+  meta = with lib; {
     description = "HTTP/2-based RPC framework";
-    license = lib.licenses.asl20;
+    license = licenses.asl20;
     homepage = "https://grpc.io/grpc/python/";
-    maintainers = with maintainers; [ vanschelven ];
+    maintainers = with maintainers; [ ];
   };
 }

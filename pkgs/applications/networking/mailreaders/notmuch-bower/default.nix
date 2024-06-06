@@ -1,36 +1,43 @@
-{ stdenv, fetchFromGitHub, gawk, mercury, pandoc, ncurses, gpgme }:
+{ lib, stdenv, fetchFromGitHub, mercury, pandoc, ncurses, gpgme, coreutils, file }:
 
 stdenv.mkDerivation rec {
-  name = "notmuch-bower-${version}";
-  version = "0.10";
+  pname = "notmuch-bower";
+  version = "1.0";
 
   src = fetchFromGitHub {
     owner = "wangp";
     repo = "bower";
     rev = version;
-    sha256 = "0jpaxlfxz7mj76z3cyj8sq053p0mkp46kaw05nimzwaq5yx923fv";
+    sha256 = "sha256-BNuJEVuzreI2AK/fqVMRHq8ZhPQjO33Y2FzkrWlfmm0=";
   };
 
-  nativeBuildInputs = [ gawk mercury pandoc ];
+  nativeBuildInputs = [ mercury pandoc ];
+  postPatch = ''
+    substituteInPlace src/compose.m --replace 'shell_quoted("base64' 'shell_quoted("${coreutils}/bin/base64'
+    substituteInPlace src/detect_mime_type.m --replace 'shell_quoted("file' 'shell_quoted("${file}/bin/file'
+  '';
 
   buildInputs = [ ncurses gpgme ];
 
   makeFlags = [ "PARALLEL=-j$(NIX_BUILD_CORES)" "bower" "man" ];
 
   installPhase = ''
+    runHook preInstall
     mkdir -p $out/bin
     mv bower $out/bin/
     mkdir -p $out/share/man/man1
     mv bower.1 $out/share/man/man1/
+    runHook postInstall
   '';
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/wangp/bower;
+  meta = with lib; {
+    homepage = "https://github.com/wangp/bower";
     description = "A curses terminal client for the Notmuch email system";
-    maintainers = with maintainers; [ erictapen ];
-    license = licenses.gpl3;
+    mainProgram = "bower";
+    maintainers = with maintainers; [ jgart ];
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
   };
 }

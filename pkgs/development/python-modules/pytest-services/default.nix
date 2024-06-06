@@ -1,34 +1,76 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, requests
-, psutil
-, pytest
-, subprocess32
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  psutil,
+  pylibmc,
+  pytest,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  setuptools,
+  setuptools-scm,
+  toml,
+  mysqlclient,
+  zc-lockfile,
 }:
 
 buildPythonPackage rec {
   pname = "pytest-services";
-  version = "1.3.1";
+  version = "2.2.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "035bc9ce8addb33f7c2ec95a9c0c88926d213a6c2e12b2c57da31a4ec0765f2c";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "pytest-dev";
+    repo = "pytest-services";
+    rev = "refs/tags/${version}";
+    hash = "sha256-E/VcKcAb1ekypm5jP4lsSz1LYJTcTSed6i5OY5ihP30=";
   };
+
+  patches = [
+    # Replace distutils.spawn.find_executable with shutil.which, https://github.com/pytest-dev/pytest-services/pull/46
+    (fetchpatch {
+      name = "replace-distutils.patch";
+      url = "https://github.com/pytest-dev/pytest-services/commit/e0e2a85434a2dcbcc0584299c5b2b751efe0b6db.patch";
+      hash = "sha256-hvr7EedfjfonHDn6v2slwUBqz1xQoF7Ez/kqAhZRXEc=";
+    })
+  ];
+
+  nativeBuildInputs = [
+    setuptools-scm
+    toml
+  ];
+
+  buildInputs = [ pytest ];
 
   propagatedBuildInputs = [
     requests
     psutil
-    pytest
-  ] ++ lib.optional (!isPy3k) subprocess32;
+    zc-lockfile
+  ];
 
-  # no tests in PyPI tarball
-  doCheck = false;
+  nativeCheckInputs = [
+    mysqlclient
+    pylibmc
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "pytest_services" ];
+
+  disabledTests = [
+    # Tests require binaries and additional parts
+    "test_memcached"
+    "test_mysql"
+    "test_xvfb "
+  ];
 
   meta = with lib; {
     description = "Services plugin for pytest testing framework";
-    homepage = https://github.com/pytest-dev/pytest-services;
+    homepage = "https://github.com/pytest-dev/pytest-services";
+    changelog = "https://github.com/pytest-dev/pytest-services/blob/${version}/CHANGES.rst";
     license = licenses.mit;
     maintainers = with maintainers; [ dotlambda ];
   };

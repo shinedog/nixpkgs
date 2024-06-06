@@ -1,40 +1,67 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, pcre, qtbase, qttools,
-  qtx11extras, xorg, lxqt-build-tools, openbox, hicolor-icon-theme }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, libSM
+, libXdmcp
+, libpthreadstubs
+, lxqt-build-tools
+, openbox
+, pcre
+, pkg-config
+, qtbase
+, qttools
+, qtwayland
+, wrapQtAppsHook
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
   pname = "obconf-qt";
-  version = "0.14.1";
+  version = "0.16.4";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "15dizs072ylmld1lxwgqkvybqy8ms8zki5586xm305jnlmrkb4lq";
+    hash = "sha256-uF90v56BthEts/Jy+a6kH2b1QFHCtft4ZLxyi/K/Vnc=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
+    libSM
+    libXdmcp
+    libpthreadstubs
+    openbox
     pcre
     qtbase
-    qttools
-    qtx11extras
-    xorg.libpthreadstubs
-    xorg.libXdmcp
-    xorg.libSM
-    openbox
-    hicolor-icon-theme
+    qtwayland
   ];
 
-  meta = with stdenv.lib; {
+  patches = [
+    (fetchpatch {
+      name = "obconf-qt.port-to-qt6";
+      url = "https://patch-diff.githubusercontent.com/raw/lxqt/obconf-qt/pull/230.patch";
+      hash = "sha256-XLt8+/4oMXeli07qTAGc73U9RD1fGYqxTX0QdhuXpII=";
+    })
+  ];
+
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/obconf-qt";
     description = "The Qt port of obconf, the Openbox configuration tool";
-    homepage = https://github.com/lxqt/obconf-qt;
-    license = licenses.gpl2;
+    mainProgram = "obconf-qt";
+    license = licenses.gpl2Plus;
     platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    maintainers = teams.lxqt.members;
   };
 }

@@ -1,28 +1,58 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, flake8
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+
+  # build-system
+  hatchling,
+  hatch-vcs,
+
+  # tests
+  numpy,
+  pandas,
+  pytest-asyncio,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "param";
-  version = "1.8.2";
+  version = "2.1.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "49927979d4f6c994bcd8f6f7f2b34e3a0a7f0d62404dca6bcae5acde0192bb01";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "holoviz";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-9264KfRDuHsvDyIpGKs2VTPcTZOZIFLKe7xuplkfzf4=";
   };
 
-  checkInputs = [ flake8 nose ];
+  nativeBuildInputs = [
+    hatchling
+    hatch-vcs
+  ];
 
-  # tests not included with pypi release
-  doCheck = false;
+  nativeCheckInputs = [
+    numpy
+    pandas
+    pytest-asyncio
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [
+    "-W"
+    "ignore::DeprecationWarning"
+  ];
+
+  pythonImportsCheck = [ "param" ];
 
   meta = with lib; {
     description = "Declarative Python programming using Parameters";
-    homepage = https://github.com/pyviz/param;
+    homepage = "https://param.holoviz.org/";
+    changelog = "https://github.com/holoviz/param/releases/tag/v${version}";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

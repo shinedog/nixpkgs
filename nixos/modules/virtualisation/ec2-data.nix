@@ -7,6 +7,10 @@
 with lib;
 
 {
+  imports = [
+    (mkRemovedOptionModule [ "ec2" "metadata" ] "")
+  ];
+
   config = {
 
     systemd.services.apply-ec2-data =
@@ -14,8 +18,9 @@ with lib;
 
         wantedBy = [ "multi-user.target" "sshd.service" ];
         before = [ "sshd.service" ];
+        after = ["fetch-ec2-metadata.service"];
 
-        path = [ pkgs.iproute ];
+        path = [ pkgs.iproute2 ];
 
         script =
           ''
@@ -64,7 +69,7 @@ with lib;
         serviceConfig.RemainAfterExit = true;
       };
 
-    systemd.services."print-host-key" =
+    systemd.services.print-host-key =
       { description = "Print SSH Host Key";
         wantedBy = [ "multi-user.target" ];
         after = [ "sshd.service" ];

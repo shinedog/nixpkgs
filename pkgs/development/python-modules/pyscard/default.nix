@@ -1,38 +1,72 @@
-{ stdenv, fetchPypi, fetchpatch, buildPythonPackage, swig, pcsclite, PCSC }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  PCSC,
+  pcsclite,
+  pkg-config,
+  pytestCheckHook,
+  setuptools,
+  stdenv,
+  swig,
+}:
+
+let
+  # Package does not support configuring the pcsc library.
+  withApplePCSC = stdenv.isDarwin;
+in
 
 buildPythonPackage rec {
-  version = "1.9.8";
   pname = "pyscard";
+  version = "2.0.9";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "15fh00z1an6r5j7hrz3jlq0rb3jygwf3x4jcwsa008bv8vpcg7gm";
+  src = fetchFromGitHub {
+    owner = "LudovicRousseau";
+    repo = "pyscard";
+    rev = "refs/tags/${version}";
+    hash = "sha256-DO4Ea+mlrWPpOLI8Eki+03UnsOXEhN2PAl0+gdN5sTo=";
   };
 
-  postPatch = ''
-    sed -e 's!"libpcsclite\.so\.1"!"${stdenv.lib.getLib pcsclite}/lib/libpcsclite.so.1"!' \
-        -i smartcard/scard/winscarddll.c
+  build-system = [ setuptools ];
+
+  nativeBuildInputs = [ swig ] ++ lib.optionals (!withApplePCSC) [ pkg-config ];
+
+  buildInputs = if withApplePCSC then [ PCSC ] else [ pcsclite ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  postPatch =
+    if withApplePCSC then
+      ''
+        substituteInPlace smartcard/scard/winscarddll.c \
+          --replace-fail "/System/Library/Frameworks/PCSC.framework/PCSC" \
+                    "${PCSC}/Library/Frameworks/PCSC.framework/PCSC"
+      ''
+    else
+      ''
+        substituteInPlace setup.py --replace "pkg-config" "$PKG_CONFIG"
+        substituteInPlace smartcard/scard/winscarddll.c \
+          --replace-fail "libpcsclite.so.1" \
+                    "${lib.getLib pcsclite}/lib/libpcsclite${stdenv.hostPlatform.extensions.sharedLibrary}"
+      '';
+
+  preCheck = ''
+    # remove src module, so tests use the installed module instead
+    rm -r smartcard
   '';
 
-  NIX_CFLAGS_COMPILE = "-isystem ${stdenv.lib.getDev pcsclite}/include/PCSC/";
-
-  patches = [
-    # Fixes darwin tests
-    # See: https://github.com/LudovicRousseau/pyscard/issues/77
-    (fetchpatch {
-      url = "https://github.com/LudovicRousseau/pyscard/commit/62e675028086c75656444cc21d563d9f08ebf8e7.patch";
-      sha256 = "1lr55npcpc8j750vf7vaisqyk18d5f00l7nii2lvawg4sssjaaf7";
-    })
+  disabledTests = [
+    # AssertionError
+    "test_hresult"
+    "test_low_level"
   ];
 
-  propagatedBuildInputs = [ pcsclite ];
-  buildInputs = stdenv.lib.optional stdenv.isDarwin PCSC;
-  nativeBuildInputs = [ swig ];
-
-  meta = {
-    homepage = https://pyscard.sourceforge.io/;
+  meta = with lib; {
     description = "Smartcard library for python";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = with stdenv.lib.maintainers; [ layus ];
+    homepage = "https://pyscard.sourceforge.io/";
+    changelog = "https://github.com/LudovicRousseau/pyscard/releases/tag/${version}";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ layus ];
   };
 }

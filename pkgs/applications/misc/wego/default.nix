@@ -1,21 +1,22 @@
-{ stdenv, buildGoPackage, fetchgit }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "wego-${version}";
-  version = "20170403-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "415efdfab5d5ee68300bf261a0c6f630c6c2584c";
-  
-  goPackagePath = "github.com/schachmat/wego";
+buildGoModule rec {
+  pname = "wego";
+  version = "2.2";
 
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/schachmat/wego";
-    sha256 = "0w8sypwg0s2mvhk9cdibqr8bz5ipiiacs60a39sdswrpc4z486hg";
+  src = fetchFromGitHub {
+    owner = "schachmat";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-bkbH3RewlYYNamAhAZGWQmzNdGB06K3m/D8ScsQP9ic=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-aXrXw/7ZtSZXIKDMZuWPV2zAf0e0lU0QCBhua7tHGEY=";
 
-  meta = {
-    license = stdenv.lib.licenses.isc;
+  meta = with lib; {
+    homepage = "https://github.com/schachmat/wego";
+    description = "Weather app for the terminal";
+    license = licenses.isc;
+    mainProgram = "wego";
   };
 }

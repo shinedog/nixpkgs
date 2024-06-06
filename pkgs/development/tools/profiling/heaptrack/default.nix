@@ -1,31 +1,40 @@
 {
-  stdenv, fetchFromGitHub, cmake, extra-cmake-modules,
-  zlib, boost, libunwind, elfutils, sparsehash,
+  lib, stdenv, mkDerivation, fetchFromGitHub, cmake, extra-cmake-modules, makeBinaryWrapper,
+  zlib, boost179, libunwind, elfutils, sparsehash, zstd,
   qtbase, kio, kitemmodels, threadweaver, kconfigwidgets, kcoreaddons, kdiagram
 }:
 
-stdenv.mkDerivation rec {
-  name = "heaptrack-${version}";
-  version = "1.1.0";
+mkDerivation rec {
+  pname = "heaptrack";
+  version = "1.5.0";
 
   src = fetchFromGitHub {
     owner = "KDE";
     repo = "heaptrack";
     rev = "v${version}";
-    sha256 = "0vgwldl5n41r4y3pv8w29gmyln0k2w6m59zrfw9psm4hkxvivzlx";
+    hash = "sha256-pP+s60ERnmOctYTe/vezCg0VYzziApNY0QaF3aTccZU=";
   };
 
-  nativeBuildInputs = [ cmake extra-cmake-modules ];
+  nativeBuildInputs = [ cmake extra-cmake-modules makeBinaryWrapper ];
   buildInputs = [
-    zlib boost libunwind elfutils sparsehash
+    zlib boost179 libunwind sparsehash zstd
     qtbase kio kitemmodels threadweaver kconfigwidgets kcoreaddons kdiagram
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    elfutils
   ];
 
-  meta = with stdenv.lib; {
+  postInstall = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    makeWrapper \
+      $out/Applications/KDE/heaptrack_gui.app/Contents/MacOS/heaptrack_gui \
+      $out/bin/heaptrack_gui
+  '';
+
+  meta = with lib; {
     description = "Heap memory profiler for Linux";
-    homepage = https://github.com/KDE/heaptrack;
+    homepage = "https://github.com/KDE/heaptrack";
     license = licenses.lgpl21Plus;
+    mainProgram = "heaptrack_gui";
     maintainers = with maintainers; [ gebner ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

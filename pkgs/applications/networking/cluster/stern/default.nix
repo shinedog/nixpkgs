@@ -1,36 +1,39 @@
-{ stdenv, lib, buildPackages, buildGoPackage, fetchFromGitHub }:
+{ stdenv, lib, buildPackages, buildGoModule, fetchFromGitHub, installShellFiles }:
 
-let isCrossBuild = stdenv.hostPlatform != stdenv.buildPlatform; in
-
-buildGoPackage rec {
-  name = "stern-${version}";
-  version = "1.10.0";
-
-  goPackagePath = "github.com/wercker/stern";
+buildGoModule rec {
+  pname = "stern";
+  version = "1.30.0";
 
   src = fetchFromGitHub {
-    owner = "wercker";
+    owner = "stern";
     repo = "stern";
-    rev = "${version}";
-    sha256 = "05wsif0pwh2v4rw4as36f1d9r149zzp2nyc0z4jwnj9nx58nfpll";
+    rev = "v${version}";
+    sha256 = "sha256-sqRPX+NC58mQi0wvs3u3Lb81LBntaY1FzzlY1TIiz18=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-RLcF7KfKtkwB+nWzaQb8Va9pau+TS2uE9AmJ0aFNsik=";
 
-  postInstall =
-    let stern = if isCrossBuild then buildPackages.stern else "$bin"; in
+  subPackages = [ "." ];
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  ldflags = [ "-s" "-w" "-X github.com/stern/stern/cmd.version=${version}" ];
+
+  postInstall = let
+    stern = if stdenv.buildPlatform.canExecute stdenv.hostPlatform then "$out" else buildPackages.stern;
+  in
     ''
-      mkdir -p $bin/share/bash-completion/completions
-      ${stern}/bin/stern --completion bash > $bin/share/bash-completion/completions/stern
-      mkdir -p $bin/share/zsh/site-functions
-      ${stern}/bin/stern --completion zsh > $bin/share/zsh/site-functions/_stern
+      for shell in bash zsh fish; do
+        ${stern}/bin/stern --completion $shell > stern.$shell
+        installShellCompletion stern.$shell
+      done
     '';
 
   meta = with lib; {
-    description      = "Multi pod and container log tailing for Kubernetes";
-    homepage         = "https://github.com/wercker/stern";
-    license          = licenses.asl20;
-    maintainers      = with maintainers; [ mbode ];
-    platforms        = platforms.unix;
+    description = "Multi pod and container log tailing for Kubernetes";
+    mainProgram = "stern";
+    homepage = "https://github.com/stern/stern";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ mbode preisschild ];
   };
 }

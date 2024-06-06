@@ -1,13 +1,15 @@
-{ pkgs
-, buildPythonPackage
-, fetchPypi
-, requests
-, python
+{
+  pkgs,
+  buildPythonPackage,
+  fetchPypi,
+  requests,
+  python,
 }:
 
 buildPythonPackage rec {
   pname = "facebook-sdk";
   version = "3.1.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -25,8 +27,8 @@ buildPythonPackage rec {
 
   meta = with pkgs.lib; {
     description = "Client library that supports the Facebook Graph API and the official Facebook JavaScript SDK";
-    homepage = https://github.com/pythonforfacebook/facebook-sdk;
-    license = licenses.asl20 ;
-    maintainers = [ maintainers.costrouc ];
+    homepage = "https://github.com/pythonforfacebook/facebook-sdk";
+    license = licenses.asl20;
+    maintainers = [ ];
   };
 }

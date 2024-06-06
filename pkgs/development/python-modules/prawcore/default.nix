@@ -1,36 +1,59 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, requests
-, testfixtures, mock, requests_toolbelt
-, betamax, betamax-serializers, betamax-matchers
+{
+  lib,
+  betamax,
+  betamax-matchers,
+  betamax-serializers,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flit-core,
+  mock,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  requests-toolbelt,
+  testfixtures,
 }:
 
 buildPythonPackage rec {
   pname = "prawcore";
-  version = "1.0.1";
+  version = "2.4.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "ab5558efb438aa73fc66c4178bfc809194dea3ce2addf4dec873de7e2fd2824e";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "praw-dev";
+    repo = "prawcore";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-tECZRx6VgyiJDKHvj4Rf1sknFqUhz3sDFEsAMOeB7/g=";
   };
 
-  propagatedBuildInputs = [
-    requests
-  ];
+  nativeBuildInputs = [ flit-core ];
 
-  checkInputs = [
+  propagatedBuildInputs = [ requests ];
+
+  nativeCheckInputs = [
     testfixtures
     mock
     betamax
     betamax-serializers
     betamax-matchers
-    requests_toolbelt
+    requests-toolbelt
+    pytestCheckHook
   ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # tests requiring network
+    "tests/integration"
+  ];
+
+  pythonImportsCheck = [ "prawcore" ];
+
+  meta = with lib; {
     description = "Low-level communication layer for PRAW";
-    homepage = https://praw.readthedocs.org/;
-    license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ ];
+    homepage = "https://praw.readthedocs.org/";
+    changelog = "https://github.com/praw-dev/prawcore/blob/v${version}/CHANGES.rst";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ fab ];
   };
 }

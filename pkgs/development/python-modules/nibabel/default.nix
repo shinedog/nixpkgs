@@ -1,44 +1,78 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, numpy
-, six
-, bz2file
-, nose
-, mock
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonAtLeast,
+  pythonOlder,
+  hatchling,
+  hatch-vcs,
+  numpy,
+  packaging,
+  importlib-resources,
+  pydicom,
+  pillow,
+  h5py,
+  scipy,
+  git,
+  pytest-doctestplus,
+  pytest-httpserver,
+  pytest-xdist,
+  pytest7CheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "nibabel";
-  version = "2.3.3";
+  version = "5.2.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b6366634c65b04464e62f3a9a8df1faa172f780ed7f1af1c6818b3dc2f1202c3";
+    hash = "sha256-tsgLLnKOS8K2XxFC2bjSKHqRAqi/hHfhFe8NgzRVmXU=";
   };
+
+  nativeBuildInputs = [
+    hatchling
+    hatch-vcs
+  ];
 
   propagatedBuildInputs = [
     numpy
-    six
-  ] ++ lib.optional (!isPy3k) bz2file;
+    packaging
+  ] ++ lib.optionals (pythonOlder "3.9") [ importlib-resources ];
 
-  checkInputs = [ nose mock ];
-
-  checkPhase = let
-    excludeTests = lib.optionals isPy3k [
-      # https://github.com/nipy/nibabel/issues/691
-      "nibabel.gifti.tests.test_giftiio.test_read_deprecated"
-      "nibabel.gifti.tests.test_parse_gifti_fast.test_parse_dataarrays"
-      "nibabel.tests.test_minc1.test_old_namespace"
+  passthru.optional-dependencies = rec {
+    all = dicom ++ dicomfs ++ minc2 ++ spm ++ zstd;
+    dicom = [ pydicom ];
+    dicomfs = [ pillow ] ++ dicom;
+    minc2 = [ h5py ];
+    spm = [ scipy ];
+    zstd = [
+      # TODO: pyzstd
     ];
-  # TODO: Add --with-doctest once all doctests pass
-  in ''
-    nosetests ${lib.concatMapStrings (test: "-e '${test}' ") excludeTests}
+  };
+
+  nativeCheckInputs = [
+    git
+    pytest-doctestplus
+    pytest-httpserver
+    pytest-xdist
+    pytest7CheckHook
+  ] ++ passthru.optional-dependencies.all;
+
+  preCheck = ''
+    export PATH=$out/bin:$PATH
   '';
 
+  disabledTestPaths = lib.optionals (pythonAtLeast "3.12") [
+    # uses distutils
+    "nisext/tests/test_sexts.py"
+  ];
+
   meta = with lib; {
-    homepage = https://nipy.org/nibabel/;
+    homepage = "https://nipy.org/nibabel";
+    changelog = "https://github.com/nipy/nibabel/blob/${version}/Changelog";
     description = "Access a multitude of neuroimaging data formats";
     license = licenses.mit;
     maintainers = with maintainers; [ ashgillman ];

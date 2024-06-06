@@ -1,25 +1,24 @@
-{ stdenv, fetchFromGitHub }:
-
-with stdenv.lib;
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "hexd-${version}";
-  version = "1.0.0";
+  pname = "hexd";
+  version = "1.1.0";
 
   src = fetchFromGitHub {
     owner = "FireyFly";
     repo = "hexd";
     rev = "v${version}";
-    sha256 = "1lm0mj5c71id5kpqar8n44023s1kymb3q45nsz0hjh9v7p8libp0";
+    sha256 = "sha256-b/dROBQVPEiMBTcu4MTi6Lf6ChkFZqZrJ1V0j54rrFY=";
   };
 
   makeFlags = [ "PREFIX=$(out)" ];
 
-  meta = {
+  meta = with lib; {
     description = "Colourful, human-friendly hexdump tool";
-    homepage = https://github.com/FireyFly/hexd;
+    homepage = "https://github.com/FireyFly/hexd";
     maintainers = [ maintainers.FireyFly ];
     license = licenses.mit;
     platforms = platforms.unix;
+    mainProgram = "hexd";
   };
 }

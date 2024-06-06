@@ -1,22 +1,35 @@
-{ stdenv, fetchFromGitHub, buildDunePackage, cppo, bos, cmdliner, tyxml }:
+{ lib, buildDunePackage, ocaml
+, ocaml-crunch
+, astring, cmdliner, cppo, fpath, result, tyxml
+, markup, yojson, sexplib0, jq
+, odoc-parser, ppx_expect, bash, fmt
+}:
 
 buildDunePackage rec {
   pname = "odoc";
-  version = "1.3.0";
+  inherit (odoc-parser) version src;
 
-  src = fetchFromGitHub {
-    owner = "ocaml";
-    repo = pname;
-    rev = version;
-    sha256 = "0hjan5aj5zk8j8qyagv9r4hqm469mh207cv2m6kxwgnw0c3cz7sy";
-  };
+  nativeBuildInputs = [ cppo ocaml-crunch ];
+  buildInputs = [ astring cmdliner fpath result tyxml odoc-parser fmt ];
 
-  buildInputs = [ cppo bos cmdliner tyxml ];
+  nativeCheckInputs = [ bash jq ];
+  checkInputs = [ markup yojson sexplib0 jq ppx_expect ];
+  doCheck = lib.versionAtLeast ocaml.version "4.08"
+    && lib.versionOlder yojson.version "2.0";
+
+  preCheck = ''
+    # some run.t files check the content of patchShebangs-ed scripts, so patch
+    # them as well
+    find test \( -name '*.sh' -o -name 'run.t' \)  -execdir sed 's@#!/bin/sh@#!${bash}/bin/sh@' -i '{}' \;
+    patchShebangs test
+  '';
 
   meta = {
     description = "A documentation generator for OCaml";
-    license = stdenv.lib.licenses.isc;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    inherit (src.meta) homepage;
+    mainProgram = "odoc";
+    license = lib.licenses.isc;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/ocaml/odoc";
+    changelog = "https://github.com/ocaml/odoc/blob/${version}/CHANGES.md";
   };
 }

@@ -1,24 +1,35 @@
-{ stdenv, fetchurl, lib
-, autoconf, automake, gnum4, libtool, perl, gnulib, uthash, pkgconfig, gettext
-, python, freetype, zlib, glib, libungif, libpng, libjpeg, libtiff, libxml2, cairo, pango
+{ stdenv, fetchFromGitHub, lib, fetchpatch
+, cmake, uthash, pkg-config
+, python, freetype, zlib, glib, giflib, libpng, libjpeg, libtiff, libxml2, cairo, pango
 , readline, woff2, zeromq
 , withSpiro ? false, libspiro
-, withGTK ? false, gtk2
+, withGTK ? false, gtk3
+, withGUI ? withGTK
 , withPython ? true
 , withExtras ? true
-, Carbon ? null, Cocoa ? null
+, Carbon, Cocoa
 }:
+
+assert withGTK -> withGUI;
 
 stdenv.mkDerivation rec {
   pname = "fontforge";
-  version = "20190413";
+  version = "20230101";
 
-  src = fetchurl {
-    url = "https://github.com/${pname}/${pname}/releases/download/${version}/${pname}-${version}.tar.gz";
-    sha256 = "05v640mnk4fy4jzmxb6c4n4qm800x7hy4sl5gcdgzmm3md2s0qk7";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-/RYhvL+Z4n4hJ8dmm+jbA1Ful23ni2DbCRZC5A3+pP0=";
   };
 
-  patches = [ ./fontforge-20140813-use-system-uthash.patch ];
+  patches = [
+    (fetchpatch {
+      name = "CVE-2024-25081.CVE-2024-25082.patch";
+      url = "https://github.com/fontforge/fontforge/commit/216eb14b558df344b206bf82e2bdaf03a1f2f429.patch";
+      hash = "sha256-aRnir09FSQMT50keoB7z6AyhWAVBxjSQsTRvBzeBuHU=";
+    })
+  ];
 
   # use $SOURCE_DATE_EPOCH instead of non-deterministic timestamps
   postPatch = ''
@@ -30,36 +41,27 @@ stdenv.mkDerivation rec {
   '';
 
   # do not use x87's 80-bit arithmetic, rouding errors result in very different font binaries
-  NIX_CFLAGS_COMPILE = lib.optionals stdenv.isi686 [ "-msse2" "-mfpmath=sse" ];
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isi686 "-msse2 -mfpmath=sse";
 
-  nativeBuildInputs = [ pkgconfig autoconf automake gnum4 libtool perl gettext ];
+  nativeBuildInputs = [ pkg-config cmake ];
   buildInputs = [
     readline uthash woff2 zeromq
-    python freetype zlib glib libungif libpng libjpeg libtiff libxml2
+    python freetype zlib glib giflib libpng libjpeg libtiff libxml2
   ]
-    ++ lib.optionals withSpiro [libspiro]
-    ++ lib.optionals withGTK [ gtk2 cairo pango ]
+    ++ lib.optionals withSpiro [ libspiro ]
+    ++ lib.optionals withGUI [ gtk3 cairo pango ]
     ++ lib.optionals stdenv.isDarwin [ Carbon Cocoa ];
 
-    configureFlags = [ "--enable-woff2" ]
-    ++ lib.optionals (!withPython) [ "--disable-python-scripting" "--disable-python-extension" ]
-    ++ lib.optional withGTK "--enable-gtk2-use"
-    ++ lib.optional (!withGTK) "--without-x"
-    ++ lib.optional withExtras "--enable-fontforge-extras";
+  cmakeFlags = [ "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON" ]
+    ++ lib.optional (!withSpiro) "-DENABLE_LIBSPIRO=OFF"
+    ++ lib.optional (!withGUI) "-DENABLE_GUI=OFF"
+    ++ lib.optional (!withGTK) "-DENABLE_X11=ON"
+    ++ lib.optional withExtras "-DENABLE_FONTFORGE_EXTRAS=ON";
 
-  # work-around: git isn't really used, but configuration fails without it
   preConfigure = ''
     # The way $version propagates to $version of .pe-scripts (https://github.com/dejavu-fonts/dejavu-fonts/blob/358190f/scripts/generate.pe#L19)
     export SOURCE_DATE_EPOCH=$(date -d ${version} +%s)
-
-    export GIT="$(type -P true)"
-    cp -r "${gnulib}" ./gnulib
-    chmod +w -R ./gnulib
-    ./bootstrap --skip-git --gnulib-srcdir=./gnulib --force
   '';
-
-  doCheck = false; # tries to wget some fonts
-  doInstallCheck = doCheck;
 
   postInstall =
     # get rid of the runtime dependency on python
@@ -67,12 +69,11 @@ stdenv.mkDerivation rec {
       rm -r "$out/share/fontforge/python"
     '';
 
-  enableParallelBuilding = true;
-
-  meta = {
+  meta = with lib; {
     description = "A font editor";
-    homepage = http://fontforge.github.io;
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.bsd3;
+    homepage = "https://fontforge.github.io";
+    platforms = platforms.all;
+    license = licenses.bsd3;
+    maintainers = [ maintainers.erictapen ];
   };
 }

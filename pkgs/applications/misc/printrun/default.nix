@@ -1,26 +1,33 @@
-{ stdenv, python27Packages, fetchFromGitHub }:
+{ lib, python3Packages, fetchFromGitHub, glib, wrapGAppsHook3 }:
 
-python27Packages.buildPythonApplication rec {
-  name = "printrun-20150310";
+python3Packages.buildPythonApplication rec {
+  pname = "printrun";
+  version = "2.0.1";
 
   src = fetchFromGitHub {
     owner = "kliment";
     repo = "Printrun";
-    rev = name;
-    sha256 = "09ijv8h4k5h15swg64s7igamvynawz7gdi7hiymzrzywdvr0zwsa";
+    rev = "refs/tags/printrun-${version}";
+    hash = "sha256-GmTA/C45MuptN/Y0KjpFjaLV3sWoM4rHz8AMfV9sf4U=";
   };
 
-  propagatedBuildInputs = with python27Packages; [
-    wxPython30 pyserial dbus-python psutil numpy pyopengl pyglet cython
+  postPatch = ''
+    substituteInPlace requirements.txt \
+      --replace "pyglet >= 1.1, < 2.0" "pyglet" \
+      --replace "cairosvg >= 1.0.9, < 2.6.0" "cairosvg"
+    sed -i -r "s|/usr(/local)?/share/|$out/share/|g" printrun/utils.py
+  '';
+
+  nativeBuildInputs = [ glib wrapGAppsHook3 ];
+
+  propagatedBuildInputs = with python3Packages; [
+    appdirs cython dbus-python numpy six wxpython psutil pyglet pyopengl pyserial cffi cairosvg lxml
   ];
 
+  # pyglet.canvas.xlib.NoSuchDisplayException: Cannot connect to "None"
   doCheck = false;
 
   setupPyBuildFlags = ["-i"];
-
-  postPatch = ''
-    sed -i -r "s|/usr(/local)?/share/|$out/share/|g" printrun/utils.py
-  '';
 
   postInstall = ''
     for f in $out/share/applications/*.desktop; do
@@ -28,10 +35,16 @@ python27Packages.buildPythonApplication rec {
     done
   '';
 
-  meta = with stdenv.lib; {
+  dontWrapGApps = true;
+
+  preFixup = ''
+    makeWrapperArgs+=("''${gappsWrapperArgs[@]}")
+  '';
+
+  meta = with lib; {
     description = "Pronterface, Pronsole, and Printcore - Pure Python 3d printing host software";
-    homepage = https://github.com/kliment/Printrun;
-    license = licenses.gpl3;
+    homepage = "https://github.com/kliment/Printrun";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
   };
 }

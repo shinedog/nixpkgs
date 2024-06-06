@@ -1,24 +1,32 @@
-{ stdenv, fetchurl, zlib, pcre }:
+{ stdenv, fetchFromGitHub, lib, zlib, pcre
+, memorymappingHook, memstreamHook
+, gnutls
+}:
 
 stdenv.mkDerivation rec {
-  name = "tintin-2.01.7";
+  pname = "tintin";
+  version = "2.02.41";
 
-  src = fetchurl {
-    url    = "mirror://sourceforge/tintin/${name}.tar.gz";
-    sha256 = "033n84pyxml3n3gd4dq0497n9w331bnrr1gppwipz9ashmq8jz7v";
+  src = fetchFromGitHub {
+    owner = "scandum";
+    repo = "tintin";
+    rev = version;
+    hash = "sha256-AfWw9CMBAzTTsrZXDEoOdpvUofIQfLCW7hRgSb7LB00=";
   };
 
-  buildInputs = [ zlib pcre ];
+  buildInputs = [ zlib pcre gnutls ]
+    ++ lib.optionals (stdenv.system == "x86_64-darwin") [ memorymappingHook memstreamHook ];
 
   preConfigure = ''
     cd src
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A free MUD client for macOS, Linux and Windows";
-    homepage    = http://tintin.sourceforge.net;
-    license     = licenses.gpl2;
-    maintainers = with maintainers; [ lovek323 ];
+    homepage    = "https://tintin.mudhalla.net/index.php";
+    license     = licenses.gpl3Plus;
+    maintainers = with maintainers; [ abathur ];
+    mainProgram = "tt++";
     platforms   = platforms.unix;
   };
 }

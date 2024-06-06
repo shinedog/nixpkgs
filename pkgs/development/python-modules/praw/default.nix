@@ -1,48 +1,60 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, requests, decorator, flake8, mock, six, update_checker, pytestrunner, prawcore
-, pytest_3, betamax, betamax-serializers, betamax-matchers, requests_toolbelt
+{
+  lib,
+  betamax,
+  betamax-matchers,
+  betamax-serializers,
+  buildPythonPackage,
+  fetchFromGitHub,
+  mock,
+  prawcore,
+  pytestCheckHook,
+  pythonOlder,
+  requests-toolbelt,
+  update-checker,
+  websocket-client,
 }:
 
 buildPythonPackage rec {
   pname = "praw";
-  version = "6.0.0";
+  version = "7.7.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchFromGitHub {
     owner = "praw-dev";
-    repo = "praw";
-    rev = "v${version}";
-    sha256 = "0y6nyz8vf98gl1qfmnznv3dbvlbzdl6mz99vk673nyfn3hbs451i";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-L7wTHD/ypXVc8GMfl9u16VNb9caLJoXpaMEIzaVVUgo=";
   };
 
-  postPatch = ''
-    # drop upper bound of prawcore requirement
-    sed -ri "s/'(prawcore >=.+), <.+'/'\1'/" setup.py
-  '';
-
   propagatedBuildInputs = [
-    requests
-    decorator
-    flake8
     mock
-    six
-    update_checker
-    pytestrunner
     prawcore
+    update-checker
+    websocket-client
   ];
 
-  checkInputs = [
-    pytest_3
+  nativeCheckInputs = [
     betamax
     betamax-serializers
     betamax-matchers
-    requests_toolbelt
+    pytestCheckHook
+    requests-toolbelt
   ];
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # tests requiring network
+    "tests/integration"
+  ];
+
+  pythonImportsCheck = [ "praw" ];
+
+  meta = with lib; {
     description = "Python Reddit API wrapper";
-    homepage = https://praw.readthedocs.org/;
-    license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ ];
+    homepage = "https://praw.readthedocs.org/";
+    changelog = "https://github.com/praw-dev/praw/blob/v${version}/CHANGES.rst";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ fab ];
   };
 }

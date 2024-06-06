@@ -1,4 +1,4 @@
-{ pkgs, idris-no-deps, overrides ? (self: super: {}) }: let
+{ pkgs, config, idris-no-deps, overrides ? (self: super: {}) }: let
   inherit (pkgs.lib) callPackageWith fix' extends;
 
   /* Taken from haskell-modules/default.nix, should probably abstract this away */
@@ -75,8 +75,6 @@
 
     cube = callPackage ./cube.nix {};
 
-    data = callPackage ./data.nix {};
-
     derive = callPackage ./derive.nix {};
 
     descncrunch = callPackage ./descncrunch.nix {};
@@ -102,8 +100,6 @@
     hamt = callPackage ./hamt.nix {};
 
     html = callPackage ./html.nix {};
-
-    heyting-algebra = callPackage ./heyting-algebra.nix {};
 
     hezarfen = callPackage ./hezarfen.nix {};
 
@@ -149,8 +145,6 @@
 
     posix = callPackage ./posix.nix {};
 
-    protobuf = callPackage ./protobuf.nix {};
-
     quantities = callPackage ./quantities.nix {};
 
     rationals = callPackage ./rationals.nix {};
@@ -159,8 +153,7 @@
 
     refined = callPackage ./refined.nix {};
 
-    sdl = callPackage ./sdl.nix {};
-
+    sdl = throw "'idrisPackages.sdl' has been removed, as it was broken and unmaintained"; # added 2024-05-09
     sdl2 = callPackage ./sdl2.nix {};
 
     semidirect = callPackage ./semidirect.nix {};
@@ -178,6 +171,8 @@
     tap = callPackage ./tap.nix {};
 
     test = callPackage ./test.nix {};
+
+    tf-random = callPackage ./tfrandom.nix {};
 
     tlhydra = callPackage ./tlhydra.nix {};
 
@@ -209,5 +204,8 @@
 
     yampa = callPackage ./yampa.nix {};
 
-  } // builtins_;
+  } // builtins_ // pkgs.lib.optionalAttrs config.allowAliases {
+    # removed packages
+    protobuf = throw "idrisPackages.protobuf has been removed: abandoned by upstream"; # Added 2022-02-06
+  };
 in fix' (extends overrides idrisPackages)

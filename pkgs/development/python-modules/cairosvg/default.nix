@@ -1,34 +1,61 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k, fetchpatch
-, cairocffi, cssselect2, defusedxml, pillow, tinycss2
-, pytest, pytestrunner, pytestcov, pytest-flake8, pytest-isort }:
+{
+  lib,
+  buildPythonPackage,
+  cairocffi,
+  cssselect2,
+  defusedxml,
+  fetchPypi,
+  pillow,
+  pytestCheckHook,
+  setuptools,
+  tinycss2,
+}:
 
 buildPythonPackage rec {
-  pname = "CairoSVG";
-  version = "2.3.0";
-
-  disabled = !isPy3k;
+  pname = "cairosvg";
+  version = "2.7.1";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "66f333ef5dc79fdfbd3bbe98adc791b1f854e0461067d202fa7b15de66d517ec";
+    pname = "CairoSVG";
+    inherit version;
+    hash = "sha256-QyUx1yNHKRuanr+2d3AmtgdWP9hxnEbudC2wrvcnG6A=";
   };
 
-  patches = [
-    # fix isort-check
-    (fetchpatch {
-      url = https://github.com/Kozea/CairoSVG/commit/b2534b0fc80b9f24a2bff2c938ac5da73ff1e478.patch;
-      excludes = [ "test_non_regression/__init__.py" ];
-      sha256 = "1bms75dd0fd978yhlr0k565zq45lzxf0vkihryb7gcwnd42bl6yf";
-    })
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    cairocffi
+    cssselect2
+    defusedxml
+    pillow
+    tinycss2
   ];
 
-  propagatedBuildInputs = [ cairocffi cssselect2 defusedxml pillow tinycss2 ];
+  propagatedNativeBuildInputs = [ cairocffi ];
 
-  checkInputs = [ pytest pytestrunner pytestcov pytest-flake8 pytest-isort ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    homepage = https://cairosvg.org;
-    license = licenses.lgpl3;
+  postPatch = ''
+    substituteInPlace setup.cfg \
+      --replace "pytest-runner" "" \
+      --replace "pytest-flake8" "" \
+      --replace "pytest-isort" "" \
+      --replace "pytest-cov" "" \
+      --replace "--flake8" "" \
+      --replace "--isort" ""
+  '';
+
+  pytestFlagsArray = [ "cairosvg/test_api.py" ];
+
+  pythonImportsCheck = [ "cairosvg" ];
+
+  meta = with lib; {
+    homepage = "https://cairosvg.org";
+    changelog = "https://github.com/Kozea/CairoSVG/releases/tag/${version}";
+    license = licenses.lgpl3Plus;
     description = "SVG converter based on Cairo";
+    mainProgram = "cairosvg";
+    maintainers = with maintainers; [ ];
   };
 }

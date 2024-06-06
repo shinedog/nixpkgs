@@ -1,18 +1,19 @@
-{ stdenv
+{ lib
+, mkDerivation
 , fetchFromGitHub
-, makeWrapper
 , qmake
 , qtbase
 , qtmultimedia
-, qttranslations
+, qttools
 }:
 
-stdenv.mkDerivation rec {
-  name = "qgo-${version}";
+mkDerivation {
+  pname = "qgo";
   version = "unstable-2017-12-18";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Go client based on Qt5";
+    mainProgram = "qgo";
     longDescription = ''
       qGo is a Go Client based on Qt 5. It supports playing online at
       IGS-compatible servers (including some special tweaks for WING and LGS,
@@ -25,7 +26,7 @@ stdenv.mkDerivation rec {
       Go is an ancient Chinese board game. It's called "圍棋(Wei Qi)" in
       Chinese, "囲碁(Yi Go)" in Japanese, "바둑(Baduk)" in Korean.
     '';
-    homepage = https://github.com/pzorin/qgo;
+    homepage = "https://github.com/pzorin/qgo";
     license = licenses.gpl2;
     maintainers = with maintainers; [ zalakain ];
   };
@@ -41,8 +42,6 @@ stdenv.mkDerivation rec {
   postPatch = ''
     sed -i 's|@out@|'"''${out}"'|g' src/src.pro src/defines.h
   '';
-  nativeBuildInputs = [ makeWrapper qmake ];
-  buildInputs = [ qtbase qtmultimedia qttranslations ];
-  enableParallelBuilding = true;
-
+  nativeBuildInputs = [ qmake qttools ];
+  buildInputs = [ qtbase qtmultimedia ];
 }

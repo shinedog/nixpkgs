@@ -1,11 +1,13 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "umalqurra";
   version = "0.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -17,10 +19,9 @@ buildPythonPackage rec {
 
   # See for license
   # https://github.com/tytkal/python-hijiri-ummalqura/issues/4
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Date Api that support Hijri Umalqurra calendar";
-    homepage = https://github.com/tytkal/python-hijiri-ummalqura;
+    homepage = "https://github.com/tytkal/python-hijiri-ummalqura";
     license = with licenses; [ publicDomain ];
   };
-
 }

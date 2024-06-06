@@ -1,36 +1,42 @@
-{ stdenv, pythonPackages, fetchpatch }:
+{ lib, fetchFromGitHub, python3, installShellFiles, fetchpatch }:
 
-with pythonPackages;
+with python3.pkgs;
 
 buildPythonApplication rec {
-  pname = "td-watson";
-  version = "1.5.2";
+  pname = "watson";
+  version = "2.1.0";
 
-  src = fetchPypi {
-    inherit version pname;
-    sha256 = "6e03d44a9278807fe5245e9ed0943f13ffb88e11249a02655c84cb86260b27c8";
+  src = fetchFromGitHub {
+    owner = "TailorDev";
+    repo = "Watson";
+    rev = version;
+    sha256 = "sha256-/AASYeMkt18KPJljAjNPRYOpg/T5xuM10LJq4LrFD0g=";
   };
 
-  # uses tox, test invocation fails
-  doCheck = true;
-  checkPhase = ''
-    py.test -vs tests
- '';
-
   patches = [
+    # https://github.com/TailorDev/Watson/pull/473
     (fetchpatch {
-      url = https://github.com/TailorDev/Watson/commit/f5760c71cbc22de4e12ede8f6f7257515a9064d3.patch;
-      sha256 = "0s9h26915ilpbd0qhmvk77r3gmrsdrl5l7dqxj0l5q66fp0z6b0g";
+      name = "fix-completion.patch";
+      url = "https://github.com/TailorDev/Watson/commit/43ad061a981eb401c161266f497e34df891a5038.patch";
+      sha256 = "sha256-v8/asP1wooHKjyy9XXB4Rtf6x+qmGDHpRoHEne/ZCxc=";
     })
   ];
 
-  checkInputs = [ py pytest pytest-datafiles mock pytest-mock pytestrunner ];
-  propagatedBuildInputs = [ requests click arrow ];
+  postInstall = ''
+    installShellCompletion --bash --name watson watson.completion
+    installShellCompletion --zsh --name _watson watson.zsh-completion
+    installShellCompletion --fish watson.fish
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://tailordev.github.io/Watson/;
+  nativeCheckInputs = [ pytestCheckHook pytest-mock mock pytest-datafiles ];
+  propagatedBuildInputs = [ arrow click click-didyoumean requests ];
+  nativeBuildInputs = [ installShellFiles ];
+
+  meta = with lib; {
+    homepage = "https://tailordev.github.io/Watson/";
     description = "A wonderful CLI to track your time!";
+    mainProgram = "watson";
     license = licenses.mit;
-    maintainers = with maintainers; [ mguentner ] ;
+    maintainers = with maintainers; [ mguentner nathyong oxzi ];
   };
 }

@@ -1,7 +1,8 @@
 { stdenv, lib, fetchurl, coreutils, ncurses, gzip, flex, bison
-, less, makeWrapper
+, less
 , buildPackages
-, x11Mode ? false, qtMode ? false, libXaw, libXext, libXpm, bdftopcf, mkfontdir, pkgconfig, qt5
+, x11Mode ? false, qtMode ? false, libXaw, libXext, libXpm, bdftopcf, mkfontdir, pkg-config, qt5
+, copyDesktopItems, makeDesktopItem
 }:
 
 let
@@ -12,32 +13,32 @@ let
     if x11Mode then "linux-x11"
     else if qtMode then "linux-qt4"
     else if stdenv.hostPlatform.isLinux  then "linux"
-    else if stdenv.hostPlatform.isDarwin then "macosx10.10"
+    else if stdenv.hostPlatform.isDarwin then "macosx10.14"
     # We probably want something different for Darwin
     else "unix";
   userDir = "~/.config/nethack";
   binPath = lib.makeBinPath [ coreutils less ];
 
 in stdenv.mkDerivation rec {
-  version = "3.6.2";
-  name = if x11Mode then "nethack-x11-${version}"
-         else if qtMode then "nethack-qt-${version}"
-         else "nethack-${version}";
+  version = "3.6.7";
+  pname = if x11Mode then "nethack-x11"
+         else if qtMode then "nethack-qt"
+         else "nethack";
 
   src = fetchurl {
-    url = "https://nethack.org/download/3.6.2/nethack-362-src.tgz";
-    sha256 = "07fvkm3v11a4pjrq2f66vjslljsvk6raal53skn4gqsfdbd0ml7v";
+    url = "https://nethack.org/download/${version}/nethack-${lib.replaceStrings ["."] [""] version}-src.tgz";
+    sha256 = "sha256-mM9n323r+WaKYXRaqEwJvKs2Ll0z9blE7FFV1E0qrLI=";
   };
 
   buildInputs = [ ncurses ]
                 ++ lib.optionals x11Mode [ libXaw libXext libXpm ]
                 ++ lib.optionals qtMode [ gzip qt5.qtbase.bin qt5.qtmultimedia.bin ];
 
-  nativeBuildInputs = [ flex bison ]
+  nativeBuildInputs = [ flex bison copyDesktopItems ]
                       ++ lib.optionals x11Mode [ mkfontdir bdftopcf ]
                       ++ lib.optionals qtMode [
-                           pkgconfig mkfontdir qt5.qtbase.dev
-                           qt5.qtmultimedia.dev makeWrapper
+                           pkg-config mkfontdir qt5.qtbase.dev
+                           qt5.qtmultimedia.dev qt5.wrapQtAppsHook
                            bdftopcf
                          ];
 
@@ -60,11 +61,12 @@ in stdenv.mkDerivation rec {
       -e 's,^WINTTYLIB=.*,WINTTYLIB=-lncurses,' \
       -i sys/unix/hints/linux
     sed \
-      -e 's,^CC=.*$,CC=cc,' \
+      -e 's,^#WANT_WIN_CURSES=1$,WANT_WIN_CURSES=1,' \
+      -e 's,^CC=.*$,CC=${stdenv.cc.targetPrefix}cc,' \
       -e 's,^HACKDIR=.*$,HACKDIR=\$(PREFIX)/games/lib/\$(GAME)dir,' \
       -e 's,^SHELLDIR=.*$,SHELLDIR=\$(PREFIX)/games,' \
       -e 's,^CFLAGS=-g,CFLAGS=,' \
-      -i sys/unix/hints/macosx10.10
+      -i sys/unix/hints/macosx10.14
     sed -e '/define CHDIR/d' -i include/config.h
     ${lib.optionalString qtMode ''
     sed \
@@ -85,6 +87,9 @@ in stdenv.mkDerivation rec {
       -i sys/unix/Makefile.*
     ''}
     sed -i -e '/rm -f $(MAKEDEFS)/d' sys/unix/Makefile.src
+    # Fix building on darwin where otherwise __has_attribute fails with an empty parameter
+    sed -e 's/define __warn_unused_result__ .*/define __warn_unused_result__ __unused__/' -i include/tradstdc.h
+    sed -e 's/define warn_unused_result .*/define warn_unused_result __unused__/' -i include/tradstdc.h
   '';
 
   configurePhase = ''
@@ -95,7 +100,12 @@ in stdenv.mkDerivation rec {
     popd
   '';
 
-  enableParallelBuilding = true;
+  # https://github.com/NixOS/nixpkgs/issues/294751
+  enableParallelBuilding = false;
+
+  preFixup = lib.optionalString qtMode ''
+    wrapQtApp "$out/games/nethack"
+  '';
 
   postInstall = ''
     mkdir -p $out/games/lib/nethackuserdir
@@ -137,16 +147,26 @@ in stdenv.mkDerivation rec {
     ${lib.optionalString (!(x11Mode || qtMode)) "install -Dm 555 util/dlb -t $out/libexec/nethack/"}
   '';
 
-  postFixup = lib.optionalString qtMode ''
-    wrapProgram $out/bin/nethack-qt \
-      --prefix QT_PLUGIN_PATH : "${qt5.qtbase}/${qt5.qtbase.qtPluginPrefix}"
-  '';
+  desktopItems = [
+    (makeDesktopItem {
+      name = "NetHack";
+      exec =
+         if x11Mode then "nethack-x11"
+         else if qtMode then "nethack-qt"
+         else "nethack";
+      icon = "nethack";
+      desktopName = "NetHack";
+      comment = "NetHack is a single player dungeon exploration game";
+      categories = [ "Game" "ActionGame" ];
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Rogue-like game";
-    homepage = http://nethack.org/;
+    homepage = "http://nethack.org/";
     license = "nethack";
     platforms = if x11Mode then platforms.linux else platforms.unix;
     maintainers = with maintainers; [ abbradar ];
+    mainProgram = "nethack";
   };
 }

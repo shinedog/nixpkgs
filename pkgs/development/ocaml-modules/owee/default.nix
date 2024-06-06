@@ -1,25 +1,20 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib }:
+{ lib, buildDunePackage, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-owee-${version}";
-  version = "0.2";
+buildDunePackage rec {
+  minimalOCamlVersion = "4.06";
+  pname = "owee";
+  version = "0.7";
 
-  src = fetchFromGitHub {
-    owner = "let-def";
-    repo = "owee";
-    rev = "v${version}";
-    sha256 = "025a8sm03mm9qr7grdmdhzx7pyrd0dr7ndr5mbj5baalc0al132z";
+  src = fetchurl {
+    url =
+      "https://github.com/let-def/owee/releases/download/v${version}/owee-${version}.tbz";
+    hash = "sha256-9FXcmddHg5mk5UWgYd4kTPOLOY/p6A/OBuvfas4elUA=";
   };
 
-  buildInputs = [ ocaml findlib ];
-
-  createFindlibDestdir = true;
-
-  meta = {
+  meta = with lib; {
     description = "An experimental OCaml library to work with DWARF format";
-    inherit (src.meta) homepage;
-    inherit (ocaml.meta) platforms;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
+    homepage = "https://github.com/let-def/owee/";
+    license = licenses.mit;
+    maintainers = with maintainers; [ vbgl alizter ];
   };
 }

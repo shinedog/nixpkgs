@@ -1,34 +1,73 @@
-{ buildGoModule, fetchFromGitHub, lib
-, wayland, libX11, xbitmaps, libXcursor, libXmu
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, libX11
+, libXcursor
+, libXmu
+, libXpm
+, libheif
+, pkg-config
+, wayland
+, xbitmaps
 }:
 
 buildGoModule rec {
-  name = "wallutils-${version}";
-  version = "5.7.2";
+  pname = "wallutils";
+  version = "5.12.7";
 
   src = fetchFromGitHub {
     owner = "xyproto";
     repo = "wallutils";
     rev = version;
-    sha256 = "1q4487s83iwwgd40hkihpns84ya8mg54zp63ag519cdjizz38xyi";
+    hash = "sha256-7UqZr/DEiHDgg3XwvsKk/gc6FNtLh3aj5NWVz/A3J4o=";
   };
 
-  modSha256 = "0kj9s9ymd99a5w9r1d997qysnzlgpnmh5dnki33h1jlwz47nwkld";
+  vendorHash = null;
 
-  patches = [ ./lscollection-Add-NixOS-paths-to-DefaultWallpaperDirectories.patch ];
+  patches = [
+    ./000-add-nixos-dirs-to-default-wallpapers.patch
+  ];
 
-  postPatch = ''
-    # VersionString is sometimes not up-to-date:
-    sed -iE 's/VersionString = "[0-9].[0-9].[0-9]"/VersionString = "${version}"/' wallutils.go
+  excludedPackages = [
+    "./pkg/event/cmd" # Development tools
+  ];
+
+  nativeBuildInputs = [
+    pkg-config
+  ];
+
+  buildInputs = [
+    libX11
+    libXcursor
+    libXmu
+    libXpm
+    libheif
+    wayland
+    xbitmaps
+  ];
+
+  ldflags = [ "-s" "-w" ];
+
+  preCheck = ''
+    export XDG_RUNTIME_DIR=$(mktemp -d)
   '';
 
-  buildInputs = [ wayland libX11 xbitmaps libXcursor libXmu ];
+  checkFlags =
+    let
+      skippedTests = [
+        "TestClosest" # Requiring Wayland or X
+        "TestEveryMinute" # Blocking
+        "TestNewSimpleEvent" # Blocking
+      ];
+    in
+    [ "-skip=^${builtins.concatStringsSep "$|^" skippedTests}$" ];
 
-  meta = with lib; {
+  meta = {
     description = "Utilities for handling monitors, resolutions, and (timed) wallpapers";
     inherit (src.meta) homepage;
-    license = licenses.mit;
-    maintainers = with maintainers; [ primeos ];
-    platforms = platforms.linux;
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.AndersonTorres ];
+    inherit (wayland.meta) platforms;
+    badPlatforms = lib.platforms.darwin;
   };
 }

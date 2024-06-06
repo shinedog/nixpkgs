@@ -1,48 +1,89 @@
-{ stdenv, fetchFromGitLab, intltool, meson, ninja, pkgconfig, gtk-doc, docbook_xsl, docbook_xml_dtd_412, glib, json-glib, libsoup, libnotify, gdk_pixbuf
-, modemmanager, avahi, glib-networking, python3, wrapGAppsHook, gobject-introspection, vala
+{ lib
+, stdenv
+, fetchFromGitLab
+, intltool
+, meson
+, mesonEmulatorHook
+, ninja
+, pkg-config
+, gtk-doc
+, docbook-xsl-nons
+, docbook_xml_dtd_412
+, glib
+, json-glib
+, libsoup_3
+, libnotify
+, gdk-pixbuf
+, modemmanager
+, avahi
+, glib-networking
+, python3
+, wrapGAppsHook3
+, gobject-introspection
+, vala
 , withDemoAgent ? false
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
   pname = "geoclue";
-  version = "2.5.2";
+  version = "2.7.0";
+
+  outputs = [ "out" "dev" "devdoc" ];
 
   src = fetchFromGitLab {
     domain = "gitlab.freedesktop.org";
-    owner = pname;
-    repo = pname;
+    owner = "geoclue";
+    repo = "geoclue";
     rev = version;
-    sha256 = "1zk6n28q030a9v03whad928b9zwq16d30ch369qv2c0994axdr5p";
+    hash = "sha256-vzarUg4lBEXYkH+n9SY8SYr0gHUX94PSTDmKd957gyc=";
   };
 
   patches = [
     ./add-option-for-installation-sysconfdir.patch
   ];
 
-  outputs = [ "out" "dev" "devdoc" ];
-
   nativeBuildInputs = [
-    pkgconfig intltool meson ninja wrapGAppsHook python3 vala gobject-introspection
+    pkg-config
+    intltool
+    meson
+    ninja
+    wrapGAppsHook3
+    python3
+    vala
+    gobject-introspection
     # devdoc
-    gtk-doc docbook_xsl docbook_xml_dtd_412
+    gtk-doc
+    docbook-xsl-nons
+    docbook_xml_dtd_412
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
   ];
 
   buildInputs = [
-    glib json-glib libsoup avahi
-  ] ++ optionals withDemoAgent [
-    libnotify gdk_pixbuf
-  ] ++ optionals (!stdenv.isDarwin) [ modemmanager ];
+    glib
+    json-glib
+    libsoup_3
+    avahi
+  ] ++ lib.optionals withDemoAgent [
+    libnotify gdk-pixbuf
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    modemmanager
+  ];
 
-  propagatedBuildInputs = [ glib glib-networking ];
+  propagatedBuildInputs = [
+    glib
+    glib-networking
+  ];
 
   mesonFlags = [
     "-Dsystemd-system-unit-dir=${placeholder "out"}/etc/systemd/system"
-    "-Ddemo-agent=${if withDemoAgent then "true" else "false"}"
+    "-Ddemo-agent=${lib.boolToString withDemoAgent}"
     "--sysconfdir=/etc"
     "-Dsysconfdir_install=${placeholder "out"}/etc"
-  ] ++ optionals stdenv.isDarwin [
+    "-Dmozilla-api-key=5c28d1f4-9511-47ff-b11a-2bef80fc177c"
+    "-Ddbus-srv-user=geoclue"
+    "-Ddbus-sys-dir=${placeholder "out"}/share/dbus-1/system.d"
+  ] ++ lib.optionals stdenv.isDarwin [
     "-D3g-source=false"
     "-Dcdma-source=false"
     "-Dmodem-gps-source=false"
@@ -54,11 +95,12 @@ stdenv.mkDerivation rec {
     patchShebangs demo/install-file.py
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    broken = stdenv.isDarwin && withDemoAgent;
     description = "Geolocation framework and some data providers";
-    homepage = https://gitlab.freedesktop.org/geoclue/geoclue/wikis/home;
-    maintainers = with maintainers; [ raskin garbas ];
+    homepage = "https://gitlab.freedesktop.org/geoclue/geoclue/wikis/home";
+    maintainers = with maintainers; [ raskin mimame ];
     platforms = with platforms; linux ++ darwin;
-    license = licenses.lgpl2;
+    license = licenses.lgpl2Plus;
   };
 }

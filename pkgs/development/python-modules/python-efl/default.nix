@@ -1,37 +1,66 @@
-{ stdenv, fetchurl, buildPythonPackage, pkgconfig, python, enlightenment }:
+{
+  lib,
+  fetchurl,
+  buildPythonPackage,
+  pkg-config,
+  python,
+  dbus-python,
+  packaging,
+  enlightenment,
+  directoryListingUpdater,
+}:
 
 # Should be bumped along with EFL!
 
 buildPythonPackage rec {
-  name = "python-efl-${version}";
-  version = "1.22.0";
+  pname = "python-efl";
+  version = "1.26.1";
+  format = "setuptools";
 
   src = fetchurl {
-    url = "http://download.enlightenment.org/rel/bindings/python/${name}.tar.xz";
-    sha256 = "1qhy63c3fs2bxkx2np5z14hyxbr12ii030crsjnhpbyw3mic0s63";
+    url = "http://download.enlightenment.org/rel/bindings/python/${pname}-${version}.tar.xz";
+    hash = "sha256-3Ns5fhIHihnpDYDnxvPP00WIZL/o1UWLzgNott4GKNc=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [ enlightenment.efl ];
 
-  propagatedBuildInputs = [ python.pkgs.dbus-python ];
+  propagatedBuildInputs = [
+    dbus-python
+    packaging
+  ];
 
   preConfigure = ''
-    export NIX_CFLAGS_COMPILE="$(pkg-config --cflags efl) -I${stdenv.lib.getDev python.pkgs.dbus-python}/include/dbus-1.0 $NIX_CFLAGS_COMPILE"
+    NIX_CFLAGS_COMPILE="$(pkg-config --cflags efl evas) $NIX_CFLAGS_COMPILE"
   '';
 
-  preBuild = "${python.interpreter} setup.py build_ext";
+  preBuild = ''
+    ${python.pythonOnBuildForHost.interpreter} setup.py build_ext
+  '';
 
-  installPhase= "${python.interpreter} setup.py install --prefix=$out";
+  installPhase = ''
+    ${python.pythonOnBuildForHost.interpreter} setup.py install --prefix=$out --single-version-externally-managed
+  '';
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "Python bindings for EFL and Elementary";
-    homepage = https://phab.enlightenment.org/w/projects/python_bindings_for_efl/;
+  passthru.updateScript = directoryListingUpdater { };
+
+  meta = with lib; {
+    description = "Python bindings for Enlightenment Foundation Libraries";
+    homepage = "https://github.com/DaveMDS/python-efl";
     platforms = platforms.linux;
-    license = with licenses; [ gpl3 lgpl3 ];
-    maintainers = with maintainers; [ matejc tstrobel ftrvxmtrx ];
+    license = with licenses; [
+      gpl3
+      lgpl3
+    ];
+    maintainers =
+      with maintainers;
+      [
+        matejc
+        ftrvxmtrx
+      ]
+      ++ teams.enlightenment.members;
   };
 }

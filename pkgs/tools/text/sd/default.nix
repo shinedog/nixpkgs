@@ -1,24 +1,40 @@
-{ stdenv, fetchFromGitHub, rustPlatform
+{ lib
+, stdenv
+, fetchFromGitHub
+, rustPlatform
+, installShellFiles
+, Security
 }:
 
 rustPlatform.buildRustPackage rec {
   pname = "sd";
-  version = "0.5.0";
+  version = "1.0.0";
 
   src = fetchFromGitHub {
     owner = "chmln";
     repo = pname;
-    rev = "sd-${version}";
-    sha256 = "1y44qizciir75d1srwm1mlskhflab2b6153d19vblw410in82f5d";
+    rev = "v${version}";
+    hash = "sha256-hC4VKEgrAVuqOX7b24XhtrxrnJW5kmlX4E6QbY9H8OA=";
   };
 
-  cargoSha256 = "1gls68lw8a2c3gsav70l2wasrgav68q5w1nf50jsrbqq9kb4i7nb";
+  cargoHash = "sha256-IhCuWCaSU7c7Tot4uvxE7oabY69wDLstuBN35OzkQcU=";
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ installShellFiles ];
+
+  buildInputs = lib.optionals stdenv.isDarwin [ Security ];
+
+  postInstall = ''
+    installManPage gen/sd.1
+
+    installShellCompletion gen/completions/sd.{bash,fish}
+    installShellCompletion --zsh gen/completions/_sd
+  '';
+
+  meta = with lib; {
     description = "Intuitive find & replace CLI (sed alternative)";
-    homepage = https://github.com/chmln/sd;
+    mainProgram = "sd";
+    homepage = "https://github.com/chmln/sd";
     license = licenses.mit;
-    platforms = platforms.all;
-    maintainers = [ maintainers.amar1729 ];
+    maintainers = with maintainers; [ amar1729 Br1ght0ne ];
   };
 }

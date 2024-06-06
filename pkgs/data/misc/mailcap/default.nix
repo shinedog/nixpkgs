@@ -1,21 +1,25 @@
-{ lib, fetchzip }:
+{ lib, stdenv, fetchurl }:
 
-let
-  version = "2.1.48";
+stdenv.mkDerivation rec {
+  pname = "mailcap";
+  version = "2.1.53";
 
-in fetchzip {
-  name = "mailcap-${version}";
+  src = fetchurl {
+    url = "https://releases.pagure.org/mailcap/mailcap-${version}.tar.xz";
+    sha256 = "sha256-Xuou8XswSXe6PsuHr61DGfoEQPgl5Pb7puj6L/64h4U=";
+  };
 
-  url = "https://releases.pagure.org/mailcap/mailcap-${version}.tar.xz";
-  sha256 = "0m1rls4z85aby9fggwx2x70b4y6l0jjyiqdv30p8g91nv8hrq9fw";
+  installPhase = ''
+    runHook preInstall
 
-  postFetch = ''
-    tar -xavf $downloadedFile --strip-components=1
     substituteInPlace mailcap --replace "/usr/bin/" ""
-    gzip mailcap.4
+    sh generate-nginx-mimetypes.sh < mime.types > nginx-mime.types
 
+    install -D -m0644 nginx-mime.types $out/etc/nginx/mime.types
     install -D -m0644 -t $out/etc mailcap mime.types
-    install -D -m0644 -t $out/share/man/man4 mailcap.4.gz
+    install -D -m0644 -t $out/share/man/man5 mailcap.5
+
+    runHook postInstall
   '';
 
   meta = with lib; {

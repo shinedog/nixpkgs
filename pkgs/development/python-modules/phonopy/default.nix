@@ -1,28 +1,54 @@
-{ stdenv, buildPythonPackage, python, fetchPypi, numpy, pyyaml, matplotlib, h5py }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  numpy,
+  pyyaml,
+  matplotlib,
+  h5py,
+  scipy,
+  spglib,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "phonopy";
-  version = "2.0.0";
+  version = "2.23.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "46baf7c4571fe75374071674727c2beb0388cf57073e0623d8457f04b1c54495";
+    hash = "sha256-xJohROJNAPdEITtM/VncAYL8ASkfgThKy8XXnqiS3hU=";
   };
 
-  propagatedBuildInputs = [ numpy pyyaml matplotlib h5py ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = ''
-    cd test
-    # dynamic structure factor test ocassionally fails do to roundoff
-    # see issue https://github.com/atztogo/phonopy/issues/79
-    rm spectrum/test_dynamic_structure_factor.py
-    ${python.interpreter} -m unittest discover -b
-    cd ../..
+  propagatedBuildInputs = [
+    h5py
+    matplotlib
+    numpy
+    pyyaml
+    scipy
+    spglib
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # prevent pytest from importing local directory
+  preCheck = ''
+    rm -r phonopy
   '';
 
-  meta = with stdenv.lib; {
-    description = "A package for phonon calculations at harmonic and quasi-harmonic levels";
-    homepage = https://atztogo.github.io/phonopy/;
+  pythonImportsCheck = [ "phonopy" ];
+
+  meta = with lib; {
+    description = "Modulefor phonon calculations at harmonic and quasi-harmonic levels";
+    homepage = "https://phonopy.github.io/phonopy/";
+    changelog = "https://github.com/phonopy/phonopy/blob/v${version}/doc/changelog.md";
     license = licenses.bsd0;
     maintainers = with maintainers; [ psyanticy ];
   };

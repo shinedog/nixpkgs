@@ -1,22 +1,36 @@
-{ stdenv, buildPythonPackage, fetchPypi, six, pytest, pytestrunner }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  six,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "srptools";
-  version = "1.0.0";
+  version = "1.0.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5754f639ed1888f47c1185d74e8907ff9af4c0ccc1c8be2ef19339d0a1327f4d";
+    hash = "sha256-f6QzclahVC6PW7S+0Z4dmuqY/l/5uvdmkzQqHdasfJY=";
   };
 
   propagatedBuildInputs = [ six ];
 
-  checkInputs = [ pytest pytestrunner ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    description = "Python-Tools to implement Secure Remote Password (SRP) authentication";
-    homepage = https://github.com/idlesign/srptools;
+  pythonImportsCheck = [ "srptools" ];
+
+  meta = with lib; {
+    description = "Module to implement Secure Remote Password (SRP) authentication";
+    mainProgram = "srptools";
+    homepage = "https://github.com/idlesign/srptools";
+    changelog = "https://github.com/idlesign/srptools/blob/v${version}/CHANGELOG";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ elseym ];
+    maintainers = with maintainers; [ ];
   };
 }

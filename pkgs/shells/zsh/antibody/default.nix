@@ -1,24 +1,35 @@
-{ lib, buildGoModule, fetchFromGitHub }:
+{ lib, stdenv, buildGoModule, fetchFromGitHub }:
 
 buildGoModule rec {
   pname = "antibody";
-  version = "4.1.1";
-
-  goPackagePath = "github.com/getantibody/antibody";
+  version = "6.1.1";
 
   src = fetchFromGitHub {
     owner = "getantibody";
     repo = "antibody";
     rev = "v${version}";
-    sha256 = "1qfic9prdbldvjw0n15jfc9qr4p5h87mjripq2pc4c6x8244phfw";
+    hash = "sha256-If7XAwtg1WqkDkrJ6qYED+DjwHWloPu3P7X9rUd5ikU=";
   };
 
-  modSha256 = "1p9cw92ivwgpkvjxvwd9anbd1vzhpicm9il4pg37z2kgr2ihhnyh";
+  vendorHash = "sha256-0m+yDo+AMX5tZfOsjsZgulyjB9mVEjy2RfA2sYeqDn0=";
+
+  doCheck = false;
+
+  ldflags = [ "-s" "-w" "-X main.version=${version}" ];
 
   meta = with lib; {
     description = "The fastest shell plugin manager";
-    homepage = https://github.com/getantibody/antibody;
+    mainProgram = "antibody";
+    homepage = "https://github.com/getantibody/antibody";
     license = licenses.mit;
-    maintainers = with maintainers; [ worldofpeace ];
+    maintainers = with maintainers; [ Br1ght0ne ];
+
+    # golang.org/x/sys needs to be updated due to:
+    #
+    #   https://github.com/golang/go/issues/49219
+    #
+    # but this package is no longer maintained.
+    #
+    broken = stdenv.isDarwin;
   };
 }

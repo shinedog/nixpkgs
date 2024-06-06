@@ -1,29 +1,39 @@
-{ stdenv
+{ lib, stdenv
 , fetchFromGitHub
 , fetchpatch
 , autoreconfHook
 , givaro
-, pkgconfig
+, pkg-config
 , blas
+, lapack
 , fflas-ffpack
 , gmpxx
 , withSage ? false # sage support
 }:
+
+assert (!blas.isILP64) && (!lapack.isILP64);
+
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "linbox";
-  version = "1.6.0";
+  version = "1.7.0";
 
   src = fetchFromGitHub {
     owner = "linbox-team";
-    repo = "${pname}";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "0rmk474hvgkggmhxwa5i52wdnbvipx9n8mpsc41j1c96q4v8fl22";
+    sha256 = "sha256-mW84a98KPLqcHMjX3LIYTmVe0ngUdz6RJLpoDaAqKU8=";
   };
+
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/linbox-team/linbox/commit/4be26e9ef0eaf36a9909e5008940e8bf7dc625b6.patch";
+      sha256 = "PX0Tik7blXOV2vHUq92xMxaADkNoNGiax4qrjQyGK6U=";
+    })
+  ];
 
   nativeBuildInputs = [
     autoreconfHook
-    pkgconfig
+    pkg-config
   ];
 
   buildInputs = [
@@ -34,33 +44,35 @@ stdenv.mkDerivation rec {
   ];
 
   configureFlags = [
-    "--with-blas-libs=-l${blas.linkName}"
-    "--disable-optimization"
-  ] ++ stdenv.lib.optionals stdenv.isx86_64 {
+    "--with-blas-libs=-lblas"
+    "--without-archnative"
+  ] ++ lib.optionals stdenv.isx86_64 [
     # disable SIMD instructions (which are enabled *when available* by default)
-    "default"        = [ "--disable-sse3" "--disable-ssse3" "--disable-sse41" "--disable-sse42" "--disable-avx" "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "westmere"       = [                                                                        "--disable-avx" "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "sandybridge"    = [                                                                                        "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "ivybridge"      = [                                                                                        "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "haswell"        = [                                                                                                                         "--disable-fma4" ];
-    "broadwell"      = [                                                                                                                         "--disable-fma4" ];
-    "skylake"        = [                                                                                                                         "--disable-fma4" ];
-    "skylake-avx512" = [                                                                                                                         "--disable-fma4" ];
-  }.${stdenv.hostPlatform.platform.gcc.arch or "default"}
-  ++ stdenv.lib.optionals withSage [
+    "--${if stdenv.hostPlatform.sse3Support   then "enable" else "disable"}-sse3"
+    "--${if stdenv.hostPlatform.ssse3Support  then "enable" else "disable"}-ssse3"
+    "--${if stdenv.hostPlatform.sse4_1Support then "enable" else "disable"}-sse41"
+    "--${if stdenv.hostPlatform.sse4_2Support then "enable" else "disable"}-sse42"
+    "--${if stdenv.hostPlatform.avxSupport    then "enable" else "disable"}-avx"
+    "--${if stdenv.hostPlatform.avx2Support   then "enable" else "disable"}-avx2"
+    "--${if stdenv.hostPlatform.fmaSupport    then "enable" else "disable"}-fma"
+    "--${if stdenv.hostPlatform.fma4Support   then "enable" else "disable"}-fma4"
+  ] ++ lib.optionals withSage [
     "--enable-sage"
   ];
+
+  # https://github.com/linbox-team/linbox/issues/304
+  hardeningDisable = [ "fortify3" ];
 
   doCheck = true;
 
   enableParallelBuilding = true;
 
-  meta = {
-    inherit version;
+  meta = with lib; {
     description = "C++ library for exact, high-performance linear algebra";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    maintainers = [stdenv.lib.maintainers.timokau];
-    platforms = stdenv.lib.platforms.unix;
-    homepage = http://linalg.org/;
+    mainProgram = "linbox-config";
+    license = licenses.lgpl21Plus;
+    maintainers = teams.sage.members;
+    platforms = platforms.unix;
+    homepage = "https://linalg.org/";
   };
 }

@@ -1,31 +1,45 @@
-{ stdenv, buildPythonPackage, fetchPypi, pythonOlder, fetchpatch
-, mock, pytest, pytestrunner
-, configparser, enum34, mccabe, pycodestyle, pyflakes, entrypoints, functools32, typing
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  setuptools,
+  mccabe,
+  pycodestyle,
+  pyflakes,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "flake8";
-  version = "3.7.7";
+  version = "7.0.0";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "859996073f341f2670741b51ec1e67a01da142831aa1fdc6242dbf88dffbe661";
+  disabled = pythonOlder "3.8";
+
+  pyproject = true;
+
+  src = fetchFromGitHub {
+    owner = "PyCQA";
+    repo = "flake8";
+    rev = version;
+    hash = "sha256-2oVvchDhH3cX90RTIquYLyr+rzHxzQgYA4k4ReTxpH8=";
   };
 
-  checkInputs = [ pytest mock pytestrunner ];
-  propagatedBuildInputs = [ entrypoints pyflakes pycodestyle mccabe ]
-    ++ stdenv.lib.optionals (pythonOlder "3.2") [ configparser functools32 ]
-    ++ stdenv.lib.optionals (pythonOlder "3.4") [ enum34 ]
-    ++ stdenv.lib.optionals (pythonOlder "3.5") [ typing ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  propagatedBuildInputs = [
+    mccabe
+    pycodestyle
+    pyflakes
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Code checking using pep8 and pyflakes";
-    homepage = https://pypi.python.org/pypi/flake8;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  meta = with lib; {
+    description = "The modular source code checker: pep8, pyflakes and co";
+    homepage = "https://github.com/PyCQA/flake8";
     license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
+    maintainers = with maintainers; [ dotlambda ];
+    mainProgram = "flake8";
   };
 }

@@ -1,14 +1,16 @@
 { config, lib, pkgs, ... }: with lib; let
   cfg = config.services.icingaweb2;
+  fpm = config.services.phpfpm.pools.${poolName};
   poolName = "icingaweb2";
-  phpfpmSocketName = "/var/run/phpfpm/${poolName}.sock";
 
   defaultConfig = {
     global = {
-      module_path = "${pkgs.icingaweb2}/modules${optionalString (builtins.length config.modulePath > 0) ":${concatStringsSep ":" config.modulePath}"}";
+      module_path = "${pkgs.icingaweb2}/modules";
     };
   };
 in {
+  meta.maintainers = with maintainers; [ das_j ];
+
   options.services.icingaweb2 = with types; {
     enable = mkEnableOption "the icingaweb2 web interface";
 
@@ -18,6 +20,16 @@ in {
       description = ''
          Name of existing PHP-FPM pool that is used to run Icingaweb2.
          If not specified, a pool will automatically created with default values.
+      '';
+    };
+
+    libraryPaths = mkOption {
+      type = attrsOf package;
+      default = { };
+      description = ''
+        Libraries to add to the Icingaweb2 library path.
+        The name of the attribute is the name of the library, the value
+        is the package to add.
       '';
     };
 
@@ -47,7 +59,7 @@ in {
     modulePackages = mkOption {
       type = attrsOf package;
       default = {};
-      example = literalExample ''
+      example = literalExpression ''
         {
           "snow" = icingaweb2Modules.theme-snow;
         }
@@ -162,33 +174,40 @@ in {
   };
 
   config = mkIf cfg.enable {
-    services.phpfpm.poolConfigs = mkIf (cfg.pool == "${poolName}") {
-      "${poolName}" = ''
-        listen = "${phpfpmSocketName}"
-        listen.owner = nginx
-        listen.group = nginx
-        listen.mode = 0600
-        user = icingaweb2
-        pm = dynamic
-        pm.max_children = 75
-        pm.start_servers = 2
-        pm.min_spare_servers = 2
-        pm.max_spare_servers = 10
-      '';
+    services.phpfpm.pools = mkIf (cfg.pool == "${poolName}") {
+      ${poolName} = {
+        user = "icingaweb2";
+        phpEnv = {
+          ICINGAWEB_LIBDIR = toString (pkgs.linkFarm "icingaweb2-libdir" (mapAttrsToList (name: path: { inherit name path; }) cfg.libraryPaths));
+        };
+        phpPackage = pkgs.php.withExtensions ({ enabled, all }: [ all.imagick ] ++ enabled);
+        phpOptions = ''
+          date.timezone = "${cfg.timezone}"
+        '';
+        settings = mapAttrs (name: mkDefault) {
+          "listen.owner" = "nginx";
+          "listen.group" = "nginx";
+          "listen.mode" = "0600";
+          "pm" = "dynamic";
+          "pm.max_children" = 75;
+          "pm.start_servers" = 2;
+          "pm.min_spare_servers" = 2;
+          "pm.max_spare_servers" = 10;
+        };
+      };
     };
 
-    services.phpfpm.phpOptions = mkIf (cfg.pool == "${poolName}")
-      ''
-        extension = ${pkgs.phpPackages.imagick}/lib/php/extensions/imagick.so
-        date.timezone = "${cfg.timezone}"
-      '';
+    services.icingaweb2.libraryPaths = {
+      ipl = pkgs.icingaweb2-ipl;
+      thirdparty = pkgs.icingaweb2-thirdparty;
+    };
 
     systemd.services."phpfpm-${poolName}".serviceConfig.ReadWritePaths = [ "/etc/icingaweb2" ];
 
     services.nginx = {
       enable = true;
       virtualHosts = mkIf (cfg.virtualHost != null) {
-        "${cfg.virtualHost}" = {
+        ${cfg.virtualHost} = {
           root = "${pkgs.icingaweb2}/public";
 
           extraConfig = ''
@@ -206,7 +225,7 @@ in {
             include ${config.services.nginx.package}/conf/fastcgi.conf;
             try_files $uri =404;
             fastcgi_split_path_info ^(.+\.php)(/.+)$;
-            fastcgi_pass unix:${phpfpmSocketName};
+            fastcgi_pass unix:${fpm.socket};
             fastcgi_param SCRIPT_FILENAME ${pkgs.icingaweb2}/public/index.php;
           '';
         };
@@ -215,7 +234,7 @@ in {
 
     # /etc/icingaweb2
     environment.etc = let
-      doModule = name: optionalAttrs (cfg.modules."${name}".enable) (nameValuePair "icingaweb2/enabledModules/${name}" { source = "${pkgs.icingaweb2}/modules/${name}"; });
+      doModule = name: optionalAttrs (cfg.modules.${name}.enable) { "icingaweb2/enabledModules/${name}".source = "${pkgs.icingaweb2}/modules/${name}"; };
     in {}
       # Module packages
       // (mapAttrs' (k: v: nameValuePair "icingaweb2/enabledModules/${k}" { source = v; }) cfg.modulePackages)

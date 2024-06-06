@@ -1,40 +1,66 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, coverage
-, glibcLocales
-, flake8
-, stdenv
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  wheel,
+  pytestCheckHook,
+  pytest-asyncio,
+  pytest-timeout,
+  numpy,
+  pandas,
+  rich,
+  tkinter,
 }:
 
 buildPythonPackage rec {
   pname = "tqdm";
-  version = "4.31.1";
+  version = "4.66.4";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "e22977e3ebe961f72362f6ddfb9197cc531c9737aaf5f607ef09740c849ecd05";
+    hash = "sha256-5Nk2yd6HJ5KPO+YHlZDpfZq/6NOaWQvmeOtZGf/Bhrs=";
   };
 
-  buildInputs = [ nose coverage glibcLocales flake8 ];
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
+    wheel
+  ];
 
-  postPatch = ''
-    # Remove performance testing.
-    # Too sensitive for on Hydra.
-    rm tqdm/tests/tests_perf.py
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-asyncio
+    pytest-timeout
+    # tests of optional features
+    numpy
+    rich
+    tkinter
+    pandas
+  ];
 
-  LC_ALL="en_US.UTF-8";
+  pytestFlagsArray = [
+    "-W"
+    "ignore::FutureWarning"
+    "-W"
+    "ignore::DeprecationWarning"
+  ];
 
-#   doCheck = !stdenv.isDarwin;
-  # Test suite is too big and slow.
-  doCheck = false;
+  # Remove performance testing.
+  # Too sensitive for on Hydra.
+  disabledTests = [ "perf" ];
 
-  meta = {
+  LC_ALL = "en_US.UTF-8";
+
+  pythonImportsCheck = [ "tqdm" ];
+
+  meta = with lib; {
     description = "A Fast, Extensible Progress Meter";
-    homepage = https://github.com/tqdm/tqdm;
-    license = with lib.licenses; [ mit ];
-    maintainers = with lib.maintainers; [ fridh ];
+    mainProgram = "tqdm";
+    homepage = "https://github.com/tqdm/tqdm";
+    changelog = "https://tqdm.github.io/releases/";
+    license = with licenses; [ mit ];
   };
 }

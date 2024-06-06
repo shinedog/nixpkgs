@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, openssl, pkgconfig
+{ lib, stdenv, fetchurl, openssl, pkg-config
 , withPerl ? false, perl
 , withPython ? false, python3
 , withTcl ? false, tcl
@@ -9,39 +9,39 @@
 , withDebug ? false
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "znc-${version}";
-  version = "1.7.3";
+  pname = "znc";
+  version = "1.8.2";
 
   src = fetchurl {
-    url = "https://znc.in/releases/archive/${name}.tar.gz";
-    sha256 = "0g8i5hsl4kinpz1wp0a2zniidv3w2sd6awq8676fds516wcc6k0y";
+    url = "https://znc.in/releases/archive/${pname}-${version}.tar.gz";
+    sha256 = "03fyi0j44zcanj1rsdx93hkdskwfvhbywjiwd17f9q1a7yp8l8zz";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [ openssl ]
-    ++ optional withPerl perl
-    ++ optional withPython python3
-    ++ optional withTcl tcl
-    ++ optional withCyrus cyrus_sasl
-    ++ optional withUnicode icu
-    ++ optional withZlib zlib;
+    ++ lib.optional withPerl perl
+    ++ lib.optional withPython python3
+    ++ lib.optional withTcl tcl
+    ++ lib.optional withCyrus cyrus_sasl
+    ++ lib.optional withUnicode icu
+    ++ lib.optional withZlib zlib;
 
   configureFlags = [
-    (stdenv.lib.enableFeature withPerl "perl")
-    (stdenv.lib.enableFeature withPython "python")
-    (stdenv.lib.enableFeature withTcl "tcl")
-    (stdenv.lib.withFeatureAs withTcl "tcl" "${tcl}/lib")
-    (stdenv.lib.enableFeature withCyrus "cyrus")
-  ] ++ optional (!withIPv6) [ "--disable-ipv6" ]
-    ++ optional withDebug [ "--enable-debug" ];
+    (lib.enableFeature withPerl "perl")
+    (lib.enableFeature withPython "python")
+    (lib.enableFeature withTcl "tcl")
+    (lib.withFeatureAs withTcl "tcl" "${tcl}/lib")
+    (lib.enableFeature withCyrus "cyrus")
+  ] ++ lib.optionals (!withIPv6) [ "--disable-ipv6" ]
+    ++ lib.optionals withDebug [ "--enable-debug" ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Advanced IRC bouncer";
-    homepage = https://wiki.znc.in/ZNC;
+    homepage = "https://wiki.znc.in/ZNC";
     maintainers = with maintainers; [ schneefux lnl7 ];
     license = licenses.asl20;
     platforms = platforms.unix;

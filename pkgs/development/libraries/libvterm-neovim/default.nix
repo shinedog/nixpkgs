@@ -1,33 +1,35 @@
-{ stdenv
-, fetchFromGitHub
+{ lib
+, stdenv
+, fetchurl
 , perl
 , libtool
 }:
 
 stdenv.mkDerivation rec {
   pname = "libvterm-neovim";
-  version = "2018-11-26";
+  # Releases are not tagged, look at commit history to find latest release
+  version = "0.3.3";
 
-  src = fetchFromGitHub {
-    owner = "neovim";
-    repo = "libvterm";
-    rev = "f600f523545b7d4018ebf320e3273795dbe43c8a";
-    sha256 = "08lxd8xs9cg4axgq6bkb7afjxg3s29s1a3niqqm4wjb7iyi2jx5b";
+  src = fetchurl {
+    url = "https://launchpad.net/libvterm/trunk/v${lib.versions.majorMinor version}/+download/libvterm-${version}.tar.gz";
+    hash = "sha256-CRVvQ90hKL00fL7r5Q2aVx0yxk4M8Y0hEZeUav9yJuA=";
   };
 
-  buildInputs = [ perl ];
-  nativeBuildInputs = [ libtool ];
+  nativeBuildInputs = [ perl libtool ];
 
-  makeFlags = [ "PREFIX=$(out)" ]
-    ++ stdenv.lib.optional stdenv.isDarwin "LIBTOOL=${libtool}/bin/libtool";
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "LIBTOOL=${libtool}/bin/libtool"
+    "PREFIX=$(out)"
+  ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "VT220/xterm/ECMA-48 terminal emulator library";
-    homepage = http://www.leonerd.org.uk/code/libvterm/;
+    homepage = "http://www.leonerd.org.uk/code/libvterm/";
     license = licenses.mit;
-    maintainers = with maintainers; [ garbas ];
+    maintainers = with maintainers; [ rvolosatovs ];
     platforms = platforms.unix;
   };
 }

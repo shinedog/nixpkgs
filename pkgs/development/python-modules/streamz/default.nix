@@ -1,48 +1,88 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, tornado
-, toolz
-, zict
-, six
-, pytest
-, networkx
-, distributed
-, confluent-kafka
-, graphviz
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  pythonOlder,
+  fetchPypi,
+  setuptools,
+  confluent-kafka,
+  dask,
+  dask-expr,
+  distributed,
+  flaky,
+  graphviz,
+  networkx,
+  pytest-asyncio,
+  pytestCheckHook,
+  requests,
+  six,
+  toolz,
+  tornado,
+  zict,
 }:
 
 buildPythonPackage rec {
   pname = "streamz";
-  version = "0.5.0";
+  version = "0.6.4";
+  pyproject = true;
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cfdd42aa62df299f550768de5002ec83112136a34b44441db9d633b2df802fb4";
+    hash = "sha256-VXfWkEwuxInBQVQJV3IQXgGVRkiBmYfUZCBMbjyWNPM=";
   };
 
-  # Pytest 4.x fails to collect streamz-dataframe tests.
-  # Removing them in v0.5.0. TODO: re-enable in a future release
-  postPatch = ''
-    rm -rf streamz/dataframe/tests/*.py
-  '';
+  build-system = [ setuptools ];
 
-  checkInputs = [ pytest networkx distributed confluent-kafka graphviz ];
-  propagatedBuildInputs = [
-    tornado
-    toolz
-    zict
+  dependencies = [
+    networkx
     six
+    toolz
+    tornado
+    zict
   ];
 
-  checkPhase = ''
-    pytest
-  '';
+  nativeCheckInputs = [
+    confluent-kafka
+    dask
+    dask-expr
+    distributed
+    flaky
+    graphviz
+    pytest-asyncio
+    pytestCheckHook
+    requests
+  ];
+
+  pythonImportsCheck = [ "streamz" ];
+
+  disabledTests = [
+    # Error with distutils version: fixture 'cleanup' not found
+    "test_separate_thread_without_time"
+    "test_await_syntax"
+    "test_partition_then_scatter_sync"
+    "test_sync"
+    "test_sync_2"
+    # Test fail in the sandbox
+    "test_tcp_async"
+    "test_tcp"
+    "test_partition_timeout"
+    # Tests are flaky
+    "test_from_iterable"
+    "test_buffer"
+  ];
+
+  disabledTestPaths = [
+    # Disable kafka tests
+    "streamz/tests/test_kafka.py"
+  ];
 
   meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "Pipelines to manage continuous streams of data";
-    homepage = https://github.com/mrocklin/streamz/;
+    homepage = "https://github.com/python-streamz/streamz";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

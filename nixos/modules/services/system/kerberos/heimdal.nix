@@ -2,9 +2,9 @@
 
 let
   inherit (lib) mkIf concatStringsSep concatMapStrings toList mapAttrs
-    mapAttrsToList attrValues;
+    mapAttrsToList;
   cfg = config.services.kerberos_server;
-  kerberos = config.krb5.kerberos;
+  kerberos = config.security.krb5.package;
   stateDir = "/var/heimdal";
   aclFiles = mapAttrs
     (name: {acl, ...}: pkgs.writeText "${name}.acl" (concatMapStrings ((
@@ -27,7 +27,7 @@ in
 {
   # No documentation about correct triggers, so guessing at them.
 
-  config = mkIf (cfg.enable && kerberos == pkgs.heimdalFull) {
+  config = mkIf (cfg.enable && kerberos == pkgs.heimdal) {
     systemd.services.kadmind = {
       description = "Kerberos Administration Daemon";
       wantedBy = [ "multi-user.target" ];
@@ -35,7 +35,7 @@ in
         mkdir -m 0755 -p ${stateDir}
       '';
       serviceConfig.ExecStart =
-        "${kerberos}/libexec/heimdal/kadmind --config-file=/etc/heimdal-kdc/kdc.conf";
+        "${kerberos}/libexec/kadmind --config-file=/etc/heimdal-kdc/kdc.conf";
       restartTriggers = [ kdcConfFile ];
     };
 
@@ -46,7 +46,7 @@ in
         mkdir -m 0755 -p ${stateDir}
       '';
       serviceConfig.ExecStart =
-        "${kerberos}/libexec/heimdal/kdc --config-file=/etc/heimdal-kdc/kdc.conf";
+        "${kerberos}/libexec/kdc --config-file=/etc/heimdal-kdc/kdc.conf";
       restartTriggers = [ kdcConfFile ];
     };
 
@@ -56,7 +56,7 @@ in
       preStart = ''
         mkdir -m 0755 -p ${stateDir}
       '';
-      serviceConfig.ExecStart = "${kerberos}/libexec/heimdal/kpasswdd";
+      serviceConfig.ExecStart = "${kerberos}/libexec/kpasswdd";
       restartTriggers = [ kdcConfFile ];
     };
 

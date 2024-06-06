@@ -1,80 +1,155 @@
 { lib
-, python
+, python3
+, fetchFromGitHub
+, git
+, testers
+, aws-sam-cli
+, nix-update-script
+, enableTelemetry ? false
 }:
 
-let
-  py = python.override {
-    packageOverrides = self: super: {
-      click = super.click.overridePythonAttrs (oldAttrs: rec {
-        version = "6.7";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "f15516df478d5a56180fbf80e68f206010e6d160fc39fa508b65e035fd75130b";
-        };
-      });
-
-      requests = super.requests.overridePythonAttrs (oldAttrs: rec {
-        version = "2.20.1";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "ea881206e59f41dbd0bd445437d792e43906703fff75ca8ff43ccdb11f33f263";
-        };
-      });
-
-      idna = super.idna.overridePythonAttrs (oldAttrs: rec {
-        version = "2.7";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "684a38a6f903c1d71d6d5fac066b58d7768af4de2b832e426ec79c30daa94a16";
-        };
-      });
-
-      six = super.six.overridePythonAttrs (oldAttrs: rec {
-        version = "1.11";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9";
-        };
-      });
-    };
-  };
-
-in
-
-with py.pkgs;
-
-buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "aws-sam-cli";
-  version = "0.14.2";
+  version = "1.117.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "b7f80838d57c1096a9a03ed703a91a8a5775a6ead33df8f31765ecf39b3a956f";
+  disabled = python3.pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "aws";
+    repo = "aws-sam-cli";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-EXwR1bOaz2//pP3evOWF3XPUgIzbSEYqW4djyPkX8nQ=";
   };
 
-  # Tests are not included in the PyPI package
-  doCheck = false;
+  build-system = with python3.pkgs; [
+    pythonRelaxDepsHook
+    setuptools
+  ];
 
-  propagatedBuildInputs = [
+  pythonRelaxDeps = [
+    "aws-lambda-builders"
+    "aws-sam-translator"
+    "boto3-stubs"
+    "cfn-lint"
+    "cookiecutter"
+    "docker"
+    "jsonschema"
+    "pyopenssl"
+    "rich"
+    "ruamel-yaml"
+    "tomlkit"
+    "tzlocal"
+  ];
+
+  dependencies = with python3.pkgs; [
     aws-lambda-builders
     aws-sam-translator
+    boto3
+    boto3-stubs
+    cfn-lint
     chevron
     click
     cookiecutter
     dateparser
     docker
     flask
-    idna
-    pathlib2
+    jsonschema
+    pyopenssl
+    pyyaml
     requests
-    serverlessrepo
-    six
+    rich
+    ruamel-yaml
+    tomlkit
+    typing-extensions
+    tzlocal
+    watchdog
+  ] ++ (with python3.pkgs.boto3-stubs.optional-dependencies; [
+    apigateway
+    cloudformation
+    ecr
+    iam
+    kinesis
+    lambda
+    s3
+    schemas
+    secretsmanager
+    signer
+    sqs
+    stepfunctions
+    sts
+    xray
+  ]);
+
+  postFixup = ''
+    # Disable telemetry: https://github.com/aws/aws-sam-cli/issues/1272
+    wrapProgram $out/bin/sam \
+      --set SAM_CLI_TELEMETRY ${if enableTelemetry then "1" else "0"} \
+      --prefix PATH : $out/bin:${lib.makeBinPath [ git ]}
+  '';
+
+  nativeCheckInputs = with python3.pkgs; [
+    filelock
+    flaky
+    parameterized
+    psutil
+    pytest-timeout
+    pytest-xdist
+    pytestCheckHook
   ];
 
+  preCheck = ''
+    export HOME=$(mktemp -d)
+    export PATH="$PATH:$out/bin:${lib.makeBinPath [ git ]}"
+  '';
+
+  pytestFlagsArray = [
+    "tests"
+    # Disable warnings
+    "-W"
+    "ignore::DeprecationWarning"
+  ];
+
+  disabledTestPaths = [
+    # Disable tests that requires networking or complex setup
+    "tests/end_to_end"
+    "tests/integration"
+    "tests/regression"
+    "tests/smoke"
+    "tests/unit/lib/telemetry"
+    # Disable flaky tests
+    "tests/unit/lib/samconfig/test_samconfig.py"
+  ];
+
+  disabledTests = [
+    # Disable flaky tests
+    "test_update_stage"
+    "test_delete_deployment"
+    "test_request_with_no_data"
+  ];
+
+  pythonImportsCheck = [
+    "samcli"
+  ];
+
+  passthru = {
+    tests.version = testers.testVersion {
+      package = aws-sam-cli;
+      command = "sam --version";
+    };
+    updateScript = nix-update-script {
+      extraArgs = [ "--version-regex" "^v([0-9.]+)$" ];
+    };
+  };
+
+  __darwinAllowLocalNetworking = true;
+
   meta = with lib; {
-    homepage = https://github.com/awslabs/aws-sam-cli;
     description = "CLI tool for local development and testing of Serverless applications";
+    homepage = "https://github.com/aws/aws-sam-cli";
+    changelog = "https://github.com/aws/aws-sam-cli/releases/tag/v${version}";
     license = licenses.asl20;
-    maintainers = with maintainers; [ andreabedini dhkl ];
+    mainProgram = "sam";
+    maintainers = with maintainers; [ lo1tuma anthonyroussel ];
   };
 }

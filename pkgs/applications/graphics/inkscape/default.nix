@@ -1,21 +1,79 @@
-{ stdenv, fetchurl, pkgconfig, perlPackages, libXft
-, libpng, zlib, popt, boehmgc, libxml2, libxslt, glib, gtkmm2
-, glibmm, libsigcxx, lcms, boost, gettext, makeWrapper
-, gsl, python2, poppler, imagemagick, libwpg, librevenge
-, libvisio, libcdr, libexif, potrace, cmake, hicolor-icon-theme
+{ stdenv
+, lib
+, boehmgc
+, boost
+, cairo
+, callPackage
+, cmake
+, desktopToDarwinBundle
+, fetchurl
+, fetchpatch
+, gettext
+, ghostscript
+, glib
+, glibmm
+, gobject-introspection
+, gsl
+, gspell
+, gtk-mac-integration
+, gtkmm3
+, gdk-pixbuf
+, imagemagick
+, lcms
+, lib2geom
+, libcdr
+, libexif
+, libpng
+, librevenge
+, librsvg
+, libsigcxx
+, libsoup
+, libvisio
+, libwpg
+, libXft
+, libxml2
+, libxslt
+, ninja
+, perlPackages
+, pkg-config
+, poppler
+, popt
+, potrace
+, python3
+, substituteAll
+, wrapGAppsHook3
+, libepoxy
+, zlib
 }:
-
 let
-  python2Env = python2.withPackages(ps: with ps;
-    [ numpy lxml scour ]);
+  python3Env = python3.withPackages
+    (ps: with ps; [
+      appdirs
+      beautifulsoup4
+      cachecontrol
+    ]
+    # CacheControl requires extra runtime dependencies for FileCache
+    # https://gitlab.com/inkscape/extras/extension-manager/-/commit/9a4acde6c1c028725187ff5972e29e0dbfa99b06
+    ++ cachecontrol.optional-dependencies.filecache
+    ++ [
+      numpy
+      lxml
+      packaging
+      pillow
+      scour
+      pyparsing
+      pyserial
+      requests
+      pygobject3
+    ] ++ inkex.propagatedBuildInputs);
 in
-
 stdenv.mkDerivation rec {
-  name = "inkscape-0.92.4";
+  pname = "inkscape";
+  version = "1.3.2";
 
   src = fetchurl {
-    url = "https://media.inkscape.org/dl/resources/file/${name}.tar.bz2";
-    sha256 = "0pjinhjibfsz1aywdpgpj3k23xrsszpj4a1ya5562dkv2yl2vv2p";
+    url = "https://inkscape.org/release/inkscape-${version}/source/archive/xz/dl/inkscape-${version}.tar.xz";
+    sha256 = "sha256-29GETcRD/l4Q0+mohxROX7ciOFL/8ZHPte963qsOCGs=";
   };
 
   # Inkscape hits the ARGMAX when linking on macOS. It appears to be
@@ -24,49 +82,106 @@ stdenv.mkDerivation rec {
   # will leave us under ARGMAX.
   strictDeps = true;
 
-  unpackPhase = ''
-    cp $src ${name}.tar.bz2
-    tar xvjf ${name}.tar.bz2 > /dev/null
-    cd ${name}
-  '';
+  patches = [
+    (substituteAll {
+      src = ./fix-python-paths.patch;
+      # Python is used at run-time to execute scripts,
+      # e.g., those from the "Effects" menu.
+      python3 = "${python3Env}/bin/python";
+    })
+    (substituteAll {
+      # Fix path to ps2pdf binary
+      src = ./fix-ps2pdf-path.patch;
+      inherit ghostscript;
+    })
+
+    # Fix build with libxml2 2.12
+    # https://gitlab.com/inkscape/inkscape/-/merge_requests/6089
+    (fetchpatch {
+      url = "https://gitlab.com/inkscape/inkscape/-/commit/694d8ae43d06efff21adebf377ce614d660b24cd.patch";
+      hash = "sha256-9IXJzpZbNU5fnt7XKgqCzUDrwr08qxGwo8TqnL+xc6E=";
+    })
+  ];
 
   postPatch = ''
     patchShebangs share/extensions
-    patchShebangs fix-roff-punct
+    patchShebangs share/templates
+    patchShebangs man/fix-roff-punct
 
-    # Python is used at run-time to execute scripts, e.g., those from
-    # the "Effects" menu.
-    substituteInPlace src/extension/implementation/script.cpp \
-      --replace '"python-interpreter", "python"' '"python-interpreter", "${python2Env}/bin/python"'
+    # double-conversion is a dependency of 2geom
+    substituteInPlace CMakeScripts/DefineDependsandFlags.cmake \
+      --replace 'find_package(DoubleConversion REQUIRED)' ""
   '';
 
-  nativeBuildInputs = [ pkgconfig cmake makeWrapper python2Env ]
-    ++ (with perlPackages; [ perl XMLParser ]);
-  buildInputs = [
-    libXft libpng zlib popt boehmgc
-    libxml2 libxslt glib gtkmm2 glibmm libsigcxx lcms boost gettext
-    gsl poppler imagemagick libwpg librevenge
-    libvisio libcdr libexif potrace hicolor-icon-theme
-
-    python2Env perlPackages.perl
+  nativeBuildInputs = [
+    pkg-config
+    cmake
+    ninja
+    python3Env
+    glib # for setup hook
+    gdk-pixbuf # for setup hook
+    wrapGAppsHook3
+    gobject-introspection
+  ] ++ (with perlPackages; [
+    perl
+    XMLParser
+  ]) ++ lib.optionals stdenv.isDarwin [
+    desktopToDarwinBundle
   ];
 
-  enableParallelBuilding = true;
+  buildInputs = [
+    boehmgc
+    boost
+    gettext
+    glib
+    glibmm
+    gsl
+    gtkmm3
+    imagemagick
+    lcms
+    lib2geom
+    libcdr
+    libexif
+    libpng
+    librevenge
+    librsvg # for loading icons
+    libsigcxx
+    libsoup
+    libvisio
+    libwpg
+    libXft
+    libxml2
+    libxslt
+    perlPackages.perl
+    poppler
+    popt
+    potrace
+    python3Env
+    zlib
+    libepoxy
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    gspell
+  ] ++ lib.optionals stdenv.isDarwin [
+    cairo
+    gtk-mac-integration
+  ];
 
   # Make sure PyXML modules can be found at run-time.
-  postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
-    install_name_tool -change $out/lib/libinkscape_base.dylib $out/lib/inkscape/libinkscape_base.dylib $out/bin/inkscape
-    install_name_tool -change $out/lib/libinkscape_base.dylib $out/lib/inkscape/libinkscape_base.dylib $out/bin/inkview
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    for f in $out/lib/inkscape/*.dylib; do
+      ln -s $f $out/lib/$(basename $f)
+    done
   '';
 
-  # 0.92.3 complains about an invalid conversion from const char * to char *
-  NIX_CFLAGS_COMPILE = " -fpermissive ";
+  passthru.tests.ps2pdf-plugin = callPackage ./test-ps2pdf-plugin.nix { };
 
-  meta = with stdenv.lib; {
-    license = "GPL";
-    homepage = https://www.inkscape.org;
+  meta = with lib; {
     description = "Vector graphics editor";
+    homepage = "https://www.inkscape.org";
+    license = licenses.gpl3Plus;
+    maintainers = [ maintainers.jtojnar ];
     platforms = platforms.all;
+    mainProgram = "inkscape";
     longDescription = ''
       Inkscape is a feature-rich vector graphics editor that edits
       files in the W3C SVG (Scalable Vector Graphics) file format.

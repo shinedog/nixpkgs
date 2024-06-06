@@ -1,39 +1,33 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, python
-, pytest
-, numpy
-, isPy33
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  numpy,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "traits";
-  version = "5.1.1";
+  version = "6.4.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0lwmqgkjihqkf269xmdqsa302p378zjcpz01k9a98br7ngzrsj64";
+    hash = "sha256-qbv9ngwIt94H6G72TmnLlqKcIQWkO/gyzYsWL6HiL0Q=";
   };
 
-  # Use pytest because its easier to discover tests
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ numpy ];
+  # Circular dependency
+  doCheck = false;
 
-  checkPhase = ''
-    py.test $out/${python.sitePackages}
-  '';
+  pythonImportsCheck = [ "traits" ];
 
-  # Test suite is broken for 3.x on latest release
-  # https://github.com/enthought/traits/issues/187
-  # https://github.com/enthought/traits/pull/188
-  # Furthermore, some tests fail due to being in a chroot
-  doCheck = isPy33;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Explicitly typed attributes for Python";
-    homepage = https://pypi.python.org/pypi/traits;
-    license = "BSD";
+    homepage = "https://pypi.python.org/pypi/traits";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
-
 }

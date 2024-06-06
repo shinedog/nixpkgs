@@ -1,42 +1,109 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig, libxml2, glib, gtk3, gettext, libsoup
-, gtk-doc, docbook_xsl, docbook_xml_dtd_43, gobject-introspection, python3, tzdata, geocode-glib, vala, gnome3 }:
+{ lib
+, stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, libxml2
+, json-glib
+, glib
+, gettext
+, libsoup_3
+, gi-docgen
+, gobject-introspection
+, python3
+, tzdata
+, geocode-glib_2
+, vala
+, gnome
+, withIntrospection ? stdenv.buildPlatform == stdenv.hostPlatform
+}:
 
 stdenv.mkDerivation rec {
   pname = "libgweather";
-  version = "3.32.1";
+  version = "4.4.2";
 
-  outputs = [ "out" "dev" "devdoc" ];
+  outputs = [ "out" "dev" ] ++ lib.optional withIntrospection "devdoc";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "1079d26y8d2zaw9w50l9scqjhbrynpdd6kyaa32x4393f7nih8hw";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-puQntHcK2kiUXzqpBq9xD8gzz/DULfkfGCgwJ0DXlOw=";
   };
 
-  nativeBuildInputs = [ meson ninja pkgconfig gettext vala gtk-doc docbook_xsl docbook_xml_dtd_43 gobject-introspection python3 ];
-  buildInputs = [ glib gtk3 libsoup libxml2 geocode-glib ];
+  patches = [
+    # Headers depend on glib but it is only listed in Requires.private,
+    # which does not influence Cflags on non-static builds in nixpkgs’s
+    # pkg-config. Let’s add it to Requires to ensure Cflags are set correctly.
+    ./fix-pkgconfig.patch
+  ];
 
-  postPatch = ''
-    chmod +x meson/meson_post_install.py
-    patchShebangs meson/meson_post_install.py
-  '';
+  depsBuildBuild = [
+    pkg-config
+  ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    glib
+    (python3.pythonOnBuildForHost.withPackages (ps: [ ps.pygobject3 ]))
+  ] ++ lib.optionals withIntrospection [
+    gi-docgen
+    gobject-introspection
+    vala
+  ];
+
+  buildInputs = [
+    glib
+    libsoup_3
+    libxml2
+    json-glib
+    geocode-glib_2
+  ];
 
   mesonFlags = [
     "-Dzoneinfo_dir=${tzdata}/share/zoneinfo"
-    "-Denable_vala=true"
-    "-Dgtk_doc=true"
+    (lib.mesonBool "introspection" withIntrospection)
+  ] ++ lib.optionals stdenv.isDarwin [
+    "-Dc_args=-D_DARWIN_C_SOURCE"
   ];
 
+  postPatch = ''
+    patchShebangs build-aux/meson/gen_locations_variant.py
+
+    # Run-time dependency gi-docgen found: NO (tried pkgconfig and cmake)
+    # it should be a build-time dep for build
+    # TODO: send upstream
+    substituteInPlace doc/meson.build \
+      --replace "'gi-docgen', ver" "'gi-docgen', native:true, ver" \
+      --replace "'gi-docgen', req" "'gi-docgen', native:true, req"
+
+    # gir works for us even when cross-compiling
+    # TODO: send upstream because downstream users can use the option to disable gir if they don't have it working
+    substituteInPlace libgweather/meson.build \
+      --replace "g_ir_scanner.found() and not meson.is_cross_build()" "g_ir_scanner.found()"
+  '';
+
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    moveToOutput "share/doc" "$devdoc"
+  '';
+
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = pname;
+      versionPolicy = "odd-unstable";
+      # Version 40.alpha preceded version 4.0.
+      freeze = "40.alpha";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library to access weather information from online services for numerous locations";
-    homepage = https://wiki.gnome.org/Projects/LibGWeather;
+    homepage = "https://gitlab.gnome.org/GNOME/libgweather";
     license = licenses.gpl2Plus;
-    maintainers = gnome3.maintainers;
-    platforms = platforms.linux;
+    maintainers = teams.gnome.members;
+    platforms = platforms.unix;
   };
 }

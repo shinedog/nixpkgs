@@ -1,29 +1,36 @@
-{ stdenv
-, buildPythonPackage
-, fetchurl
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "minidb";
-  version = "2.0.2";
+  version = "2.0.8";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "https://github.com/thp/minidb/archive/${version}.tar.gz";
-    sha256 = "17rvkpq8v7infvbgsi48vnxamhxb3f635nqn0sln7yyvh4i9k8a0";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "thp";
+    repo = "minidb";
+    rev = "refs/tags/${version}";
+    hash = "sha256-e7wVR+xr+5phNoRnGIxnmrjB1QU9JmyfQiu88PYapA8=";
   };
 
-  checkInputs = [ nose ];
+  build-system = [ setuptools ];
 
-  checkPhase = ''
-    nosetests test
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    description = "A simple SQLite3-based store for Python objects";
-    homepage = https://thp.io/2010/minidb/;
-    license = stdenv.lib.licenses.isc;
-    maintainers = [ stdenv.lib.maintainers.tv ];
+  pythonImportsCheck = [ "minidb" ];
+
+  meta = with lib; {
+    description = "SQLite3-based store for Python objects";
+    homepage = "https://thp.io/2010/minidb/";
+    license = licenses.isc;
+    maintainers = with maintainers; [ tv ];
   };
-
 }

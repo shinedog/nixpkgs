@@ -1,41 +1,81 @@
-{ stdenv, makeWrapper, python2Packages, fetchFromGitHub }:
+{ lib
+, fetchFromGitHub
+, python3
+}:
 
-stdenv.mkDerivation rec {
-  pname = "theHarvester";
-  version = "2.7.1";
-  name = "${pname}-${version}";
+python3.pkgs.buildPythonApplication rec {
+  pname = "theharvester";
+  version = "4.6.0";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "laramies";
-    repo = "${pname}";
-    rev = "25553762d2d93a39083593adb08a34d5f5142c60";
-    sha256 = "0gnm598y6paz0knwvdv1cx0w6ngdbbpzkdark3q5vs66yajv24w4";
+    repo = "theharvester";
+    rev = "refs/tags/${version}";
+    hash = "sha256-B2pZBrWZqbtvcO0pnM57GFhrryYilLCBTMEmsKvyU/I=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
-
-  # add dependencies
-  propagatedBuildInputs = [ python2Packages.requests ];
-
-  installPhase = ''
-    # create dirs
-    mkdir -p $out/share/${pname} $out/bin
-
-    # move project code
-    mv * $out/share/${pname}/
-
-    # make project runnable
-    chmod +x $out/share/${pname}/theHarvester.py
-    ln -s $out/share/${pname}/theHarvester.py $out/bin
-
-    wrapProgram "$out/bin/theHarvester.py" --prefix PYTHONPATH : $out/share/${pname}:$PYTHONPATH
+  postPatch = ''
+    # Requirements are pinned
+    sed -i 's/==.*//' requirements/base.txt
   '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = with python3.pkgs; [
+    poetry-core
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    aiodns
+    aiofiles
+    aiohttp
+    aiomultiprocess
+    aiosqlite
+    beautifulsoup4
+    censys
+    certifi
+    dnspython
+    fastapi
+    lxml
+    netaddr
+    ujson
+    playwright
+    plotly
+    pyppeteer
+    python-dateutil
+    pyyaml
+    requests
+    retrying
+    shodan
+    slowapi
+    starlette
+    uvicorn
+    uvloop
+  ];
+
+  nativeCheckInputs = with  python3.pkgs; [
+    pytest
+    pytest-asyncio
+  ];
+
+  # We don't run other tests (discovery modules) because they require network access
+  checkPhase = ''
+    runHook preCheck
+    pytest tests/test_myparser.py
+    runHook postCheck
+  '';
+
+  meta = with lib; {
     description = "Gather E-mails, subdomains and names from different public sources";
+    longDescription = ''
+      theHarvester is a very simple, yet effective tool designed to be used in the early
+      stages of a penetration test. Use it for open source intelligence gathering and
+      helping to determine an entity's external threat landscape on the internet. The tool
+      gathers emails, names, subdomains, IPs, and URLs using multiple public data sources.
+    '';
     homepage = "https://github.com/laramies/theHarvester";
-    platforms = platforms.all;
-    maintainers = with maintainers; [ treemo ];
-    license = licenses.gpl2;
+    changelog = "https://github.com/laramies/theHarvester/releases/tag/${version}";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ c0bw3b fab treemo ];
+    mainProgram = "theHarvester";
   };
 }

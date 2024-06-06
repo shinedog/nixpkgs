@@ -1,19 +1,41 @@
-{ lib, buildPythonPackage, fetchPypi, flask }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flask,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "flask-paginate";
-  version = "0.5.2";
+  version = "2024.4.12";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "ebc896bf6e8d7a414e3efba0bd0770a8f73dcd7023f99e849c64164287e36e9b";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "lixxu";
+    repo = "flask-paginate";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-YaAgl+iuoXB0eWVzhmNq2UTOpM/tHfDISIb9CyaXiuA=";
   };
 
-  propagatedBuildInputs = [ flask ];
+  build-system = [ setuptools ];
+
+  dependencies = [ flask ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "flask_paginate" ];
+
+  pytestFlagsArray = [ "tests/tests.py" ];
 
   meta = with lib; {
-    homepage = https://github.com/lixxu/flask-paginate;
     description = "Pagination support for Flask";
+    homepage = "https://github.com/lixxu/flask-paginate";
+    changelog = "https://github.com/lixxu/flask-paginate/releases/tag/v${version}";
     license = licenses.bsd3;
     maintainers = with maintainers; [ ];
   };

@@ -1,29 +1,60 @@
-{ lib, fetchurl, stdenv, ncurses,
-IOKit, python }:
+{ lib, fetchFromGitHub, stdenv, autoreconfHook, pkg-config
+, ncurses
+, IOKit
+, libcap
+, libnl
+, sensorsSupport ? stdenv.isLinux, lm_sensors
+, systemdSupport ? lib.meta.availableOn stdenv.hostPlatform systemd, systemd
+}:
+
+assert systemdSupport -> stdenv.isLinux;
 
 stdenv.mkDerivation rec {
-  name = "htop-${version}";
-  version = "2.2.0";
+  pname = "htop";
+  version = "3.3.0";
 
-  src = fetchurl {
-    url = "https://hisham.hm/htop/releases/${version}/${name}.tar.gz";
-    sha256 = "0mrwpb3cpn3ai7ar33m31yklj64c3pp576vh1naqff6f21pq5mnr";
+  src = fetchFromGitHub {
+    owner = "htop-dev";
+    repo = pname;
+    rev = version;
+    hash = "sha256-qDhQkzY2zj2yxbgFUXwE0MGEgAFOsAhnapUuetO9WTw=";
   };
 
-  nativeBuildInputs = [ python ];
-  buildInputs =
-    [ ncurses ] ++
-    lib.optionals stdenv.isDarwin [ IOKit ];
+  nativeBuildInputs = [ autoreconfHook ]
+    ++ lib.optional stdenv.isLinux pkg-config
+  ;
 
-  prePatch = ''
-    patchShebangs scripts/MakeHeader.py
-  '';
+  buildInputs = [ ncurses ]
+    ++ lib.optional stdenv.isDarwin IOKit
+    ++ lib.optionals stdenv.isLinux [ libcap libnl ]
+    ++ lib.optional sensorsSupport lm_sensors
+    ++ lib.optional systemdSupport systemd
+  ;
 
-  meta = with stdenv.lib; {
-    description = "An interactive process viewer for Linux";
-    homepage = https://hisham.hm/htop/;
-    license = licenses.gpl2Plus;
-    platforms = with platforms; linux ++ freebsd ++ openbsd ++ darwin;
-    maintainers = with maintainers; [ rob relrod ];
+  configureFlags = [ "--enable-unicode" "--sysconfdir=/etc" ]
+    ++ lib.optionals stdenv.isLinux [
+      "--enable-affinity"
+      "--enable-capabilities"
+      "--enable-delayacct"
+    ]
+    ++ lib.optional sensorsSupport "--enable-sensors"
+  ;
+
+  postFixup =
+    let
+      optionalPatch = pred: so: lib.optionalString pred "patchelf --add-needed ${so} $out/bin/htop";
+    in lib.optionalString (!stdenv.hostPlatform.isStatic) ''
+      ${optionalPatch sensorsSupport "${lm_sensors}/lib/libsensors.so"}
+      ${optionalPatch systemdSupport "${systemd}/lib/libsystemd.so"}
+    '';
+
+  meta = with lib; {
+    description = "An interactive process viewer";
+    homepage = "https://htop.dev";
+    license = licenses.gpl2Only;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ rob relrod SuperSandro2000 ];
+    changelog = "https://github.com/htop-dev/htop/blob/${version}/ChangeLog";
+    mainProgram = "htop";
   };
 }

@@ -1,26 +1,37 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "boltons";
-  version = "2019-01-07";
+  version = "24.0.0";
+  format = "setuptools";
 
-  # No tests in PyPi Tarball
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "mahmoud";
     repo = "boltons";
-    rev = "3584ac9399f227a2a11b74153140ee171fd49783";
-    sha256 = "13xngjw249sk4vmr5kqqnia0npw0kpa0gm020a4dqid0cjyvj0rv";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Ie5CPT2u/2/hAIhDzXT6CPzJwmbgt3B6q3oxqKYb27o=";
   };
 
-  checkInputs = [ pytest ];
-  checkPhase = "pytest tests";
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mahmoud/boltons;
-    description = "220+ constructs, recipes, and snippets extending (and relying on nothing but) the Python standard library";
+  # Tests bind to localhost
+  __darwinAllowLocalNetworking = true;
+
+  pythonImportsCheck = [ "boltons" ];
+
+  meta = with lib; {
+    description = "Constructs, recipes, and snippets extending the Python standard library";
     longDescription = ''
-      Boltons is a set of over 220 BSD-licensed, pure-Python utilities
-      in the same spirit as — and yet conspicuously missing from — the
+      Boltons is a set of over 200 BSD-licensed, pure-Python utilities
+      in the same spirit as - and yet conspicuously missing from - the
       standard library, including:
 
       - Atomic file saving, bolted on with fileutils
@@ -33,6 +44,8 @@ buildPythonPackage rec {
       - A full-featured TracebackInfo type, for representing stack
       traces, in tbutils
     '';
+    homepage = "https://github.com/mahmoud/boltons";
+    changelog = "https://github.com/mahmoud/boltons/blob/${version}/CHANGELOG.md";
     license = licenses.bsd3;
     maintainers = with maintainers; [ twey ];
   };

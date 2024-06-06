@@ -1,8 +1,15 @@
-{ lib, buildPythonPackage, fetchFromGitHub, flask, mutagen }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  flask,
+  mutagen,
+}:
 
 buildPythonPackage rec {
   pname = "podcats";
   version = "0.5.0";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "jakubroztocil";
@@ -16,12 +23,15 @@ buildPythonPackage rec {
       --replace 'debug=True' 'debug=True, use_reloader=False'
   '';
 
-  propagatedBuildInputs = [ flask mutagen ];
+  propagatedBuildInputs = [
+    flask
+    mutagen
+  ];
 
   meta = {
     description = "Application that generates RSS feeds for podcast episodes from local audio files";
-    homepage = https://github.com/jakubroztocil/podcats;
+    mainProgram = "podcats";
+    homepage = "https://github.com/jakubroztocil/podcats";
     license = lib.licenses.bsd2;
-    maintainers = with lib.maintainers; [ the-kenny ];
   };
 }

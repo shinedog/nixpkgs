@@ -1,35 +1,99 @@
-{ stdenv, fetchFromGitHub
-, llvm, qt48Full, qrencode, libmicrohttpd, libjack2, alsaLib, faust, curl
-, bc, coreutils, which
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, pkg-config
+, which
+, alsa-lib
+, curl
+, faust
+, flac
+, gnutls
+, libjack2
+, libmicrohttpd
+, libmpg123
+, libogg
+, libopus
+, libsndfile
+, libtasn1
+, libvorbis
+, libxcb
+, llvm
+, p11-kit
+, qrencode
+, qt5
 }:
 
 stdenv.mkDerivation rec {
-  name = "faustlive-${version}";
-  version = "2017-12-05";
+  pname = "faustlive";
+  version = "2.5.17";
   src = fetchFromGitHub {
     owner = "grame-cncm";
     repo = "faustlive";
-    rev = "281fcb852dcd94f8c57ade1b2a7a3937542e1b2d";
-    sha256 = "0sw44yd9928rid9ib0b5mx2x129m7zljrayfm6jz6hrwdc5q3k9a";
+    rev = version;
+    hash = "sha256-RqtdDkP63l/30sL5PDocvpar5TI4LdKfeeliSNeOHog=";
+    fetchSubmodules = true;
   };
 
-  buildInputs = [
-    llvm qt48Full qrencode libmicrohttpd libjack2 alsaLib faust curl
-    bc coreutils which
+  patches = [
+    # move mutex initialization outside assert call
+    # https://github.com/grame-cncm/faustlive/pull/59
+    (fetchpatch {
+      name = "initalize-mutexes.patch";
+      url = "https://github.com/grame-cncm/faustlive/commit/fdd46b12202def9731b9ed2f6363287af16be892.patch";
+      hash = "sha256-yH95Y4Jbqgs8siE9rtutmu5C2sNZwQMJzCgDYqNBDj4=";
+    })
   ];
 
-  makeFlags = [ "PREFIX=$(out)" ];
+  strictDeps = true;
 
-  preBuild = "patchShebangs Build/Linux/buildversion";
+  nativeBuildInputs = [
+    cmake
+    faust
+    llvm
+    pkg-config
+    qt5.wrapQtAppsHook
+    which
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    alsa-lib
+    curl
+    faust
+    flac
+    gnutls
+    libjack2
+    libmicrohttpd
+    libmpg123
+    libogg
+    libopus
+    libsndfile
+    libtasn1
+    libvorbis
+    libxcb
+    llvm
+    p11-kit
+    qrencode
+    qt5.qtbase
+  ];
+
+  cmakeFlags = [
+    "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON"
+  ];
+
+  postPatch = "cd Build";
+
+  meta = with lib; {
     description = "A standalone just-in-time Faust compiler";
+    mainProgram = "FaustLive";
     longDescription = ''
       FaustLive is a standalone just-in-time Faust compiler. It tries to bring
       together the convenience of a standalone interpreted language with the
       efficiency of a compiled language. It's ideal for fast prototyping.
     '';
-    homepage = http://faust.grame.fr/;
+    homepage = "https://faust.grame.fr/";
     license = licenses.gpl3;
+    maintainers = with maintainers; [ magnetophon ];
   };
 }

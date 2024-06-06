@@ -1,16 +1,22 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, xmltodict
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  xmltodict,
 }:
 
 buildPythonPackage rec {
-  version = "0.9.5";
-  pname = "DataModelDict";
+  pname = "datamodeldict";
+  version = "0.9.9";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "afa15c137c09e7d937e31c8956fd8092be0251c9869a6b7c1d0f81c0901bc47d";
+    pname = "DataModelDict";
+    inherit version;
+    hash = "sha256-DadBRsc8qEu9PWgMNllGS2ESKL7kgBLDhg4yDr87WRk=";
   };
 
   propagatedBuildInputs = [ xmltodict ];
@@ -18,10 +24,12 @@ buildPythonPackage rec {
   # no tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/usnistgov/DataModelDict/;
+  pythonImportsCheck = [ "DataModelDict" ];
+
+  meta = with lib; {
     description = "Class allowing for data models equivalently represented as Python dictionaries, JSON, and XML";
+    homepage = "https://github.com/usnistgov/DataModelDict/";
     license = licenses.mit;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

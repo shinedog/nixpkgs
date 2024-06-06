@@ -1,26 +1,26 @@
-{ stdenv, fetchurl, glib, gnome3, pkgconfig, dbus-glib, telepathy-glib, libxslt, makeWrapper }:
+{ lib, stdenv, fetchurl, glib, dconf, pkg-config, dbus-glib, telepathy-glib, python3, libxslt, makeWrapper }:
 
 stdenv.mkDerivation rec {
   pname = "telepathy-idle";
-  version = "0.2.0";
-  name = "${pname}-${version}";
+  version = "0.2.2";
 
   src = fetchurl {
-    url = "http://telepathy.freedesktop.org/releases/${pname}/${name}.tar.gz";
-    sha256 = "1argdzbif1vdmwp5vqbgkadq9ancjmgdm2ncp0qfckni715ss4rh";
+    url = "http://telepathy.freedesktop.org/releases/${pname}/${pname}-${version}.tar.gz";
+    hash = "sha256-g4fiXl+wtMvnAeXcCS1mbWUQuDP9Pn5GLpFw027DwV8=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ glib telepathy-glib dbus-glib libxslt telepathy-glib.python (stdenv.lib.getLib gnome3.dconf) makeWrapper ];
+  nativeBuildInputs = [ pkg-config python3 makeWrapper ];
+  buildInputs = [ glib telepathy-glib dbus-glib libxslt (lib.getLib dconf) ];
 
   preFixup = ''
     wrapProgram "$out/libexec/telepathy-idle" \
-      --prefix GIO_EXTRA_MODULES : "${stdenv.lib.getLib gnome3.dconf}/lib/gio/modules"
+      --prefix GIO_EXTRA_MODULES : "${lib.getLib dconf}/lib/gio/modules"
   '';
 
   meta = {
     description = "IRC connection manager for the Telepathy framework";
-    license = stdenv.lib.licenses.lgpl21;
-    platforms = stdenv.lib.platforms.gnu ++ stdenv.lib.platforms.linux;
+    homepage = "https://telepathy.freedesktop.org/components/telepathy-idle/";
+    license = lib.licenses.lgpl21Plus;
+    platforms = lib.platforms.unix;
   };
 }

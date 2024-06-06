@@ -1,39 +1,44 @@
-{ stdenv, fetchgit
-}:
+{ lib, stdenv, fetchgit }:
 
 stdenv.mkDerivation rec {
-  name = "liburing-${version}";
-  version = "1.0.0pre92_${builtins.substring 0 7 src.rev}";
+  pname = "liburing";
+  version = "2.5";
 
   src = fetchgit {
-    url    = "http://git.kernel.dk/liburing";
-    rev    = "7b989f34191302011b5b49bf5b26b36862d54056";
-    sha256 = "12kfqvwzxksmsm8667a1g4vxr6xsaq63cz9wrfhwq6hrsv3ynydc";
+    url    = "http://git.kernel.dk/${pname}";
+    rev    = "liburing-${version}";
+    sha256 = "sha256-hPyEZ0P1rfos53OCNd2OYFiqmv6TgpWaj5/xPLccCvM=";
   };
 
+  separateDebugInfo = true;
   enableParallelBuilding = true;
+  # Upstream's configure script is not autoconf generated, but a hand written one.
+  setOutputFlags = false;
+  configureFlags = [
+    "--includedir=${placeholder "dev"}/include"
+    "--mandir=${placeholder "man"}/share/man"
+  ];
 
-  outputs = [ "out" "lib" "dev" "man" ];
+  # Doesn't recognize platform flags
+  configurePlatforms = [];
 
-  installFlags =
-    [ "prefix=$(out)"
-      "includedir=$(dev)/include"
-      "libdir=$(lib)/lib"
-      "mandir=$(man)/share/man"
-    ];
+  outputs = [ "out" "bin" "dev" "man" ];
 
-  # Copy the examples into $out.
   postInstall = ''
-    mkdir -p $out/bin
-    cp ./examples/io_uring-cp examples/io_uring-test $out/bin
+    # Copy the examples into $bin. Most reverse dependency of this package should
+    # reference only the $out output
+    mkdir -p $bin/bin
+    cp ./examples/io_uring-cp examples/io_uring-test $bin/bin
+    cp ./examples/link-cp $bin/bin/io_uring-link-cp
+  '' + lib.optionalString stdenv.hostPlatform.isGnu ''
+    cp ./examples/ucontext-cp $bin/bin/io_uring-ucontext-cp
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Userspace library for the Linux io_uring API";
-    homepage    = http://git.kernel.dk/cgit/liburing/;
+    homepage    = "https://git.kernel.dk/cgit/liburing/";
     license     = licenses.lgpl21;
     platforms   = platforms.linux;
-    maintainers = with maintainers; [ thoughtpolice ];
-    badPlatforms = [ "aarch64-linux" ];
+    maintainers = with maintainers; [ thoughtpolice nickcao ];
   };
 }

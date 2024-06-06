@@ -1,33 +1,42 @@
-{ lib, buildPythonPackage, fetchPypi, tinycss2, pytest, pytestrunner }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  flit-core,
+  pytestCheckHook,
+  pythonOlder,
+  tinycss2,
+}:
 
 buildPythonPackage rec {
   pname = "cssselect2";
-  version = "0.2.1";
+  version = "0.7.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "505d2ce3d3a1d390ddb52f7d0864b7efeb115a5b852a91861b498b92424503ab";
+    hash = "sha256-HM2YTauJ/GiVUEOspOGwPgzynK2YgPbijjunp0sUqlo=";
   };
 
-  # We're not interested in code quality tests
   postPatch = ''
-    substituteInPlace setup.py \
-      --replace "pytest-cov" "" \
-      --replace "pytest-flake8" "" \
-      --replace "pytest-isort" ""
-    substituteInPlace setup.cfg \
-      --replace "--cov=cssselect2" "" \
-      --replace "--flake8" "" \
-      --replace "--isort" ""
+    sed -i '/^addopts/d' pyproject.toml
   '';
 
-  propagatedBuildInputs = [ tinycss2 ];
+  build-system = [ flit-core ];
 
-  checkInputs = [ pytest pytestrunner ];
+  dependencies = [ tinycss2 ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "cssselect2" ];
 
   meta = with lib; {
     description = "CSS selectors for Python ElementTree";
-    homepage = https://github.com/Kozea/cssselect2;
+    homepage = "https://github.com/Kozea/cssselect2";
+    changelog = "https://github.com/Kozea/cssselect2/releases/tag/${version}";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

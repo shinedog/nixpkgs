@@ -1,19 +1,19 @@
-{ stdenv, fetchbzr, xlibsWrapper }:
+{ lib, stdenv, fetchbzr, xorg }:
 
-let
+stdenv.mkDerivation rec {
+  pname = "xwinwrap";
   version = "4";
-in
-stdenv.mkDerivation {
-  name = "xwinwrap-${version}";
 
   src = fetchbzr {
-    url = https://code.launchpad.net/~shantanu-goel/xwinwrap/devel;
+    url = "https://code.launchpad.net/~shantanu-goel/xwinwrap/devel";
     rev = version;
     sha256 = "1annhqc71jcgx5zvcy31c1c488ygx4q1ygrwyy2y0ww743smbchw";
   };
 
   buildInputs = [
-    xlibsWrapper
+    xorg.libX11
+    xorg.libXext
+    xorg.libXrender
   ];
 
   buildPhase = if stdenv.hostPlatform.system == "x86_64-linux" then ''
@@ -27,7 +27,7 @@ stdenv.mkDerivation {
     mv */xwinwrap $out/bin
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A utility that allows you to use an animated X window as the wallpaper";
     longDescription = ''
       XWinWrap is a small utility written a loooong time ago that allowed you to
@@ -47,8 +47,9 @@ stdenv.mkDerivation {
       it is, in its new avatar “Shantz XWinWrap”.
     '';
     license = licenses.hpnd;
-    homepage = https://shantanugoel.com/2008/09/03/shantz-xwinwrap/;
-    maintainers = with maintainers; [ infinisil ];
+    homepage = "https://shantanugoel.com/2008/09/03/shantz-xwinwrap/";
+    maintainers = [ ];
     platforms = platforms.linux;
+    mainProgram = "xwinwrap";
   };
 }

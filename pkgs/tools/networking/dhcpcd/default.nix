@@ -1,46 +1,70 @@
-{ stdenv, fetchurl, pkgconfig, udev, runtimeShellPackage, runtimeShell }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, udev
+, runtimeShellPackage
+, runtimeShell
+, nixosTests
+, enablePrivSep ? true
+}:
 
 stdenv.mkDerivation rec {
-  # when updating this to >=7, check, see previous reverts:
-  # nix-build -A nixos.tests.networking.scripted.macvlan.x86_64-linux nixos/release-combined.nix
-  name = "dhcpcd-7.2.2";
+  pname = "dhcpcd";
+  version = "10.0.6";
 
-  src = fetchurl {
-    url = "mirror://roy/dhcpcd/${name}.tar.xz";
-    sha256 = "17m0ig9n4p6m98j8wp4dwnl2cfg2rg3v6vqpsahls9x9rccgzdrx";
+  src = fetchFromGitHub {
+    owner = "NetworkConfiguration";
+    repo = "dhcpcd";
+    rev = "v${version}";
+    sha256 = "sha256-tNC5XCA8dShaTIff15mQz8v+YK9sZkRNLCX5qnlpxx4=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [
     udev
     runtimeShellPackage # So patchShebangs finds a bash suitable for the installed scripts
   ];
 
-  prePatch = ''
+  postPatch = ''
     substituteInPlace hooks/dhcpcd-run-hooks.in --replace /bin/sh ${runtimeShell}
   '';
-
-  preConfigure = "patchShebangs ./configure";
 
   configureFlags = [
     "--sysconfdir=/etc"
     "--localstatedir=/var"
-  ];
+  ]
+  ++ (
+    if ! enablePrivSep
+    then [ "--disable-privsep" ]
+    else [
+      "--enable-privsep"
+      # dhcpcd disables privsep if it can't find the default user,
+      # so we explicitly specify a user.
+      "--privsepuser=dhcpcd"
+    ]
+  );
 
-  makeFlags = "PREFIX=\${out}";
+  makeFlags = [ "PREFIX=${placeholder "out"}" ];
 
   # Hack to make installation succeed.  dhcpcd will still use /var/db
   # at runtime.
-  installFlags = "DBDIR=\${TMPDIR}/db SYSCONFDIR=$(out)/etc";
+  installFlags = [ "DBDIR=$(TMPDIR)/db" "SYSCONFDIR=${placeholder "out"}/etc" ];
 
   # Check that the udev plugin got built.
-  postInstall = stdenv.lib.optional (udev != null) "[ -e $out/lib/dhcpcd/dev/udev.so ]";
+  postInstall = lib.optionalString (udev != null) "[ -e ${placeholder "out"}/lib/dhcpcd/dev/udev.so ]";
 
-  meta = with stdenv.lib; {
+  passthru = {
+    inherit enablePrivSep;
+    tests = { inherit (nixosTests.networking.scripted) macvlan dhcpSimple dhcpOneIf; };
+  };
+
+  meta = with lib; {
     description = "A client for the Dynamic Host Configuration Protocol (DHCP)";
-    homepage = https://roy.marples.name/projects/dhcpcd;
+    homepage = "https://roy.marples.name/projects/dhcpcd";
     platforms = platforms.linux;
     license = licenses.bsd2;
-    maintainers = with maintainers; [ eelco fpletz ];
+    maintainers = with maintainers; [ eelco ];
+    mainProgram = "dhcpcd";
   };
 }

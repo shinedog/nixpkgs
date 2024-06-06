@@ -1,9 +1,8 @@
-{ config, lib, pkgs }:
-
-with lib;
+{ config, lib, pkgs, options, ... }:
 
 let
   cfg = config.services.prometheus.exporters.tor;
+  inherit (lib) mkOption types concatStringsSep;
 in
 {
   port = 9130;
@@ -17,7 +16,7 @@ in
     };
 
     torControlPort = mkOption {
-      type = types.int;
+      type = types.port;
       default = 9051;
       description = ''
         Tor control port.
@@ -26,7 +25,6 @@ in
   };
   serviceOpts = {
     serviceConfig = {
-      DynamicUser = true;
       ExecStart = ''
         ${pkgs.prometheus-tor-exporter}/bin/prometheus-tor-exporter \
           -b ${cfg.listenAddress} \

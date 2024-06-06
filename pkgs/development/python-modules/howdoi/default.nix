@@ -1,32 +1,65 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, six
-, requests-cache
-, pygments
-, pyquery
-, python
+{
+  stdenv,
+  lib,
+  appdirs,
+  buildPythonPackage,
+  cachelib,
+  colorama,
+  cssselect,
+  fetchFromGitHub,
+  keep,
+  lxml,
+  pygments,
+  pyquery,
+  requests,
+  rich,
+  pytestCheckHook,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "howdoi";
-  version = "1.1.14";
+  version = "2.0.20";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "b85b8e551bf47ff157392660f0fc5b9eb3eacb78516a5823f7b774ec61955db5";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "gleitz";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-u0k+h7Sp2t/JUnfPqRzDpEA+vNXB7CpyZ/SRvk+B9t0=";
   };
 
-  propagatedBuildInputs = [ six requests-cache pygments pyquery ];
+  propagatedBuildInputs = [
+    appdirs
+    cachelib
+    colorama
+    cssselect
+    keep
+    lxml
+    pygments
+    pyquery
+    requests
+    rich
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   preCheck = ''
     export HOME=$(mktemp -d)
   '';
 
+  disabledTests = [ "test_colorize" ];
+
+  pythonImportsCheck = [ "howdoi" ];
+
   meta = with lib; {
+    broken = stdenv.isDarwin;
+    changelog = "https://github.com/gleitz/howdoi/blob/v${version}/CHANGES.txt";
     description = "Instant coding answers via the command line";
-    homepage = https://pypi.python.org/pypi/howdoi;
+    homepage = "https://github.com/gleitz/howdoi";
     license = licenses.mit;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

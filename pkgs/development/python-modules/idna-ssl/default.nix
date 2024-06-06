@@ -1,8 +1,14 @@
-{ lib, buildPythonPackage, fetchPypi, idna }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  idna,
+}:
 
 buildPythonPackage rec {
   pname = "idna-ssl";
   version = "1.1.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -16,7 +22,7 @@ buildPythonPackage rec {
 
   meta = with lib; {
     description = "Patch ssl.match_hostname for Unicode(idna) domains support";
-    homepage = https://github.com/aio-libs/idna-ssl;
+    homepage = "https://github.com/aio-libs/idna-ssl";
     license = licenses.mit;
     maintainers = with maintainers; [ dotlambda ];
   };

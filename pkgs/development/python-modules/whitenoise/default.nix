@@ -1,20 +1,60 @@
-{ stdenv, fetchPypi, buildPythonPackage }:
+{
+  lib,
+  brotli,
+  buildPythonPackage,
+  django,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "whitenoise";
-  version = "4.1.2";
+  version = "6.6.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "42133ddd5229eeb6a0c9899496bdbe56c292394bf8666da77deeb27454c0456a";
+  disabled = pythonOlder "3.8";
+
+  __darwinAllowLocalNetworking = true;
+
+  src = fetchFromGitHub {
+    owner = "evansd";
+    repo = pname;
+    rev = "refs/tags/${version}";
+    hash = "sha256-Z59GjrOL+BPHqBCirg9T4qBOrjiuBng6Q5lTuLQx9ac=";
   };
 
-  # No tests
-  doCheck = false;
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Radically simplified static file serving for WSGI applications";
-    homepage = http://whitenoise.evans.io/;
+  propagatedBuildInputs = [ brotli ];
+
+  nativeCheckInputs = [
+    django
+    pytestCheckHook
+    requests
+  ];
+
+  disabledTestPaths = [
+    # Don't run Django tests
+    "tests/test_django_whitenoise.py"
+    "tests/test_runserver_nostatic.py"
+    "tests/test_storage.py"
+  ];
+
+  disabledTests = [
+    # Test fails with AssertionError
+    "test_modified"
+  ];
+
+  pythonImportsCheck = [ "whitenoise" ];
+
+  meta = with lib; {
+    description = "Library to serve static file for WSGI applications";
+    homepage = "https://whitenoise.readthedocs.io/";
+    changelog = "https://github.com/evansd/whitenoise/blob/${version}/docs/changelog.rst";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

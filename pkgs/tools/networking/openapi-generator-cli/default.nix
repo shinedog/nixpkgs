@@ -1,34 +1,45 @@
-{ stdenv, fetchurl, jre, makeWrapper }:
+{ callPackage, lib, stdenv, fetchurl, jre, makeWrapper }:
 
-stdenv.mkDerivation rec {
-  version = "3.3.4";
+let this = stdenv.mkDerivation (finalAttrs: {
+  version = "7.6.0";
   pname = "openapi-generator-cli";
 
-  jarfilename = "${pname}-${version}.jar";
+  jarfilename = "${finalAttrs.pname}-${finalAttrs.version}.jar";
 
   nativeBuildInputs = [
     makeWrapper
   ];
 
   src = fetchurl {
-    url = "http://central.maven.org/maven2/org/openapitools/${pname}/${version}/${jarfilename}";
-    sha256 = "24cb04939110cffcdd7062d2f50c6f61159dc3e0ca3b8aecbae6ade53ad3dc8c";
+    url = "mirror://maven/org/openapitools/${finalAttrs.pname}/${finalAttrs.version}/${finalAttrs.jarfilename}";
+    sha256 = "sha256-NQdL3TzfxGvpqQLhGlSj+qPK4eNOtmy9lZ0cgHC719c=";
   };
 
-  phases = [ "installPhase" ];
+  dontUnpack = true;
 
   installPhase = ''
-    install -D "$src" "$out/share/java/${jarfilename}"
+    runHook preInstall
 
-    makeWrapper ${jre}/bin/java $out/bin/${pname} \
-      --add-flags "-jar $out/share/java/${jarfilename}"
+    install -D "$src" "$out/share/java/${finalAttrs.jarfilename}"
+
+    makeWrapper ${jre}/bin/java $out/bin/${finalAttrs.pname} \
+      --add-flags "-jar $out/share/java/${finalAttrs.jarfilename}"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Allows generation of API client libraries (SDK generation), server stubs and documentation automatically given an OpenAPI Spec";
-    homepage = https://github.com/OpenAPITools/openapi-generator;
+    homepage = "https://github.com/OpenAPITools/openapi-generator";
+    changelog = "https://github.com/OpenAPITools/openapi-generator/releases/tag/v${finalAttrs.version}";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.asl20;
-    maintainers = [ maintainers.shou ];
+    maintainers = with maintainers; [ shou ];
+    mainProgram = "openapi-generator-cli";
   };
-}
 
+  passthru.tests.example = callPackage ./example.nix {
+    openapi-generator-cli = this;
+  };
+});
+in this

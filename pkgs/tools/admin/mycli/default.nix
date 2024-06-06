@@ -1,5 +1,6 @@
 { lib
 , python3
+, fetchPypi
 , glibcLocales
 }:
 
@@ -7,36 +8,55 @@ with python3.pkgs;
 
 buildPythonApplication rec {
   pname = "mycli";
-  version = "1.19.0";
+  version = "1.27.2";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0x5vzl4vvirqy03fnjwkamhzrqkknlajamwz1rmbnqh4bfmijh9m";
+    sha256 = "sha256-0R2k5hRkAJbqgGZEPXWUb48oFxTKMKiQZckf3F+VC3I=";
   };
 
-  patches = [ ./fix-tests.patch ];
-
   propagatedBuildInputs = [
-    pymysql configobj sqlparse prompt_toolkit pygments click pycrypto cli-helpers
+    cli-helpers
+    click
+    configobj
+    importlib-resources
+    paramiko
+    prompt-toolkit
+    pyaes
+    pycrypto
+    pygments
+    pymysql
+    pyperclip
+    sqlglot
+    sqlparse
   ];
 
-  checkInputs = [ pytest mock glibcLocales ];
+  nativeCheckInputs = [ pytestCheckHook glibcLocales ];
 
-  checkPhase = ''
+  preCheck = ''
     export HOME=.
     export LC_ALL="en_US.UTF-8"
-
-    py.test
   '';
 
-  meta = {
+  disabledTestPaths = [
+    "mycli/packages/paramiko_stub/__init__.py"
+  ];
+
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "cryptography == 36.0.2" "cryptography"
+  '';
+
+  meta = with lib; {
     inherit version;
     description = "Command-line interface for MySQL";
+    mainProgram = "mycli";
     longDescription = ''
       Rich command-line interface for MySQL with auto-completion and
       syntax highlighting.
     '';
-    homepage = http://mycli.net;
-    license = lib.licenses.bsd3;
+    homepage = "http://mycli.net";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ jojosch ];
   };
 }

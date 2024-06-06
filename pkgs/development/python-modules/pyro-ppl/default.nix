@@ -1,38 +1,81 @@
-{ buildPythonPackage, fetchPypi, lib, pytorch, contextlib2
-, graphviz, networkx, six, opt-einsum, tqdm }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  graphviz,
+  jupyter,
+  matplotlib,
+  networkx,
+  opt-einsum,
+  pandas,
+  pillow,
+  pyro-api,
+  pythonOlder,
+  torch,
+  scikit-learn,
+  seaborn,
+  setuptools,
+  torchvision,
+  tqdm,
+  wget,
+}:
+
 buildPythonPackage rec {
-  version = "0.3.2";
   pname = "pyro-ppl";
+  version = "1.9.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit version pname;
-    sha256 = "f00db7e7747e016479ef65e3f00115d66a4200e59914f016d50e4d3e32bc94b0";
+    hash = "sha256-QfTABRWVaCgPvFEWSJYKmKKxpBACfYvQpDIgrJsQLN8=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
   propagatedBuildInputs = [
-    pytorch
-    contextlib2
-    # TODO(tom): graphviz pulls in a lot of dependencies - make
-    # optional when some time to figure out how.
-    graphviz
+    pyro-api
+    torch
     networkx
-    six
     opt-einsum
     tqdm
   ];
 
-  # pyro not shipping tests do simple smoke test instead
-  checkPhase = ''
-    python -c "import pyro"
-    python -c "import pyro.distributions"
-    python -c "import pyro.infer"
-    python -c "import pyro.optim"
-  '';
+  passthru.optional-dependencies = {
+    extras = [
+      graphviz
+      jupyter
+      # lap
+      matplotlib
+      pandas
+      pillow
+      scikit-learn
+      seaborn
+      torchvision
+      # visdom
+      wget
+    ];
+  };
 
-  meta = {
-    description = "A Python library for probabilistic modeling and inference";
-    homepage = http://pyro.ai;
-    license = lib.licenses.mit;
-    maintainers = with lib.maintainers; [ teh ];
+  # pyro not shipping tests do simple smoke test instead
+  doCheck = false;
+
+  pythonImportsCheck = [
+    "pyro"
+    "pyro.distributions"
+    "pyro.infer"
+    "pyro.optim"
+  ];
+
+  meta = with lib; {
+    description = "Library for probabilistic modeling and inference";
+    homepage = "http://pyro.ai";
+    changelog = "https://github.com/pyro-ppl/pyro/releases/tag/${version}";
+    license = licenses.asl20;
+    maintainers = with maintainers; [
+      teh
+      georgewhewell
+    ];
   };
 }

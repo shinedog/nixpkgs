@@ -1,20 +1,22 @@
-{ stdenv, fetchgit, perl, makeWrapper, makeDesktopItem
-, which, perlPackages, boost
+{ lib, stdenv, fetchFromGitHub, fetchpatch, perl, makeWrapper
+, makeDesktopItem, which, perlPackages, boost, wrapGAppsHook3
 }:
 
 stdenv.mkDerivation rec {
   version = "1.3.0";
-  name = "slic3r-${version}";
+  pname = "slic3r";
 
-  src = fetchgit {
-    url = "git://github.com/alexrj/Slic3r";
+  src = fetchFromGitHub {
+    owner = "alexrj";
+    repo = "Slic3r";
     rev = version;
-    sha256 = "1pg4jxzb7f58ls5s8mygza8kqdap2c50kwlsdkf28bz1xi611zbi";
+    sha256 = "sha256-cf0QTOzhLyTcbJryCQoTVzU8kfrPV6SLpqi4s36X5N0=";
   };
 
+  nativeBuildInputs = [ makeWrapper which wrapGAppsHook3 ];
   buildInputs =
   [boost] ++
-  (with perlPackages; [ perl makeWrapper which
+  (with perlPackages; [ perl
     EncodeLocale MathClipper ExtUtilsXSpp
     MathConvexHullMonotoneChain MathGeometryVoronoi MathPlanePath Moo
     IOStringy ClassXSAccessor Wx GrowlGNTP NetDBus ImportInto XMLSAX
@@ -30,7 +32,7 @@ stdenv.mkDerivation rec {
     comment = "G-code generator for 3D printers";
     desktopName = "Slic3r";
     genericName = "3D printer tool";
-    categories = "Application;Development;";
+    categories = [ "Development" ];
   };
 
   prePatch = ''
@@ -39,6 +41,21 @@ stdenv.mkDerivation rec {
     # one in the kernel, we use that one instead.
     sed -i 's|"/usr/include/asm-generic/ioctls.h"|<asm-generic/ioctls.h>|g' xs/src/libslic3r/GCodeSender.cpp
   '';
+
+  patches = [
+    (fetchpatch {
+      url = "https://web.archive.org/web/20230606220657if_/https://sources.debian.org/data/main/s/slic3r/1.3.0%2Bdfsg1-5/debian/patches/Drop-error-admesh-works-correctly-on-little-endian-machin.patch";
+      hash = "sha256-+F94jzMFBdI++SKgyEZTBaHFVbjxWwgJa8YVbpK0euI=";
+    })
+    (fetchpatch {
+      url = "https://web.archive.org/web/20230606220036if_/https://sources.debian.org/data/main/s/slic3r/1.3.0+dfsg1-5/debian/patches/0006-Fix-FTBFS-with-Boost-1.71.patch";
+      hash = "sha256-4jvNccttig5YI1hXSANAWxVz6C4+kowlacMXVCpFgOo=";
+    })
+    (fetchpatch {
+      url = "https://web.archive.org/web/20230606220054if_/https://sources.debian.org/data/main/s/slic3r/1.3.0+dfsg1-5/debian/patches/fix_boost_174.patch";
+      hash = "sha256-aSmxc2htmrla9l/DIRWeKdBW0LTV96wMUZSLLNjgbzY=";
+    })
+  ];
 
   buildPhase = ''
     export SLIC3R_NO_AUTO=true
@@ -70,16 +87,17 @@ stdenv.mkDerivation rec {
     cp "$desktopItem"/share/applications/* "$out/share/applications/"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "G-code generator for 3D printers";
+    mainProgram = "slic3r";
     longDescription = ''
       Slic3r is the tool you need to convert a digital 3D model into printing
       instructions for your 3D printer. It cuts the model into horizontal
       slices (layers), generates toolpaths to fill them and calculates the
       amount of material to be extruded.'';
-    homepage = http://slic3r.org/;
-    license = licenses.agpl3;
+    homepage = "https://slic3r.org/";
+    license = licenses.agpl3Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ bjornfor the-kenny ];
+    maintainers = with maintainers; [ bjornfor ];
   };
 }

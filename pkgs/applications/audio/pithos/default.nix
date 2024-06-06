@@ -1,39 +1,41 @@
-{ fetchFromGitHub, stdenv, pythonPackages, gtk3, gobject-introspection, libnotify
-, gst_all_1, wrapGAppsHook }:
+{ stdenv, lib, fetchFromGitHub, meson, ninja, pkg-config, appstream-glib
+, wrapGAppsHook3, pythonPackages, gtk3, gnome, gobject-introspection
+, libnotify, libsecret, gst_all_1 }:
 
 pythonPackages.buildPythonApplication rec {
   pname = "pithos";
-  version = "1.1.2";
+  version = "1.6.2";
 
   src = fetchFromGitHub {
     owner = pname;
     repo  = pname;
-    rev = version;
-    sha256 = "0zk9clfawsnwmgjbk7y5d526ksxd1pkh09ln6sb06v4ygaiifcxp";
+    rev = "refs/tags/${version}";
+    hash = "sha256-3j6IoMi30BQ8WHK4BxbsW+/3XZx7rBFd47EBENa2GiQ=";
   };
 
-  # No tests in repo
-  doCheck = false;
+  format = "other";
 
   postPatch = ''
-    substituteInPlace setup.py --replace "/usr/share" "$out/share"
+    chmod +x meson_post_install.py
+    patchShebangs meson_post_install.py
   '';
 
-  postInstall = ''
-    mkdir -p $out/share/applications
-    cp -v data/pithos.desktop $out/share/applications
-  '';
+  nativeBuildInputs = [ meson ninja pkg-config appstream-glib wrapGAppsHook3 ];
 
-  buildInputs = [ wrapGAppsHook ];
+  propagatedNativeBuildInputs = [
+    gobject-introspection
+  ];
 
   propagatedBuildInputs =
-    [ gtk3 gobject-introspection libnotify ] ++
+    [ gtk3 gobject-introspection libnotify libsecret gnome.adwaita-icon-theme ] ++
     (with gst_all_1; [ gstreamer gst-plugins-base gst-plugins-good gst-plugins-ugly gst-plugins-bad ]) ++
     (with pythonPackages; [ pygobject3 pylast ]);
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "Pandora Internet Radio player for GNOME";
-    homepage = https://pithos.github.io/;
+    mainProgram = "pithos";
+    homepage = "https://pithos.github.io/";
     license = licenses.gpl3;
     maintainers = with maintainers; [ obadz ];
   };

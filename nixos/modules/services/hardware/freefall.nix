@@ -18,17 +18,10 @@ in {
       '';
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.freefall;
-      defaultText = "pkgs.freefall";
-      description = ''
-        freefall derivation to use.
-      '';
-    };
+    package = mkPackageOption pkgs "freefall" { };
 
     devices = mkOption {
-      type = types.listOf types.string;
+      type = types.listOf types.str;
       default = [ "/dev/sda" ];
       description = ''
         Device paths to all internal spinning hard drives.

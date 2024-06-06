@@ -1,27 +1,33 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+}:
 
-stdenv.mkDerivation rec {
-  name = "QuadProgpp-${version}";
-  version = "4b6bd65f09fbff99c172a86d6e96ca74449b323f";
+stdenv.mkDerivation {
+  pname = "quadprogpp";
+  version = "unstable-2023-01-20";
 
   src = fetchFromGitHub {
     owner = "liuq";
     repo = "QuadProgpp";
-    rev = version;
-    sha256 = "02r0dlk2yjpafknvm945vbgs4sl26w2i1gw3pllar9hi364y8hnx";
+    rev = "4c51d91deb5af251957edf9454bfb74279a4544e";
+    hash = "sha256-uozwuTAOPsRwYM9KyG3V0hwcmaPpfZPID9Wdd4olsvY=";
   };
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ ];
+  nativeBuildInputs = [
+    cmake
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/liuq/QuadProgpp;
-    license = licenses.mit;
-    description = ''
-      A C++ library for Quadratic Programming which implements the
-      Goldfarb-Idnani active-set dual method.
+  meta = with lib; {
+    description = "A C++ library for Quadratic Programming";
+    longDescription = ''
+      QuadProg++ is a C++ library for Quadratic Programming which implements
+      the Goldfarb-Idnani active-set dual method.
     '';
-    maintainers = with maintainers; [ fuuzetsu ];
-    platforms = with platforms; linux;
+    homepage = "https://github.com/liuq/QuadProgpp";
+    license = licenses.mit;
+    maintainers = with maintainers; [ wegank ];
+    platforms = platforms.all;
   };
 }

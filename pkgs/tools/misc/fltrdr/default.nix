@@ -1,27 +1,26 @@
-{ stdenv
+{ lib, stdenv
 , fetchFromGitHub
 , cmake
-, icu
+, icu, openssl
 }:
 
 stdenv.mkDerivation rec {
-  name = "fltrdr-${version}";
-  version = "0.2.1";
+  pname = "fltrdr";
+  version = "0.3.1";
 
   src = fetchFromGitHub {
     repo   = "fltrdr";
     owner  = "octobanana";
-    rev    = "${version}";
-    sha256 = "0hj7pwb93l4ahykmmr0665nq50jvwdq0aiaciz82225aw1cq939w";
+    rev    = version;
+    sha256 = "1vpci7vqzcpdd21zgigyz38k77r9fc81dmiwsvfr8w7gad5sg6sj";
   };
 
   nativeBuildInputs = [ cmake ];
-  buildInputs       = [ icu ];
 
-  enableParallelBuilding = true;
+  buildInputs = [ icu openssl ];
 
-  meta = with stdenv.lib; {
-    homepage = https://octobanana.com/software/fltrdr;
+  meta = with lib; {
+    homepage = "https://octobanana.com/software/fltrdr";
     description = "A TUI text reader for the terminal";
 
     longDescription = ''
@@ -37,6 +36,6 @@ stdenv.mkDerivation rec {
     platforms   = platforms.linux; # can only test linux
     license     = licenses.mit;
     maintainers = [ maintainers.matthiasbeyer ];
+    mainProgram = "fltrdr";
   };
 }
-

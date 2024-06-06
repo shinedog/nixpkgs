@@ -4,11 +4,7 @@
 }:
 
 mkDerivation {
-  name = "bluez-qt";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
+  pname = "bluez-qt";
   nativeBuildInputs = [ extra-cmake-modules ];
   buildInputs = [ qtdeclarative ];
   propagatedBuildInputs = [ qtbase ];
@@ -16,4 +12,5 @@ mkDerivation {
     substituteInPlace CMakeLists.txt \
       --replace /lib/udev/rules.d "$bin/lib/udev/rules.d"
   '';
+  meta.platforms = lib.platforms.linux;
 }

@@ -1,18 +1,17 @@
 { qtModule, stdenv, lib, fetchurl
 , qtbase, qtdeclarative, qtlocation, qtmultimedia, qtsensors, qtwebchannel
-, fontconfig, gdk_pixbuf, gtk2, libwebp, libxml2, libxslt
+, fontconfig, libwebp, libxml2, libxslt
 , sqlite, systemd, glib, gst_all_1, cmake
-, bison2, flex, gdb, gperf, perl, pkgconfig, python2, ruby
-, darwin
-, flashplayerFix ? false
+, bison, flex, gdb, gperf, perl, pkg-config, python3, ruby
+, ICU, OpenGL
 }:
 
 let
-  inherit (lib) optional optionals getDev getLib;
   hyphen = stdenv.mkDerivation rec {
-    name = "hyphen-2.8.8";
+    pname = "hyphen";
+    version = "2.8.8";
     src = fetchurl {
-      url = "http://dev-www.libreoffice.org/src/5ade6ae2a99bc1e9e57031ca88d36dad-${name}.tar.gz";
+      url = "http://dev-www.libreoffice.org/src/5ade6ae2a99bc1e9e57031ca88d36dad-hyphen-${version}.tar.gz";
       sha256 = "304636d4eccd81a14b6914d07b84c79ebb815288c76fe027b9ebff6ff24d5705";
     };
     postPatch = ''
@@ -20,52 +19,45 @@ let
     '';
     buildInputs = [ perl ];
   };
-  usingAnnulenWebkitFork = lib.versionAtLeast qtbase.version "5.11.0";
 in
 qtModule {
-  name = "qtwebkit";
-  qtInputs = [ qtbase qtdeclarative qtlocation qtsensors ]
-    ++ optional (stdenv.isDarwin && lib.versionAtLeast qtbase.version "5.9.0") qtmultimedia
-    ++ optional usingAnnulenWebkitFork qtwebchannel;
-  buildInputs = [ fontconfig libwebp libxml2 libxslt sqlite glib gst_all_1.gstreamer gst_all_1.gst-plugins-base ]
-    ++ optionals (stdenv.isDarwin) (with darwin; with apple_sdk.frameworks; [ cf-private ICU OpenGL ])
-    ++ optional usingAnnulenWebkitFork hyphen;
-  nativeBuildInputs = [
-    bison2 flex gdb gperf perl pkgconfig python2 ruby
-  ] ++ optional usingAnnulenWebkitFork cmake;
+  pname = "qtwebkit";
+  propagatedBuildInputs = [ qtbase qtdeclarative qtlocation qtsensors qtwebchannel ]
+    ++ lib.optional stdenv.isDarwin qtmultimedia;
+  buildInputs = [ fontconfig libwebp libxml2 libxslt sqlite glib gst_all_1.gstreamer gst_all_1.gst-plugins-base hyphen ]
+    ++ lib.optionals stdenv.isDarwin [ ICU OpenGL ];
+  nativeBuildInputs = [ bison flex gdb gperf perl pkg-config python3 ruby cmake ];
 
-  cmakeFlags = optionals usingAnnulenWebkitFork ([ "-DPORT=Qt" ]
-    ++ optionals stdenv.isDarwin [
-      "-DQt5Multimedia_DIR=${getDev qtmultimedia}/lib/cmake/Qt5Multimedia"
-      "-DQt5MultimediaWidgets_DIR=${getDev qtmultimedia}/lib/cmake/Qt5MultimediaWidgets"
+  cmakeFlags = [ "-DPORT=Qt" ]
+    ++ lib.optionals stdenv.isDarwin [
+      "-DQt5Multimedia_DIR=${lib.getDev qtmultimedia}/lib/cmake/Qt5Multimedia"
+      "-DQt5MultimediaWidgets_DIR=${lib.getDev qtmultimedia}/lib/cmake/Qt5MultimediaWidgets"
       "-DMACOS_FORCE_SYSTEM_XML_LIBRARIES=OFF"
-    ]);
+    ];
 
-  # QtWebKit overrides qmake's default_pre and default_post features,
-  # so its custom qmake files must be found first at the front of QMAKEPATH.
-  preConfigure = stdenv.lib.optionalString (!usingAnnulenWebkitFork) ''
-    QMAKEPATH="$PWD/Tools/qmake''${QMAKEPATH:+:}$QMAKEPATH"
-    fixQtBuiltinPaths . '*.pr?'
-    # Fix hydra's "Log limit exceeded"
-    export qmakeFlags="$qmakeFlags CONFIG+=silent"
-  '';
-
-  NIX_CFLAGS_COMPILE =
+  env.NIX_CFLAGS_COMPILE = toString ([
     # with gcc7 this warning blows the log over Hydra's limit
-    [ "-Wno-expansion-to-defined" ]
-    # with clang this warning blows the log over Hydra's limit
-    ++ optional stdenv.isDarwin "-Wno-inconsistent-missing-override"
-    ++ optionals flashplayerFix
-      [
-        ''-DNIXPKGS_LIBGTK2="${getLib gtk2}/lib/libgtk-x11-2.0"''
-        ''-DNIXPKGS_LIBGDK2="${getLib gdk_pixbuf}/lib/libgdk-x11-2.0"''
-      ]
-    ++ optional (!stdenv.isDarwin) ''-DNIXPKGS_LIBUDEV="${getLib systemd}/lib/libudev"'';
+    "-Wno-expansion-to-defined"
+  ]
+  # with gcc8, -Wclass-memaccess became part of -Wall and this too exceeds the logging limit
+  ++ lib.optional stdenv.cc.isGNU "-Wno-class-memaccess"
+  # with clang this warning blows the log over Hydra's limit
+  ++ lib.optional stdenv.isDarwin "-Wno-inconsistent-missing-override"
+  ++ lib.optional (!stdenv.isDarwin) ''-DNIXPKGS_LIBUDEV="${lib.getLib systemd}/lib/libudev"'');
 
   doCheck = false; # fails 13 out of 13 tests (ctest)
 
-  # Hack to avoid TMPDIR in RPATHs.
-  preFixup = ''rm -rf "$(pwd)" && mkdir "$(pwd)" '';
+  # remove forbidden references to $TMPDIR
+  preFixup = lib.optionalString stdenv.isLinux ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out"/libexec/*
+  '';
 
-  meta.maintainers = with stdenv.lib.maintainers; [ abbradar periklis ];
+  enableParallelBuilding = true;
+
+  meta = {
+    maintainers = with lib.maintainers; [ abbradar periklis ];
+    knownVulnerabilities = [
+      "QtWebkit upstream is unmaintained and receives no security updates, see https://blogs.gnome.org/mcatanzaro/2022/11/04/stop-using-qtwebkit/"
+    ];
+  };
 }

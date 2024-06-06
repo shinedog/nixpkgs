@@ -1,24 +1,33 @@
-{ stdenv, fetchurl, perl, gd, rrdtool }:
+{ lib, stdenv, fetchurl, perl, gd, rrdtool }:
 
+let
+  perlWithPkgs = perl.withPackages (pp: with pp;[
+    Socket6
+    IOSocketINET6
+  ]);
+in
 stdenv.mkDerivation rec {
-
-  version = "2.17.7";
-  name = "mrtg-${version}";
+  pname = "mrtg";
+  version = "2.17.10";
 
   src = fetchurl {
-    url = "https://oss.oetiker.ch/mrtg/pub/${name}.tar.gz";
-    sha256 = "1hrjqfi290i936nblwpfzjn6v8d8p69frcrvml206nxiiwkcp54v";
+    url = "https://oss.oetiker.ch/mrtg/pub/${pname}-${version}.tar.gz";
+    sha256 = "sha256-x/EcteIXpQDYfuO10mxYqGUu28DTKRaIu3krAQ+uQ6w=";
   };
 
   buildInputs = [
-    perl gd rrdtool
+    # add support for ipv6 snmp:
+    # https://github.com/oetiker/mrtg/blob/433ebfa5fc043971b46a5cd975fb642c76e3e49d/src/bin/mrtg#L331-L341
+    perlWithPkgs
+    gd
+    rrdtool
   ];
 
-  meta = {
+  meta = with lib; {
     description = "The Multi Router Traffic Grapher";
-    homepage = https://oss.oetiker.ch/mrtg/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.robberer ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://oss.oetiker.ch/mrtg/";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ robberer ];
+    platforms = platforms.unix;
   };
 }

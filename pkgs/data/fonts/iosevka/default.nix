@@ -1,103 +1,145 @@
-{
-  stdenv, lib,
-  fetchFromGitHub, fetchurl,
-  nodejs, ttfautohint-nox, otfcc,
-
+{ stdenv
+, lib
+, buildNpmPackage
+, fetchFromGitHub
+, darwin
+, remarshal
+, ttfautohint-nox
   # Custom font set options.
-  # See https://github.com/be5invis/Iosevka#build-your-own-style
-  design ? [], upright ? [], italic ? [], oblique ? [],
-  family ? null, weights ? [],
+  # See https://typeof.net/Iosevka/customizer
+  # Can be a raw TOML string, or a Nix attrset.
+
+  # Ex:
+  # privateBuildPlan = ''
+  #   [buildPlans.iosevka-custom]
+  #   family = "Iosevka Custom"
+  #   spacing = "normal"
+  #   serifs = "sans"
+  #
+  #   [buildPlans.iosevka-custom.variants.design]
+  #   capital-j = "serifless"
+  #
+  #   [buildPlans.iosevka-custom.variants.italic]
+  #   i = "tailed"
+  # '';
+
+  # Or:
+  # privateBuildPlan = {
+  #   family = "Iosevka Custom";
+  #   spacing = "normal";
+  #   serifs = "sans";
+  #
+  #   variants = {
+  #     design.capital-j = "serifless";
+  #     italic.i = "tailed";
+  #   };
+  # }
+, privateBuildPlan ? null
+  # Extra parameters. Can be used for ligature mapping.
+  # It must be a raw TOML string.
+
+  # Ex:
+  # extraParameters = ''
+  #   [[iosevka.compLig]]
+  #   unicode = 57808 # 0xe1d0
+  #   featureTag = 'XHS0'
+  #   sequence = "+>"
+  # '';
+, extraParameters ? null
   # Custom font set name. Required if any custom settings above.
-  set ? null
+, set ? null
 }:
 
-assert (design != []) -> set != null;
-assert (upright != []) -> set != null;
-assert (italic != []) -> set != null;
-assert (oblique != []) -> set != null;
-assert (family != null) -> set != null;
-assert (weights != []) -> set != null;
+assert (privateBuildPlan != null) -> set != null;
+assert (extraParameters != null) -> set != null;
 
-let
-  installPackageLock = import ./package-lock.nix { inherit fetchurl lib; };
-in
+buildNpmPackage rec {
+  pname = "Iosevka${toString set}";
+  version = "30.1.1";
 
-let pname = if set != null then "iosevka-${set}" else "iosevka"; in
-
-let
-  version = "1.14.3";
-  name = "${pname}-${version}";
   src = fetchFromGitHub {
     owner = "be5invis";
-    repo ="Iosevka";
+    repo = "iosevka";
     rev = "v${version}";
-    sha256 = "0ba8hwxi88bp2jb9xfhk95nnlv8ykl74cv62xr4ybzm3b8ahpwqf";
+    hash = "sha256-PVPr/mI13UDJfXy+vmj3DfZ1vkcE7r7YoWTeXokJz50=";
   };
-in
 
-with lib;
-let unwords = concatStringsSep " "; in
+  npmDepsHash = "sha256-/MWONDfq+2TqwcOJFnjLatSdGvMqcgMjJnuuAduWJ14=";
 
-let
-  param = name: options:
-    if options != [] then "${name}='${unwords options}'" else null;
-  config = unwords (lib.filter (x: x != null) [
-    (param "design" design)
-    (param "upright" upright)
-    (param "italic" italic)
-    (param "oblique" oblique)
-    (if family != null then "family='${family}'" else null)
-    (param "weights" weights)
-  ]);
-  custom = design != [] || upright != [] || italic != [] || oblique != []
-    || family != null || weights != [];
-in
+  nativeBuildInputs = [
+    remarshal
+    ttfautohint-nox
+  ] ++ lib.optionals stdenv.isDarwin [
+    # libtool
+    darwin.cctools
+  ];
 
-stdenv.mkDerivation {
-  inherit name pname version src;
+  buildPlan =
+    if builtins.isAttrs privateBuildPlan then
+      builtins.toJSON { buildPlans.${pname} = privateBuildPlan; }
+    else
+      privateBuildPlan;
 
-  nativeBuildInputs = [ nodejs ttfautohint-nox otfcc ];
-
-  passAsFile = [ "installPackageLock" ];
-  installPackageLock = installPackageLock ./package-lock.json;
-
-  preConfigure = ''
-    HOME=$TMPDIR
-    source "$installPackageLockPath";
-    npm --offline rebuild
-  '';
+  inherit extraParameters;
+  passAsFile = [ "extraParameters" ] ++ lib.optionals
+    (
+      !(builtins.isString privateBuildPlan
+        && lib.hasPrefix builtins.storeDir privateBuildPlan)
+    ) [ "buildPlan" ];
 
   configurePhase = ''
-    runHook preConfigure
-
-    ${optionalString custom ''make custom-config set=${set} ${config}''}
-
-    runHook postConfigure
+      runHook preConfigure
+      ${lib.optionalString (builtins.isAttrs privateBuildPlan) ''
+        remarshal -i "$buildPlanPath" -o private-build-plans.toml -if json -of toml
+      ''}
+      ${lib.optionalString (builtins.isString privateBuildPlan
+    && (!lib.hasPrefix builtins.storeDir privateBuildPlan)) ''
+          cp "$buildPlanPath" private-build-plans.toml
+        ''}
+      ${lib.optionalString (builtins.isString privateBuildPlan
+    && (lib.hasPrefix builtins.storeDir privateBuildPlan)) ''
+          cp "$buildPlan" private-build-plans.toml
+        ''}
+      ${lib.optionalString (extraParameters != null) ''
+        echo -e "\n" >> params/parameters.toml
+        cat "$extraParametersPath" >> params/parameters.toml
+      ''}
+      runHook postConfigure
   '';
 
-  makeFlags = lib.optionals custom [ "custom" "set=${set}" ];
+  buildPhase = ''
+    export HOME=$TMPDIR
+    runHook preBuild
+    npm run build --no-update-notifier --targets ttf::$pname -- --jCmd=$NIX_BUILD_CORES --verbose=9
+    runHook postBuild
+  '';
 
   installPhase = ''
     runHook preInstall
-
-    fontdir="$out/share/fonts/$pname"
+    fontdir="$out/share/fonts/truetype"
     install -d "$fontdir"
-    install "dist/$pname/ttf"/* "$fontdir"
-
+    install "dist/$pname/TTF"/* "$fontdir"
     runHook postInstall
   '';
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://be5invis.github.io/Iosevka/;
+  meta = with lib; {
+    homepage = "https://typeof.net/Iosevka/";
     downloadPage = "https://github.com/be5invis/Iosevka/releases";
-    description = ''
-      Slender monospace sans-serif and slab-serif typeface inspired by Pragmata
-      Pro, M+ and PF DIN Mono, designed to be the ideal font for programming.
+    description = "Versatile typeface for code, from code.";
+    longDescription = ''
+      Iosevka is an open-source, sans-serif + slab-serif, monospace +
+      quasi‑proportional typeface family, designed for writing code, using in
+      terminals, and preparing technical documents.
     '';
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = with maintainers; [ cstrahan jfrankenau ttuegel ];
+    maintainers = with maintainers; [
+      ttuegel
+      rileyinman
+      AluisioASG
+      lunik1
+    ];
   };
 }

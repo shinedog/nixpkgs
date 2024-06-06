@@ -1,34 +1,62 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, slicerator
-, scikitimage
-, six
-, numpy
-, tifffile
-, pytest
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  imageio,
+  numpy,
+  pytestCheckHook,
+  pythonOlder,
+  scikit-image,
+  slicerator,
 }:
 
 buildPythonPackage rec {
-  version = "0.4.1";
-  pname = "PIMS";
+  pname = "pims";
+  version = "0.6.1";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "6a53a155e900b44e71127a1e1fccbfbaed7eec3c2b52497c40c23a05f334c9dd";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "soft-matter";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-QdllA1QTSJ8vWaSJ0XoUanX53sb4RaOmdXBCFEsoWMU=";
   };
 
-  checkInputs = [ nose ];
-  propagatedBuildInputs = [ slicerator six numpy tifffile scikitimage ];
+  propagatedBuildInputs = [
+    slicerator
+    imageio
+    numpy
+  ];
 
-  # not everything packaged with pypi release
-  doCheck = false;
+  nativeCheckInputs = [
+    pytestCheckHook
+    scikit-image
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/soft-matter/pims;
-    description = "Python Image Sequence: Load video and sequential images in many formats with a simple, consistent interface";
-    license = licenses.bsdOriginal;
-    maintainers = [ maintainers.costrouc ];
+  pythonImportsCheck = [ "pims" ];
+
+  pytestFlagsArray = [
+    "-W"
+    "ignore::Warning"
+  ];
+
+  disabledTests = [
+    # NotImplementedError: Do not know how to deal with infinite readers
+    "TestVideo_ImageIO"
+  ];
+
+  disabledTestPaths = [
+    # AssertionError: Tuples differ: (377, 505, 4) != (384, 512, 4)
+    "pims/tests/test_display.py"
+  ];
+
+  meta = with lib; {
+    description = "Module to load video and sequential images in various formats";
+    homepage = "https://github.com/soft-matter/pims";
+    changelog = "https://github.com/soft-matter/pims/releases/tag/v${version}";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

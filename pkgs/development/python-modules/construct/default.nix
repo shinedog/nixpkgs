@@ -1,31 +1,62 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub
-, six, pytest, arrow
+{
+  lib,
+  stdenv,
+  arrow,
+  buildPythonPackage,
+  cloudpickle,
+  cryptography,
+  fetchFromGitHub,
+  lz4,
+  numpy,
+  pytestCheckHook,
+  pythonOlder,
+  ruamel-yaml,
+  setuptools,
 }:
 
 buildPythonPackage rec {
-  pname   = "construct";
-  version = "2.9.45";
+  pname = "construct";
+  version = "2.10.70";
+  pyproject = true;
+
+  disabled = pythonOlder "3.6";
 
   src = fetchFromGitHub {
-    owner  = pname;
-    repo   = pname;
-    rev    = "v${version}";
-    sha256 = "0ig66xrzswpkhhmw123p2nvr15a9lxz54a1fmycfdh09327c1d3y";
+    owner = "construct";
+    repo = "construct";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-5otjjIyje0+z/Y/C2ivmu08PNm0oJcSSvZkQfGxHDuQ=";
   };
 
-  propagatedBuildInputs = [ six ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ pytest arrow ];
+  propagatedBuildInputs = [
+    # Not an explicit dependency, but it's imported by an entrypoint
+    lz4
+  ];
 
-  # TODO: figure out missing dependencies
-  doCheck = false;
-  checkPhase = ''
-    py.test -k 'not test_numpy and not test_gallery' tests
-  '';
+  passthru.optional-dependencies = {
+    extras = [
+      arrow
+      cloudpickle
+      cryptography
+      numpy
+      ruamel-yaml
+    ];
+  };
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+  pythonImportsCheck = [ "construct" ];
+
+  disabledTests = [ "test_benchmarks" ] ++ lib.optionals stdenv.isDarwin [ "test_multiprocessing" ];
+
+  meta = with lib; {
     description = "Powerful declarative parser (and builder) for binary data";
-    homepage = https://construct.readthedocs.org/;
+    homepage = "https://construct.readthedocs.org/";
+    changelog = "https://github.com/construct/construct/releases/tag/v${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ bjornfor ];
   };

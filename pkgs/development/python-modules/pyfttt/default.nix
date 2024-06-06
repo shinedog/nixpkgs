@@ -1,9 +1,14 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, requests }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  requests,
+}:
 
 buildPythonPackage rec {
   pname = "pyfttt";
   version = "0.3.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,9 +20,10 @@ buildPythonPackage rec {
   # tests need a server to run against
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Package for sending events to the IFTTT Webhooks Channel";
-    homepage = https://github.com/briandconnelly/pyfttt;
+    mainProgram = "pyfttt";
+    homepage = "https://github.com/briandconnelly/pyfttt";
     maintainers = with maintainers; [ peterhoeg ];
     license = licenses.bsd2;
   };

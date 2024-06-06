@@ -1,35 +1,53 @@
-{ stdenv, fetchurl, perl }:
+{ lib, stdenv, perl, fetchFromGitHub, fetchpatch, makeWrapper, nix-update-script, testers }:
 
-stdenv.mkDerivation rec{
-  version = "3.03+dfsg2";
-  name = "cowsay-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "cowsay";
+  version = "3.7.0";
 
-  src = fetchurl {
-    url = "http://http.debian.net/debian/pool/main/c/cowsay/cowsay_${version}.orig.tar.gz";
-    sha256 = "0ghqnkp8njc3wyqx4mlg0qv0v0pc996x2nbyhqhz66bbgmf9d29v";
+  outputs = [ "out" "man" ];
+
+  src = fetchFromGitHub {
+    owner = "cowsay-org";
+    repo = "cowsay";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-t1grmCPQhRgwS64RjEwkK61F2qxxMBKuv0/DzBTnL3s=";
   };
 
+  patches = [
+    # Install cowthink as a symlink, not a copy
+    # See https://github.com/cowsay-org/cowsay/pull/18
+    (fetchpatch {
+      url = "https://github.com/cowsay-org/cowsay/commit/9e129fa0933cf1837672c97f5ae5ad4a1a10ec11.patch";
+      hash = "sha256-zAYEUAM5MkyMONAl5BXj8hBHRalQVAOdpxgiM+Ewmlw=";
+    })
+  ];
+
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ perl ];
 
-  postBuild = ''
-    substituteInPlace cowsay --replace "%BANGPERL%" "!${perl}/bin/perl" \
-      --replace "%PREFIX%" "$out"
+  postInstall = ''
+    wrapProgram $out/bin/cowsay \
+      --suffix COWPATH : $out/share/cowsay/cows
   '';
 
-  installPhase = ''
-    mkdir -p $out/{bin,man/man1,share/cows}
-    install -m755 cowsay $out/bin/cowsay
-    ln -s cowsay $out/bin/cowthink
-    install -m644 cowsay.1 $out/man/man1/cowsay.1
-    ln -s cowsay.1 $out/man/man1/cowthink.1
-    install -m644 cows/* -t $out/share/cows/
-  '';
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A program which generates ASCII pictures of a cow with a message";
-    homepage = https://en.wikipedia.org/wiki/Cowsay;
-    license = licenses.gpl1;
-    platforms = platforms.all;
-    maintainers = [ maintainers.rob ];
+  passthru = {
+    updateScript = nix-update-script { };
+    tests.version = testers.testVersion {
+      package = finalAttrs.finalPackage;
+      command = "cowsay --version";
+    };
   };
-}
+
+  meta = with lib; {
+    description = "A program which generates ASCII pictures of a cow with a message";
+    homepage = "https://cowsay.diamonds";
+    changelog = "https://github.com/cowsay-org/cowsay/releases/tag/v${finalAttrs.version}";
+    license = licenses.gpl3Only;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ rob anthonyroussel ];
+  };
+})

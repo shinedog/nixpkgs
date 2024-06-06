@@ -1,24 +1,42 @@
-{ lib, buildGoPackage, fetchFromGitHub, ... }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, installShellFiles
+}:
 
-let version = "0.9.1"; in
-
-buildGoPackage {
-  name = "kubecfg-${version}";
+buildGoModule rec {
+  pname = "kubecfg";
+  version = "0.34.3";
 
   src = fetchFromGitHub {
-    owner = "ksonnet";
+    owner = "kubecfg";
     repo = "kubecfg";
     rev = "v${version}";
-    sha256 = "010k33arxa4spaq923iazsisxgsaj8c7w4z250y9yrch8xxd74bi";
+    hash = "sha256-zy7SuJ5ChR09CvZ362z6ZDRd/eIyqg06fpv+JP7C4T0=";
   };
 
-  goPackagePath = "github.com/ksonnet/kubecfg";
+  vendorHash = "sha256-TDXZy2I1sxMmtHiE5l9wgW1kJolFYsV5Otv3xfoErWM=";
 
-  meta = {
+  ldflags = [
+    "-s"
+    "-w"
+    "-X main.version=v${version}"
+  ];
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  postInstall = ''
+    installShellCompletion --cmd kubecfg \
+      --bash <($out/bin/kubecfg completion --shell=bash) \
+      --zsh  <($out/bin/kubecfg completion --shell=zsh)
+  '';
+
+  meta = with lib; {
     description = "A tool for managing Kubernetes resources as code";
-    homepage = https://github.com/ksonnet/kubecfg;
-    license = lib.licenses.asl20;
-    maintainers = with lib.maintainers; [ benley ];
-    platforms = lib.platforms.unix;
+    mainProgram = "kubecfg";
+    homepage = "https://github.com/kubecfg/kubecfg";
+    changelog = "https://github.com/kubecfg/kubecfg/releases/tag/v${version}";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ benley qjoly ];
   };
 }

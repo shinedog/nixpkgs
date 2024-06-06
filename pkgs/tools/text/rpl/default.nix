@@ -1,24 +1,37 @@
-{ stdenv, fetchFromGitHub, pythonPackages }:
+{ lib, fetchPypi, python3Packages }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "${pname}-${version}";
+python3Packages.buildPythonApplication rec {
   pname = "rpl";
-  version = "1.5.7";
+  version = "1.15.6";
 
-  # Tests not included in pip package.
-  doCheck = false;
+  pyproject = true;
 
-  src = fetchFromGitHub {
-    owner  = "kcoyner";
-    repo   = "rpl";
-    rev    = "v${version}";
-    sha256 = "1xhpgcmq91ivy9ijfyz5ilg51m7fz8ar2077r7gq246j8gbf8ggr";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-4vUnFfxiPvyg9gtwiQE3nHZBnqBtBVwhM3KQzkjzw/I=";
   };
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    python3Packages.setuptools
+  ];
+
+  nativeCheckInputs = [
+    python3Packages.pytest-datafiles
+    python3Packages.pytestCheckHook
+  ];
+
+  propagatedBuildInputs = [
+    python3Packages.argparse-manpage
+    python3Packages.chainstream
+    python3Packages.chardet
+    python3Packages.regex
+  ];
+
+  meta = with lib; {
     description = "Replace strings in files";
-    homepage    = "https://github.com/kcoyner/rpl";
-    license     = licenses.gpl2;
-    maintainers = with maintainers; [ teto ];
+    mainProgram = "rpl";
+    homepage = "https://github.com/rrthomas/rpl";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ cbley ];
   };
 }

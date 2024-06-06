@@ -1,23 +1,38 @@
-{ stdenv, fetchurl, readline }:
+{ lib
+, stdenv
+, fetchurl
+, fixDarwinDylibNames
+, readline
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-  name = "mujs-${version}";
-  version = "1.0.5";
+  pname = "mujs";
+  version = "1.3.4";
 
   src = fetchurl {
-    url = "https://mujs.com/downloads/mujs-${version}.tar.xz";
-    sha256 = "02cqrfnww2s3ylcvqin1951f2c5nzpby8gxb207p2hbrivbg8f0l";
+    url = "https://mujs.com/downloads/mujs-${version}.tar.gz";
+    hash = "sha256-wBVHWID2o4LnBhaclDcafdbMIgeIMvbghlr4KJwu9Cs=";
   };
 
   buildInputs = [ readline ];
 
+  nativeBuildInputs = lib.optionals stdenv.isDarwin [ fixDarwinDylibNames ];
+
   makeFlags = [ "prefix=$(out)" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://mujs.com/;
+  installFlags = [ "install-shared" ];
+
+  passthru.updateScript = gitUpdater {
+    # No nicer place to track releases
+    url = "git://git.ghostscript.com/mujs.git";
+  };
+
+  meta = with lib; {
+    homepage = "https://mujs.com/";
     description = "A lightweight, embeddable Javascript interpreter";
     platforms = platforms.unix;
     maintainers = with maintainers; [ pSub ];
-    license = licenses.gpl3;
+    license = licenses.isc;
   };
 }

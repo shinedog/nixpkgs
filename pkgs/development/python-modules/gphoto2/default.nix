@@ -1,26 +1,47 @@
-{ stdenv, fetchPypi, buildPythonPackage
-, pkgconfig
-, libgphoto2 }:
+{
+  lib,
+  fetchPypi,
+  fetchpatch,
+  buildPythonPackage,
+  pkg-config,
+  libgphoto2,
+  setuptools,
+  toml,
+}:
 
 buildPythonPackage rec {
   pname = "gphoto2";
-  version = "1.9.0";
+  version = "2.5.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "9c8e0c3ca22c0a2bfd0f27d24be6e4da5fe315d39d51f5af7bb5da416dbfa4b7";
+    hash = "sha256-l9B6PEIGf8rkUlYApOytW2s9OhgcxMHVlDgfQR5ZnoA=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  # only convert first 2 values from setuptools_version to ints to avoid
+  # parse errors if last value is a string.
+  patches = fetchpatch {
+    url = "https://github.com/jim-easterbrook/python-gphoto2/commit/d388971b63fea831eb986d2212d4828c6c553235.patch";
+    hash = "sha256-EXtXlhBx2jCKtMl7HmN87liqiHVAFSeXr11y830AlpY=";
+  };
+
+  nativeBuildInputs = [
+    pkg-config
+    setuptools
+    toml
+  ];
 
   buildInputs = [ libgphoto2 ];
 
   doCheck = false; # No tests available
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "gphoto2" ];
+
+  meta = with lib; {
     description = "Python interface to libgphoto2";
-    homepage = https://github.com/jim-easterbrook/python-gphoto2;
+    homepage = "https://github.com/jim-easterbrook/python-gphoto2";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ jfrankenau ];
+    maintainers = with maintainers; [ ];
   };
 }

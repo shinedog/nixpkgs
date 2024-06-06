@@ -1,39 +1,43 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, setuptools_scm
-, pytest
-, fetchpatch
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  hatchling,
+  hatch-vcs,
+  pytest,
+  pytestCheckHook,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "pytest-repeat";
-  version = "0.7.0";
+  version = "0.9.3";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0axbrpqal3cqw9zq6dakdbg49pnf5gvyvq6yn93hp1ayc7fnhzk3";
+    pname = "pytest_repeat";
+    inherit version;
+    hash = "sha256-/9ODbfzWe7JwvsZIszDiC+N9KWZEjEFIxAktHoq6gYU=";
   };
 
-  # fixes support for pytest >3.6. Should be droppable during the
-  # next bump.
-  patches = [
-    (fetchpatch {
-      url = https://github.com/pytest-dev/pytest-repeat/commit/f94b6940e3651b7593aca5a7a987eb56abe04cb1.patch;
-      sha256 = "00da1gmpq9pslcmm8pw93jcbp8j2zymzqdsm6jq3xinkvjpsbmny";
-    })
+  nativeBuildInputs = [
+    hatchling
+    hatch-vcs
   ];
 
-  buildInputs = [ setuptools_scm pytest ];
+  buildInputs = [ pytest ];
 
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = {
+  pythonImportsCheck = [ "pytest_repeat" ];
+
+  meta = with lib; {
     description = "Pytest plugin for repeating tests";
-    homepage = https://github.com/pytest-dev/pytest-repeat;
-    maintainers = with lib.maintainers; [ costrouc ];
-    license = lib.licenses.mpl20;
+    homepage = "https://github.com/pytest-dev/pytest-repeat";
+    changelog = "https://github.com/pytest-dev/pytest-repeat/blob/v${version}/CHANGES.rst";
+    license = licenses.mpl20;
+    maintainers = with maintainers; [ ];
   };
 }

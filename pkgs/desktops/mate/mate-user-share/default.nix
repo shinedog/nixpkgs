@@ -1,27 +1,48 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, gtk3, libnotify, libxml2, libcanberra-gtk3, mod_dnssd, apacheHttpd, hicolor-icon-theme, mate, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, gtk3
+, caja
+, dbus-glib
+, libnotify
+, libxml2
+, libcanberra-gtk3
+, apacheHttpdPackages
+, hicolor-icon-theme
+, mate
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
+let
+  inherit (apacheHttpdPackages) apacheHttpd mod_dnssd;
+in
 stdenv.mkDerivation rec {
-  name = "mate-user-share-${version}";
-  version = "1.22.0";
+  pname = "mate-user-share";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "14bhr6fv6gj3ka3sf13q64ck4svx8f4x8kzbppxv0jygpjp48w7h";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "iYVgmZkXllE0jkl+8I81C4YIG5expKcwQHfurlc5rjg=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     itstool
-    wrapGAppsHook
+    libxml2
+    wrapGAppsHook3
   ];
 
   buildInputs = [
     gtk3
+    caja
+    dbus-glib
     libnotify
     libcanberra-gtk3
-    libxml2
-    mate.caja
     hicolor-icon-theme
     # Should mod_dnssd and apacheHttpd be runtime dependencies?
     # In gnome-user-share they are not.
@@ -37,15 +58,20 @@ stdenv.mkDerivation rec {
 
   configureFlags = [
     "--with-httpd=${apacheHttpd.out}/bin/httpd"
-    "--with-modules-path=${apacheHttpd.dev}/modules"
+    "--with-modules-path=${apacheHttpd}/modules"
     "--with-cajadir=$(out)/lib/caja/extensions-2.0"
   ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "User level public file sharing for the MATE desktop";
-    homepage = https://github.com/mate-desktop/mate-user-share;
+    mainProgram = "mate-file-share-properties";
+    homepage = "https://github.com/mate-desktop/mate-user-share";
     license = with licenses; [ gpl2Plus ];
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

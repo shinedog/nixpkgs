@@ -1,42 +1,58 @@
-{ lib, buildPythonPackage, fetchPypi
-, setuptools_scm
-, sphinx
-, hypothesis
-, py
-, pytest
-, pytest-benchmark
-, sortedcollections
-, sortedcontainers
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  hypothesis,
+  pytest-xdist,
+  pytestCheckHook,
+  typing-extensions,
+  pythonOlder,
+  wheel,
 }:
 
 buildPythonPackage rec {
   pname = "bidict";
-  version = "0.18.0";
+  version = "0.23.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "4d10630fd5d86b7c165387473c5180e7fca7635f12e24b1f426aac259c72c81a";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "jab";
+    repo = "bidict";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-WE0YaRT4a/byvU2pzcByuf1DfMlOpYA9i0PPrKXsS+M=";
   };
 
-  nativeBuildInputs = [ setuptools_scm ];
-  propagatedBuildInputs = [ sphinx ];
-
-  checkInputs = [
-    hypothesis
-    py
-    pytest
-    pytest-benchmark
-    sortedcollections
-    sortedcontainers
+  build-system = [
+    setuptools
+    wheel
   ];
-  checkPhase = ''
-    pytest tests
+
+  nativeCheckInputs = [
+    hypothesis
+    pytest-xdist
+    pytestCheckHook
+    typing-extensions
+  ];
+
+  # Remove the bundled pytest.ini, which adds options to run additional integration
+  # tests that are overkill for our purposes.
+  preCheck = ''
+    rm pytest.ini
   '';
 
+  pythonImportsCheck = [ "bidict" ];
+
   meta = with lib; {
-    homepage = https://github.com/jab/bidict;
-    description = "Efficient, Pythonic bidirectional map data structures and related functionality";
+    homepage = "https://bidict.readthedocs.io";
+    changelog = "https://bidict.readthedocs.io/changelog.html";
+    description = "The bidirectional mapping library for Python.";
     license = licenses.mpl20;
-    maintainers = with maintainers; [ jakewaksbaum ];
+    maintainers = with maintainers; [
+      jab
+      jakewaksbaum
+    ];
   };
 }

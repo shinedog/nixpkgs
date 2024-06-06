@@ -1,18 +1,23 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-fetchzip rec {
-  name = "ipaexfont-003.01";
+stdenvNoCC.mkDerivation {
+  pname = "ipaexfont";
+  version = "004.01";
 
-  url = "http://dl.ipafont.ipa.go.jp/IPAexfont/IPAexfont00301.zip";
+  src = fetchzip {
+    url = "https://moji.or.jp/wp-content/ipafont/IPAexfont/IPAexfont00401.zip";
+    hash = "sha256-/87qJIb+v4qrtDy+ApfXxh59reOk+6RhGqFN98mc+8Q=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts
-    unzip -j $downloadedFile \*.ttf -d $out/share/fonts/opentype
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  sha256 = "02a6sj990cnig5lq0m54nmbmfkr3s57jpxl9fiyzrjmigvd1qmhj";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Japanese font package with Mincho and Gothic fonts";
     longDescription = ''
       IPAex font is a Japanese font developed by the Information-technology
@@ -21,9 +26,8 @@ fetchzip rec {
 
       This is the successor to the IPA fonts.
     '';
-    homepage = http://ipafont.ipa.go.jp/;
+    homepage = "https://moji.or.jp/ipafont/";
     license = licenses.ipa;
     maintainers = with maintainers; [ gebner ];
-    platforms = with platforms; unix;
   };
 }

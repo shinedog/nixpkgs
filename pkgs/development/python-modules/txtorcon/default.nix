@@ -1,33 +1,61 @@
-{lib, buildPythonPackage, fetchPypi, isPy3k, incremental, ipaddress, twisted
-, automat, zope_interface, idna, pyopenssl, service-identity, pytest, mock, lsof
-, GeoIP}:
+{
+  lib,
+  stdenv,
+  automat,
+  buildPythonPackage,
+  cryptography,
+  fetchPypi,
+  geoip,
+  idna,
+  incremental,
+  lsof,
+  mock,
+  pyopenssl,
+  pytestCheckHook,
+  python,
+  pythonOlder,
+  service-identity,
+  twisted,
+  zope-interface,
+}:
 
 buildPythonPackage rec {
   pname = "txtorcon";
-  version = "19.0.0";
+  version = "23.11.0";
+  format = "setuptools";
 
-  checkInputs = [ pytest mock lsof GeoIP ];
-  propagatedBuildInputs = [
-    incremental twisted automat zope_interface
-    # extra dependencies required by twisted[tls]
-    idna pyopenssl service-identity
-  ] ++ lib.optionals (!isPy3k) [ ipaddress ];
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0fxzhsc62bhmr730vj9pzallmw56gz6iykvl28a5agrycm0bfc9p";
+    hash = "sha256-cfha6T121yZRAFnJ7XTmCLxaXJ99EDhTtJ5BQoBAai8=";
   };
 
-  # Skip a failing test until fixed upstream:
-  # https://github.com/meejah/txtorcon/issues/250
-  checkPhase = ''
-    pytest --ignore=test/test_util.py .
-  '';
+  propagatedBuildInputs = [
+    cryptography
+    incremental
+    twisted
+    automat
+    zope-interface
+  ] ++ twisted.optional-dependencies.tls;
 
-  meta = {
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    lsof
+    geoip
+  ];
+
+  doCheck = !(stdenv.isDarwin && stdenv.isAarch64);
+
+  meta = with lib; {
     description = "Twisted-based Tor controller client, with state-tracking and configuration abstractions";
-    homepage = https://github.com/meejah/txtorcon;
-    maintainers = with lib.maintainers; [ jluttine ];
-    license = lib.licenses.mit;
+    homepage = "https://github.com/meejah/txtorcon";
+    changelog = "https://github.com/meejah/txtorcon/releases/tag/v${version}";
+    maintainers = with maintainers; [
+      jluttine
+      exarkun
+    ];
+    license = licenses.mit;
   };
 }

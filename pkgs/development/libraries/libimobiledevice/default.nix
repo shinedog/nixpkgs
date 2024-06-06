@@ -1,46 +1,67 @@
-{ stdenv, fetchFromGitHub, automake, autoconf, libtool, pkgconfig, gnutls
-, libgcrypt, libtasn1, glib, libplist, libusbmuxd }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, autoreconfHook
+, pkg-config
+, openssl
+, libgcrypt
+, libplist
+, libtasn1
+, libusbmuxd
+, libimobiledevice-glue
+, SystemConfiguration
+, CoreFoundation
+}:
 
 stdenv.mkDerivation rec {
   pname = "libimobiledevice";
-  version = "2019-04-04";
-
-  name = "${pname}-${version}";
-
-  src = fetchFromGitHub {
-    owner = pname;
-    repo = pname;
-    rev = "eea4f1be9107c8ab621fd71460e47d0d38e55d71";
-    sha256 = "0wh6z5f5znlqs0grh7c8jj1s411azgyy45klmql5kj3p8qqybqrs";
-  };
+  version = "1.3.0+date=2023-04-30";
 
   outputs = [ "out" "dev" ];
 
-  nativeBuildInputs = [
-    autoconf
-    automake
-    libtool
-    pkgconfig
+  src = fetchFromGitHub {
+    owner = "libimobiledevice";
+    repo = pname;
+    rev = "860ffb707af3af94467d2ece4ad258dda957c6cd";
+    hash = "sha256-mIsB+EaGJlGMOpz3OLrs0nAmhOY1BwMs83saFBaejwc=";
+  };
+
+  patches = [
+    # Pull upstream fix for clang-16 and upcoming gcc-14 support:
+    #   https://github.com/libimobiledevice/libimobiledevice/pull/1444
+    (fetchpatch {
+      name = "usleep-decl.patch";
+      url = "https://github.com/libimobiledevice/libimobiledevice/commit/db623184c0aa09c27697f5a2e81025db223075d5.patch";
+      hash = "sha256-TgdgBkEDXzQDSgJxcZc+pZncfmBVXarhHOByGFs6p0Q=";
+    })
   ];
+
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+
   propagatedBuildInputs = [
-    glib
-    gnutls
+    openssl
     libgcrypt
     libplist
     libtasn1
     libusbmuxd
+    libimobiledevice-glue
+  ] ++ lib.optionals stdenv.isDarwin [
+    SystemConfiguration
+    CoreFoundation
   ];
 
-  preConfigure = "NOCONFIGURE=1 ./autogen.sh";
+  preAutoreconf = ''
+    export RELEASE_VERSION=${version}
+  '';
 
-  configureFlags = [
-    "--disable-static"
-    "--disable-openssl"
-    "--without-cython"
-  ];
+  configureFlags = [ "--without-cython" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/libimobiledevice/libimobiledevice;
+  meta = with lib; {
+    homepage = "https://github.com/libimobiledevice/libimobiledevice";
     description = "A software library that talks the protocols to support iPhone®, iPod Touch® and iPad® devices on Linux";
     longDescription = ''
       libimobiledevice is a software library that talks the protocols to support
@@ -55,7 +76,7 @@ stdenv.mkDerivation rec {
       devices to the Linux Desktop.
     '';
     license = licenses.lgpl21Plus;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ infinisil ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ RossComputerGuy ];
   };
 }

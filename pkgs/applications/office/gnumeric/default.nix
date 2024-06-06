@@ -1,42 +1,44 @@
-{ stdenv, fetchurl, pkgconfig, intltool, perlPackages
-, goffice, gnome3, wrapGAppsHook, gtk3, bison, pythonPackages
+{ lib, stdenv, fetchurl, pkg-config, intltool, perlPackages
+, goffice, gnome, wrapGAppsHook3, gtk3, bison, python3Packages
 , itstool
 }:
 
 let
-  inherit (pythonPackages) python pygobject3;
+  inherit (python3Packages) python pygobject3;
 in stdenv.mkDerivation rec {
   pname = "gnumeric";
-  version = "1.12.44";
+  version = "1.12.57";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "0147962c6ybdsj57rz95nla0rls7g545wc2n7pz59zmzyd5pksk0";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "r/ULG2I0DCT8z0U9X60+f7c/S8SzT340tsPS2a9qHk8=";
   };
 
   configureFlags = [ "--disable-component" ];
 
-  nativeBuildInputs = [ pkgconfig intltool bison itstool wrapGAppsHook ];
+  nativeBuildInputs = [ pkg-config intltool bison itstool wrapGAppsHook3 ];
 
   # ToDo: optional libgda, introspection?
   buildInputs = [
-    goffice gtk3 gnome3.adwaita-icon-theme
+    goffice gtk3 gnome.adwaita-icon-theme
     python pygobject3
   ] ++ (with perlPackages; [ perl XMLParser ]);
 
   enableParallelBuilding = true;
 
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = pname;
+      versionPolicy = "odd-unstable";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The GNOME Office Spreadsheet";
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = http://projects.gnome.org/gnumeric/;
+    license = lib.licenses.gpl2Plus;
+    homepage = "http://projects.gnome.org/gnumeric/";
     platforms = platforms.unix;
+    broken = with stdenv; isDarwin && isAarch64;
     maintainers = [ maintainers.vcunat ];
   };
 }

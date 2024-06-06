@@ -1,9 +1,9 @@
-{ stdenv, dpkg, fetchurl }:
+{ lib, stdenv, dpkg, fetchurl, zip, nixosTests }:
 
 let
-  generic = { version, sha256, suffix ? "" }:
-  stdenv.mkDerivation rec {
-    name = "unifi-controller-${version}";
+  generic = { version, sha256, suffix ? "", ... } @ args:
+  stdenv.mkDerivation (args // {
+    pname = "unifi-controller";
 
     src = fetchurl {
       url = "https://dl.ubnt.com/unifi/${version}${suffix}/unifi_sysvinit_all.deb";
@@ -18,8 +18,6 @@ let
       runHook postUnpack
     '';
 
-    doConfigure = false;
-
     installPhase = ''
       runHook preInstall
 
@@ -30,32 +28,31 @@ let
       runHook postInstall
     '';
 
-    meta = with stdenv.lib; {
-      homepage = http://www.ubnt.com/;
+    passthru.tests = {
+      unifi = nixosTests.unifi;
+    };
+
+    meta = with lib; {
+      homepage = "http://www.ubnt.com/";
       description = "Controller for Ubiquiti UniFi access points";
+      sourceProvenance = with sourceTypes; [ binaryBytecode ];
       license = licenses.unfree;
       platforms = platforms.unix;
-      maintainers = with maintainers; [ erictapen ];
+      maintainers = with maintainers; [ globin patryk27 ];
     };
-  };
+  });
 
 in rec {
+  # see https://community.ui.com/releases / https://www.ui.com/download/unifi
 
-  # https://help.ubnt.com/hc/en-us/articles/115000441548-UniFi-Current-Controller-Versions
-
-  unifiLTS = generic {
-    version = "5.6.42";
-    sha256  = "0wxkv774pw43c15jk0sg534l5za4j067nr85r5fw58iar3w2l84x";
+  unifi7 = generic {
+    version = "7.5.187";
+    suffix = "-f57f5bf7ab";
+    sha256 = "sha256-a5kl8gZbRnhS/p1imPl7soM0/QSFHdM0+2bNmDfc1mY=";
   };
 
-  unifiStable = generic {
-    version = "5.10.23";
-    sha256  = "0ak8crx3anxsx4r3b9k0rihgafkgsxj7f64z48nrk1l8m7f0wwxg";
-  };
-
-  unifiTesting = generic {
-    version = "5.11.18";
-    suffix = "-996baf2ca5";
-    sha256 = "14yyfn39ix8bnn0cb6bn0ly6pqxg81lvy83y40bk0y8vxfg6maqc";
+  unifi8 = generic {
+    version = "8.1.127";
+    sha256 = "sha256-7Xg4I0Kuvta4oKzkduCda7aonTFzutrQJK03FLqM0KE=";
   };
 }

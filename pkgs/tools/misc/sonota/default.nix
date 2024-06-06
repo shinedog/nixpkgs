@@ -12,7 +12,7 @@ let
   };
 
 in buildPythonApplication rec {
-  name = "sonota-unstable-${version}";
+  pname = "sonota-unstable";
   version = "2018-10-07";
 
   src = fetchFromGitHub {
@@ -48,7 +48,8 @@ in buildPythonApplication rec {
   meta = with lib; {
     description = "Flash Itead Sonoff devices with custom firmware via original OTA mechanism";
     homepage = src.meta.homepage;
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "sonota";
   };
 }

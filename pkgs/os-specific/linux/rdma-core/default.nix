@@ -1,22 +1,48 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, pandoc
-, ethtool, iproute, libnl, udev, python, perl
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, docutils
+, pandoc
+, ethtool
+, iproute2
+, libnl
+, udev
+, python3
+, perl
 } :
 
-let
-  version = "23";
-
-in stdenv.mkDerivation {
-  name = "rdma-core-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "rdma-core";
+  version = "52.0";
 
   src = fetchFromGitHub {
     owner = "linux-rdma";
     repo = "rdma-core";
-    rev = "v${version}";
-    sha256 = "1n0v075ndczwrc87b70vxhx42nv1p953cqycmgnz334790zg002g";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-M4nmnfeEIxsaFO1DJV9jKD/NnkaLHVNXtfTPf2pTDs4=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig pandoc ];
-  buildInputs = [ libnl ethtool iproute udev python perl ];
+  strictDeps = true;
+
+  outputs = [ "out" "man" "dev" ];
+
+  nativeBuildInputs = [
+    cmake
+    docutils
+    pandoc
+    pkg-config
+    python3
+  ];
+
+  buildInputs = [
+    ethtool
+    iproute2
+    libnl
+    perl
+    udev
+  ];
 
   cmakeFlags = [
     "-DCMAKE_INSTALL_RUNDIR=/run"
@@ -24,17 +50,29 @@ in stdenv.mkDerivation {
   ];
 
   postPatch = ''
-    substituteInPlace providers/rxe/rxe_cfg.in \
-      --replace ethtool "${ethtool}/bin/ethtool" \
-      --replace 'ip addr' "${iproute}/bin/ip addr" \
-      --replace 'ip link' "${iproute}/bin/ip link"
+    substituteInPlace srp_daemon/srp_daemon.sh.in \
+      --replace /bin/rm rm
   '';
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    # cmake script is buggy, move file manually
+    mkdir -p $out/${perl.libPrefix}
+    mv $out/share/perl5/* $out/${perl.libPrefix}
+  '';
+
+  postFixup = ''
+    for pls in $out/bin/{ibfindnodesusing.pl,ibidsverify.pl}; do
+      echo "wrapping $pls"
+      substituteInPlace $pls --replace \
+        "${perl}/bin/perl" "${perl}/bin/perl -I $out/${perl.libPrefix}"
+    done
+  '';
+
+  meta = {
     description = "RDMA Core Userspace Libraries and Daemons";
-    homepage = https://github.com/linux-rdma/rdma-core;
-    license = licenses.gpl2;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ markuskowa ];
+    homepage = "https://github.com/linux-rdma/rdma-core";
+    license = lib.licenses.gpl2Only;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.markuskowa ];
   };
-}
+})

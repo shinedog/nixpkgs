@@ -1,30 +1,61 @@
-{ lib
-, buildPythonPackage
-, cython
-, numpy
-, nose
-, scipy
-, scikitlearn
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  cython,
+  numpy,
+  pytestCheckHook,
+  scipy,
+  scikit-learn,
+  fetchPypi,
+  joblib,
+  six,
+  pythonRelaxDepsHook,
 }:
 
 buildPythonPackage rec {
   pname = "hdbscan";
-  version = "0.8.20";
+  version = "0.8.36";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "263e9f34db63eec217d50f2ca3e65049c065775dc4095b5ee817824cd2b5b51b";
+    hash = "sha256-05istp4MTr31OcK6WDnFIzYOyBTzAPqn8vh96PJXr1g=";
   };
 
-  checkInputs = [ nose ];
+  pythonRemoveDeps = [ "cython" ];
+  nativeBuildInputs = [
+    pythonRelaxDepsHook
+    cython
+  ];
+  propagatedBuildInputs = [
+    numpy
+    scipy
+    scikit-learn
+    joblib
+    six
+  ];
+  preCheck = ''
+    cd hdbscan/tests
+    rm __init__.py
+  '';
+  nativeCheckInputs = [ pytestCheckHook ];
+  disabledTests = [
+    # known flaky tests: https://github.com/scikit-learn-contrib/hdbscan/issues/420
+    "test_mem_vec_diff_clusters"
+    "test_all_points_mem_vec_diff_clusters"
+    "test_approx_predict_diff_clusters"
+    # another flaky test https://github.com/scikit-learn-contrib/hdbscan/issues/421
+    "test_hdbscan_boruvka_balltree_matches"
+    # more flaky tests https://github.com/scikit-learn-contrib/hdbscan/issues/570
+    "test_hdbscan_boruvka_balltree"
+    "test_hdbscan_best_balltree_metric"
+  ];
 
-  propagatedBuildInputs = [ cython numpy scipy scikitlearn ];
+  pythonImportsCheck = [ "hdbscan" ];
 
   meta = with lib; {
     description = "Hierarchical Density-Based Spatial Clustering of Applications with Noise, a clustering algorithm with a scikit-learn compatible API";
-    homepage =  https://github.com/scikit-learn-contrib/hdbscan;
+    homepage = "https://github.com/scikit-learn-contrib/hdbscan";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ ixxie ];
   };
 }

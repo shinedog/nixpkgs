@@ -1,14 +1,23 @@
-{ lib, buildPythonPackage, fetchPypi, pythonOlder, python }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  python,
+  pythonAtLeast,
+}:
 
 buildPythonPackage rec {
   pname = "asynctest";
-  version = "0.12.4";
+  version = "0.13.0";
+  format = "setuptools";
 
-  disabled = pythonOlder "3.4";
+  # Unmaintained and incompatible python 3.11
+  disabled = pythonAtLeast "3.11";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "ade427a711d18016f35fb0c5d412f0ed63fb074a6084b67ff2dad48f50b0d6ca";
+    sha256 = "1b3zsy7p84gag6q8ai2ylyrhx213qdk2h2zb6im3xn0m5n264y62";
   };
 
   postPatch = ''
@@ -17,13 +26,16 @@ buildPythonPackage rec {
       --replace "test_events_watched_outside_test_are_ignored" "xtest_events_watched_outside_test_are_ignored"
   '';
 
+  # https://github.com/Martiusweb/asynctest/issues/132
+  doCheck = pythonOlder "3.7";
+
   checkPhase = ''
     ${python.interpreter} -m unittest test
   '';
 
   meta = with lib; {
     description = "Enhance the standard unittest package with features for testing asyncio libraries";
-    homepage = https://github.com/Martiusweb/asynctest;
+    homepage = "https://github.com/Martiusweb/asynctest";
     license = licenses.asl20;
     maintainers = with maintainers; [ dotlambda ];
   };

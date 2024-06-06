@@ -1,25 +1,54 @@
-{ stdenv, buildPythonPackage, fetchPypi, pyside, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # propagates
+  packaging,
+
+  # tests
+  pyqt5,
+  pyside2,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
-  pname = "QtPy";
-  version = "1.7.0";
+  pname = "qtpy";
+  version = "2.4.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "0gjg7farw6mkmrwqcg6ms7j74g8py2msvawddji4wy8yfvql1ifl";
+    pname = "QtPy";
+    inherit version;
+    hash = "sha256-paFf/VGVUKE2G9xW/8B/2lamr3KS8Xx7OV1Ag69jKYc=";
   };
 
-  # no concrete propagatedBuildInputs as multiple backends are supposed
-  checkInputs = [ pyside pytest ];
+  propagatedBuildInputs = [ packaging ];
 
-  doCheck = false; # require X
-  checkPhase = ''
-    py.test qtpy/tests
-  '';
+  doCheck = false; # ModuleNotFoundError: No module named 'PyQt5.QtConnectivity'
+  nativeCheckInputs = [
+    pyside2
+    (pyqt5.override {
+      withConnectivity = true;
+      withMultimedia = true;
+      withWebKit = true;
+      withWebSockets = true;
+    })
+    pytestCheckHook
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Abstraction layer for PyQt5/PyQt4/PySide2/PySide";
-    homepage = https://github.com/spyder-ide/qtpy;
+  disabledTestPaths = [
+    # Fatal error in python on x86_64
+    "qtpy/tests/test_uic.py"
+  ];
+
+  meta = with lib; {
+    description = "Abstraction layer for PyQt5/PyQt6/PySide2/PySide6";
+    mainProgram = "qtpy";
+    homepage = "https://github.com/spyder-ide/qtpy";
     license = licenses.mit;
   };
 }

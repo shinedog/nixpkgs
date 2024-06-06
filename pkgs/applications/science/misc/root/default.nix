@@ -1,77 +1,243 @@
-{ stdenv, fetchurl, cmake, pcre, pkgconfig, python2
-, libX11, libXpm, libXft, libXext, libGLU_combined, zlib, libxml2, lz4, lzma, gsl, xxHash
-, Cocoa, OpenGL, cf-private, noSplash ? false }:
+{ stdenv
+, lib
+, callPackage
+, fetchgit
+, fetchurl
+, makeWrapper
+, cmake
+, coreutils
+, git
+, davix
+, ftgl
+, gl2ps
+, glew
+, gnugrep
+, gnused
+, gsl
+, gtest
+, lapack
+, libX11
+, libXpm
+, libXft
+, libXext
+, libGLU
+, libGL
+, libxcrypt
+, libxml2
+, llvm_16
+, lsof
+, lz4
+, xz
+, man
+, openblas
+, openssl
+, pcre
+, nlohmann_json
+, pkg-config
+, procps
+, python
+, which
+, xxHash
+, zlib
+, zstd
+, giflib
+, libjpeg
+, libtiff
+, libpng
+, patchRcPathCsh
+, patchRcPathFish
+, patchRcPathPosix
+, tbb
+, xrootd
+, Cocoa
+, CoreSymbolication
+, OpenGL
+}:
 
 stdenv.mkDerivation rec {
-  name = "root-${version}";
-  version = "6.12.06";
+  pname = "root";
+  version = "6.32.00";
+
+  passthru = {
+    tests = import ./tests { inherit callPackage; };
+  };
 
   src = fetchurl {
     url = "https://root.cern.ch/download/root_v${version}.source.tar.gz";
-    sha256 = "1557b9sdragsx9i15qh6lq7fn056bgi87d31kxdl4vl0awigvp5f";
+    hash = "sha256-EvIDaBpZBBxHTOlSN2Hm8OiGGzvueN9feZqNtVGJ5dI=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ cmake pcre python2 zlib libxml2 lz4 lzma gsl xxHash ]
-    ++ stdenv.lib.optionals (!stdenv.isDarwin) [ libX11 libXpm libXft libXext libGLU_combined ]
-    ++ stdenv.lib.optionals (stdenv.isDarwin) [ Cocoa OpenGL cf-private ]
-    ;
+  clad_src = fetchgit {
+    url = "https://github.com/vgvassilev/clad";
+    rev = "refs/tags/v1.5"; # Make sure that this is the same tag as in the ROOT build files!
+    hash = "sha256-s0DbHfLthv51ZICnTd30O4qG/DyZPk5tADeu3bBRoOw=";
+  };
+
+  nativeBuildInputs = [ makeWrapper cmake pkg-config git ];
+  propagatedBuildInputs = [
+    nlohmann_json
+  ];
+  buildInputs = [
+    davix
+    ftgl
+    gl2ps
+    glew
+    pcre
+    zlib
+    zstd
+    lapack
+    libxcrypt
+    libxml2
+    llvm_16
+    lz4
+    xz
+    gsl
+    gtest
+    openblas
+    openssl
+    xxHash
+    giflib
+    libjpeg
+    libtiff
+    libpng
+    patchRcPathCsh
+    patchRcPathFish
+    patchRcPathPosix
+    python.pkgs.numpy
+    tbb
+    xrootd
+  ]
+  ++ lib.optionals (!stdenv.isDarwin) [ libX11 libXpm libXft libXext libGLU libGL ]
+  ++ lib.optionals (stdenv.isDarwin) [ Cocoa CoreSymbolication OpenGL ]
+  ;
 
   patches = [
     ./sw_vers.patch
   ];
 
   preConfigure = ''
+    for path in builtins/*; do
+      if [[ "$path" != "builtins/openui5" ]] && [[ "$path" != "builtins/rendercore" ]]; then
+        rm -rf "$path"
+      fi
+    done
+    substituteInPlace cmake/modules/SearchInstalledSoftware.cmake \
+      --replace 'set(lcgpackages ' '#set(lcgpackages '
+
+    # We have to bypass the connection check, because it would disable clad.
+    # This should probably be fixed upstream with a flag to disable the
+    # connectivity check!
+    substituteInPlace CMakeLists.txt \
+      --replace 'if(clad AND NO_CONNECTION)' 'if(FALSE)'
+    # Make sure that clad is not downloaded when building
+    substituteInPlace interpreter/cling/tools/plugins/clad/CMakeLists.txt \
+      --replace 'UPDATE_COMMAND ""' 'SOURCE_DIR ${clad_src} DOWNLOAD_COMMAND "" UPDATE_COMMAND ""'
+    # Make sure that clad is finding the right llvm version
+    substituteInPlace interpreter/cling/tools/plugins/clad/CMakeLists.txt \
+      --replace '-DLLVM_DIR=''${LLVM_BINARY_DIR}' '-DLLVM_DIR=${llvm_16.dev}/lib/cmake/llvm'
+
+    substituteInPlace interpreter/llvm-project/clang/tools/driver/CMakeLists.txt \
+      --replace 'add_clang_symlink(''${link} clang)' ""
+
+    # Don't require textutil on macOS
+    : > cmake/modules/RootCPack.cmake
+
+    # Hardcode path to fix use with cmake
+    sed -i cmake/scripts/ROOTConfig.cmake.in \
+      -e '1iset(nlohmann_json_DIR "${nlohmann_json}/lib/cmake/nlohmann_json/")'
+
     patchShebangs build/unix/
-  '' + stdenv.lib.optionalString noSplash ''
-    substituteInPlace rootx/src/rootx.cxx --replace "gNoLogo = false" "gNoLogo = true"
+  '' + lib.optionalString stdenv.isDarwin ''
+    # Eliminate impure reference to /System/Library/PrivateFrameworks
+    substituteInPlace core/macosx/CMakeLists.txt \
+      --replace "-F/System/Library/PrivateFrameworks " ""
+  '' + lib.optionalString (stdenv.isDarwin && lib.versionAtLeast stdenv.hostPlatform.darwinMinVersion "11") ''
+    MACOSX_DEPLOYMENT_TARGET=10.16
   '';
 
   cmakeFlags = [
-    "-Drpath=ON"
+    "-DCMAKE_INSTALL_BINDIR=bin"
     "-DCMAKE_INSTALL_LIBDIR=lib"
     "-DCMAKE_INSTALL_INCLUDEDIR=include"
-    "-Dalien=OFF"
-    "-Dbonjour=OFF"
-    "-Dcastor=OFF"
-    "-Dchirp=OFF"
-    "-Ddavix=OFF"
-    "-Ddcache=OFF"
-    "-Dfftw3=OFF"
+    "-Dbuiltin_llvm=OFF"
+    "-Dfail-on-missing=ON"
     "-Dfitsio=OFF"
-    "-Dfortran=OFF"
-    "-Dimt=OFF"
-    "-Dgfal=OFF"
-    "-Dgviz=OFF"
-    "-Dhdfs=OFF"
-    "-Dkrb5=OFF"
-    "-Dldap=OFF"
-    "-Dmonalisa=OFF"
+    "-Dgnuinstall=ON"
     "-Dmysql=OFF"
-    "-Dodbc=OFF"
-    "-Dopengl=ON"
-    "-Doracle=OFF"
     "-Dpgsql=OFF"
-    "-Dpythia6=OFF"
-    "-Dpythia8=OFF"
-    "-Drfio=OFF"
     "-Dsqlite=OFF"
-    "-Dssl=OFF"
-    "-Dxml=ON"
-    "-Dxrootd=OFF"
+    "-Dtmva-pymva=OFF"
+    "-Dvdt=OFF"
   ]
-  ++ stdenv.lib.optional (stdenv.cc.libc != null) "-DC_INCLUDE_DIRS=${stdenv.lib.getDev stdenv.cc.libc}/include"
-  ++ stdenv.lib.optional stdenv.isDarwin "-DOPENGL_INCLUDE_DIR=${OpenGL}/Library/Frameworks";
+  ++ lib.optional (stdenv.cc.libc != null) "-DC_INCLUDE_DIRS=${lib.getDev stdenv.cc.libc}/include"
+  ++ lib.optionals stdenv.isDarwin [
+    "-DOPENGL_INCLUDE_DIR=${OpenGL}/Library/Frameworks"
 
-  enableParallelBuilding = true;
+    # fatal error: module map file '/nix/store/<hash>-Libsystem-osx-10.12.6/include/module.modulemap' not found
+    # fatal error: could not build module '_Builtin_intrinsics'
+    "-Druntime_cxxmodules=OFF"
+  ];
+
+  postInstall = ''
+    for prog in rootbrowse rootcp rooteventselector rootls rootmkdir rootmv rootprint rootrm rootslimtree; do
+      wrapProgram "$out/bin/$prog" \
+        --set PYTHONPATH "$out/lib"
+    done
+
+    # Make ldd and sed available to the ROOT executable by prefixing PATH.
+    wrapProgram "$out/bin/root" \
+      --prefix PATH : "${lib.makeBinPath [
+        gnused # sed
+        stdenv.cc # c++ ld etc.
+        stdenv.cc.libc # ldd
+      ]}"
+
+    # Patch thisroot.{sh,csh,fish}
+
+    # The main target of `thisroot.sh` is "bash-like shells",
+    # but it also need to support Bash-less POSIX shell like dash,
+    # as they are mentioned in `thisroot.sh`.
+
+    patchRcPathPosix "$out/bin/thisroot.sh" "${lib.makeBinPath [
+      coreutils # dirname tail
+      gnugrep # grep
+      gnused # sed
+      lsof # lsof
+      man # manpath
+      procps # ps
+      which # which
+    ]}"
+    patchRcPathCsh "$out/bin/thisroot.csh" "${lib.makeBinPath [
+      coreutils
+      gnugrep
+      gnused
+      lsof # lsof
+      man
+      which
+    ]}"
+    patchRcPathFish "$out/bin/thisroot.fish" "${lib.makeBinPath [
+      coreutils
+      man
+      which
+    ]}"
+  '';
+
+  # To use the debug information on the fly (without installation)
+  # add the outPath of root.debug into NIX_DEBUG_INFO_DIRS (in PATH-like format)
+  # and make sure that gdb from Nixpkgs can be found in PATH.
+  #
+  # Darwin currently fails to support it (#203380)
+  # we set it to true hoping to benefit from the future fix.
+  # Before that, please make sure if root.debug exists before using it.
+  separateDebugInfo = true;
 
   setupHook = ./setup-hook.sh;
 
-  meta = with stdenv.lib; {
-    homepage = https://root.cern.ch/;
+  meta = with lib; {
+    homepage = "https://root.cern/";
     description = "A data analysis framework";
     platforms = platforms.unix;
-    maintainers = [ maintainers.veprbl ];
+    maintainers = [ maintainers.guitargeek maintainers.veprbl ];
     license = licenses.lgpl21;
   };
 }

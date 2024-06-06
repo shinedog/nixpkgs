@@ -1,38 +1,44 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pbr
-, python_mimeparse
-, extras
-, unittest2
-, traceback2
-, testscenarios
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonAtLeast,
+  pythonRelaxDepsHook,
+
+  # build-system
+  hatchling,
+  hatch-vcs,
+
+  # dependencies
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "testtools";
-  version = "2.3.0";
+  version = "2.7.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5827ec6cf8233e0f29f51025addd713ca010061204fdea77484a2934690a0559";
+    sha256 = "sha256-323pYBDinuIfY3oUfqvzDVCyXjhB3R1o+T7onOd+Nmw=";
   };
 
-  propagatedBuildInputs = [ pbr python_mimeparse extras unittest2 ];
-  buildInputs = [ traceback2 ];
+  nativeBuildInputs = [
+    hatchling
+    hatch-vcs
+    pythonRelaxDepsHook
+  ];
+
+  pythonRemoveDeps = [ "fixtures" ];
+
+  propagatedBuildInputs = lib.optionals (pythonAtLeast "3.12") [ setuptools ];
 
   # testscenarios has a circular dependency on testtools
   doCheck = false;
-  checkInputs = [ testscenarios ];
-
-  # testtools 2.0.0 and up has a circular run-time dependency on futures
-  postPatch = ''
-    substituteInPlace requirements.txt --replace "fixtures>=1.3.0" ""
-  '';
 
   meta = {
     description = "A set of extensions to the Python standard library's unit testing framework";
-    homepage = https://pypi.python.org/pypi/testtools;
+    homepage = "https://pypi.python.org/pypi/testtools";
     license = lib.licenses.mit;
   };
 }

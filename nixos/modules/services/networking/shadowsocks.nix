@@ -11,8 +11,13 @@ let
     method = cfg.encryptionMethod;
     mode = cfg.mode;
     user = "nobody";
-    fast_open = true;
-  } // optionalAttrs (cfg.password != null) { password = cfg.password; };
+    fast_open = cfg.fastOpen;
+  } // optionalAttrs (cfg.plugin != null) {
+    plugin = cfg.plugin;
+    plugin_opts = cfg.pluginOpts;
+  } // optionalAttrs (cfg.password != null) {
+    password = cfg.password;
+  } // cfg.extraConfig;
 
   configFile = pkgs.writeText "shadowsocks.json" (builtins.toJSON opts);
 
@@ -35,15 +40,15 @@ in
       };
 
       localAddress = mkOption {
-        type = types.str;
-        default = "0.0.0.0";
+        type = types.coercedTo types.str singleton (types.listOf types.str);
+        default = [ "[::0]" "0.0.0.0" ];
         description = ''
-          Local address to which the server binds.
+          Local addresses to which the server binds.
         '';
       };
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8388;
         description = ''
           Port which the server uses.
@@ -74,14 +79,55 @@ in
         '';
       };
 
+      fastOpen = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          use TCP fast-open
+        '';
+      };
+
       encryptionMethod = mkOption {
         type = types.str;
         default = "chacha20-ietf-poly1305";
         description = ''
-          Encryption method. See <link xlink:href="https://github.com/shadowsocks/shadowsocks-org/wiki/AEAD-Ciphers"/>.
+          Encryption method. See <https://github.com/shadowsocks/shadowsocks-org/wiki/AEAD-Ciphers>.
         '';
       };
 
+      plugin = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = literalExpression ''"''${pkgs.shadowsocks-v2ray-plugin}/bin/v2ray-plugin"'';
+        description = ''
+          SIP003 plugin for shadowsocks
+        '';
+      };
+
+      pluginOpts = mkOption {
+        type = types.str;
+        default = "";
+        example = "server;host=example.com";
+        description = ''
+          Options to pass to the plugin if one was specified
+        '';
+      };
+
+      extraConfig = mkOption {
+        type = types.attrs;
+        default = {};
+        example = {
+          nameserver = "8.8.8.8";
+        };
+        description = ''
+          Additional configuration for shadowsocks that is not covered by the
+          provided options. The provided attrset will be serialized to JSON and
+          has to contain valid shadowsocks options. Unfortunately most
+          additional options are undocumented but it's easy to find out what is
+          available by looking into the source code of
+          <https://github.com/shadowsocks/shadowsocks-libev/blob/master/src/jconf.c>
+        '';
+      };
     };
 
   };
@@ -90,16 +136,22 @@ in
   ###### implementation
 
   config = mkIf cfg.enable {
-    assertions = singleton
-      { assertion = cfg.password == null || cfg.passwordFile == null;
-        message = "Cannot use both password and passwordFile for shadowsocks-libev";
-      };
+    assertions = [
+      {
+        # xor, make sure either password or passwordFile be set.
+        # shadowsocks-libev not support plain/none encryption method
+        # which indicated that password must set.
+        assertion = let noPasswd = cfg.password == null; noPasswdFile = cfg.passwordFile == null;
+          in (noPasswd && !noPasswdFile) || (!noPasswd && noPasswdFile);
+        message = "Option `password` or `passwordFile` must be set and cannot be set simultaneously";
+      }
+    ];
 
     systemd.services.shadowsocks-libev = {
       description = "shadowsocks-libev Daemon";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      path = [ pkgs.shadowsocks-libev ] ++ optional (cfg.passwordFile != null) pkgs.jq;
+      path = [ pkgs.shadowsocks-libev ] ++ optional (cfg.plugin != null) cfg.plugin ++ optional (cfg.passwordFile != null) pkgs.jq;
       serviceConfig.PrivateTmp = true;
       script = ''
         ${optionalString (cfg.passwordFile != null) ''

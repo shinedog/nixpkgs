@@ -1,45 +1,83 @@
-{ stdenv, fetchFromGitHub, z3, ocamlPackages, makeWrapper }:
+{ callPackage
+, fetchFromGitHub
+, installShellFiles
+, lib
+, makeWrapper
+, ocamlPackages
+, removeReferencesTo
+, stdenv
+, writeScript
+, z3
+}:
 
-stdenv.mkDerivation rec {
-  name = "fstar-${version}";
-  version = "0.9.6.0";
+let
+
+  version = "2024.01.13";
 
   src = fetchFromGitHub {
     owner = "FStarLang";
     repo = "FStar";
     rev = "v${version}";
-    sha256 = "0wix7l229afkn6c6sk4nwkfq0nznsiqdkds4ixi2yyf72immwmmb";
+    hash = "sha256-xjSWDP8mSjLcn+0hsRpEdzsBgBR+mKCZB8yLmHl+WqE=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  fstar-dune = ocamlPackages.callPackage ./dune.nix { inherit version src; };
 
-  buildInputs = with ocamlPackages; [
-    z3 ocaml findlib batteries menhir stdint
-    zarith camlp4 yojson pprint
-    ulex ocaml-migrate-parsetree process ppx_deriving ppx_deriving_yojson ocamlbuild
+  fstar-ulib = callPackage ./ulib.nix { inherit version src fstar-dune z3; };
+
+in
+
+stdenv.mkDerivation {
+  pname = "fstar";
+  inherit version src;
+
+  nativeBuildInputs = [
+    installShellFiles
+    makeWrapper
+    removeReferencesTo
   ];
 
-  makeFlags = [ "PREFIX=$(out)" ];
+  inherit (fstar-dune) propagatedBuildInputs;
 
-  preBuild = ''
-    patchShebangs src/tools
-    patchShebangs bin
-  '';
-  buildFlags = "-C src/ocaml-output";
+  dontBuild = true;
 
-  preInstall = ''
-    mkdir -p $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstarlib
-  '';
-  installFlags = "-C src/ocaml-output";
-  postInstall = ''
-    wrapProgram $out/bin/fstar.exe --prefix PATH ":" "${z3}/bin"
+  installPhase = ''
+    mkdir $out
+
+    CP="cp -r --no-preserve=mode"
+    $CP ${fstar-dune}/* $out
+    $CP ${fstar-ulib}/* $out
+
+    PREFIX=$out make -C src/ocaml-output install-sides
+
+    chmod +x $out/bin/fstar.exe
+    wrapProgram $out/bin/fstar.exe --prefix PATH ":" ${z3}/bin
+    remove-references-to -t '${ocamlPackages.ocaml}' $out/bin/fstar.exe
+
+    substituteInPlace $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstar/dune-package \
+      --replace ${fstar-dune} $out
+
+    installShellCompletion --bash .completion/bash/fstar.exe.bash
+    installShellCompletion --fish .completion/fish/fstar.exe.fish
+    installShellCompletion --zsh --name _fstar.exe .completion/zsh/__fstar.exe
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = writeScript "update-fstar" ''
+    #!/usr/bin/env nix-shell
+    #!nix-shell -i bash -p git gnugrep common-updater-scripts
+    set -eu -o pipefail
+
+    version="$(git ls-remote --tags git@github.com:FStarLang/FStar.git | grep -Po 'v\K\d{4}\.\d{2}\.\d{2}' | sort | tail -n1)"
+    update-source-version fstar "$version"
+  '';
+
+  meta = with lib; {
     description = "ML-like functional programming language aimed at program verification";
-    homepage = https://www.fstar-lang.org;
+    homepage = "https://www.fstar-lang.org";
+    changelog = "https://github.com/FStarLang/FStar/raw/v${version}/CHANGES.md";
     license = licenses.asl20;
+    maintainers = with maintainers; [ gebner pnmadelaine ];
+    mainProgram = "fstar.exe";
     platforms = with platforms; darwin ++ linux;
-    maintainers = with maintainers; [ gebner ];
   };
 }

@@ -1,73 +1,107 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, click
-, click-default-group
-, sanic
-, jinja2
-, hupper
-, pint
-, pluggy
-, pytest
-, pytestrunner
-, pytest-asyncio
-, aiohttp
-, beautifulsoup4
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  aiofiles,
+  asgi-csrf,
+  click,
+  click-default-group,
+  itsdangerous,
+  janus,
+  jinja2,
+  hupper,
+  mergedeep,
+  pint,
+  pluggy,
+  python-baseconv,
+  pyyaml,
+  uvicorn,
+  httpx,
+  pytestCheckHook,
+  pytest-asyncio,
+  pytest-timeout,
+  aiohttp,
+  beautifulsoup4,
+  asgiref,
+  setuptools,
+  trustme,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "datasette";
-  version = "0.27";
+  version = "0.64.6";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchFromGitHub {
     owner = "simonw";
-    repo = "datasette";
-    rev = version;
-    sha256 = "02k1kk6bw034rs74w0viwzapxz684lqgjvw5q5j5xgr0i4kynylp";
+    repo = pname;
+    rev = "refs/tags/${version}";
+    hash = "sha256-chU0AFaVfkJMRwraX/Ky0e6/g3ZSZ2efNIJ15veqFmg=";
   };
 
-  buildInputs = [ pytestrunner ];
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace '"pytest-runner"' ""
+  '';
 
   propagatedBuildInputs = [
+    aiofiles
+    asgi-csrf
+    asgiref
     click
     click-default-group
-    sanic
-    jinja2
+    httpx
     hupper
+    itsdangerous
+    janus
+    jinja2
+    mergedeep
     pint
     pluggy
+    python-baseconv
+    pyyaml
+    setuptools
+    uvicorn
   ];
 
-  checkInputs = [
-    pytest
-    pytest-asyncio
+  nativeCheckInputs = [
     aiohttp
     beautifulsoup4
+    pytest-asyncio
+    pytest-timeout
+    pytestCheckHook
+    trustme
   ];
 
-  postConfigure = ''
-    substituteInPlace setup.py \
-      --replace "click==6.7" "click" \
-      --replace "click-default-group==1.2" "click-default-group" \
-      --replace "Sanic==0.7.0" "Sanic" \
-      --replace "hupper==1.0" "hupper" \
-      --replace "pint==0.8.1" "pint" \
-      --replace "Jinja2==2.10" "Jinja2"
-  '';
+  # takes 30-180 mins to run entire test suite, not worth the CPU resources, slows down reviews
+  # with pytest-xdist, it still takes around 10 mins with 32 cores
+  # just run the csv tests, as this should give some indictation of correctness
+  pytestFlagsArray = [ "tests/test_csv.py" ];
 
-  # many tests require network access
-  checkPhase = ''
-    pytest --ignore tests/test_api.py \
-           --ignore tests/test_csv.py \
-           --ignore tests/test_html.py \
-           --ignore tests/test_publish_heroku.py
-  '';
+  disabledTests = [
+    "facet"
+    "_invalid_database" # checks error message when connecting to invalid database
+  ];
+
+  pythonImportsCheck = [
+    "datasette"
+    "datasette.cli"
+    "datasette.app"
+    "datasette.database"
+    "datasette.renderer"
+    "datasette.tracer"
+    "datasette.plugins"
+  ];
 
   meta = with lib; {
-    description = "An instant JSON API for your SQLite databases";
-    homepage = https://github.com/simonw/datasette;
+    description = "Multi-tool for exploring and publishing data";
+    mainProgram = "datasette";
+    homepage = "https://datasette.io/";
+    changelog = "https://github.com/simonw/datasette/releases/tag/${version}";
     license = licenses.asl20;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
-
 }

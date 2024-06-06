@@ -8,12 +8,7 @@ in {
   options.services.ecs-agent = {
     enable = mkEnableOption "Amazon ECS agent";
 
-    package = mkOption {
-      type = types.path;
-      description = "The ECS agent package to use";
-      default = pkgs.ecs-agent;
-      defaultText = "pkgs.ecs-agent";
-    };
+    package = mkPackageOption pkgs "ecs-agent" { };
 
     extra-environment = mkOption {
       type = types.attrsOf types.str;
@@ -38,9 +33,8 @@ in {
         if [ ! -z "$ECS_DATADIR" ]; then
           mkdir -p "$ECS_DATADIR"
         fi
-        ${cfg.package.bin}/bin/agent
+        ${cfg.package}/bin/agent
       '';
     };
   };
 }
-

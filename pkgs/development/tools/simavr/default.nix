@@ -1,17 +1,25 @@
-{ stdenv, fetchFromGitHub, libelf, which, git, pkgconfig, freeglut
-, avrbinutils, avrgcc, avrlibc
-, libGLU_combined
+{ lib, stdenv, makeSetupHook, fetchFromGitHub, libelf, which, pkg-config, freeglut
+, avrgcc, avrlibc
+, libGLU, libGL
 , GLUT }:
 
-stdenv.mkDerivation rec {
-  name = "simavr-${version}";
-  version = "1.5";
+let
+  setupHookDarwin = makeSetupHook {
+    name = "darwin-avr-gcc-hook";
+    substitutions = {
+      darwinSuffixSalt = stdenv.cc.suffixSalt;
+      avrSuffixSalt = avrgcc.suffixSalt;
+    };
+  } ./setup-hook-darwin.sh;
+in stdenv.mkDerivation rec {
+  pname = "simavr";
+  version = "1.7";
 
   src = fetchFromGitHub {
     owner = "buserror";
     repo = "simavr";
-    rev = "e0d4de41a72520491a4076b3ed87beb997a395c0";
-    sha256 = "0b2lh6l2niv80dmbm9xkamvnivkbmqw6v97sy29afalrwfxylxla";
+    rev = "v${version}";
+    sha256 = "0njz03lkw5374x1lxrq08irz4b86lzj2hibx46ssp7zv712pq55q";
   };
 
   makeFlags = [
@@ -22,19 +30,23 @@ stdenv.mkDerivation rec {
     "AVR=avr-"
   ];
 
-  nativeBuildInputs = [ which pkgconfig avrgcc ];
-  buildInputs = [ libelf freeglut libGLU_combined ]
-    ++ stdenv.lib.optional stdenv.isDarwin GLUT;
+  nativeBuildInputs = [ which pkg-config avrgcc ]
+    ++ lib.optional stdenv.isDarwin setupHookDarwin;
+  buildInputs = [ libelf freeglut libGLU libGL ]
+    ++ lib.optional stdenv.isDarwin GLUT;
 
-  # Hack to avoid TMPDIR in RPATHs.
-  preFixup = ''rm -rf "$(pwd)" && mkdir "$(pwd)" '';
+  # remove forbidden references to $TMPDIR
+  preFixup = lib.optionalString stdenv.isLinux ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out"/bin/*
+  '';
 
   doCheck = true;
   checkTarget = "-C tests run_tests";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A lean and mean Atmel AVR simulator";
-    homepage    = https://github.com/buserror/simavr;
+    mainProgram = "simavr";
+    homepage    = "https://github.com/buserror/simavr";
     license     = licenses.gpl3;
     platforms   = platforms.unix;
     maintainers = with maintainers; [ goodrone ];

@@ -1,26 +1,35 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pyyaml
-, unidecode
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pyyaml,
+  unidecode,
 }:
 
 buildPythonPackage rec {
   pname = "pyaml";
-  version = "18.11.0";
+  version = "24.4.0";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b96292cc409e0f222b6fecff96afd2e19cfab5d1f2606344907751d42301263a";
+    hash = "sha256-Dkg9kokBDnR6Ml3EMXG8w51lYt0d1HGejMfnyWyZ/OY=";
   };
+
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [ pyyaml ];
 
-  checkInputs = [ unidecode ];
+  nativeCheckInputs = [ unidecode ];
 
-  meta = {
+  pythonImportsCheck = [ "pyaml" ];
+
+  meta = with lib; {
     description = "PyYAML-based module to produce pretty and readable YAML-serialized data";
-    homepage = https://github.com/mk-fg/pretty-yaml;
-    license = lib.licenses.wtfpl;
+    mainProgram = "pyaml";
+    homepage = "https://github.com/mk-fg/pretty-yaml";
+    license = licenses.wtfpl;
+    maintainers = with maintainers; [ ];
   };
 }

@@ -1,32 +1,55 @@
-{ stdenv, fetchFromGitHub, qt5, poppler, zlib, pkgconfig}:
+{ stdenv, lib, fetchFromGitHub, cmake, qtbase, qttools, qtsvg, qt5compat, quazip
+, qtwayland
+, hunspell
+, wrapQtAppsHook, poppler, zlib, pkg-config }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "texstudio";
-  version = "2.12.14";
-  name = "${pname}-${version}";
+  version = "4.8.0";
 
   src = fetchFromGitHub {
-    owner = "${pname}-org";
-    repo = pname;
-    rev = version;
-    sha256 = "08vfhkgzhh1227wcvr5wwpnw0072c80nf2crhmxwh3jgjfgi538f";
+    owner = "texstudio-org";
+    repo = "texstudio";
+    rev = finalAttrs.version;
+    hash = "sha256-oPC0HJgBWCAGZ1pVTiHyDO3NQ3u/+1fA2KrxuBCB+IY=";
   };
 
-  nativeBuildInputs = [ qt5.qmake pkgconfig ];
-  buildInputs = [ qt5.qtbase qt5.qtscript qt5.qtsvg poppler zlib ];
+  nativeBuildInputs = [
+    cmake
+    wrapQtAppsHook
+    pkg-config
+  ];
+  buildInputs = [
+    hunspell
+    poppler
+    qt5compat
+    qtbase
+    qtsvg
+    qttools
+    quazip
+    zlib
+  ] ++ lib.optionals stdenv.isLinux [
+    qtwayland
+  ];
 
-  qmakeFlags = [ "NO_APPDATA=True" ];
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    mkdir -p "$out/Applications"
+    mv "$out/bin/texstudio.app" "$out/Applications"
+    rm -d "$out/bin"
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "TeX and LaTeX editor";
     longDescription=''
-	Fork of TeXMaker, this editor is a full fledged IDE for
-	LaTeX editing with completion, structure viewer, preview,
-	spell checking and support of any compilation chain.
-	'';
-    homepage = http://texstudio.sourceforge.net;
+      Fork of TeXMaker, this editor is a full fledged IDE for
+      LaTeX editing with completion, structure viewer, preview,
+      spell checking and support of any compilation chain.
+    '';
+    homepage = "https://texstudio.org";
+    changelog = "https://github.com/texstudio-org/texstudio/blob/${finalAttrs.version}/utilities/manual/CHANGELOG.txt";
     license = licenses.gpl2Plus;
-    platforms = [ "x86_64-linux" ];
-    maintainers = with maintainers; [ cfouche ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ ajs124 cfouche ];
+    mainProgram = "texstudio";
   };
-}
+})

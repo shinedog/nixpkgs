@@ -1,46 +1,121 @@
-{ lib
-, fetchPypi
-, fetchpatch
-, buildPythonPackage
-, pytest
-, mock
-, isPy3k
-, pysqlite
+{
+  lib,
+  isPyPy,
+  pythonOlder,
+  fetchFromGitHub,
+  buildPythonPackage,
+
+  # build
+  cython,
+  setuptools,
+
+  # propagates
+  greenlet,
+  typing-extensions,
+
+  # optionals
+  aiomysql,
+  aiosqlite,
+  asyncmy,
+  asyncpg,
+  cx-oracle,
+  mariadb,
+  mypy,
+  mysql-connector,
+  mysqlclient,
+  oracledb,
+  pg8000,
+  psycopg,
+  psycopg2,
+  psycopg2cffi,
+  # TODO: pymssql
+  pymysql,
+  pyodbc,
+  # TODO: sqlcipher3
+
+  # tests
+  mock,
+  pytest-xdist,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  pname = "SQLAlchemy";
-  version = "1.2.14";
+  pname = "sqlalchemy";
+  version = "2.0.30";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "9de7c7dabcf06319becdb7e15099c44e5e34ba7062f9ba10bc00e562f5db3d04";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "sqlalchemy";
+    repo = "sqlalchemy";
+    rev = "refs/tags/rel_${lib.replaceStrings [ "." ] [ "_" ] version}";
+    hash = "sha256-l6VxBK4RT/sAFkz3g633MrfQH9Bvp/JE12mdtqjsxd8=";
   };
 
-  patches = [
-    # fix for failing doc tests
-    # https://bitbucket.org/zzzeek/sqlalchemy/issues/4370/sqlite-325x-docs-tutorialrst-doctests-fail
-    (fetchpatch {
-      name = "doc-test-fixes.patch";
-      url = https://bitbucket.org/zzzeek/sqlalchemy/commits/63279a69e2b9277df5e97ace161fa3a1bb4f29cd/raw;
-      sha256 = "1x25aj5hqmgjdak4hllya0rf0srr937k1hwaxb24i9ban607hjri";
-    })
-  ];
-
-  checkInputs = [
-    pytest
-    mock
-#     Disable pytest_xdist tests for now, because our version seems to be too new.
-#     pytest_xdist
-  ] ++ lib.optional (!isPy3k) pysqlite;
-
-  checkPhase = ''
-    py.test -k "not test_round_trip_direct_type_affinity"
+  postPatch = ''
+    sed -i '/tag_build = dev/d' setup.cfg
   '';
 
+  nativeBuildInputs = [ setuptools ] ++ lib.optionals (!isPyPy) [ cython ];
+
+  propagatedBuildInputs = [
+    greenlet
+    typing-extensions
+  ];
+
+  passthru.optional-dependencies = lib.fix (self: {
+    asyncio = [ greenlet ];
+    mypy = [ mypy ];
+    mssql = [ pyodbc ];
+    mssql_pymysql = [
+      # TODO: pymssql
+    ];
+    mssql_pyodbc = [ pyodbc ];
+    mysql = [ mysqlclient ];
+    mysql_connector = [ mysql-connector ];
+    mariadb_connector = [ mariadb ];
+    oracle = [ cx-oracle ];
+    oracle_oracledb = [ oracledb ];
+    postgresql = [ psycopg2 ];
+    postgresql_pg8000 = [ pg8000 ];
+    postgresql_asyncpg = [ asyncpg ] ++ self.asyncio;
+    postgresql_psycopg2binary = [ psycopg2 ];
+    postgresql_psycopg2cffi = [ psycopg2cffi ];
+    postgresql_psycopg = [ psycopg ];
+    postgresql_psycopgbinary = [ psycopg ];
+    pymysql = [ pymysql ];
+    aiomysql = [ aiomysql ] ++ self.asyncio;
+    asyncmy = [ asyncmy ] ++ self.asyncio;
+    aiosqlite = [
+      aiosqlite
+      typing-extensions
+    ] ++ self.asyncio;
+    sqlcipher = [
+      # TODO: sqlcipher3
+    ];
+  });
+
+  nativeCheckInputs = [
+    pytest-xdist
+    pytestCheckHook
+    mock
+  ];
+
+  disabledTestPaths = [
+    # typing correctness, not interesting
+    "test/ext/mypy"
+    "test/typing"
+    # slow and high memory usage, not interesting
+    "test/aaa_profiling"
+  ];
+
   meta = with lib; {
-    homepage = http://www.sqlalchemy.org/;
-    description = "A Python SQL toolkit and Object Relational Mapper";
+    changelog = "https://github.com/sqlalchemy/sqlalchemy/releases/tag/rel_${
+      builtins.replaceStrings [ "." ] [ "_" ] version
+    }";
+    description = "The Python SQL toolkit and Object Relational Mapper";
+    homepage = "http://www.sqlalchemy.org/";
     license = licenses.mit;
   };
 }

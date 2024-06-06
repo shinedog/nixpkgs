@@ -1,37 +1,56 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cmake, qtbase, qttools
-, seafile-shared, ccnet, makeWrapper
-, withShibboleth ? true, qtwebengine }:
-
-with stdenv.lib;
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, cmake
+, qtbase
+, qttools
+, libuuid
+, seafile-shared
+, jansson
+, libsearpc
+, withShibboleth ? true
+, qtwebengine
+, wrapQtAppsHook
+}:
 
 stdenv.mkDerivation rec {
-  version = "6.2.11";
-  name = "seafile-client-${version}";
+  pname = "seafile-client";
+  version = "9.0.5";
 
   src = fetchFromGitHub {
     owner = "haiwen";
     repo = "seafile-client";
     rev = "v${version}";
-    sha256 = "1b8jqmr2qd3bpb3sr4p5w2a76x5zlknkj922sxrvw1rdwqhkb2pj";
+    sha256 = "sha256-fAPEtULab3Ug4gRCS+Eigp48JkORi7tvic2vp5jaw44=";
   };
 
-  nativeBuildInputs = [ pkgconfig cmake makeWrapper ];
-  buildInputs = [ qtbase qttools seafile-shared ]
-    ++ optional withShibboleth qtwebengine;
+  nativeBuildInputs = [
+    libuuid
+    pkg-config
+    cmake
+    wrapQtAppsHook
+    qttools
+  ];
 
-  cmakeFlags = [ "-DCMAKE_BUILD_TYPE=Release" ]
-    ++ optional withShibboleth "-DBUILD_SHIBBOLETH_SUPPORT=ON";
+  buildInputs = [
+    seafile-shared
+    jansson
+    libsearpc
+  ] ++ lib.optional withShibboleth qtwebengine;
 
-  postInstall = ''
-    wrapProgram $out/bin/seafile-applet \
-      --suffix PATH : ${stdenv.lib.makeBinPath [ ccnet seafile-shared ]}
-  '';
+  cmakeFlags = lib.optional withShibboleth "-DBUILD_SHIBBOLETH_SUPPORT=ON";
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/haiwen/seafile-client;
+  qtWrapperArgs = [
+    "--suffix PATH : ${lib.makeBinPath [ seafile-shared ]}"
+  ];
+
+  meta = with lib; {
+    homepage = "https://github.com/haiwen/seafile-client";
     description = "Desktop client for Seafile, the Next-generation Open Source Cloud Storage";
     license = licenses.asl20;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ ];
+    maintainers = with maintainers; [ schmittlauch greizgh ];
+    mainProgram = "seafile-applet";
   };
 }

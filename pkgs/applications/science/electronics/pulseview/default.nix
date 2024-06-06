@@ -1,30 +1,64 @@
-{ stdenv, fetchurl, pkgconfig, cmake, glib, boost, libsigrok
-, libsigrokdecode, libserialport, libzip, udev, libusb1, libftdi1, glibmm
-, pcre, librevisa, python3, qtbase, qtsvg
+{ lib
+, stdenv
+, fetchgit
+, pkg-config
+, cmake
+, glib
+, boost
+, libsigrok
+, libsigrokdecode
+, libserialport
+, libzip
+, libftdi1
+, hidapi
+, glibmm
+, pcre
+, python3
+, qtsvg
+, qttools
+, bluez
+, wrapQtAppsHook
+, desktopToDarwinBundle
 }:
 
 stdenv.mkDerivation rec {
-  name = "pulseview-0.4.0";
+  pname = "pulseview";
+  version = "0.4.2-unstable-2024-03-14";
 
-  src = fetchurl {
-    url = "https://sigrok.org/download/source/pulseview/${name}.tar.gz";
-    sha256 = "1f8f2342d5yam98mmcb8f9g2vslcwv486bmi4x45pxn68l82ky3q";
+  src = fetchgit {
+    url = "git://sigrok.org/pulseview";
+    rev = "d00efc65ef47090b71c4da12797056033bee795f";
+    hash = "sha256-MwfMUqV3ejxesg+3cFeXVB5hwg4r0cOCgHJuH3ZLmNE=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qttools
+    wrapQtAppsHook
+  ] ++ lib.optional stdenv.isDarwin desktopToDarwinBundle;
 
   buildInputs = [
-    glib boost libsigrok libsigrokdecode libserialport libzip udev libusb1 libftdi1 glibmm
-    pcre librevisa python3 qtbase qtsvg
-  ];
+    glib
+    boost
+    libsigrok
+    libsigrokdecode
+    libserialport
+    libzip
+    libftdi1
+    hidapi
+    glibmm
+    pcre
+    python3
+    qtsvg
+  ] ++ lib.optionals stdenv.isLinux [ bluez ];
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Qt-based LA/scope/MSO GUI for sigrok (a signal analysis software suite)";
-    homepage = https://sigrok.org/;
+    mainProgram = "pulseview";
+    homepage = "https://sigrok.org/";
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
+    maintainers = with maintainers; [ bjornfor vifino ];
+    platforms = platforms.unix;
   };
 }

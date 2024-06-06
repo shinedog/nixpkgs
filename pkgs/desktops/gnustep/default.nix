@@ -1,22 +1,25 @@
-{ pkgs, newScope, stdenv, llvmPackages_6 }:
+{ newScope
+, llvmPackages
+}:
 
 let
   callPackage = newScope self;
 
-  self = rec {
-    stdenv = pkgs.clangStdenv;
+  self = {
+    stdenv = llvmPackages.stdenv;
 
-    gsmakeDerivation = callPackage ./make/gsmakeDerivation.nix {};
+    wrapGNUstepAppsHook = callPackage ./wrapGNUstepAppsHook.nix {};
+
+    make = callPackage ./make {};
+
+    libobjc = callPackage ./libobjc2 {};
+    base = callPackage ./base {};
+    back = callPackage ./back {};
+    gui = callPackage ./gui {};
+
     gorm = callPackage ./gorm {};
     projectcenter = callPackage ./projectcenter {};
     system_preferences = callPackage ./systempreferences {};
-    libobjc = callPackage ./libobjc2 {
-      stdenv = if stdenv.cc.isClang then llvmPackages_6.stdenv else stdenv;
-    };
-    make = callPackage ./make {};
-    back = callPackage ./back {};
-    base = callPackage ./base { giflib = pkgs.giflib_4_1; };
-    gui = callPackage ./gui {};
     gworkspace = callPackage ./gworkspace {};
   };
 

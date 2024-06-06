@@ -1,37 +1,72 @@
-{stdenv, cmake, qtbase, fetchurl, qtdeclarative, qtmultimedia, qttools, qtsensors, qmlbox2d, gettext, qtquickcontrols, qtgraphicaleffects, qtxmlpatterns, makeWrapper,
-  gst_all_1, ninja
+{ stdenv
+, cmake
+, fetchurl
+, gettext
+, gst_all_1
+, lib
+, ninja
+, wrapQtAppsHook
+, qmlbox2d
+, qtbase
+, qtcharts
+, qtdeclarative
+, qtgraphicaleffects
+, qtmultimedia
+, qtquickcontrols2
+, qtsensors
+, qttools
+, qtxmlpatterns
+, extra-cmake-modules
 }:
-stdenv.mkDerivation rec {
-  version = "0.96";
-  name = "gcompris-${version}";
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gcompris";
+  version = "4.1";
 
   src = fetchurl {
-    url = "http://gcompris.net/download/qt/src/gcompris-qt-${version}.tar.xz";
-    sha256 = "06483il59l46ny2w771sg45dgzjwv1ph7vidzzbj0wb8wbk2rg52";
+    url = "mirror://kde/stable/gcompris/qt/src/gcompris-qt-${finalAttrs.version}.tar.xz";
+    hash = "sha256-Pz0cOyBfiexKHUsHXm18Zw2FKu7b7vVuwy4Vu4daBoU=";
   };
 
-  cmakeFlags = "-DQML_BOX2D_LIBRARY=${qmlbox2d}/${qtbase.qtQmlPrefix}/Box2D.2.0";
+  cmakeFlags = [
+    (lib.cmakeFeature "QML_BOX2D_LIBRARY" "${qmlbox2d}/${qtbase.qtQmlPrefix}/Box2D.2.1")
+    (lib.cmakeBool "BUILD_TESTING" (finalAttrs.doCheck or false))
+  ];
 
-  nativeBuildInputs = [ cmake ninja makeWrapper ];
-  buildInputs = [ qtbase qtdeclarative qttools qtsensors qmlbox2d gettext qtquickcontrols qtmultimedia qtgraphicaleffects qtxmlpatterns] ++ soundPlugins;
-  soundPlugins = with gst_all_1; [gst-plugins-good gstreamer gst-plugins-base gst-plugins-bad];
+  nativeBuildInputs = [ cmake extra-cmake-modules gettext ninja qttools wrapQtAppsHook ];
+
+  buildInputs = [
+    qmlbox2d
+    qtbase
+    qtcharts
+    qtdeclarative
+    qtgraphicaleffects
+    qtmultimedia
+    qtquickcontrols2
+    qtsensors
+    qtxmlpatterns
+  ] ++ (with gst_all_1; [
+    gstreamer
+    gst-plugins-base
+    gst-plugins-good
+    gst-plugins-bad
+  ]);
 
   postInstall = ''
-    # install .desktop and icon file
-    mkdir -p $out/share/applications/
-    mkdir -p $out/share/icons/hicolor/256x256/apps/
-    cp ../org.kde.gcompris.desktop $out/share/applications/gcompris.desktop
-    cp -r ../images/256-apps-gcompris-qt.png $out/share/icons/hicolor/256x256/apps/gcompris-qt.png
+    install -Dm444 ../org.kde.gcompris.appdata.xml -t $out/share/metainfo
 
-    wrapProgram "$out/bin/gcompris-qt" \
-       --prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0"
-    '';
+    qtWrapperArgs+=(--prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0")
+  '';
 
-  meta = with stdenv.lib; {
+  # we need a graphical environment for the tests
+  doCheck = false;
+
+  meta = with lib; {
     description = "A high quality educational software suite, including a large number of activities for children aged 2 to 10";
     homepage = "https://gcompris.net/";
-    maintainers = [ maintainers.guibou ];
-    platforms = [ "i686-linux" "x86_64-linux" ];
     license = licenses.gpl3Plus;
+    mainProgram = "gcompris-qt";
+    maintainers = with maintainers; [ guibou ];
+    platforms = platforms.linux;
   };
-}
+})

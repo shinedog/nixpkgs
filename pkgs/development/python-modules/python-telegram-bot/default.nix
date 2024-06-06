@@ -1,43 +1,130 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, certifi
-, future
-, urllib3
-, tornado
-, pytest
+{
+  lib,
+  aiolimiter,
+  apscheduler,
+  beautifulsoup4,
+  buildPythonPackage,
+  cachetools,
+  cryptography,
+  fetchFromGitHub,
+  flaky,
+  httpx,
+  pytest-asyncio,
+  pytest-timeout,
+  pytest-xdist,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  setuptools,
+  tornado,
 }:
 
 buildPythonPackage rec {
   pname = "python-telegram-bot";
-  version = "11.1.0";
+  version = "21.2";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "cca4e32ebb8da7fdf35ab2fa2b3edd441211364819c5592fc253acdb7561ea5b";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "python-telegram-bot";
+    repo = "python-telegram-bot";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-l5twJbyZh30+pt9DsCpQRuSav8qYNGlIhQW0qY9BmO4=";
   };
 
-  prePatch = ''
-    rm -rf telegram/vendor
-    substituteInPlace telegram/utils/request.py \
-      --replace "import telegram.vendor.ptb_urllib3.urllib3 as urllib3" "import urllib3 as urllib3" \
-      --replace "import telegram.vendor.ptb_urllib3.urllib3.contrib.appengine as appengine" "import urllib3.contrib.appengine as appengine" \
-      --replace "from telegram.vendor.ptb_urllib3.urllib3.connection import HTTPConnection" "from urllib3.connection import HTTPConnection" \
-      --replace "from telegram.vendor.ptb_urllib3.urllib3.util.timeout import Timeout" "from urllib3.util.timeout import Timeout"
+  build-system = [ setuptools ];
 
-    touch LICENSE.dual
-  '';
+  dependencies = [
+    aiolimiter
+    apscheduler
+    cachetools
+    cryptography
+    httpx
+    pytz
+  ] ++ httpx.optional-dependencies.socks ++ httpx.optional-dependencies.http2;
 
-  checkInputs = [ pytest ];
-  propagatedBuildInputs = [ certifi future urllib3 tornado ];
+  nativeCheckInputs = [
+    beautifulsoup4
+    flaky
+    pytest-asyncio
+    pytest-timeout
+    pytest-xdist
+    pytestCheckHook
+    tornado
+  ];
 
-  # tests not included with release
-  doCheck = false;
+  pythonImportsCheck = [ "telegram" ];
 
-  meta = with stdenv.lib; {
-    description = "This library provides a pure Python interface for the Telegram Bot API.";
-    homepage = https://python-telegram-bot.org;
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ veprbl ];
+  disabledTests = [
+    # Tests require network access
+    "TestAIO"
+    "TestAnimation"
+    "TestApplication"
+    "TestAudio"
+    "TestBase"
+    "TestBot"
+    "TestCallback"
+    "TestChat"
+    "TestChosenInlineResult"
+    "TestCommandHandler"
+    "TestConstants"
+    "TestContact"
+    "TestConversationHandler"
+    "TestDice"
+    "TestDict"
+    "TestDocument"
+    "TestFile"
+    "TestForceReply"
+    "TestForum"
+    "TestGame"
+    "TestGet"
+    "TestHTTP"
+    "TestInline"
+    "TestInput"
+    "TestInvoice"
+    "TestJob"
+    "TestKeyboard"
+    "TestLocation"
+    "TestMask"
+    "TestMenu"
+    "TestMessage"
+    "TestMeta"
+    "TestOrder"
+    "TestPassport"
+    "TestPhoto"
+    "TestPickle"
+    "TestPoll"
+    "TestPre"
+    "TestPrefix"
+    "TestProximity"
+    "TestReply"
+    "TestRequest"
+    "TestSend"
+    "TestSent"
+    "TestShipping"
+    "TestSlot"
+    "TestSticker"
+    "TestString"
+    "TestSuccess"
+    "TestTelegram"
+    "TestType"
+    "TestUpdate"
+    "TestUser"
+    "TestVenue"
+    "TestVideo"
+    "TestVoice"
+    "TestWeb"
+  ];
+
+  meta = with lib; {
+    description = "Python library to interface with the Telegram Bot API";
+    homepage = "https://python-telegram-bot.org";
+    changelog = "https://github.com/python-telegram-bot/python-telegram-bot/blob/v${version}/CHANGES.rst";
+    license = licenses.lgpl3Only;
+    maintainers = with maintainers; [
+      veprbl
+      pingiun
+    ];
   };
 }

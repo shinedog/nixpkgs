@@ -9,17 +9,17 @@
 
 # This file is made to be used as follow:
 #
-#   $ nix-instantiate ./option-usage.nix --argstr testOption service.xserver.enable -A txtContent --eval
+#   $ nix-instantiate ./option-usages.nix --argstr testOption service.xserver.enable -A txtContent --eval
 #
 # or
 #
-#   $ nix-build ./option-usage.nix --argstr testOption service.xserver.enable -A txt -o service.xserver.enable._txt
+#   $ nix-build ./option-usages.nix --argstr testOption service.xserver.enable -A txt -o service.xserver.enable._txt
 #
 # Other targets exists such as `dotContent`, `dot`, and `pdf`.  If you are
 # looking for the option usage of multiple options, you can provide a list
 # as argument.
 #
-#   $ nix-build ./option-usage.nix --arg testOptions \
+#   $ nix-build ./option-usages.nix --arg testOptions \
 #      '["boot.loader.gummiboot.enable" "boot.loader.gummiboot.timeout"]' \
 #      -A txt -o gummiboot.list
 #
@@ -102,7 +102,7 @@ let
       # builtins multiply by 4 the memory usage and the time used to compute
       # each options.
       tryCollectOptions = moduleResult:
-        flip map (excludeOptions (collect isOption moduleResult)) (opt:
+        forEach (excludeOptions (collect isOption moduleResult)) (opt:
           { name = showOption opt.loc; } // builtins.tryEval (strict opt.value));
      in
        keepNames (
@@ -145,7 +145,7 @@ let
   displayOptionsGraph =
      let
        checkList =
-         if !(isNull testOption) then [ testOption ]
+         if testOption != null then [ testOption ]
          else testOptions;
        checkAll = checkList == [];
      in

@@ -1,30 +1,57 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, dask
-, numpy, toolz # dask[array]
-, scipy
-, pims
-, pytest
-, scikitimage
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  setuptools,
+  setuptools-scm,
+  dask,
+  numpy,
+  scipy,
+  pandas,
+  pims,
+  pytestCheckHook,
+  scikit-image,
 }:
 
 buildPythonPackage rec {
-  version = "0.2.0";
   pname = "dask-image";
+  version = "2024.5.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "bece2ea347f963dc0168c7d5fdfd11e51b47d9c857d3bc56144d7c146964a23f";
+  disabled = pythonOlder "3.9";
+
+  src = fetchFromGitHub {
+    owner = "dask";
+    repo = "dask-image";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-kXCAqJ2Zgo/2Khvo2YcK+n4oGM219GyQ2Hsq9re1Lac=";
   };
 
-  checkInputs = [ pytest scikitimage ];
-  propagatedBuildInputs = [ dask numpy toolz scipy pims ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/dask/dask-image;
+  dependencies = [
+    dask
+    numpy
+    scipy
+    pandas
+    pims
+  ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    scikit-image
+  ];
+
+  pythonImportsCheck = [ "dask_image" ];
+
+  meta = {
     description = "Distributed image processing";
-    license = licenses.bsdOriginal;
-    maintainers = [ maintainers.costrouc ];
+    homepage = "https://github.com/dask/dask-image";
+    license = lib.licenses.bsdOriginal;
+    maintainers = with lib.maintainers; [ GaetanLepage ];
   };
 }

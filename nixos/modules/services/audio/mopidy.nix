@@ -13,11 +13,11 @@ let
   mopidyEnv = buildEnv {
     name = "mopidy-with-extensions-${mopidy.version}";
     paths = closePropagation cfg.extensionPackages;
-    pathsToLink = [ "/${python.sitePackages}" ];
-    buildInputs = [ makeWrapper ];
+    pathsToLink = [ "/${mopidyPackages.python.sitePackages}" ];
+    nativeBuildInputs = [ makeWrapper ];
     postBuild = ''
       makeWrapper ${mopidy}/bin/mopidy $out/bin/mopidy \
-        --prefix PYTHONPATH : $out/${python.sitePackages}
+        --prefix PYTHONPATH : $out/${mopidyPackages.python.sitePackages}
     '';
   };
 in {
@@ -39,7 +39,7 @@ in {
       extensionPackages = mkOption {
         default = [];
         type = types.listOf types.package;
-        example = literalExample "[ pkgs.mopidy-spotify ]";
+        example = literalExpression "[ pkgs.mopidy-spotify ]";
         description = ''
           Mopidy extensions that should be loaded by the service.
         '';
@@ -70,25 +70,27 @@ in {
 
   config = mkIf cfg.enable {
 
+    systemd.tmpfiles.settings."10-mopidy".${cfg.dataDir}.d = {
+      user = "mopidy";
+      group = "mopidy";
+    };
+
     systemd.services.mopidy = {
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" "sound.target" ];
+      after = [ "network-online.target" "sound.target" ];
+      wants = [ "network-online.target" ];
       description = "mopidy music player daemon";
-      preStart = "mkdir -p ${cfg.dataDir} && chown -R mopidy:mopidy  ${cfg.dataDir}";
       serviceConfig = {
         ExecStart = "${mopidyEnv}/bin/mopidy --config ${concatStringsSep ":" ([mopidyConf] ++ cfg.extraConfigFiles)}";
         User = "mopidy";
-        PermissionsStartOnly = true;
       };
     };
 
     systemd.services.mopidy-scan = {
       description = "mopidy local files scanner";
-      preStart = "mkdir -p ${cfg.dataDir} && chown -R mopidy:mopidy  ${cfg.dataDir}";
       serviceConfig = {
         ExecStart = "${mopidyEnv}/bin/mopidy --config ${concatStringsSep ":" ([mopidyConf] ++ cfg.extraConfigFiles)} local scan";
         User = "mopidy";
-        PermissionsStartOnly = true;
         Type = "oneshot";
       };
     };
@@ -98,7 +100,7 @@ in {
       group = "mopidy";
       extraGroups = [ "audio" ];
       description = "Mopidy daemon user";
-      home = "${cfg.dataDir}";
+      home = cfg.dataDir;
     };
 
     users.groups.mopidy.gid = gid;

@@ -1,39 +1,53 @@
-{ stdenv, fetchurl, lightdm, pkgconfig, intltool
-, hicolor-icon-theme, makeWrapper
-, useGTK2 ? false, gtk2, gtk3 # gtk3 seems better supported
-, exo, at-spi2-core
+{ stdenv
+, lib
+, lightdm-gtk-greeter
+, fetchurl
+, lightdm
+, pkg-config
+, intltool
+, linkFarm
+, wrapGAppsHook3
+, gtk3
+, xfce4-dev-tools
+, at-spi2-core
+, librsvg
+, hicolor-icon-theme
 }:
 
-#ToDo: bad icons with gtk2;
-#  avatar icon is missing in standard hicolor theme, I don't know where gtk3 takes it from
-
-let
-  ver_branch = "2.0";
-  version = "2.0.6";
-in
 stdenv.mkDerivation rec {
-  name = "lightdm-gtk-greeter-${version}";
+  pname = "lightdm-gtk-greeter";
+  version = "2.0.9";
 
   src = fetchurl {
-    url = "${meta.homepage}/${ver_branch}/${version}/+download/${name}.tar.gz";
-    sha256 = "1pis5qyg95pg31dvnfqq34bzgj00hg4vs547r8h60lxjk81z8p15";
+    # Release tarball differs from source tarball.
+    url = "https://github.com/Xubuntu/lightdm-gtk-greeter/releases/download/lightdm-gtk-greeter-${version}/lightdm-gtk-greeter-${version}.tar.gz";
+    hash = "sha256-yP3xmKqaP50NrQtI3+I8Ine3kQfo/PxillKQ8QgfZF0=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ lightdm exo intltool makeWrapper hicolor-icon-theme ]
-    ++ (if useGTK2 then [ gtk2 ] else [ gtk3 ]);
+  nativeBuildInputs = [
+    pkg-config
+    intltool
+    xfce4-dev-tools
+    wrapGAppsHook3
+  ];
+
+  buildInputs = [
+    lightdm
+    librsvg
+    hicolor-icon-theme
+    gtk3
+  ];
 
   configureFlags = [
     "--localstatedir=/var"
     "--sysconfdir=/etc"
     "--disable-indicator-services-command"
-  ] ++ stdenv.lib.optional useGTK2 "--with-gtk2";
+    "--sbindir=${placeholder "out"}/bin" # for wrapGAppsHook3 to wrap automatically
+  ];
 
   preConfigure = ''
     configureFlagsArray+=( --enable-at-spi-command="${at-spi2-core}/libexec/at-spi-bus-launcher --launch-immediately" )
   '';
-
-  NIX_CFLAGS_COMPILE = [ "-Wno-error=deprecated-declarations" ];
 
   installFlags = [
     "localstatedir=\${TMPDIR}"
@@ -42,15 +56,20 @@ stdenv.mkDerivation rec {
 
   postInstall = ''
     substituteInPlace "$out/share/xgreeters/lightdm-gtk-greeter.desktop" \
-      --replace "Exec=lightdm-gtk-greeter" "Exec=$out/sbin/lightdm-gtk-greeter"
-    wrapProgram "$out/sbin/lightdm-gtk-greeter" \
-      --prefix XDG_DATA_DIRS ":" "${hicolor-icon-theme}/share"
+      --replace-fail "Exec=lightdm-gtk-greeter" "Exec=$out/bin/lightdm-gtk-greeter"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://launchpad.net/lightdm-gtk-greeter;
+  passthru.xgreeters = linkFarm "lightdm-gtk-greeter-xgreeters" [{
+    path = "${lightdm-gtk-greeter}/share/xgreeters/lightdm-gtk-greeter.desktop";
+    name = "lightdm-gtk-greeter.desktop";
+  }];
+
+  meta = with lib; {
+    homepage = "https://github.com/Xubuntu/lightdm-gtk-greeter";
+    description = "A GTK greeter for LightDM";
+    mainProgram = "lightdm-gtk-greeter";
     platforms = platforms.linux;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ ocharles ];
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ bobby285271 ];
   };
 }

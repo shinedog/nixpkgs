@@ -1,66 +1,208 @@
-{ stdenv, fetchurl, wxGTK30, pkgconfig, file, gettext, gtk2,
-  libvorbis, libmad, libjack2, lv2, lilv, serd, sord, sratom, suil, alsaLib, libsndfile, soxr, flac, lame,
-  expat, libid3tag, ffmpeg, soundtouch, /*, portaudio - given up fighting their portaudio.patch */
-  autoconf, automake, libtool
-  }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+, makeWrapper
+, wrapGAppsHook3
+, pkg-config
+, python3
+, gettext
+, file
+, libvorbis
+, libmad
+, libjack2
+, lv2
+, lilv
+, mpg123
+, opusfile
+, rapidjson
+, serd
+, sord
+, sqlite
+, sratom
+, suil
+, libsndfile
+, soxr
+, flac
+, lame
+, twolame
+, expat
+, libid3tag
+, libopus
+, libuuid
+, ffmpeg_6
+, soundtouch
+, pcre
+, portaudio # given up fighting their portaudio.patch?
+, portmidi
+, linuxHeaders
+, alsa-lib
+, at-spi2-core
+, dbus
+, libepoxy
+, libXdmcp
+, libXtst
+, libpthreadstubs
+, libsbsms_2_3_0
+, libselinux
+, libsepol
+, libxkbcommon
+, util-linux
+, wavpack
+, wxGTK32
+, gtk3
+, libpng
+, libjpeg
+, AppKit
+, CoreAudioKit
+}:
 
-with stdenv.lib;
+# TODO
+# 1. detach sbsms
 
 stdenv.mkDerivation rec {
-  version = "2.3.1";
-  name = "audacity-${version}";
+  pname = "audacity";
+  version = "3.5.1";
 
-  src = fetchurl {
-    url = "https://github.com/audacity/audacity/archive/Audacity-${version}.tar.gz";
-    sha256 = "089kz6hgqg0caz33sps19wpkfnza5gf7brdq2p9y6bnwkipw1w9f";
+  src = fetchFromGitHub {
+    owner = "audacity";
+    repo = "audacity";
+    rev = "Audacity-${version}";
+    hash = "sha256-wQ+K31TvDTVwDyVQ5nWgcneZ1cFxztmsbSXrDs33Uoc=";
   };
 
-  preConfigure = /* we prefer system-wide libs */ ''
-    autoreconf -vi # use system libraries
-
-    # we will get a (possibly harmless) warning during configure without this
-    substituteInPlace configure \
-      --replace /usr/bin/file ${file}/bin/file
+  postPatch = ''
+    mkdir src/private
+    substituteInPlace scripts/build/macOS/fix_bundle.py \
+      --replace "path.startswith('/usr/lib/')" "path.startswith('${builtins.storeDir}')"
+  '' + lib.optionalString stdenv.isLinux ''
+    substituteInPlace libraries/lib-files/FileNames.cpp \
+      --replace /usr/include/linux/magic.h ${linuxHeaders}/include/linux/magic.h
+  '' + lib.optionalString (stdenv.isDarwin && lib.versionOlder stdenv.hostPlatform.darwinMinVersion "11.0") ''
+    sed -z -i "s/NSAppearanceName.*systemAppearance//" src/AudacityApp.mm
   '';
 
-  configureFlags = [
-    "--with-libsamplerate"
+  nativeBuildInputs = [
+    cmake
+    gettext
+    pkg-config
+    python3
+    makeWrapper
+    wrapGAppsHook3
+  ] ++ lib.optionals stdenv.isLinux [
+    linuxHeaders
   ];
 
-  # audacity only looks for lame and ffmpeg at runtime, so we need to link them in manually
-  NIX_LDFLAGS = [
-    # LAME
-    "-lmp3lame"
-    # ffmpeg
-    "-lavcodec"
-    "-lavdevice"
-    "-lavfilter"
-    "-lavformat"
-    "-lavresample"
-    "-lavutil"
-    "-lpostproc"
-    "-lswresample"
-    "-lswscale"
-  ];
-
-  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    file gettext wxGTK30 expat alsaLib
-    libsndfile soxr libid3tag libjack2 lv2 lilv serd sord sratom suil gtk2
-    ffmpeg libmad lame libvorbis flac soundtouch
-    autoconf automake libtool # for the preConfigure phase
-  ]; #ToDo: detach sbsms
+    expat
+    ffmpeg_6
+    file
+    flac
+    gtk3
+    lame
+    libid3tag
+    libjack2
+    libmad
+    libopus
+    libsbsms_2_3_0
+    libsndfile
+    libvorbis
+    lilv
+    lv2
+    mpg123
+    opusfile
+    pcre
+    portmidi
+    rapidjson
+    serd
+    sord
+    soundtouch
+    soxr
+    sqlite
+    sratom
+    suil
+    twolame
+    portaudio
+    wavpack
+    wxGTK32
+  ] ++ lib.optionals stdenv.isLinux [
+    alsa-lib # for portaudio
+    at-spi2-core
+    dbus
+    libepoxy
+    libXdmcp
+    libXtst
+    libpthreadstubs
+    libxkbcommon
+    libselinux
+    libsepol
+    libuuid
+    util-linux
+  ] ++ lib.optionals stdenv.isDarwin [
+    AppKit
+    CoreAudioKit # for portaudio
+    libpng
+    libjpeg
+  ];
 
-  enableParallelBuilding = true;
+  cmakeFlags = [
+    "-DAUDACITY_BUILD_LEVEL=2"
+    "-DAUDACITY_REV_LONG=nixpkgs"
+    "-DAUDACITY_REV_TIME=nixpkgs"
+    "-DDISABLE_DYNAMIC_LOADING_FFMPEG=ON"
+    "-Daudacity_conan_enabled=Off"
+    "-Daudacity_use_ffmpeg=loaded"
+    "-Daudacity_has_vst3=Off"
+    "-Daudacity_has_crashreports=Off"
 
-  dontDisableStatic = true;
+    # RPATH of binary /nix/store/.../bin/... contains a forbidden reference to /build/
+    "-DCMAKE_SKIP_BUILD_RPATH=ON"
+
+    # Fix duplicate store paths
+    "-DCMAKE_INSTALL_LIBDIR=lib"
+  ];
+
+  # [ 57%] Generating LightThemeAsCeeCode.h...
+  # ../../utils/image-compiler: error while loading shared libraries:
+  # lib-theme.so: cannot open shared object file: No such file or directory
+  preBuild = ''
+    export LD_LIBRARY_PATH=$PWD/Release/lib/audacity
+  '';
+
   doCheck = false; # Test fails
 
-  meta = with stdenv.lib; {
+  dontWrapGApps = true;
+
+  # Replace audacity's wrapper, to:
+  # - put it in the right place, it shouldn't be in "$out/audacity"
+  # - Add the ffmpeg dynamic dependency
+  postFixup = lib.optionalString stdenv.isLinux ''
+    wrapProgram "$out/bin/audacity" \
+      "''${gappsWrapperArgs[@]}" \
+      --prefix LD_LIBRARY_PATH : "$out/lib/audacity":${lib.makeLibraryPath [ ffmpeg_6 ]} \
+      --suffix AUDACITY_MODULES_PATH : "$out/lib/audacity/modules" \
+      --suffix AUDACITY_PATH : "$out/share/audacity"
+  '' + lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/{Applications,bin}
+    mv $out/Audacity.app $out/Applications/
+    makeWrapper $out/Applications/Audacity.app/Contents/MacOS/Audacity $out/bin/audacity
+  '';
+
+  meta = with lib; {
     description = "Sound editor with graphical UI";
-    homepage = http://audacityteam.org/;
-    license = licenses.gpl2Plus;
-    platforms = with platforms; linux;
-    maintainers = with maintainers; [ the-kenny ];
+    mainProgram = "audacity";
+    homepage = "https://www.audacityteam.org";
+    changelog = "https://github.com/audacity/audacity/releases";
+    license = with licenses; [
+      gpl2Plus
+      # Must be GPL3 when building with "technologies that require it,
+      # such as the VST3 audio plugin interface".
+      # https://github.com/audacity/audacity/discussions/2142.
+      gpl3
+      # Documentation.
+      cc-by-30
+    ];
+    maintainers = with maintainers; [ lheckemann veprbl wegank ];
+    platforms = platforms.unix;
   };
 }

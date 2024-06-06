@@ -1,9 +1,32 @@
 # builder for Emacs packages built for packages.el
 # using MELPA package-build.el
 
-{ lib, stdenv, fetchFromGitHub, emacs, texinfo }:
+{ lib, stdenv, fetchFromGitHub, emacs, texinfo, writeText, gcc }:
 
-with lib;
+let
+  genericBuild = import ./generic.nix { inherit lib stdenv emacs texinfo writeText gcc; };
+
+  packageBuild = stdenv.mkDerivation {
+    name = "package-build";
+    src = fetchFromGitHub {
+      owner = "melpa";
+      repo = "package-build";
+      rev = "c48aa078c01b4f07b804270c4583a0a58ffea1c0";
+      sha256 = "sha256-MzPj375upIiYXdQR+wWXv3A1zMqbSrZlH0taLuxx/1M=";
+    };
+
+    patches = [ ./package-build-dont-use-mtime.patch ];
+
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = "
+      mkdir -p $out
+      cp -r * $out
+    ";
+  };
+
+in
 
 { /*
     pname: Nix package name without special symbols and without version or
@@ -12,38 +35,41 @@ with lib;
   pname
   /*
     ename: Original Emacs package name, possibly containing special symbols.
+    Default: pname
   */
-, ename ? null
+, ename ? pname
 , version
-, recipe
+  /*
+    commit: Optional package history commit.
+    Default: src.rev or "unknown"
+    This will be written into the generated package but it is not needed during
+    the build process.
+  */
+, commit ? (args.src.rev or "unknown")
+  /*
+    files: Optional recipe property specifying the files used to build the package.
+    If null, do not set it in recipe, keeping the default upstream behaviour.
+    Default: null
+  */
+, files ? null
+  /*
+    recipe: Optional MELPA recipe.
+    Default: a minimally functional recipe
+  */
+, recipe ? (writeText "${pname}-recipe" ''
+    (${ename} :fetcher git :url ""
+              ${lib.optionalString (files != null) ":files ${files}"})
+  '')
 , meta ? {}
 , ...
 }@args:
 
-let
-
-  defaultMeta = {
-    homepage = args.src.meta.homepage or "http://melpa.org/#/${pname}";
-  };
-
-in
-
-import ./generic.nix { inherit lib stdenv emacs texinfo; } ({
-
-  ename =
-    if isNull(ename)
-    then pname
-    else ename;
-
-  packageBuild = fetchFromGitHub {
-    owner = "melpa";
-    repo = "package-build";
-    rev = "0a22c3fbbf661822ec1791739953b937a12fa623";
-    sha256 = "0dpy5p34il600sc8ic5jdgb3glya9si3lrvhxab0swks8fdydjgs";
-  };
+genericBuild ({
 
   elpa2nix = ./elpa2nix.el;
   melpa2nix = ./melpa2nix.el;
+
+  inherit packageBuild commit ename recipe;
 
   preUnpack = ''
     mkdir -p "$NIX_BUILD_TOP/recipes"
@@ -70,7 +96,7 @@ import ./generic.nix { inherit lib stdenv emacs texinfo; } ({
         -L "$NIX_BUILD_TOP/package-build" \
         -l "$melpa2nix" \
         -f melpa2nix-build-package \
-        $ename $version
+        $ename $version $commit
 
     runHook postBuild
     '';
@@ -91,7 +117,9 @@ import ./generic.nix { inherit lib stdenv emacs texinfo; } ({
     runHook postInstall
   '';
 
-  meta = defaultMeta // meta;
+  meta = {
+    homepage = args.src.meta.homepage or "https://melpa.org/#/${pname}";
+  } // meta;
 }
 
 // removeAttrs args [ "meta" ])

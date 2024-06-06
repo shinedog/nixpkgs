@@ -1,22 +1,24 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, matplotlib
-, numpy
-, python-dateutil
-, pytz
-, requests
-, retrying
-, scipy
-, six
-, tornado
-, tweepy
-, ws4py
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  matplotlib,
+  numpy,
+  python-dateutil,
+  pytz,
+  requests,
+  retrying,
+  scipy,
+  six,
+  tornado,
+  tweepy,
+  ws4py,
 }:
 
 buildPythonPackage rec {
   pname = "pyalgotrade";
   version = "0.20";
+  format = "setuptools";
 
   src = fetchPypi {
     pname = "PyAlgoTrade";
@@ -25,17 +27,25 @@ buildPythonPackage rec {
   };
 
   propagatedBuildInputs = [
-    matplotlib numpy python-dateutil pytz requests
-    retrying scipy six tornado tweepy ws4py
+    matplotlib
+    numpy
+    python-dateutil
+    pytz
+    requests
+    retrying
+    scipy
+    six
+    tornado
+    tweepy
+    ws4py
   ];
 
   # no tests in PyPI tarball
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Python Algorithmic Trading";
-    homepage = http://gbeced.github.io/pyalgotrade/;
+    homepage = "http://gbeced.github.io/pyalgotrade/";
     license = licenses.asl20;
   };
-
 }

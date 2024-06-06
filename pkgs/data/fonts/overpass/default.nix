@@ -1,21 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  version = "3.0.3";
-in fetchzip rec {
-  name = "overpass-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "overpass";
+  version = "3.0.5";
 
-  url = "https://github.com/RedHatBrand/Overpass/archive/${version}.zip";
+  src = fetchzip {
+    url = "https://github.com/RedHatOfficial/Overpass/releases/download/v${version}/overpass-${version}.zip";
+    hash = "sha256-8AWT0/DELfNWXtZOejC90DbUSOtyGt9tSkcSuO7HP2o=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/fonts/opentype ; unzip -j $downloadedFile \*.otf -d $out/share/fonts/opentype
-    mkdir -p $out/share/doc/${name}    ; unzip -j $downloadedFile \*.md  -d $out/share/doc/${name}
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 */*/*.otf -t $out/share/fonts/opentype
+    install -Dm644 */*/*.ttf -t $out/share/fonts/truetype
+    install -Dm644 *.md  -t $out/share/doc/${pname}-${version}
+
+    runHook postInstall
   '';
 
-  sha256 = "1m6p7rrlyqikjvypp4698sn0lp3a4z0z5al4swblfhg8qaxzv5pg";
-
-  meta = with stdenv.lib; {
-    homepage = http://overpassfont.org/;
+  meta = with lib; {
+    homepage = "https://overpassfont.org/";
     description = "Font heavily inspired by Highway Gothic";
     license = licenses.ofl;
     platforms = platforms.all;

@@ -4,56 +4,107 @@ with lib;
 
 let
   cfg = config.services.traefik;
-  configFile =
-    if cfg.configFile == null then
-      pkgs.runCommand "config.toml" {
-        buildInputs = [ pkgs.remarshal ];
-        preferLocalBuild = true;
-      } ''
-        remarshal -if json -of toml \
-          < ${pkgs.writeText "config.json" (builtins.toJSON cfg.configOptions)} \
-          > $out
-      ''
-    else cfg.configFile;
+  jsonValue = with types;
+    let
+      valueType = nullOr (oneOf [
+        bool
+        int
+        float
+        str
+        (lazyAttrsOf valueType)
+        (listOf valueType)
+      ]) // {
+        description = "JSON value";
+        emptyValue.value = { };
+      };
+    in valueType;
+  dynamicConfigFile = if cfg.dynamicConfigFile == null then
+    pkgs.runCommand "config.toml" {
+      buildInputs = [ pkgs.remarshal ];
+      preferLocalBuild = true;
+    } ''
+      remarshal -if json -of toml \
+        < ${
+          pkgs.writeText "dynamic_config.json"
+          (builtins.toJSON cfg.dynamicConfigOptions)
+        } \
+        > $out
+    ''
+  else
+    cfg.dynamicConfigFile;
+  staticConfigFile = if cfg.staticConfigFile == null then
+    pkgs.runCommand "config.toml" {
+      buildInputs = [ pkgs.yj ];
+      preferLocalBuild = true;
+    } ''
+      yj -jt -i \
+        < ${
+          pkgs.writeText "static_config.json" (builtins.toJSON
+            (recursiveUpdate cfg.staticConfigOptions {
+              providers.file.filename = "${dynamicConfigFile}";
+            }))
+        } \
+        > $out
+    ''
+  else
+    cfg.staticConfigFile;
 
+  finalStaticConfigFile =
+    if cfg.environmentFiles == []
+    then staticConfigFile
+    else "/run/traefik/config.toml";
 in {
   options.services.traefik = {
     enable = mkEnableOption "Traefik web server";
 
-    configFile = mkOption {
+    staticConfigFile = mkOption {
       default = null;
-      example = literalExample "/path/to/config.toml";
+      example = literalExpression "/path/to/static_config.toml";
       type = types.nullOr types.path;
       description = ''
-        Path to verbatim traefik.toml to use.
-        (Using that option has precedence over <literal>configOptions</literal>)
+        Path to traefik's static configuration to use.
+        (Using that option has precedence over `staticConfigOptions` and `dynamicConfigOptions`)
       '';
     };
 
-    configOptions = mkOption {
+    staticConfigOptions = mkOption {
       description = ''
-        Config for Traefik.
+        Static configuration for Traefik.
       '';
-      type = types.attrs;
-      default = {
-        defaultEntryPoints = ["http"];
-        entryPoints.http.address = ":80";
-      };
+      type = jsonValue;
+      default = { entryPoints.http.address = ":80"; };
       example = {
-        defaultEntrypoints = [ "http" ];
-        web.address = ":8080";
+        entryPoints.web.address = ":8080";
         entryPoints.http.address = ":80";
 
-        file = {};
-        frontends = {
-          frontend1 = {
-            backend = "backend1";
-            routes.test_1.rule = "Host:localhost";
-          };
+        api = { };
+      };
+    };
+
+    dynamicConfigFile = mkOption {
+      default = null;
+      example = literalExpression "/path/to/dynamic_config.toml";
+      type = types.nullOr types.path;
+      description = ''
+        Path to traefik's dynamic configuration to use.
+        (Using that option has precedence over `dynamicConfigOptions`)
+      '';
+    };
+
+    dynamicConfigOptions = mkOption {
+      description = ''
+        Dynamic configuration for Traefik.
+      '';
+      type = jsonValue;
+      default = { };
+      example = {
+        http.routers.router1 = {
+          rule = "Host(`localhost`)";
+          service = "service1";
         };
-        backends.backend1 = {
-          servers.server1.url = "http://localhost:8000";
-        };
+
+        http.services.service1.loadBalancer.servers =
+          [{ url = "http://localhost:8080"; }];
       };
     };
 
@@ -61,45 +112,55 @@ in {
       default = "/var/lib/traefik";
       type = types.path;
       description = ''
-      Location for any persistent data traefik creates, ie. acme
+        Location for any persistent data traefik creates, ie. acme
       '';
     };
 
     group = mkOption {
       default = "traefik";
-      type = types.string;
+      type = types.str;
       example = "docker";
       description = ''
         Set the group that traefik runs under.
-        For the docker backend this needs to be set to <literal>docker</literal> instead.
+        For the docker backend this needs to be set to `docker` instead.
       '';
     };
 
-    package = mkOption {
-      default = pkgs.traefik;
-      defaultText = "pkgs.traefik";
-      type = types.package;
-      description = "Traefik package to use.";
+    package = mkPackageOption pkgs "traefik" { };
+
+    environmentFiles = mkOption {
+      default = [];
+      type = types.listOf types.path;
+      example = [ "/run/secrets/traefik.env" ];
+      description = ''
+        Files to load as environment file. Environment variables from this file
+        will be substituted into the static configuration file using envsubst.
+      '';
     };
   };
 
   config = mkIf cfg.enable {
-    systemd.tmpfiles.rules = [
-      "d '${cfg.dataDir}' 0700 traefik traefik - -"
-    ];
+    systemd.tmpfiles.rules = [ "d '${cfg.dataDir}' 0700 traefik traefik - -" ];
 
     systemd.services.traefik = {
       description = "Traefik web server";
+      wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
+      startLimitIntervalSec = 86400;
+      startLimitBurst = 5;
       serviceConfig = {
-        ExecStart = ''${cfg.package.bin}/bin/traefik --configfile=${configFile}'';
+        EnvironmentFile = cfg.environmentFiles;
+        ExecStartPre = lib.optional (cfg.environmentFiles != [])
+          (pkgs.writeShellScript "pre-start" ''
+            umask 077
+            ${pkgs.envsubst}/bin/envsubst -i "${staticConfigFile}" > "${finalStaticConfigFile}"
+          '');
+        ExecStart = "${cfg.package}/bin/traefik --configfile=${finalStaticConfigFile}";
         Type = "simple";
         User = "traefik";
         Group = cfg.group;
         Restart = "on-failure";
-        StartLimitInterval = 86400;
-        StartLimitBurst = 5;
         AmbientCapabilities = "cap_net_bind_service";
         CapabilityBoundingSet = "cap_net_bind_service";
         NoNewPrivileges = true;
@@ -109,7 +170,8 @@ in {
         PrivateDevices = true;
         ProtectHome = true;
         ProtectSystem = "full";
-        ReadWriteDirectories = cfg.dataDir;
+        ReadWritePaths = [ cfg.dataDir ];
+        RuntimeDirectory = "traefik";
       };
     };
 
@@ -117,8 +179,9 @@ in {
       group = "traefik";
       home = cfg.dataDir;
       createHome = true;
+      isSystemUser = true;
     };
 
-    users.groups.traefik = {};
+    users.groups.traefik = { };
   };
 }

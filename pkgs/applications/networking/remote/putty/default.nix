@@ -1,45 +1,43 @@
-{ stdenv, lib, fetchurl, autoconf, automake, pkgconfig, libtool
-, gtk2, halibut, ncurses, perl
+{ stdenv, lib, fetchurl, cmake, perl, pkg-config
+, gtk3, ncurses, darwin, copyDesktopItems, makeDesktopItem
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.71";
-  name = "putty-${version}";
+  version = "0.81";
+  pname = "putty";
 
   src = fetchurl {
     urls = [
-      "https://the.earth.li/~sgtatham/putty/${version}/${name}.tar.gz"
-      "ftp://ftp.wayne.edu/putty/putty-website-mirror/${version}/${name}.tar.gz"
+      "https://the.earth.li/~sgtatham/putty/${version}/${pname}-${version}.tar.gz"
+      "ftp://ftp.wayne.edu/putty/putty-website-mirror/${version}/${pname}-${version}.tar.gz"
     ];
-    sha256 = "1f66iss0kqk982azmxbk4xfm2i1csby91vdvly6cr04pz3i1r4rg";
+    hash = "sha256-y4sAqU9FNJTjRaPfKB16PtJrsN1+NiZPFFIG+IV2Of4=";
   };
 
-  preConfigure = lib.optionalString stdenv.hostPlatform.isUnix ''
-    perl mkfiles.pl
-    ( cd doc ; make );
-    sed -e '/AM_PATH_GTK(/d' \
-        -e '/AC_OUTPUT/iAM_PROG_CC_C_O' \
-        -e '/AC_OUTPUT/iAM_PROG_AR' -i configure.ac
-    ./mkauto.sh
-    cd unix
-  '' + lib.optionalString stdenv.hostPlatform.isWindows ''
-    cd windows
-  '';
-
-  TOOLPATH = stdenv.cc.targetPrefix;
-  makefile = if stdenv.hostPlatform.isWindows then "Makefile.mgw" else null;
-
-  installPhase = if stdenv.hostPlatform.isWindows then ''
-    for exe in *.exe; do
-       install -D $exe $out/bin/$exe
-    done
-  '' else null;
-
-  nativeBuildInputs = [ autoconf automake halibut libtool perl pkgconfig ];
+  nativeBuildInputs = [ cmake perl pkg-config copyDesktopItems ];
   buildInputs = lib.optionals stdenv.hostPlatform.isUnix [
-    gtk2 ncurses
-  ];
+    gtk3 ncurses
+  ] ++ lib.optional stdenv.isDarwin darwin.apple_sdk.libs.utmp;
   enableParallelBuilding = true;
+
+  desktopItems = [
+    (makeDesktopItem {
+      name = "PuTTY SSH Client";
+      exec = "putty";
+      icon = "putty";
+      desktopName = "PuTTY";
+      comment = "Connect to an SSH server with PuTTY";
+      categories = [ "GTK" "Network" ];
+    })
+    (makeDesktopItem {
+      name = "PuTTY Terminal Emulator";
+      exec = "pterm";
+      icon = "pterm";
+      desktopName = "Pterm";
+      comment = "Start a PuTTY terminal session";
+      categories = [ "GTK" "System" "Utility" "TerminalEmulator" ];
+    })
+  ];
 
   meta = with lib; {
     description = "A Free Telnet/SSH Client";
@@ -48,7 +46,7 @@ stdenv.mkDerivation rec {
       platforms, along with an xterm terminal emulator.
       It is written and maintained primarily by Simon Tatham.
     '';
-    homepage = https://www.chiark.greenend.org.uk/~sgtatham/putty/;
+    homepage = "https://www.chiark.greenend.org.uk/~sgtatham/putty/";
     license = licenses.mit;
     platforms = platforms.unix ++ platforms.windows;
   };

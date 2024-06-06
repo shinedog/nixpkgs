@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, utils, ... }:
 
 with lib;
 
@@ -9,6 +9,10 @@ let
 in
 
 {
+  meta = {
+    maintainers = teams.lxqt.members;
+  };
+
   options = {
 
     services.xserver.desktopManager.lxqt.enable = mkOption {
@@ -19,14 +23,14 @@ in
 
     environment.lxqt.excludePackages = mkOption {
       default = [];
-      example = literalExample "[ pkgs.lxqt.qterminal ]";
+      example = literalExpression "[ pkgs.lxqt.qterminal ]";
       type = types.listOf types.package;
       description = "Which LXQt packages to exclude from the default environment";
     };
 
   };
 
-  config = mkIf (xcfg.enable && cfg.enable) {
+  config = mkIf cfg.enable {
 
     services.xserver.desktopManager.session = singleton {
       name = "lxqt";
@@ -51,16 +55,26 @@ in
     environment.systemPackages =
       pkgs.lxqt.preRequisitePackages ++
       pkgs.lxqt.corePackages ++
-      (pkgs.gnome3.removePackagesByName
+      (utils.removePackagesByName
         pkgs.lxqt.optionalPackages
         config.environment.lxqt.excludePackages);
 
     # Link some extra directories in /run/current-system/software/share
     environment.pathsToLink = [ "/share" ];
 
-    environment.variables.GIO_EXTRA_MODULES = [ "${pkgs.gvfs}/lib/gio/modules" ];
+    programs.gnupg.agent.pinentryPackage = mkDefault pkgs.pinentry-qt;
+
+    # virtual file systems support for PCManFM-QT
+    services.gvfs.enable = true;
 
     services.upower.enable = config.powerManagement.enable;
+
+    services.libinput.enable = mkDefault true;
+
+    xdg.portal.lxqt.enable = mkDefault true;
+
+    # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1050804
+    xdg.portal.config.lxqt.default = mkDefault [ "lxqt" "gtk" ];
   };
 
 }

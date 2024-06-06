@@ -1,24 +1,34 @@
-{ stdenv, fetchFromGitHub, makeWrapper, openssl, coreutils, gnugrep }:
+{ lib, stdenv
+, fetchFromGitHub
+, unstableGitUpdater
+, makeWrapper
+, openssl
+, coreutils
+, gnugrep }:
 
-stdenv.mkDerivation rec {
-  name = "bash-supergenpass-unstable-${version}";
-  version = "2018-04-18";
+stdenv.mkDerivation {
+  pname = "bash-supergenpass";
+  version = "0-unstable-2024-03-24";
 
   nativeBuildInputs = [ makeWrapper ];
 
   src = fetchFromGitHub {
     owner = "lanzz";
     repo = "bash-supergenpass";
-    rev = "ece772b9ec095946ac4ea985cda5561b211e56f0";
-    sha256 = "1gkbrycyyl7y3klbfx7xjvvfw5df1h4fj6x1f73gglfy6nk8ffnd";
+    rev = "03416ad4d753d825acd0443a01ac13d385d5e048";
+    sha256 = "Q+xmT72UFCc71K87mAzpyTmEIXjR9SqX0xzmQfi5P9k=";
   };
 
   installPhase = ''
     install -m755 -D supergenpass.sh "$out/bin/supergenpass"
-    wrapProgram "$out/bin/supergenpass" --prefix PATH : "${stdenv.lib.makeBinPath [ openssl coreutils gnugrep ]}"
+    wrapProgram "$out/bin/supergenpass" --prefix PATH : "${lib.makeBinPath [ openssl coreutils gnugrep ]}"
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = unstableGitUpdater {
+    url = "https://github.com/lanzz/bash-supergenpass.git";
+  };
+
+  meta = with lib; {
     description = "Bash shell-script implementation of SuperGenPass password generation";
     longDescription = ''
       Bash shell-script implementation of SuperGenPass password generation
@@ -30,10 +40,10 @@ stdenv.mkDerivation rec {
 
       supergenpass will ask for your master password interactively, and it will not be displayed on your terminal.
     '';
+    homepage = "https://github.com/lanzz/bash-supergenpass";
     license = licenses.mit;
-    platforms = platforms.linux;
     maintainers = with maintainers; [ fgaz ];
-    homepage = https://github.com/lanzz/bash-supergenpass;
+    mainProgram = "supergenpass";
+    platforms = platforms.all;
   };
 }
-

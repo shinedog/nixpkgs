@@ -1,26 +1,36 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
+  # NOTE: this should be updated with linux_rpi
   pname = "raspberrypi-firmware";
-  version = "1.20190401";
+  # raspberrypi/firmware no longers tag the releases. However, since each commit
+  # on the stable branch corresponds to a tag in raspberrypi/linux repo, we
+  # assume they are cut together.
+  version = "stable_20231123";
 
   src = fetchFromGitHub {
     owner = "raspberrypi";
     repo = "firmware";
-    rev = version;
-    sha256 = "13q04n1hf8a52avwfp9dhsn2jpp9ivs1mj37gp0h7a6k9044s2xw";
+    rev = "524247ac6d8b1f4ddd53730e978a70c76a320bd6";
+    hash = "sha256-rESwkR7pc5MTwIZ8PaMUPXuzxfv+jVpdRp8ijvxHGcg=";
   };
 
   installPhase = ''
-    mkdir -p $out/share/raspberrypi/boot
-    cp -R boot/* $out/share/raspberrypi/boot
+    mkdir -p $out/share/raspberrypi/
+    mv boot "$out/share/raspberrypi/"
   '';
 
-  meta = with stdenv.lib; {
+  dontConfigure = true;
+  dontBuild = true;
+  dontFixup = true;
+
+  meta = with lib; {
     description = "Firmware for the Raspberry Pi board";
-    homepage = https://github.com/raspberrypi/firmware;
+    homepage = "https://github.com/raspberrypi/firmware";
     license = licenses.unfreeRedistributableFirmware; # See https://github.com/raspberrypi/firmware/blob/master/boot/LICENCE.broadcom
-    platforms = [ "armv6l-linux" "armv7l-linux" "aarch64-linux" ];
-    maintainers = with maintainers; [ dezgeg tavyc ];
+    maintainers = with maintainers; [ dezgeg ];
+    # Hash mismatch on source, mystery.
+    # Maybe due to https://github.com/NixOS/nix/issues/847
+    broken = stdenvNoCC.isDarwin;
   };
 }

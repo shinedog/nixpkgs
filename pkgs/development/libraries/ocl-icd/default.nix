@@ -1,26 +1,45 @@
-{stdenv, fetchurl, ruby, opencl-headers, libGL_driver }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, ruby
+, opencl-headers
+, addOpenGLRunpath
+, autoreconfHook
+, windows
+}:
 
 stdenv.mkDerivation rec {
-  name = "ocl-icd-${version}";
-  version = "2.2.10";
+  pname = "ocl-icd";
+  version = "2.3.2";
 
-  src = fetchurl {
-    url = "https://forge.imag.fr/frs/download.php/810/${name}.tar.gz";
-    sha256 = "0f14gpa13sdm0kzqv5yycp4pschbmi6n5fj7wl4ilspzsrqcgqr2";
+  src = fetchFromGitHub {
+    owner = "OCL-dev";
+    repo = "ocl-icd";
+    rev = "v${version}";
+    sha256 = "sha256-nx9Zz5DpS29g1HRIwPAQi6i+d7Blxd53WQ7Sb1a3FHg=";
   };
 
-  nativeBuildInputs = [ ruby ];
+  nativeBuildInputs = [
+    autoreconfHook
+    ruby
+  ];
 
-  buildInputs = [ opencl-headers ];
+  buildInputs = [ opencl-headers ]
+    ++ lib.optionals stdenv.hostPlatform.isWindows [ windows.dlfcn ];
 
-  postPatch = ''
-    sed -i 's,"/etc/OpenCL/vendors","${libGL_driver.driverLink}/etc/OpenCL/vendors",g' ocl_icd_loader.c
-  '';
+  configureFlags = [
+    "--enable-custom-vendordir=/run/opengl-driver/etc/OpenCL/vendors"
+  ];
 
-  meta = with stdenv.lib; {
+  # fixes: can't build x86_64-w64-mingw32 shared library unless -no-undefined is specified
+  makeFlags = lib.optionals stdenv.hostPlatform.isWindows [ "LDFLAGS=-no-undefined" ];
+
+  meta = with lib; {
     description = "OpenCL ICD Loader for ${opencl-headers.name}";
-    homepage    = https://forge.imag.fr/projects/ocl-icd/;
+    mainProgram = "cllayerinfo";
+    homepage    = "https://github.com/OCL-dev/ocl-icd";
     license     = licenses.bsd2;
-    platforms = platforms.linux;
+    platforms = platforms.unix ++ platforms.windows;
+    maintainers = with maintainers; [ r-burns ];
   };
 }

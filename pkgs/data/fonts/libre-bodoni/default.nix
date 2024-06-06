@@ -1,19 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-fetchzip rec {
-  name = "libre-bodoni-2.000";
+stdenvNoCC.mkDerivation rec {
+  pname = "libre-bodoni";
+  version = "2.000";
 
-  url = https://github.com/impallari/Libre-Bodoni/archive/995a40e8d6b95411d660cbc5bb3f726ffd080c7d.zip;
+  src = fetchFromGitHub {
+    owner = "impallari";
+    repo = "Libre-Bodoni";
+    rev = "995a40e8d6b95411d660cbc5bb3f726ffd080c7d";
+    hash = "sha256-yfqVeT/JiAT+fsqkXUxqlz4sEEFwEJUdvFTAzuqejtk=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/{doc,fonts}
-    unzip -j $downloadedFile \*/v2000\ -\ initial\ glyphs\ migration/OTF/\*.otf  -d $out/share/fonts/opentype
-    unzip -j $downloadedFile \*README.md \*FONTLOG.txt                           -d "$out/share/doc/${name}"
+  installPhase = ''
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/opentype */v2000\ -\ initial\ glyphs\ migration/OTF/*.otf
+    install -m444 -Dt $out/share/doc/${pname}-${version} README.md FONTLOG.txt
+
+    runHook postInstall
   '';
 
-  sha256 = "0pnb1xydpvcl9mkz095f566kz7yj061wbf40rwrbwmk706f6bsiw";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Bodoni fonts adapted for today's web requirements";
     longDescription = ''
       The Libre Bodoni fonts are based on the 19th century Morris Fuller
@@ -26,7 +33,7 @@ fetchzip rec {
       Libre Bodoni currently features four styles: Regular, Italic, Bold and
       Bold Italic.
     '';
-    homepage = https://github.com/impallari/Libre-Bodoni;
+    homepage = "https://github.com/impallari/Libre-Bodoni";
     license = licenses.ofl;
     maintainers = with maintainers; [ cmfwyp ];
     platforms = platforms.all;

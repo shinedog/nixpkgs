@@ -1,34 +1,33 @@
-{ stdenv, fetchFromGitHub, coq, coq-ext-lib }:
+{ lib, callPackage, mkCoqDerivation, coq, coq-ext-lib, version ? null }:
 
-stdenv.mkDerivation rec {
-  version = "1.0.0";
-  name = "coq${coq.coq-version}-simple-io-${version}";
-  src = fetchFromGitHub {
-    owner = "Lysxia";
-    repo = "coq-simple-io";
-    rev = version;
-    sha256 = "06gnbl8chv6ig18rlxnp8gg0np6863kxd7j15h46q0v1cnpx84lp";
-  };
-
-  buildInputs = [ coq ] ++ (with coq.ocamlPackages; [ ocaml ocamlbuild ]);
-
-  propagatedBuildInputs = [ coq-ext-lib ];
+(mkCoqDerivation {
+  pname = "simple-io";
+  owner = "Lysxia";
+  repo = "coq-simple-io";
+  inherit version;
+  defaultVersion = with lib.versions; lib.switch coq.coq-version [
+    { case = range "8.11" "8.19"; out = "1.8.0"; }
+    { case = range "8.7"  "8.13"; out = "1.3.0"; }
+  ] null;
+  release."1.8.0".sha256 = "sha256-3ADNeXrBIpYRlfUW+LkLHUWV1w1HFrVc/TZISMuwvRY=";
+  release."1.7.0".sha256 = "sha256:1a1q9x2abx71hqvjdai3n12jxzd49mhf3nqqh3ya2ssl2lj609ci";
+  release."1.3.0".sha256 = "1yp7ca36jyl9kz35ghxig45x6cd0bny2bpmy058359p94wc617ax";
+  mlPlugin = true;
+  nativeBuildInputs = [ coq.ocamlPackages.cppo ];
+  propagatedBuildInputs = [ coq-ext-lib ]
+  ++ (with coq.ocamlPackages; [ ocaml findlib ocamlbuild ]);
 
   doCheck = true;
   checkTarget = "test";
 
-  installFlags = [ "COQLIB=$(out)/lib/coq/${coq.coq-version}/" ];
+  passthru.tests.HelloWorld = callPackage ./test.nix {};
 
-  meta = {
+  meta = with lib; {
     description = "Purely functional IO for Coq";
-    inherit (src.meta) homepage;
-    inherit (coq.meta) platforms;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
+    license = licenses.mit;
+    maintainers = [ maintainers.vbgl ];
   };
-
-  passthru = {
-    compatibleCoqVersions = v: stdenv.lib.versionAtLeast v "8.7";
-  };
-
-}
+}).overrideAttrs (o: lib.optionalAttrs (lib.versionAtLeast o.version "1.8.0" || o.version == "dev") {
+  doCheck = false;
+  useDune = true;
+})

@@ -1,26 +1,68 @@
-{ stdenv, fetchPypi, buildPythonPackage, pytest }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  buildPythonPackage,
+  poetry-core,
+  pytest-rerunfailures,
+  pytestCheckHook,
+  procps,
+  tmux,
+  ncurses,
+}:
 
 buildPythonPackage rec {
   pname = "libtmux";
-  version = "0.8.1";
+  version = "0.36.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0al5qcvzcl4v70vngbv39jg422jsy0m1b5q9pp54cc7m9b666jax";
+  src = fetchFromGitHub {
+    owner = "tmux-python";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-oJ2IGaPFMKA/amUEPZi1UO9vZtjPNQg3SIFjQWzUeSE=";
   };
 
-  checkInputs = [ pytest ];
   postPatch = ''
-    sed -i 's/==.*$//' requirements/test.txt
+    sed -i '/addopts/d' pyproject.toml
   '';
 
-  # No tests in archive
-  doCheck = false;
+  nativeBuildInputs = [ poetry-core ];
 
-  meta = with stdenv.lib; {
-    description = "Scripting library for tmux";
-    homepage = https://libtmux.readthedocs.io/;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ ];
+  nativeCheckInputs = [
+    procps
+    tmux
+    ncurses
+    pytest-rerunfailures
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [ "tests" ];
+
+  disabledTests =
+    [
+      # Fail with: 'no server running on /tmp/tmux-1000/libtmux_test8sorutj1'.
+      "test_new_session_width_height"
+      # Assertion error
+      "test_capture_pane_start"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # tests/test_pane.py:113: AssertionError
+      "test_capture_pane_start"
+    ];
+
+  disabledTestPaths = lib.optionals stdenv.isDarwin [
+    "tests/test_test.py"
+    "tests/legacy_api/test_test.py"
+  ];
+
+  pythonImportsCheck = [ "libtmux" ];
+
+  meta = with lib; {
+    description = "Typed scripting library / ORM / API wrapper for tmux";
+    homepage = "https://libtmux.git-pull.com/";
+    changelog = "https://github.com/tmux-python/libtmux/raw/v${version}/CHANGES";
+    license = licenses.mit;
+    maintainers = with maintainers; [ otavio ];
   };
 }

@@ -1,24 +1,28 @@
-{ stdenv
-, buildGoPackage
+{ lib
+, buildGoModule
 , fetchFromGitHub
 }:
 
-buildGoPackage rec {
+buildGoModule rec {
   pname = "demoit";
-  version = "unstable-2019-03-29";
-  goPackagePath = "github.com/dgageot/demoit";
+  version = "1.0";
 
   src = fetchFromGitHub {
     owner = "dgageot";
     repo = "demoit";
-    rev = "ec70fbdf5a5e92fa1c06d8f039f7d388e0237ba2";
-    sha256 = "01584cxlnrc928sw7ldmi0sm7gixmwnawy3c5hd79rqkw8r0gbk0";
+    rev = "v${version}";
+    hash = "sha256-3g0k2Oau0d9tXYDtxHpUKvAQ1FnGhjRP05YVTlmgLhM=";
   };
 
-  meta = with stdenv.lib; {
+  vendorHash = null;
+
+  subPackages = [ "." ];
+
+  meta = with lib; {
     description = "Live coding demos without Context Switching";
-    homepage = https://github.com/dgageot/demoit;
+    homepage = "https://github.com/dgageot/demoit";
     license = licenses.asl20;
     maintainers = [ maintainers.freezeboy ];
+    mainProgram = "demoit";
   };
 }

@@ -1,29 +1,29 @@
-{ darwin, fetchFromGitHub, rustPlatform, stdenv }:
+{ darwin, fetchFromGitHub, rustPlatform, lib, stdenv, pkg-config, openssl }:
 
-with rustPlatform;
-
-buildRustPackage rec {
-  name = "click-${version}";
-  version = "0.3.2";
+rustPlatform.buildRustPackage rec {
+  pname = "click";
+  version = "0.6.3";
 
   src = fetchFromGitHub {
-    rev = "v${version}";
     owner = "databricks";
     repo = "click";
-    sha256 = "0sbj41kypn637z1w115w2h5v6bxz3y6w5ikgpx3ihsh89lkc19d2";
+    rev = "v${version}";
+    hash = "sha256-tYSbyDipZg6Qj/CWk1QVUT5AG8ncTt+5V1+ekpmsKXA=";
   };
 
-  cargoSha256 = "05asqp5312a1g26pvf5hgqhc4kj3iw2hdvml2ycvga33sxb7zm7r";
+  cargoHash = "sha256-fcJTxZX9mdF4oFl/Cn1egczRy+yhWt2zLKsdLKz6Q+s=";
 
-  patches = [ ./fix_cargo_lock_version.patch ];
+  nativeBuildInputs = lib.optionals stdenv.isLinux [ pkg-config ];
 
-  buildInputs = stdenv.lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.Security ];
+  buildInputs = lib.optionals stdenv.isLinux [ openssl ]
+    ++ lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.Security ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = ''The "Command Line Interactive Controller for Kubernetes"'';
-    homepage = https://github.com/databricks/click;
+    homepage = "https://github.com/databricks/click";
     license = [ licenses.asl20 ];
     maintainers = [ maintainers.mbode ];
     platforms = [ "x86_64-linux" "x86_64-darwin" ];
+    mainProgram = "click";
   };
 }

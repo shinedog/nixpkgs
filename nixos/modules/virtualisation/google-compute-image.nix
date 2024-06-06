@@ -18,8 +18,9 @@ in
 
   options = {
     virtualisation.googleComputeImage.diskSize = mkOption {
-      type = with types; int;
-      default = 1536;
+      type = with types; either (enum [ "auto" ]) int;
+      default = "auto";
+      example = 1536;
       description = ''
         Size of disk image. Unit is MB.
       '';
@@ -35,23 +36,45 @@ in
         `<nixpkgs/nixos/modules/virtualisation/google-compute-image.nix>`.
       '';
     };
+
+    virtualisation.googleComputeImage.compressionLevel = mkOption {
+      type = types.int;
+      default = 6;
+      description = ''
+        GZIP compression level of the resulting disk image (1-9).
+      '';
+    };
+    virtualisation.googleComputeImage.efi = mkEnableOption "EFI booting";
   };
 
   #### implementation
   config = {
+    boot.initrd.availableKernelModules = [ "nvme" ];
+    boot.loader.grub = mkIf cfg.efi {
+      device = mkForce "nodev";
+      efiSupport = true;
+      efiInstallAsRemovable = true;
+    };
+
+    fileSystems."/boot" = mkIf cfg.efi {
+      device = "/dev/disk/by-label/ESP";
+      fsType = "vfat";
+    };
 
     system.build.googleComputeImage = import ../../lib/make-disk-image.nix {
       name = "google-compute-image";
       postVM = ''
-        PATH=$PATH:${with pkgs; stdenv.lib.makeBinPath [ gnutar gzip ]}
+        PATH=$PATH:${with pkgs; lib.makeBinPath [ gnutar gzip ]}
         pushd $out
         mv $diskImage disk.raw
-        tar -Szcf nixos-image-${config.system.nixos.label}-${pkgs.stdenv.hostPlatform.system}.raw.tar.gz disk.raw
+        tar -Sc disk.raw | gzip -${toString cfg.compressionLevel} > \
+          nixos-image-${config.system.nixos.label}-${pkgs.stdenv.hostPlatform.system}.raw.tar.gz
         rm $out/disk.raw
         popd
       '';
       format = "raw";
-      configFile = if isNull cfg.configFile then defaultConfigFile else cfg.configFile;
+      configFile = if cfg.configFile == null then defaultConfigFile else cfg.configFile;
+      partitionTableType = if cfg.efi then "efi" else "legacy";
       inherit (cfg) diskSize;
       inherit config lib pkgs;
     };

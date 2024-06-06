@@ -1,33 +1,84 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, mock, tornado, pyopenssl, cryptography
-, idna, certifi, ipaddress, pysocks }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  isPyPy,
 
-buildPythonPackage rec {
-  pname = "urllib3";
-  version = "1.24.2";
+  # build-system
+  hatchling,
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "9a247273df709c4fedb38c711e44292304f73f39ab01beda9f6b9fc375669ac3";
+  # optional-dependencies
+  brotli,
+  brotlicffi,
+  pysocks,
+
+  # tests
+  backports-zoneinfo,
+  pytestCheckHook,
+  pytest-timeout,
+  pythonOlder,
+  tornado,
+  trustme,
+}:
+
+let
+  self = buildPythonPackage rec {
+    pname = "urllib3";
+    version = "2.2.1";
+    pyproject = true;
+
+    src = fetchPypi {
+      inherit pname version;
+      hash = "sha256-0FcIdsYaueUg13bDisu7WwWndtP5/5ilyP1RYqREzxk=";
+    };
+
+    nativeBuildInputs = [ hatchling ];
+
+    passthru.optional-dependencies = {
+      brotli = if isPyPy then [ brotlicffi ] else [ brotli ];
+      socks = [ pysocks ];
+    };
+
+    nativeCheckInputs =
+      [
+        pytest-timeout
+        pytestCheckHook
+        tornado
+        trustme
+      ]
+      ++ lib.optionals (pythonOlder "3.9") [ backports-zoneinfo ]
+      ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
+
+    # Tests in urllib3 are mostly timeout-based instead of event-based and
+    # are therefore inherently flaky. On your own machine, the tests will
+    # typically build fine, but on a loaded cluster such as Hydra random
+    # timeouts will occur.
+    #
+    # The urllib3 test suite has two different timeouts in their test suite
+    # (see `test/__init__.py`):
+    # - SHORT_TIMEOUT
+    # - LONG_TIMEOUT
+    # When CI is in the env, LONG_TIMEOUT will be significantly increased.
+    # Still, failures can occur and for that reason tests are disabled.
+    doCheck = false;
+
+    passthru.tests.pytest = self.overridePythonAttrs (_: {
+      doCheck = true;
+    });
+
+    preCheck = ''
+      export CI # Increases LONG_TIMEOUT
+    '';
+
+    pythonImportsCheck = [ "urllib3" ];
+
+    meta = with lib; {
+      description = "Powerful, user-friendly HTTP client for Python";
+      homepage = "https://github.com/urllib3/urllib3";
+      changelog = "https://github.com/urllib3/urllib3/blob/${version}/CHANGES.rst";
+      license = licenses.mit;
+      maintainers = with maintainers; [ fab ];
+    };
   };
-
-  NOSE_EXCLUDE = stdenv.lib.concatStringsSep "," [
-    "test_headers" "test_headerdict" "test_can_validate_ip_san" "test_delayed_body_read_timeout"
-    "test_timeout_errors_cause_retries" "test_select_multiple_interrupts_with_event"
-  ];
-
-  checkPhase = ''
-    nosetests -v --cover-min-percentage 1
-  '';
-
-  doCheck = false;
-
-  checkInputs = [ pytest mock tornado ];
-  propagatedBuildInputs = [ pyopenssl cryptography idna certifi ipaddress pysocks ];
-
-  meta = with stdenv.lib; {
-    description = "Powerful, sanity-friendly HTTP client for Python";
-    homepage = https://github.com/shazow/urllib3;
-    license = licenses.mit;
-  };
-}
+in
+self

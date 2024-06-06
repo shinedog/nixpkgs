@@ -1,43 +1,79 @@
-{ stdenv, fetchurl, gobject-introspection
-, gnutls, cairo, libtool, glib, pkgconfig
-, cyrus_sasl, intltool, libpulseaudio
-, libgcrypt, gtk3, vala, gnome3
-, python3 }:
+{ lib
+, stdenv
+, fetchurl
+, meson
+, ninja
+, gobject-introspection
+, gnutls
+, cairo
+, glib
+, pkg-config
+, cyrus_sasl
+, pulseaudioSupport ? stdenv.isLinux
+, libpulseaudio
+, libgcrypt
+, gtk3
+, vala
+, gettext
+, perl
+, python3
+, gnome
+, gdk-pixbuf
+, zlib
+}:
 
 stdenv.mkDerivation rec {
-  name = "gtk-vnc-${version}";
-  version = "0.9.0";
+  pname = "gtk-vnc";
+  version = "1.3.1";
 
   outputs = [ "out" "bin" "man" "dev" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/gtk-vnc/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1dya1wc9vis8h0fv625pii1n70cckf1xjg1m2hndz989d118i6is";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "USdjrE4FWdAVi2aCyl3Ro71jPwgvXkNJ1xWOa1+A8c4=";
   };
 
   nativeBuildInputs = [
-    python3 pkgconfig intltool libtool gobject-introspection vala
-  ];
-  buildInputs = [
-    gnutls cairo glib libgcrypt cyrus_sasl libpulseaudio gtk3
+    meson
+    ninja
+    pkg-config
+    gobject-introspection
+    vala
+    gettext
+    perl # for pod2man
+    python3
   ];
 
-  configureFlags = [
-    "--with-examples"
+  buildInputs = [
+    gnutls
+    cairo
+    gdk-pixbuf
+    zlib
+    glib
+    libgcrypt
+    cyrus_sasl
+    gtk3
+  ] ++ lib.optionals pulseaudioSupport [
+    libpulseaudio
+  ];
+
+  mesonFlags = lib.optionals (!pulseaudioSupport) [
+    "-Dpulseaudio=disabled"
   ];
 
   passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = "gtk-vnc";
+    updateScript = gnome.updateScript {
+      packageName = pname;
       versionPolicy = "none";
     };
   };
 
-  meta = with stdenv.lib; {
-    description = "A GTK VNC widget";
-    homepage = https://wiki.gnome.org/Projects/gtk-vnc;
-    license = licenses.lgpl21;
+  meta = with lib; {
+    description = "GTK VNC widget";
+    homepage = "https://gitlab.gnome.org/GNOME/gtk-vnc";
+    license = licenses.lgpl2Plus;
     maintainers = with maintainers; [ raskin offline ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
+    mainProgram = "gvnccapture";
   };
 }

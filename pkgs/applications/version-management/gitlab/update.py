@@ -1,26 +1,30 @@
 #!/usr/bin/env nix-shell
-#! nix-shell -i python3 -p bundix common-updater-scripts nix nix-prefetch-git python3 python3Packages.requests python3Packages.lxml python3Packages.click python3Packages.click-log
+#! nix-shell -I nixpkgs=../../../.. -i python3 -p bundix bundler nix-update nix nix-universal-prefetch python3 python3Packages.requests python3Packages.click python3Packages.click-log python3Packages.packaging prefetch-yarn-deps git
 
 import click
 import click_log
-import os
 import re
 import logging
 import subprocess
 import json
 import pathlib
-from distutils.version import LooseVersion
+import tempfile
+from packaging.version import Version
 from typing import Iterable
 
 import requests
-from xml.etree import ElementTree
+
+NIXPKGS_PATH = pathlib.Path(__file__).parent / "../../../../"
+GITLAB_DIR = pathlib.Path(__file__).parent
 
 logger = logging.getLogger(__name__)
+click_log.basic_config(logger)
 
 
 class GitLabRepo:
-    version_regex = re.compile(r"^v\d+\.\d+\.\d+(\-rc\d+)?(\-ee)?")
-    def __init__(self, owner: str, repo: str):
+    version_regex = re.compile(r"^v\d+\.\d+\.\d+(\-rc\d+)?(\-ee)?(\-gitlab)?")
+
+    def __init__(self, owner: str = "gitlab-org", repo: str = "gitlab"):
         self.owner = owner
         self.repo = repo
 
@@ -30,39 +34,49 @@ class GitLabRepo:
 
     @property
     def tags(self) -> Iterable[str]:
-        r = requests.get(self.url + "/tags?format=atom", stream=True)
+        """Returns a sorted list of repository tags"""
+        r = requests.get(self.url + "/refs?sort=updated_desc&ref=master").json()
+        tags = r.get("Tags", [])
 
-        tree = ElementTree.fromstring(r.content)
-        versions = [e.text for e in tree.findall('{http://www.w3.org/2005/Atom}entry/{http://www.w3.org/2005/Atom}title')]
         # filter out versions not matching version_regex
-        versions = filter(self.version_regex.match, versions)
-        
-        # sort, but ignore v and -ee for sorting comparisons
-        versions.sort(key=lambda x: LooseVersion(x.replace("v", "").replace("-ee", "")), reverse=True)
+        versions = list(filter(self.version_regex.match, tags))
+
+        # sort, but ignore v, -ee and -gitlab for sorting comparisons
+        versions.sort(
+            key=lambda x: Version(
+                x.replace("v", "").replace("-ee", "").replace("-gitlab", "")
+            ),
+            reverse=True,
+        )
         return versions
 
     def get_git_hash(self, rev: str):
-        out = subprocess.check_output(['nix-prefetch-git', self.url, rev])
-        j = json.loads(out)
-        return j['sha256']
+        return (
+            subprocess.check_output(
+                [
+                    "nix-universal-prefetch",
+                    "fetchFromGitLab",
+                    "--owner",
+                    self.owner,
+                    "--repo",
+                    self.repo,
+                    "--rev",
+                    rev,
+                ]
+            )
+            .decode("utf-8")
+            .strip()
+        )
 
-    def get_deb_url(self, flavour: str, version: str, arch: str = 'amd64') -> str:
-        """
-        gitlab builds debian packages, which we currently need as we don't build the frontend on our own
-        this returns the url of a given flavour, version and arch
-        :param flavour: 'ce' or 'ee'
-        :param version: a version, without 'v' prefix and '-ee' suffix
-        :param arch: amd64
-        :return: url of the debian package
-        """
-        if self.owner != "gitlab-org" or self.repo not in ['gitlab-ce', 'gitlab-ee']:
-            raise Exception(f"don't know how to get deb_url for {self.url}")
-        return f"https://packages.gitlab.com/gitlab/gitlab-{flavour}/packages" + \
-               f"/debian/stretch/gitlab-{flavour}_{version}-{flavour}.0_{arch}.deb/download.deb"
-
-    def get_deb_hash(self, flavour: str, version: str) -> str:
-        out = subprocess.check_output(['nix-prefetch-url', self.get_deb_url(flavour, version)])
-        return out.decode('utf-8').strip()
+    def get_yarn_hash(self, rev: str):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with open(tmp_dir + "/yarn.lock", "w") as f:
+                f.write(self.get_file("yarn.lock", rev))
+            return (
+                subprocess.check_output(["prefetch-yarn-deps", tmp_dir + "/yarn.lock"])
+                .decode("utf-8")
+                .strip()
+            )
 
     @staticmethod
     def rev2version(tag: str) -> str:
@@ -73,9 +87,9 @@ class GitLabRepo:
         :return: a normalized version number
         """
         # strip v prefix
-        version = re.sub(r"^v", '', tag)
-        # strip -ee suffix
-        return re.sub(r"-ee$", '', version)
+        version = re.sub(r"^v", "", tag)
+        # strip -ee and -gitlab suffixes
+        return re.sub(r"-(ee|gitlab)$", "", version)
 
     def get_file(self, filepath, rev):
         """
@@ -86,56 +100,42 @@ class GitLabRepo:
         """
         return requests.get(self.url + f"/raw/{rev}/{filepath}").text
 
-    def get_data(self, rev, flavour):
+    def get_data(self, rev):
         version = self.rev2version(rev)
 
-        passthru = {v: self.get_file(v, rev).strip() for v in ['GITALY_SERVER_VERSION', 'GITLAB_PAGES_VERSION',
-                                                               'GITLAB_SHELL_VERSION', 'GITLAB_WORKHORSE_VERSION']}
-        return dict(version=self.rev2version(rev),
-                    repo_hash=self.get_git_hash(rev),
-                    deb_hash=self.get_deb_hash(flavour, version),
-                    deb_url=self.get_deb_url(flavour, version),
-                    owner=self.owner,
-                    repo=self.repo,
-                    rev=rev,
-                    passthru=passthru)
+        passthru = {
+            v: self.get_file(v, rev).strip()
+            for v in [
+                "GITALY_SERVER_VERSION",
+                "GITLAB_PAGES_VERSION",
+                "GITLAB_SHELL_VERSION",
+                "GITLAB_ELASTICSEARCH_INDEXER_VERSION",
+            ]
+        }
+        passthru["GITLAB_WORKHORSE_VERSION"] = version
 
-
-def _flavour2gitlabrepo(flavour: str):
-    if flavour not in ['ce', 'ee']:
-        raise Exception(f"unknown gitlab flavour: {flavour}, needs to be ce or ee")
-
-    owner = 'gitlab-org'
-    repo = 'gitlab-' + flavour
-
-    return GitLabRepo(owner, repo)
-
-
-def _update_data_json(filename: str, repo: GitLabRepo, rev: str, flavour: str):
-    flavour_data = repo.get_data(rev, flavour)
-
-    if not os.path.exists(filename):
-        with open(filename, 'w') as f:
-            json.dump({flavour: flavour_data}, f, indent=2)
-    else:
-        with open(filename, 'r+') as f:
-            data = json.load(f)
-            data[flavour] = flavour_data
-            f.seek(0)
-            f.truncate()
-            json.dump(data, f, indent=2)
+        return dict(
+            version=self.rev2version(rev),
+            repo_hash=self.get_git_hash(rev),
+            yarn_hash=self.get_yarn_hash(rev),
+            owner=self.owner,
+            repo=self.repo,
+            rev=rev,
+            passthru=passthru,
+        )
 
 
 def _get_data_json():
-    data_file_path = pathlib.Path(__file__).parent / 'data.json'
-    with open(data_file_path, 'r') as f:
+    data_file_path = pathlib.Path(__file__).parent / "data.json"
+    with open(data_file_path, "r") as f:
         return json.load(f)
 
 
-def _call_update_source_version(pkg, version):
-    """calls update-source-version from nixpkgs root dir"""
-    nixpkgs_path = pathlib.Path(__file__).parent / '../../../../'
-    return subprocess.check_output(['update-source-version', pkg, version], cwd=nixpkgs_path)
+def _call_nix_update(pkg, version):
+    """calls nix-update from nixpkgs root dir"""
+    return subprocess.check_output(
+        ["nix-update", pkg, "--version", version], cwd=NIXPKGS_PATH
+    )
 
 
 @click_log.simple_verbosity_option(logger)
@@ -144,98 +144,251 @@ def cli():
     pass
 
 
-@cli.command('update-data')
-@click.option('--rev', default='latest', help='The rev to use, \'latest\' points to the latest (stable) tag')
-@click.argument('flavour')
-def update_data(rev: str, flavour: str):
-    """Update data.nix for a selected flavour"""
-    r = _flavour2gitlabrepo(flavour)
+@cli.command("update-data")
+@click.option("--rev", default="latest", help="The rev to use (vX.Y.Z-ee), or 'latest'")
+def update_data(rev: str):
+    """Update data.json"""
+    logger.info("Updating data.json")
 
-    if rev == 'latest':
-        # filter out pre and re releases
-        rev = next(filter(lambda x: not ('rc' in x or x.endswith('pre')), r.tags))
-    logger.debug(f"Using rev {rev}")
+    repo = GitLabRepo()
+    if rev == "latest":
+        # filter out pre and rc releases
+        rev = next(filter(lambda x: not ("rc" in x or x.endswith("pre")), repo.tags))
 
-    version = r.rev2version(rev)
-    logger.debug(f"Using version {version}")
+    data_file_path = pathlib.Path(__file__).parent / "data.json"
 
-    data_file_path = pathlib.Path(__file__).parent / 'data.json'
+    data = repo.get_data(rev)
 
-    _update_data_json(filename=data_file_path.as_posix(),
-                      repo=r,
-                      rev=rev,
-                      flavour=flavour)
+    with open(data_file_path.as_posix(), "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
 
 
-@cli.command('update-rubyenv')
-@click.argument('flavour')
-def update_rubyenv(flavour):
-    """Update rubyEnv-${flavour}"""
-    if flavour not in ['ce', 'ee']:
-        raise Exception(f"unknown gitlab flavour: {flavour}, needs to be ce or ee")
-
-    r = _flavour2gitlabrepo(flavour)
-    rubyenv_dir = pathlib.Path(__file__).parent / f"rubyEnv-{flavour}"
+@cli.command("update-rubyenv")
+def update_rubyenv():
+    """Update rubyEnv"""
+    logger.info("Updating gitlab")
+    repo = GitLabRepo()
+    rubyenv_dir = pathlib.Path(__file__).parent / "rubyEnv"
 
     # load rev from data.json
     data = _get_data_json()
-    rev = data[flavour]['rev']
+    rev = data["rev"]
+    version = data["version"]
 
-    for fn in ['Gemfile.lock', 'Gemfile']:
-        with open(rubyenv_dir / fn, 'w') as f:
-            f.write(r.get_file(fn, rev))
+    for fn in ["Gemfile.lock", "Gemfile"]:
+        with open(rubyenv_dir / fn, "w") as f:
+            f.write(repo.get_file(fn, rev))
 
-    subprocess.check_output(['bundix'], cwd=rubyenv_dir)
+    # patch for openssl 3.x support
+    subprocess.check_output(
+        ["sed", "-i", "s:'openssl', '2.*':'openssl', '3.0.2':g", "Gemfile"],
+        cwd=rubyenv_dir,
+    )
+
+    # Fetch vendored dependencies temporarily in order to build the gemset.nix
+    subprocess.check_output(["mkdir", "-p", "vendor/gems", "gems"], cwd=rubyenv_dir)
+    subprocess.check_output(
+        [
+            "sh",
+            "-c",
+            f"curl -L https://gitlab.com/gitlab-org/gitlab/-/archive/v{version}-ee/gitlab-v{version}-ee.tar.bz2?path=vendor/gems | tar -xj --strip-components=3",
+        ],
+        cwd=f"{rubyenv_dir}/vendor/gems",
+    )
+    subprocess.check_output(
+        [
+            "sh",
+            "-c",
+            f"curl -L https://gitlab.com/gitlab-org/gitlab/-/archive/v{version}-ee/gitlab-v{version}-ee.tar.bz2?path=gems | tar -xj --strip-components=3",
+        ],
+        cwd=f"{rubyenv_dir}/gems",
+    )
+
+    # Undo our gemset.nix patches so that bundix runs through
+    subprocess.check_output(
+        ["sed", "-i", "-e", "1d", "-e", "s:\\${src}/::g", "gemset.nix"], cwd=rubyenv_dir
+    )
+
+    subprocess.check_output(["bundle", "lock"], cwd=rubyenv_dir)
+    subprocess.check_output(["bundix"], cwd=rubyenv_dir)
+
+    subprocess.check_output(
+        [
+            "sed",
+            "-i",
+            "-e",
+            "1i\\src:",
+            "-e",
+            's:path = \\(vendor/[^;]*\\);:path = "${src}/\\1";:g',
+            "-e",
+            's:path = \\(gems/[^;]*\\);:path = "${src}/\\1";:g',
+            "gemset.nix",
+        ],
+        cwd=rubyenv_dir,
+    )
+    subprocess.check_output(["rm", "-rf", "vendor", "gems"], cwd=rubyenv_dir)
 
 
-@cli.command('update-gitaly')
+@cli.command("update-gitaly")
 def update_gitaly():
     """Update gitaly"""
+    logger.info("Updating gitaly")
     data = _get_data_json()
-    gitaly_server_version = data['ce']['passthru']['GITALY_SERVER_VERSION']
-    r = GitLabRepo('gitlab-org', 'gitaly')
-    rubyenv_dir = pathlib.Path(__file__).parent / 'gitaly'
+    gitaly_server_version = data['passthru']['GITALY_SERVER_VERSION']
 
-    for fn in ['Gemfile.lock', 'Gemfile']:
-        with open(rubyenv_dir / fn, 'w') as f:
-            f.write(r.get_file(f"ruby/{fn}", f"v{gitaly_server_version}"))
-
-    subprocess.check_output(['bundix'], cwd=rubyenv_dir)
-    # currently broken, as `gitaly.meta.position` returns
-    # pkgs/development/go-modules/generic/default.nix
-    # so update-source-version doesn't know where to update hashes
-    # _call_update_source_version('gitaly', gitaly_server_version)
-    gitaly_hash = r.get_git_hash(f"v{gitaly_server_version}")
-    click.echo(f"Please update gitaly/default.nix to version {gitaly_server_version} and hash {gitaly_hash}")
+    _call_nix_update("gitaly", gitaly_server_version)
 
 
-@cli.command('update-gitlab-shell')
+@cli.command("update-gitlab-pages")
+def update_gitlab_pages():
+    """Update gitlab-pages"""
+    logger.info("Updating gitlab-pages")
+    data = _get_data_json()
+    gitlab_pages_version = data["passthru"]["GITLAB_PAGES_VERSION"]
+    _call_nix_update("gitlab-pages", gitlab_pages_version)
+
+
+def get_container_registry_version() -> str:
+    """Returns the version attribute of gitlab-container-registry"""
+    return subprocess.check_output(
+        [
+            "nix",
+            "--experimental-features",
+            "nix-command",
+            "eval",
+            "-f",
+            ".",
+            "--raw",
+            "gitlab-container-registry.version",
+        ],
+        cwd=NIXPKGS_PATH,
+    ).decode("utf-8")
+
+
+@cli.command("update-gitlab-shell")
 def update_gitlab_shell():
     """Update gitlab-shell"""
+    logger.info("Updating gitlab-shell")
     data = _get_data_json()
-    gitlab_shell_version = data['ce']['passthru']['GITLAB_SHELL_VERSION']
-    _call_update_source_version('gitlab-shell', gitlab_shell_version)
+    gitlab_shell_version = data["passthru"]["GITLAB_SHELL_VERSION"]
+    _call_nix_update("gitlab-shell", gitlab_shell_version)
 
 
-@cli.command('update-gitlab-workhorse')
+@cli.command("update-gitlab-workhorse")
 def update_gitlab_workhorse():
-    """Update gitlab-shell"""
+    """Update gitlab-workhorse"""
+    logger.info("Updating gitlab-workhorse")
     data = _get_data_json()
-    gitlab_workhorse_version = data['ce']['passthru']['GITLAB_WORKHORSE_VERSION']
-    _call_update_source_version('gitlab-workhorse', gitlab_workhorse_version)
+    gitlab_workhorse_version = data["passthru"]["GITLAB_WORKHORSE_VERSION"]
+    _call_nix_update("gitlab-workhorse", gitlab_workhorse_version)
 
 
-@cli.command('update-all')
+@cli.command("update-gitlab-container-registry")
+@click.option("--rev", default="latest", help="The rev to use (vX.Y.Z-ee), or 'latest'")
+@click.option(
+    "--commit", is_flag=True, default=False, help="Commit the changes for you"
+)
+def update_gitlab_container_registry(rev: str, commit: bool):
+    """Update gitlab-container-registry"""
+    logger.info("Updading gitlab-container-registry")
+    repo = GitLabRepo(repo="container-registry")
+    old_container_registry_version = get_container_registry_version()
+
+    if rev == "latest":
+        rev = next(filter(lambda x: not ("rc" in x or x.endswith("pre")), repo.tags))
+
+    version = repo.rev2version(rev)
+    _call_nix_update("gitlab-container-registry", version)
+    if commit:
+        new_container_registry_version = get_container_registry_version()
+        commit_container_registry(
+            old_container_registry_version, new_container_registry_version
+        )
+
+
+@cli.command('update-gitlab-elasticsearch-indexer')
+def update_gitlab_elasticsearch_indexer():
+    """Update gitlab-elasticsearch-indexer"""
+    data = _get_data_json()
+    gitlab_elasticsearch_indexer_version = data['passthru']['GITLAB_ELASTICSEARCH_INDEXER_VERSION']
+    _call_nix_update('gitlab-elasticsearch-indexer', gitlab_elasticsearch_indexer_version)
+
+
+@cli.command("update-all")
+@click.option("--rev", default="latest", help="The rev to use (vX.Y.Z-ee), or 'latest'")
+@click.option(
+    "--commit", is_flag=True, default=False, help="Commit the changes for you"
+)
 @click.pass_context
-def update_all(ctx):
-    """Update gitlab ce and ee data.nix and rubyenvs to the latest stable release"""
-    for flavour in ['ce', 'ee']:
-        ctx.invoke(update_data, rev='latest', flavour=flavour)
-        ctx.invoke(update_rubyenv, flavour=flavour)
+def update_all(ctx, rev: str, commit: bool):
+    """Update all gitlab components to the latest stable release"""
+    old_data_json = _get_data_json()
+    old_container_registry_version = get_container_registry_version()
+
+    ctx.invoke(update_data, rev=rev)
+
+    new_data_json = _get_data_json()
+
+    ctx.invoke(update_rubyenv)
     ctx.invoke(update_gitaly)
+    ctx.invoke(update_gitlab_pages)
     ctx.invoke(update_gitlab_shell)
     ctx.invoke(update_gitlab_workhorse)
+    ctx.invoke(update_gitlab_elasticsearch_indexer)
+    if commit:
+        commit_gitlab(
+            old_data_json["version"], new_data_json["version"], new_data_json["rev"]
+        )
+
+    ctx.invoke(update_gitlab_container_registry)
+    if commit:
+        new_container_registry_version = get_container_registry_version()
+        commit_container_registry(
+            old_container_registry_version, new_container_registry_version
+        )
 
 
-if __name__ == '__main__':
+def commit_gitlab(old_version: str, new_version: str, new_rev: str) -> None:
+    """Commits the gitlab changes for you"""
+    subprocess.run(
+        [
+            "git",
+            "add",
+            "data.json",
+            "rubyEnv",
+            "gitaly",
+            "gitlab-pages",
+            "gitlab-shell",
+            "gitlab-workhorse",
+            "gitlab-elasticsearch-indexer",
+        ],
+        cwd=GITLAB_DIR,
+    )
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "--message",
+            f"""gitlab: {old_version} -> {new_version}\n\nhttps://gitlab.com/gitlab-org/gitlab/-/blob/{new_rev}/CHANGELOG.md""",
+        ],
+        cwd=GITLAB_DIR,
+    )
+
+
+def commit_container_registry(old_version: str, new_version: str) -> None:
+    """Commits the gitlab-container-registry changes for you"""
+    subprocess.run(["git", "add", "gitlab-container-registry"], cwd=GITLAB_DIR)
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "--message",
+            f"gitlab-container-registry: {old_version} -> {new_version}\n\nhttps://gitlab.com/gitlab-org/container-registry/-/blob/v{new_version}-gitlab/CHANGELOG.md",
+        ],
+        cwd=GITLAB_DIR,
+    )
+
+
+if __name__ == "__main__":
     cli()

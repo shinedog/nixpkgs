@@ -1,14 +1,15 @@
 { lib
 , python3Packages
+, fetchPypi
 }:
 
 python3Packages.buildPythonApplication rec {
   pname = "sqlite-web";
-  version = "0.3.5";
+  version = "0.6.3";
 
-  src = python3Packages.fetchPypi {
+  src = fetchPypi {
     inherit pname version;
-    sha256 = "9e0c8938434b0129423544162d4ca6975abf7042c131445f79661a4b9c885d47";
+    sha256 = "sha256-cDSlSh0vnwvbJZFDPqvJ5oXz68gN9yzodcQYkXUAytE=";
   };
 
   propagatedBuildInputs = with python3Packages; [ flask peewee pygments ];
@@ -18,7 +19,8 @@ python3Packages.buildPythonApplication rec {
 
   meta = with lib; {
     description = "Web-based SQLite database browser";
-    homepage = https://github.com/coleifer/sqlite-web;
+    mainProgram = "sqlite_web";
+    homepage = "https://github.com/coleifer/sqlite-web";
     license = licenses.mit;
     maintainers = [ maintainers.costrouc ];
   };

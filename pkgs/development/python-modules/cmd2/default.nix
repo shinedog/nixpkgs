@@ -1,60 +1,83 @@
-{ stdenv, fetchPypi, buildPythonPackage, pythonOlder, isPy3k
-, pyperclip, six, pyparsing, vim, wcwidth, colorama, attrs
-, contextlib2 ? null, typing ? null, setuptools_scm
-, pytest, mock ? null, pytest-mock
-, which, glibcLocales
+{
+  lib,
+  stdenv,
+  attrs,
+  buildPythonPackage,
+  colorama,
+  fetchPypi,
+  glibcLocales,
+  importlib-metadata,
+  pyperclip,
+  pytest-mock,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools-scm,
+  typing-extensions,
+  wcwidth,
 }:
+
 buildPythonPackage rec {
   pname = "cmd2";
-  version = "0.9.12";
+  version = "2.4.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "14pyvihikml1z7q21q9cvdfxvvlf8lhbaasj05hpiq6fjyvd7zsc";
+    hash = "sha256-cYc8Efcr0Z4rHbV4IUcW8NT3yPolAJPGASZamnF97lI=";
   };
 
-  LC_ALL="en_US.UTF-8";
+  LC_ALL = "en_US.UTF-8";
 
-  postPatch = stdenv.lib.optional stdenv.isDarwin ''
-    # Fake the impure dependencies pbpaste and pbcopy
-    mkdir bin
-    echo '#${stdenv.shell}' > bin/pbpaste
-    echo '#${stdenv.shell}' > bin/pbcopy
-    chmod +x bin/{pbcopy,pbpaste}
-    export PATH=$(realpath bin):$PATH
-  '';
+  buildInputs = [ setuptools-scm ];
 
-  disabled = !isPy3k;
+  propagatedBuildInputs =
+    [
+      attrs
+      colorama
+      pyperclip
+      wcwidth
+    ]
+    ++ lib.optionals (pythonOlder "3.8") [
+      typing-extensions
+      importlib-metadata
+    ];
 
-  buildInputs = [
-    setuptools_scm
+  nativeCheckInputs = [
+    pytestCheckHook
+    glibcLocales
+    pytest-mock
   ];
 
-  propagatedBuildInputs = [
-    colorama
-    pyperclip
-    six
-    pyparsing
-    wcwidth
-    attrs
-  ]
-  ++ stdenv.lib.optionals (pythonOlder "3.5") [contextlib2 typing]
-  ;
+  disabledTests = [
+    # Don't require vim for tests, it causes lots of rebuilds
+    "test_find_editor_not_specified"
+    "test_transcript"
+  ];
 
+  postPatch =
+    ''
+      sed -i "/--cov/d" setup.cfg
+    ''
+    + lib.optionalString stdenv.isDarwin ''
+      # Fake the impure dependencies pbpaste and pbcopy
+      mkdir bin
+      echo '#!${stdenv.shell}' > bin/pbpaste
+      echo '#!${stdenv.shell}' > bin/pbcopy
+      chmod +x bin/{pbcopy,pbpaste}
+      export PATH=$(realpath bin):$PATH
+    '';
 
   doCheck = !stdenv.isDarwin;
-  # pytest-cov
-  # argcomplete  will generate errors
-  checkInputs= [ pytest mock which vim glibcLocales pytest-mock ]
-        ++ stdenv.lib.optional (pythonOlder "3.6") [ mock ];
-  checkPhase = ''
-    # test_path_completion_user_expansion might be fixed in the next release
-    py.test -k 'not test_path_completion_user_expansion'
-  '';
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "cmd2" ];
+
+  meta = with lib; {
     description = "Enhancements for standard library's cmd module";
-    homepage = https://github.com/python-cmd2/cmd2;
+    homepage = "https://github.com/python-cmd2/cmd2";
+    changelog = "https://github.com/python-cmd2/cmd2/releases/tag/${version}";
+    license = with licenses; [ mit ];
     maintainers = with maintainers; [ teto ];
   };
 }

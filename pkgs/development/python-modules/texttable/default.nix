@@ -1,20 +1,34 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "texttable";
-  version = "1.6.1";
+  version = "1.7.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "2b60a5304ccfbeac80ffae7350d7c2f5d7a24e9aab5036d0f82489746419d9b2";
+    hash = "sha256-LSBo+1URWAfTrHekymj6SIA+hOuw7iNA+FgQejZSJjg=";
   };
 
-  meta = {
-    description = "A module to generate a formatted text table, using ASCII characters";
-    homepage = http://foutaise.org/code/;
-    license = lib.licenses.lgpl2;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "texttable" ];
+
+  pytestFlagsArray = [ "tests.py" ];
+
+  meta = with lib; {
+    description = "Module to generate a formatted text table, using ASCII characters";
+    homepage = "https://github.com/foutaise/texttable";
+    changelog = "https://github.com/foutaise/texttable/blob/v${version}/CHANGELOG.md";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

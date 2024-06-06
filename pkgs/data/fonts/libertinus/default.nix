@@ -1,35 +1,31 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "libertinus-${version}";
-  version = "6.6";
+stdenvNoCC.mkDerivation rec {
+  pname = "libertinus";
+  version = "7.040";
 
-  src = fetchFromGitHub {
-    rev    = "v${version}";
-    owner  = "khaledhosny";
-    repo   = "libertinus";
-    sha256 = "0syagjmwy6q1ysncchl9bgyfrm7f6fghj1aipbr6md7l6gafz7ji";
+  src = fetchurl {
+    url = "https://github.com/alerque/libertinus/releases/download/v${version}/Libertinus-${version}.tar.xz";
+    hash = "sha256-f+nwInItHBzGfcLCihELO7VbrjV1GWFg0kIsiTM7OFA=";
   };
 
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype/
-    mkdir -p $out/share/doc/${name}/
-    cp *.otf $out/share/fonts/opentype/
-    cp *.txt $out/share/doc/${name}/
+    runHook preInstall
+
+    install -m644 -Dt $out/share/fonts/opentype static/OTF/*.otf
+
+    runHook postInstall
   '';
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = "11pxb2zwvjlk06zbqrfv2pgwsl4awf68fak1ks4881i8xbl1910m";
-
-  meta = with stdenv.lib; {
-    description = "A fork of the Linux Libertine and Linux Biolinum fonts";
+  meta = with lib; {
+    description = "The Libertinus font family";
     longDescription = ''
-      Libertinus fonts is a fork of the Linux Libertine and Linux Biolinum fonts
-      that started as an OpenType math companion of the Libertine font family,
-      but grown as a full fork to address some of the bugs in the fonts.
+      The Libertinus font project began as a fork of the Linux Libertine and
+      Linux Biolinum fonts. The original impetus was to add an OpenType math
+      companion to the Libertine font families. Over time it grew into to a
+      full-fledged fork addressing many of the bugs in the Libertine fonts.
     '';
-    homepage = https://github.com/khaledhosny/libertinus;
+    homepage = "https://github.com/alerque/libertinus";
     license = licenses.ofl;
     maintainers = with maintainers; [ siddharthist ];
     platforms = platforms.all;

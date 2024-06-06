@@ -1,18 +1,20 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, beautifulsoup4
-, requests
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  beautifulsoup4,
+  requests,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "wikipedia";
   version = "1.4.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "db0fad1829fdd441b1852306e9856398204dc0786d2996dd2e0c8bb8e26133b2";
+    hash = "sha256-2w+tGCn91EGxhSMG6YVjmCBNwHhtKZbdLgyLuOJhM7I=";
   };
 
   propagatedBuildInputs = [
@@ -20,18 +22,15 @@ buildPythonPackage rec {
     requests
   ];
 
-  checkPhase = ''
-    runHook preCheck
+  nativeCheckInputs = [ unittestCheckHook ];
 
-    ${python.interpreter} -m unittest discover tests/ '*test.py'
-
-    runHook postCheck
-  '';
+  unittestFlagsArray = [ "tests/ '*test.py'" ];
 
   meta = with lib; {
-    description = "Wikipedia API for Python";
-    homepage = https://github.com/goldsmith/Wikipedia;
+    description = "A Pythonic wrapper for the Wikipedia API";
+    homepage = "https://github.com/goldsmith/Wikipedia";
+    changelog = "https://github.com/goldsmith/Wikipedia/blob/master/CHANGELOG.md";
     license = licenses.mit;
-    maintainers = [ maintainers.worldofpeace ];
+    maintainers = with maintainers; [ natsukium ];
   };
 }

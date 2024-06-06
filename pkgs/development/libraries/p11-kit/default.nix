@@ -1,41 +1,93 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, which, pkgconfig, libiconv
-, libffi, libtasn1 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, libtasn1
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_43
+, gettext
+, libffi
+, libintl
+}:
 
 stdenv.mkDerivation rec {
-  name = "p11-kit-${version}";
-  version = "0.23.14";
+  pname = "p11-kit";
+  version = "0.25.3";
 
   src = fetchFromGitHub {
     owner = "p11-glue";
-    repo = "p11-kit";
+    repo = pname;
     rev = version;
-    sha256 = "0zmrw1ciybhnxjlsfb07wnf11ak5vrmy8y8fnz3mwm8v3w8dzlvw";
+    hash = "sha256-zIbkw0pwt4TdyjncnSDeTN6Gsx7cc+x7Un4rnagZxQk=";
+    fetchSubmodules = true;
   };
 
-  outputs = [ "out" "dev"];
-  outputBin = "dev";
+  outputs = [ "out" "bin" "dev" ];
 
-  nativeBuildInputs = [ autoreconfHook which pkgconfig ];
-  buildInputs = [ libffi libtasn1 libiconv ];
+  strictDeps = true;
 
-  autoreconfPhase = ''
-    NOCONFIGURE=1 ./autogen.sh
-  '';
-
-  configureFlags = [
-    "--sysconfdir=/etc"
-    "--localstatedir=/var"
-    "--without-trust-paths"
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    libtasn1 # asn1Parser
+    libxslt # xsltproc
+    docbook-xsl-nons
+    docbook_xml_dtd_43
+    gettext
   ];
 
-  installFlags = [ "exampledir=\${out}/etc/pkcs11" ];
+  buildInputs = [
+    libffi
+    libtasn1
+    libintl
+  ];
 
-  doInstallCheck = false; # probably a bug in this derivation
-  enableParallelBuilding = true;
+  mesonFlags = [
+    "--sysconfdir=/etc"
+    (lib.mesonBool "man" true)
+    (lib.mesonEnable "systemd" false)
+    (lib.mesonOption "bashcompdir" "${placeholder "bin"}/share/bash-completion/completions")
+    (lib.mesonOption "trust_paths" (lib.concatStringsSep ":" [
+      "/etc/ssl/trust-source" # p11-kit trust source
+      "/etc/ssl/certs/ca-certificates.crt" # NixOS + Debian/Ubuntu/Arch/Gentoo...
+      "/etc/pki/tls/certs/ca-bundle.crt" # Fedora/CentOS
+      "/var/lib/ca-certificates/ca-bundle.pem" # openSUSE
+      "/etc/ssl/cert.pem" # Darwin/macOS
+    ]))
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://p11-glue.freedesktop.org/;
+  doCheck = stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+
+  postPatch = ''
+    # Install sample config files to $out/etc even though they will be loaded from /etc.
+    substituteInPlace p11-kit/meson.build \
+      --replace 'install_dir: prefix / p11_system_config' "install_dir: '$out/etc/pkcs11'"
+  '';
+
+  preCheck = ''
+    # Tests run in fakeroot for non-root users (with Nix single-user install)
+    if [ "$(id -u)" != "0" ]; then
+      export FAKED_MODE=1
+    fi
+  '';
+
+  meta = with lib; {
+    description = "Library for loading and sharing PKCS#11 modules";
+    longDescription = ''
+      Provides a way to load and enumerate PKCS#11 modules.
+      Provides a standard configuration setup for installing
+      PKCS#11 modules in such a way that they're discoverable.
+    '';
+    homepage = "https://p11-glue.github.io/p11-glue/p11-kit.html";
+    changelog = [
+      "https://github.com/p11-glue/p11-kit/raw/${version}/NEWS"
+      "https://github.com/p11-glue/p11-kit/releases/tag/${version}"
+    ];
     platforms = platforms.all;
-    license = licenses.mit;
+    license = licenses.bsd3;
   };
 }

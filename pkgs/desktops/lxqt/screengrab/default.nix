@@ -1,38 +1,58 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, qtbase, qttools, qtx11extras, qtsvg, kwindowsystem, libqtxdg, xorg, autoPatchelfHook }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, autoPatchelfHook
+, gitUpdater
+, kwindowsystem
+, libXdmcp
+, libpthreadstubs
+, libqtxdg
+, perl
+, pkg-config
+, qtbase
+, qtsvg
+, qttools
+, wrapQtAppsHook
+}:
 
 stdenv.mkDerivation rec {
   pname = "screengrab";
-  version = "1.101";
+  version = "2.8.0";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "111gnkhp77qkch7xqr7k3h8zrg4871gapyd4vvlpaj0gjhirjg6h";
+    hash = "sha256-PMe2NyIoc12n4l/oWPi3GL6pemuHyxL2HFBLTIyD690=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
+    perl # needed by LXQtTranslateDesktop.cmake
+    qttools
     autoPatchelfHook # fix libuploader.so and libextedit.so not found
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qttools
-    qtx11extras
-    qtsvg
     kwindowsystem
+    libXdmcp
+    libpthreadstubs
     libqtxdg
-    xorg.libpthreadstubs
-    xorg.libXdmcp
+    qtbase
+    qtsvg
   ];
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/screengrab";
     description = "Crossplatform tool for fast making screenshots";
-    homepage = https://github.com/lxqt/screengrab;
-    license = licenses.gpl2;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    mainProgram = "screengrab";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
   };
 }

@@ -1,33 +1,41 @@
-{ fetchurl, stdenv, libGLU_combined }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, boost
+, cmake
+, libGL
+, libGLU
+, libX11
+}:
 
-stdenv.mkDerivation rec {
-  name = "coin3d-${version}";
-  version = "3.1.3";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "coin";
+  version = "unstable-2022-07-27";
 
-  src = fetchurl {
-    url = "https://bitbucket.org/Coin3D/coin/downloads/Coin-${version}.tar.gz";
-    sha256 = "05ylhrcglm81dajbk132l1w892634z2i97x10fm64y1ih72phd2q";
+  src = fetchFromGitHub {
+    owner = "coin3d";
+    repo = "coin";
+    rev = "4c67945a58d2a6e5adb4d2332ab08007769130ef";
+    hash = "sha256-lXS7GxtoPsZe2SJfr0uY99Q0ZtYG0KFlauY1PBuFleo=";
   };
 
-  patches = [
-    (fetchurl {
-      url = http://sources.gentoo.org/cgi-bin/viewvc.cgi/gentoo-x86/media-libs/coin/files/coin-3.1.3-gcc-4.7.patch;
-      name = "gcc-4.7.patch";
-      sha256 = "076dyc52swk8qc7ylps53fg6iqmd52x8s7m18i80x49dd109yw20";
-    })
-    ./gcc-4.8.patch # taken from FC-17 source rpm
-    # see https://bitbucket.org/Coin3D/coin/issues/128/crash-in-cc_memalloc_deallocate
-    # patch adapted from https://bitbucket.org/Coin3D/coin/pull-requests/75/added-fix-for-issue-128-provided-by-fedora/diff
-    ./sbhashentry.patch
+  nativeBuildInputs = [ cmake ];
+
+  buildInputs = [
+    boost
+    libGL
+    libGLU
+    libX11
   ];
 
-  buildInputs = [ libGLU_combined ];
+  cmakeFlags = [ "-DCOIN_USE_CPACK=OFF" ];
 
-  meta = {
-    homepage = http://www.coin3d.org/;
-    license = stdenv.lib.licenses.gpl2Plus;
+  meta = with lib; {
+    homepage = "https://github.com/coin3d/coin";
     description = "High-level, retained-mode toolkit for effective 3D graphics development";
-    maintainers = [ stdenv.lib.maintainers.viric ];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "coin-config";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ gebner viric ];
+    platforms = platforms.linux;
   };
-}
+})

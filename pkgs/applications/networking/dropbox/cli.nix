@@ -1,27 +1,29 @@
-{ stdenv
+{ lib, stdenv
 , substituteAll
-, pkgconfig
+, autoreconfHook
+, pkg-config
 , fetchurl
 , python3
 , dropbox
-, gtk3
-, gnome3
-, gdk_pixbuf
+, gtk4
+, gnome
+, gdk-pixbuf
 , gobject-introspection
 }:
 
 let
-  version = "2019.02.14";
+  version = "2024.04.17";
   dropboxd = "${dropbox}/bin/dropbox";
 in
 stdenv.mkDerivation {
-  name = "dropbox-cli-${version}";
+  pname = "dropbox-cli";
+  inherit version;
 
   outputs = [ "out" "nautilusExtension" ];
 
   src = fetchurl {
-    url = "https://linux.dropboxstatic.com/packages/nautilus-dropbox-${version}.tar.bz2";
-    sha256 = "09yg7q45sycl88l3wq0byz4a9k6sxx3m0r3szinvisfay9wlj35f";
+    url = "https://linux.dropbox.com/packages/nautilus-dropbox-${version}.tar.bz2";
+    hash = "sha256-pqCYzxaqR0f0CBaseT1Z436K47cIDQswYR1sK4Zj8sE=";
   };
 
   strictDeps = true;
@@ -34,9 +36,10 @@ stdenv.mkDerivation {
   ];
 
   nativeBuildInputs = [
-    pkgconfig
+    autoreconfHook
+    pkg-config
     gobject-introspection
-    gdk_pixbuf
+    gdk-pixbuf
     # only for build, the install command also wants to use GTK through introspection
     # but we are using Nix for installation so we will not need that.
     (python3.withPackages (ps: with ps; [
@@ -47,24 +50,25 @@ stdenv.mkDerivation {
 
   buildInputs = [
     python3
-    gtk3
-    gnome3.nautilus
+    gtk4
+    gnome.nautilus
   ];
 
   configureFlags = [
-    "--with-nautilus-extension-dir=${placeholder ''nautilusExtension''}/lib/nautilus/extensions-3.0"
+    "--with-nautilus-extension-dir=${placeholder "nautilusExtension"}/lib/nautilus/extension-4"
   ];
 
   makeFlags = [
-    "EMBLEM_DIR=${placeholder ''nautilusExtension''}/share/nautilus-dropbox/emblems"
+    "EMBLEM_DIR=${placeholder "nautilusExtension"}/share/nautilus-dropbox/emblems"
   ];
 
   meta = {
-    homepage = https://www.dropbox.com;
+    homepage = "https://www.dropbox.com";
     description = "Command line client for the dropbox daemon";
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    license = lib.licenses.gpl3Plus;
+    mainProgram = "dropbox";
+    maintainers = with lib.maintainers; [ eclairevoyant ];
     # NOTE: Dropbox itself only works on linux, so this is ok.
-    platforms = stdenv.lib.platforms.linux;
+    platforms = lib.platforms.linux;
   };
 }

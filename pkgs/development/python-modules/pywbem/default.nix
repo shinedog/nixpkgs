@@ -1,57 +1,71 @@
-{ lib, buildPythonPackage, fetchPypi, libxml2
-, m2crypto, ply, pyyaml, six, pbr, pythonOlder, isPy37, python
-, httpretty, lxml, mock, pytest, requests, decorator, unittest2
+{
+  lib,
+  buildPythonPackage,
+  decorator,
+  fetchPypi,
+  formencode,
+  httpretty,
+  libxml2,
+  lxml,
+  mock,
+  nocasedict,
+  nocaselist,
+  pbr,
+  ply,
+  pytest,
+  pythonOlder,
+  pytz,
+  pyyaml,
+  requests,
+  requests-mock,
+  six,
+  testfixtures,
+  yamlloader,
 }:
 
 buildPythonPackage rec {
   pname = "pywbem";
-  version = "0.12.6";
+  version = "1.7.2";
+  format = "setuptools";
 
-  # Support added in master https://github.com/pywbem/pywbem/commit/b2f2f1a151a30355bbc6652dca69a7b30bfe941e awaiting release
-  disabled = isPy37;
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1dc6b745rrys600n05apdf6lb2vv5arlcwv7aiz9whgkbcd9qhki";
+    hash = "sha256-3Dt4WEABf1/LY4HFZoJZjOu/yEUYUXaPheIxioTga2g=";
   };
 
   propagatedBuildInputs = [
     mock
+    nocasedict
+    nocaselist
     pbr
     ply
     pyyaml
     six
-  ] ++ lib.optionals (pythonOlder "3.0") [ m2crypto ];
+    yamlloader
+  ];
 
-  checkInputs = [
+  nativeCheckInputs = [
     decorator
+    formencode
     httpretty
     libxml2
     lxml
     pytest
+    pytz
     requests
-    unittest2
+    requests-mock
+    testfixtures
   ];
 
-  postPatch = ''
-    # Uses deprecated library yamlordereddictloader
-    rm testsuite/test_client.py
-
-    # Wants `wbemcli` in PATH
-    rm testsuite/test_wbemcli.py
-    
-    # Disables tests that use testfixtures which is currently broken by nonbuilding zope_component
-    rm testsuite/{test_logging,test_recorder,test_wbemconnection_mock}.*
-  '';
-
-  checkPhase = ''
-    pytest testsuite/
-  '';
+  pythonImportsCheck = [ "pywbem" ];
 
   meta = with lib; {
     description = "Support for the WBEM standard for systems management";
-    homepage = https://pywbem.github.io;
+    homepage = "https://pywbem.github.io";
+    changelog = "https://github.com/pywbem/pywbem/blob/${version}/docs/changes.rst";
     license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [ peterhoeg ];
+    maintainers = with maintainers; [ ];
   };
 }

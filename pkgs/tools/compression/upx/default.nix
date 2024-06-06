@@ -1,32 +1,35 @@
-{ stdenv, fetchurl, ucl, zlib, perl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, nix-update-script
+, testers
+}:
 
-stdenv.mkDerivation rec {
-  name = "upx-${version}";
-  version = "3.95";
-  src = fetchurl {
-    url = "https://github.com/upx/upx/releases/download/v${version}/${name}-src.tar.xz";
-    sha256 = "14jmgy7hvx4zqra20w8260wrcxmjf2h6ba2yrw7pcp18im35a3rv";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "upx";
+  version = "4.2.4";
+  src = fetchFromGitHub {
+    owner = "upx";
+    repo = "upx";
+    rev = "v${finalAttrs.version}";
+    fetchSubmodules = true;
+    hash = "sha256-r36BD5f/sQSz3GjvreOptc7atIaaBZKpU+7qm+BKLss=";
   };
 
-  CXXFLAGS = "-Wno-unused-command-line-argument";
+  nativeBuildInputs = [ cmake ];
 
-  buildInputs = [ ucl zlib perl ];
+  passthru = {
+    updateScript = nix-update-script { };
+    tests.version = testers.testVersion { package = finalAttrs.finalPackage; };
+  };
 
-  preConfigure = ''
-    export UPX_UCLDIR=${ucl}
-  '';
-
-  makeFlags = [ "-C" "src" "CHECK_WHITESPACE=true" ];
-
-  installPhase = ''
-    mkdir -p $out/bin
-    cp src/upx.out $out/bin/upx
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = https://upx.github.io/;
+  meta = with lib; {
+    homepage = "https://upx.github.io/";
     description = "The Ultimate Packer for eXecutables";
+    changelog = "https://github.com/upx/upx/blob/${finalAttrs.src.rev}/NEWS";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
+    mainProgram = "upx";
   };
-}
+})

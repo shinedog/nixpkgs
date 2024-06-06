@@ -1,16 +1,18 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  nose,
 }:
 
 buildPythonPackage rec {
   pname = "pid";
-  version = "2.2.3";
+  version = "3.0.4";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "077da788630394adce075c88f4a087bcdb27d98cab67eb9046ebcfeedfc1194d";
+    sha256 = "0e33670e83f6a33ebb0822e43a609c3247178d4a375ff50a4689e266d853eb66";
   };
 
   buildInputs = [ nose ];
@@ -18,10 +20,9 @@ buildPythonPackage rec {
   # No tests included
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Pidfile featuring stale detection and file-locking";
-    homepage = https://github.com/trbs/pid/;
+    homepage = "https://github.com/trbs/pid/";
     license = licenses.asl20;
   };
-
 }

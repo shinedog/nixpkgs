@@ -1,25 +1,60 @@
-{ stdenv, fetchFromGitHub, meson, ninja, pkgconfig, glib, libuuid, gobject-introspection, gtk-doc, shared-mime-info, python3, docbook_xsl, docbook_xml_dtd_43 }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, docbook_xml_dtd_43
+, docbook-xsl-nons
+, glib
+, gobject-introspection
+, gtk-doc
+, meson
+, ninja
+, pkg-config
+, python3
+, shared-mime-info
+, nixosTests
+, xz
+, zstd
+}:
 
 stdenv.mkDerivation rec {
-  name = "libxmlb-${version}";
-  version = "0.1.9";
+  pname = "libxmlb";
+  version = "0.3.19";
 
-  outputs = [ "out" "lib" "dev" "devdoc" ];
+  outputs = [ "out" "lib" "dev" "devdoc" "installedTests" ];
 
   src = fetchFromGitHub {
     owner = "hughsie";
     repo = "libxmlb";
     rev = version;
-    sha256 = "1rdpsssrwpx24snqb82hisjybnpz9fq91wbmxfi2s63xllzi14b6";
+    hash = "sha256-gXLWHkT+h/wvmmi7PyIx16gbeYznVOT7CwuBgF3bjOY=";
   };
 
-  nativeBuildInputs = [ meson ninja python3 pkgconfig gobject-introspection gtk-doc shared-mime-info docbook_xsl docbook_xml_dtd_43 ];
+  patches = [
+    ./installed-tests-path.patch
+  ];
 
-  buildInputs = [ glib libuuid ];
+  nativeBuildInputs = [
+    docbook_xml_dtd_43
+    docbook-xsl-nons
+    gobject-introspection
+    gtk-doc
+    meson
+    ninja
+    pkg-config
+    python3
+    shared-mime-info
+  ];
+
+  buildInputs = [
+    glib
+    xz
+    zstd
+  ];
 
   mesonFlags = [
     "--libexecdir=${placeholder "out"}/libexec"
     "-Dgtkdoc=true"
+    "-Dinstalled_test_prefix=${placeholder "installedTests"}"
   ];
 
   preCheck = ''
@@ -28,11 +63,18 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  passthru = {
+    tests = {
+      installed-tests = nixosTests.installed-tests.libxmlb;
+    };
+  };
+
+  meta = with lib; {
     description = "A library to help create and query binary XML blobs";
-    homepage = https://github.com/hughsie/libxmlb;
+    mainProgram = "xb-tool";
+    homepage = "https://github.com/hughsie/libxmlb";
     license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [ jtojnar ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.unix;
   };
 }

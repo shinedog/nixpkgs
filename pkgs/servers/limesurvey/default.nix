@@ -1,17 +1,15 @@
-{ stdenv, lib, fetchFromGitHub, writeText, makeWrapper, php }:
+{ lib, stdenv, fetchFromGitHub, writeText, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "limesurvey-${version}";
-  version = "2.05_plus_141210";
+  pname = "limesurvey";
+  version = "6.4.1+240108";
 
   src = fetchFromGitHub {
     owner = "LimeSurvey";
     repo = "LimeSurvey";
     rev = version;
-    sha256 = "1b5yixrlrjm055ag07c7phk84mk1892v20nsss1y0xzvgn6s14gq";
+    hash = "sha256-Cpf8X6igF7LdRbFihGudFmx/8aY0Kf0BE7jHnEF1DYA=";
   };
-
-  buildInputs = [ makeWrapper ];
 
   phpConfig = writeText "config.php" ''
   <?php
@@ -19,23 +17,24 @@ stdenv.mkDerivation rec {
   ?>
   '';
 
-  patchPhase = ''
-    substituteInPlace application/core/LSYii_Application.php \
-      --replace "'basePath" "//'basePath"
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/share/limesurvey
+    cp -r . $out/share/limesurvey
+    cp ${phpConfig} $out/share/limesurvey/application/config/config.php
+
+    runHook postInstall
   '';
 
-  installPhase = ''
-    mkdir -p $out/{bin,share/limesurvey}
-    cp -R . $out/share/limesurvey
-    cp ${phpConfig} $out/share/limesurvey/application/config/config.php
-    makeWrapper ${php}/bin/php $out/bin/limesurvey-console \
-      --add-flags "$out/share/limesurvey/application/commands/console.php"
-  '';
+  passthru.tests = {
+    smoke-test = nixosTests.limesurvey;
+  };
 
   meta = with lib; {
     description = "Open source survey application";
-    license = licenses.gpl2;
-    homepage = https://www.limesurvey.org;
+    license = licenses.gpl2Plus;
+    homepage = "https://www.limesurvey.org";
     maintainers = with maintainers; [offline];
     platforms = with platforms; unix;
   };

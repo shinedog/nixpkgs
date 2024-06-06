@@ -4,9 +4,9 @@
 
 let
   overridePkgs = lib.optionals (!runtimeOnly) (with pkgs; [
-    libgpgerror
+    libgpg-error
     libpulseaudio
-    alsaLib
+    alsa-lib
     openalSoft
     libva1
     libvdpau
@@ -21,12 +21,12 @@ let
 
   gnuArch = if steamArch == "amd64" then "x86_64-linux-gnu"
             else if steamArch == "i386" then "i386-linux-gnu"
-            else abort "Unsupported architecture";
+            else throw "Unsupported architecture";
 
   libs = [ "lib/${gnuArch}" "lib" "usr/lib/${gnuArch}" "usr/lib" ];
   bins = [ "bin" "usr/bin" ];
 
-in stdenv.mkDerivation rec {
+in stdenv.mkDerivation {
   name = "steam-runtime-wrapped";
 
   nativeBuildInputs = [ perl ];

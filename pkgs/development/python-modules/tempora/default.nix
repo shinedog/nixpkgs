@@ -1,25 +1,54 @@
-{ lib, buildPythonPackage, fetchPypi
-, setuptools_scm
-, six, pytz, jaraco_functools }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  freezegun,
+  jaraco-functools,
+  pytest-freezegun,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  setuptools-scm,
+}:
 
 buildPythonPackage rec {
   pname = "tempora";
-  version = "1.14.1";
+  version = "5.5.1";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cb60b1d2b1664104e307f8e5269d7f4acdb077c82e35cd57246ae14a3427d2d6";
+    hash = "sha256-ortR4hIZdtkxNHs+QzkXw2S4P91fZO8nM2yGW/H7D3U=";
   };
 
-  doCheck = false;
+  nativeBuildInputs = [ setuptools-scm ];
 
-  buildInputs = [ setuptools_scm ];
+  propagatedBuildInputs = [
+    jaraco-functools
+    pytz
+  ];
 
-  propagatedBuildInputs = [ six pytz jaraco_functools ];
+  nativeCheckInputs = [
+    freezegun
+    pytest-freezegun
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [
+    "tempora"
+    "tempora.schedule"
+    "tempora.timing"
+    "tempora.utc"
+  ];
 
   meta = with lib; {
     description = "Objects and routines pertaining to date and time";
-    homepage = https://github.com/jaraco/tempora;
+    mainProgram = "calc-prorate";
+    homepage = "https://github.com/jaraco/tempora";
+    changelog = "https://github.com/jaraco/tempora/blob/v${version}/NEWS.rst";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

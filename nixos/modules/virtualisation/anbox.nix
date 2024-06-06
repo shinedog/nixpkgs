@@ -5,7 +5,7 @@ with lib;
 let
 
   cfg = config.virtualisation.anbox;
-  kernelPackages = config.boot.kernelPackages;
+
   addrOpts = v: addr: pref: name: {
     address = mkOption {
       default = addr;
@@ -20,10 +20,32 @@ let
       type = types.addCheck types.int (n: n >= 0 && n <= (if v == 4 then 32 else 128));
       description = ''
         Subnet mask of the ${name} address, specified as the number of
-        bits in the prefix (<literal>${if v == 4 then "24" else "64"}</literal>).
+        bits in the prefix (`${if v == 4 then "24" else "64"}`).
       '';
     };
   };
+
+  finalImage = if cfg.imageModifications == "" then cfg.image else ( pkgs.callPackage (
+    { runCommandNoCC, squashfsTools }:
+
+    runCommandNoCC "${cfg.image.name}-modified.img" {
+      nativeBuildInputs = [
+        squashfsTools
+      ];
+    } ''
+      echo "-> Extracting Anbox root image..."
+      unsquashfs -dest rootfs ${cfg.image}
+
+      echo "-> Modifying Anbox root image..."
+      (
+      cd rootfs
+      ${cfg.imageModifications}
+      )
+
+      echo "-> Packing modified Anbox root image..."
+      mksquashfs rootfs $out -comp xz -no-xattrs -all-root
+    ''
+  ) { });
 
 in
 
@@ -35,10 +57,22 @@ in
 
     image = mkOption {
       default = pkgs.anbox.image;
-      example = literalExample "pkgs.anbox.image";
+      defaultText = literalExpression "pkgs.anbox.image";
       type = types.package;
       description = ''
         Base android image for Anbox.
+      '';
+    };
+
+    imageModifications = mkOption {
+      default = "";
+      type = types.lines;
+      description = ''
+        Commands to edit the image filesystem.
+
+        This can be used to e.g. bundle a privileged F-Droid.
+
+        Commands are ran with PWD being at the root of the filesystem.
       '';
     };
 
@@ -56,7 +90,7 @@ in
 
       dns = mkOption {
         default = "1.1.1.1";
-        type = types.string;
+        type = types.str;
         description = ''
           Container DNS server.
         '';
@@ -67,19 +101,19 @@ in
   config = mkIf cfg.enable {
 
     assertions = singleton {
-      assertion = versionAtLeast (getVersion config.boot.kernelPackages.kernel) "4.18";
-      message = "Anbox needs user namespace support to work properly";
+      assertion = with config.boot.kernelPackages; kernelAtLeast "5.5" && kernelOlder "5.18";
+      message = "Anbox needs a kernel with binder and ashmem support";
     };
 
     environment.systemPackages = with pkgs; [ anbox ];
 
-    boot.kernelModules = [ "ashmem_linux" "binder_linux" ];
-    boot.extraModulePackages = [ kernelPackages.anbox ];
-
-    services.udev.extraRules = ''
-      KERNEL=="ashmem", NAME="%k", MODE="0666"
-      KERNEL=="binder*", NAME="%k", MODE="0666"
-    '';
+    systemd.mounts = singleton {
+      requiredBy = [ "anbox-container-manager.service" ];
+      description = "Anbox Binder File System";
+      what = "binder";
+      where = "/dev/binderfs";
+      type = "binder";
+    };
 
     virtualisation.lxc.enable = true;
     networking.bridges.anbox0.interfaces = [];
@@ -90,6 +124,9 @@ in
       internalInterfaces = [ "anbox0" ];
     };
 
+    # Ensures NetworkManager doesn't touch anbox0
+    networking.networkmanager.unmanaged = [ "anbox0" ];
+
     systemd.services.anbox-container-manager = let
       anboxloc = "/var/lib/anbox";
     in {
@@ -98,14 +135,8 @@ in
       environment.XDG_RUNTIME_DIR="${anboxloc}";
 
       wantedBy = [ "multi-user.target" ];
-      after = [ "systemd-udev-settle.service" ];
       preStart = let
-        initsh = let
-          ip = cfg.ipv4.container.address;
-          gw = cfg.ipv4.gateway.address;
-          dns = cfg.ipv4.dns;
-        in
-        pkgs.writeText "nixos-init" (''
+        initsh = pkgs.writeText "nixos-init" (''
           #!/system/bin/sh
           setprop nixos.version ${config.system.nixos.version}
 
@@ -130,12 +161,13 @@ in
         ExecStart = ''
           ${pkgs.anbox}/bin/anbox container-manager \
             --data-path=${anboxloc} \
-            --android-image=${cfg.image} \
+            --android-image=${finalImage} \
             --container-network-address=${cfg.ipv4.container.address} \
             --container-network-gateway=${cfg.ipv4.gateway.address} \
             --container-network-dns-servers=${cfg.ipv4.dns} \
             --use-rootfs-overlay \
-            --privileged
+            --privileged \
+            --daemon
         '';
       };
     };

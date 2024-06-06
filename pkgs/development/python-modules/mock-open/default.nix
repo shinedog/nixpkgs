@@ -1,21 +1,24 @@
-{ lib, buildPythonPackage, fetchFromGitHub, pythonOlder, mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+}:
 
 buildPythonPackage rec {
   pname = "mock-open";
-  version = "1.3.1";
+  version = "1.4.0";
+  format = "setuptools";
 
   # no tests in PyPI tarball
   src = fetchFromGitHub {
     owner = "nivbend";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0ikhrhlkl5c7qbigpsv44jw89ws1z7j06gzyg5dh1ki533ifbjm2";
+    sha256 = "0qlz4y8jqxsnmqg03yp9f87rmnjrvmxm5qvm6n1218gm9k5dixbm";
   };
 
-  propagatedBuildInputs = lib.optional (pythonOlder "3.3") mock;
-
   meta = with lib; {
-    homepage = https://github.com/nivbend/mock-open;
+    homepage = "https://github.com/nivbend/mock-open";
     description = "A better mock for file I/O";
     license = licenses.mit;
   };

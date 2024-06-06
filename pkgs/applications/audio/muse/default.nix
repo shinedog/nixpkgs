@@ -1,27 +1,76 @@
-{ stdenv
+{ lib
+, stdenv
 , fetchFromGitHub
-, libjack2
-, qt5
 , cmake
-, libsndfile
-, libsamplerate
-, ladspaH
-, fluidsynth
-, alsaLib
-, rtaudio
-, lash
+, extra-cmake-modules
+, pkg-config
+, qttools
+, wrapQtAppsHook
+, alsa-lib
 , dssi
+, fluidsynth
+, ladspaH
+, lash
+, libinstpatch
+, libjack2
 , liblo
-, pkgconfig
-, gitAndTools
+, libsamplerate
+, libsndfile
+, lilv
+, lrdf
+, lv2
+, qtsvg
+, rtaudio
+, rubberband
+, sord
+, serd
 }:
 
-stdenv.mkDerivation rec {
-  name = "muse-sequencer-${version}";
-  version = "3.1pre1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "muse-sequencer";
+  version = "4.2.1";
 
-  meta = with stdenv.lib; {
-    homepage = http://www.muse-sequencer.org;
+  src = fetchFromGitHub {
+    owner = "muse-sequencer";
+    repo = "muse";
+    rev = finalAttrs.version;
+    hash = "sha256-LxibuqopMHuKEfTWXSEXc1g3wTm2F3NQRiV71FHvaY0=";
+  };
+
+  sourceRoot = "${finalAttrs.src.name}/src";
+
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+    pkg-config
+    qttools
+    wrapQtAppsHook
+  ];
+
+  buildInputs = [
+    alsa-lib
+    dssi
+    fluidsynth
+    ladspaH
+    lash
+    libinstpatch
+    libjack2
+    liblo
+    libsamplerate
+    libsndfile
+    lilv
+    lrdf
+    lv2
+    qtsvg
+    rtaudio
+    rubberband
+    sord
+  ];
+
+  env.NIX_CFLAGS_COMPILE = toString [ "-I${lib.getDev serd}/include/serd-0" ];
+
+  meta = {
+    homepage = "https://muse-sequencer.github.io/";
     description = "MIDI/Audio sequencer with recording and editing capabilities";
     longDescription = ''
       MusE is a MIDI/Audio sequencer with recording and editing capabilities
@@ -31,49 +80,9 @@ stdenv.mkDerivation rec {
       MusE aims to be a complete multitrack virtual studio for Linux,
       it is published under the GNU General Public License.
     '';
-    license = stdenv.lib.licenses.gpl2;
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ orivej ];
+    platforms = lib.platforms.linux;
+    mainProgram = "muse4";
   };
-
-  src =
-    fetchFromGitHub {
-      owner = "muse-sequencer";
-      repo = "muse";
-      rev = "2167ae053c16a633d8377acdb1debaac10932838";
-      sha256 = "0rsdx8lvcbz5bapnjvypw8h8bq587s9z8cf2znqrk6ah38s6fsrf";
-    };
-
-
-  nativeBuildInputs = [
-    pkgconfig
-    gitAndTools.gitFull
-  ];
-
-  buildInputs = [
-    libjack2
-    qt5.qtsvg
-    qt5.qttools
-    cmake
-    libsndfile
-    libsamplerate
-    ladspaH
-    fluidsynth
-    alsaLib
-    rtaudio
-    lash
-    dssi
-    liblo
-  ];
-
-  sourceRoot = "source/muse3";
-
-  buildPhase = ''
-    cd ..
-    bash compile_muse.sh
-  '';
-
-  installPhase = ''
-    mkdir $out
-    cd build
-    make install
-  '';
-}
+})

@@ -1,23 +1,38 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "mistune";
-  version = "0.8.4";
+  version = "3.0.2";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "59a3429db53c50b5c6bcc8a07f8848cb00d7dc8bdb431a4ab41920d201d4756e";
+  disabled = pythonOlder "3.7";
+
+  format = "pyproject";
+
+  src = fetchFromGitHub {
+    owner = "lepture";
+    repo = "mistune";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-OoTiqJ7hsFP1Yx+7xW3rL+Yc/O2lCMdhBBbaZucyZXM=";
   };
 
-  buildInputs = [ nose ];
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "mistune" ];
 
   meta = with lib; {
-    description = "The fastest markdown parser in pure Python";
-    homepage = https://github.com/lepture/mistune;
+    changelog = "https://github.com/lepture/mistune/blob/${src.rev}/docs/changes.rst";
+    description = "A sane Markdown parser with useful plugins and renderers";
+    homepage = "https://github.com/lepture/mistune";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ dotlambda ];
   };
 }

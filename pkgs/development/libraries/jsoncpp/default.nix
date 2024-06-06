@@ -1,14 +1,24 @@
-{ stdenv , fetchFromGitHub , cmake , python }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, python3
+, validatePkgConfig
+, secureMemory ? false
+, enableStatic ? stdenv.hostPlatform.isStatic
+}:
 
 stdenv.mkDerivation rec {
   pname = "jsoncpp";
-  version = "1.8.4";
+  version = "1.9.5";
+
+  outputs = ["out" "dev"];
 
   src = fetchFromGitHub {
     owner = "open-source-parsers";
     repo = "jsoncpp";
     rev = version;
-    sha256 = "1z0gj7a6jypkijmpknis04qybs1hkd04d1arr3gy89lnxmp6qzlm";
+    sha256 = "sha256-OyfJD19g8cT9wOD0hyJyEw4TbaxZ9eY04396U/7R+hs=";
   };
 
   /* During darwin bootstrap, we have a cp that doesn't understand the
@@ -20,27 +30,28 @@ stdenv.mkDerivation rec {
     export sourceRoot=${src.name}
   '';
 
-  # Hack to be able to run the test, broken because we use
-  # CMAKE_SKIP_BUILD_RPATH to avoid cmake resetting rpath on install
-  preBuild = if stdenv.isDarwin then ''
-    export DYLD_LIBRARY_PATH="`pwd`/src/lib_json:$DYLD_LIBRARY_PATH"
-  '' else ''
-    export LD_LIBRARY_PATH="`pwd`/src/lib_json:$LD_LIBRARY_PATH"
+  postPatch = lib.optionalString secureMemory ''
+    sed -i 's/#define JSONCPP_USING_SECURE_MEMORY 0/#define JSONCPP_USING_SECURE_MEMORY 1/' include/json/version.h
   '';
 
-  nativeBuildInputs = [ cmake python ];
+  nativeBuildInputs = [ cmake python3 validatePkgConfig ];
 
   cmakeFlags = [
     "-DBUILD_SHARED_LIBS=ON"
-    "-DBUILD_STATIC_LIBS=OFF"
+    "-DBUILD_OBJECT_LIBS=OFF"
     "-DJSONCPP_WITH_CMAKE_PACKAGE=ON"
-  ];
+    "-DBUILD_STATIC_LIBS=${if enableStatic then "ON" else "OFF"}"
+  ]
+    # the test's won't compile if secureMemory is used because there is no
+    # comparison operators and conversion functions between
+    # std::basic_string<..., Json::SecureAllocator<char>> vs.
+    # std::basic_string<..., [default allocator]>
+    ++ lib.optional ((stdenv.buildPlatform != stdenv.hostPlatform) || secureMemory) "-DJSONCPP_WITH_TESTS=OFF";
 
-  meta = with stdenv.lib; {
-    inherit version;
-    homepage = https://github.com/open-source-parsers/jsoncpp;
-    description = "A C++ library for interacting with JSON.";
-    maintainers = with maintainers; [ ttuegel cpages nand0p ];
+  meta = with lib; {
+    homepage = "https://github.com/open-source-parsers/jsoncpp";
+    description = "A C++ library for interacting with JSON";
+    maintainers = with maintainers; [ ttuegel cpages ];
     license = licenses.mit;
     platforms = platforms.all;
   };

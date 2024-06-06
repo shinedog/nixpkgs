@@ -1,19 +1,36 @@
-{ lib, buildPythonPackage, fetchFromGitHub, isPy3k
-, bitcoinlib, GitPython, pysha3, git }:
+{
+  lib,
+  bitcoinlib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  git,
+  gitpython,
+  pycryptodomex,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "opentimestamps";
-  version = "0.4.0";
-  disabled = (!isPy3k);
+  version = "0.4.5";
+  format = "setuptools";
 
-  # We can't use the pypi source because it doesn't include README.md which is
-  # needed in setup.py
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "opentimestamps";
     repo = "python-opentimestamps";
     rev = "python-opentimestamps-v${version}";
-    sha256 = "165rj08hwmbn44ra9n0cj5vfn6p49dqfn5lz2mks962mx19c7l0m";
+    hash = "sha256-clG/5NAPmmmoj4b3LdVwl58DHg1EFMIMu+erx+GT+NE=";
   };
+
+  propagatedBuildInputs = [
+    bitcoinlib
+    gitpython
+    pycryptodomex
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   # Remove a failing test which expects the test source file to reside in the
   # project's Git repo
@@ -21,12 +38,13 @@ buildPythonPackage rec {
     rm opentimestamps/tests/core/test_git.py
   '';
 
-  checkInputs = [ git ];
-  propagatedBuildInputs = [ bitcoinlib GitPython pysha3 ];
+  pythonImportsCheck = [ "opentimestamps" ];
 
-  meta = {
+  meta = with lib; {
     description = "Create and verify OpenTimestamps proofs";
-    homepage = https://github.com/opentimestamps/python-opentimestamps;
-    license = lib.licenses.lgpl3;
+    homepage = "https://github.com/opentimestamps/python-opentimestamps";
+    changelog = "https://github.com/opentimestamps/python-opentimestamps/releases/tag/python-opentimestamps-v${version}";
+    license = licenses.lgpl3Plus;
+    maintainers = with maintainers; [ erikarvstedt ];
   };
 }

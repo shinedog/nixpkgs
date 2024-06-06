@@ -1,21 +1,28 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
+buildGoModule rec {
   pname = "sops";
-  version = "3.3.0";
-
-  goPackagePath = "go.mozilla.org/sops";
+  version = "3.8.1";
 
   src = fetchFromGitHub {
-    rev = version;
-    owner = "mozilla";
+    owner = "getsops";
     repo = pname;
-    sha256 = "0h02iy1dfn4874gyj3k07gbw8byb7rngvsi9kjglnad2pkf0pq2d";
+    rev = "v${version}";
+    hash = "sha256-4K09wLV1+TvYTtvha6YyGhjlhEldWL1eVazNwcEhi3Q=";
   };
 
-  meta = with stdenv.lib; {
-    inherit (src.meta) homepage;
-    description = "Mozilla sops (Secrets OPerationS) is an editor of encrypted files";
+  vendorHash = "sha256-iRgLspYhwSVuL0yarPdjXCKfjK7TGDZeQCOcIYtNvzA=";
+
+  subPackages = [ "cmd/sops" ];
+
+  ldflags = [ "-s" "-w" "-X github.com/getsops/sops/v3/version.Version=${version}" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/getsops/sops";
+    description = "Simple and flexible tool for managing secrets";
+    changelog = "https://github.com/getsops/sops/blob/v${version}/CHANGELOG.rst";
+    mainProgram = "sops";
+    maintainers = with maintainers; [ Scrumplex mic92 ];
     license = licenses.mpl20;
   };
 }

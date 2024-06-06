@@ -1,87 +1,189 @@
-{ lib, stdenv, python3
-, enableSystemd ? true
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchPypi
+, python3
+, openssl
+, libiconv
+, cargo
+, rustPlatform
+, rustc
+, nixosTests
+, callPackage
 }:
 
-with python3.pkgs;
-
 let
-  matrix-synapse-ldap3 = buildPythonPackage rec {
-    pname = "matrix-synapse-ldap3";
-    version = "0.1.3";
+  python = python3.override {
+    packageOverrides = self: super: {
+      netaddr = super.netaddr.overridePythonAttrs (oldAttrs: rec {
+        version = "1.0.0";
 
-    src = fetchPypi {
-      inherit pname version;
-      sha256 = "0a0d1y9yi0abdkv6chbmxr3vk36gynnqzrjhbg26q4zg06lh9kgn";
+        src = fetchPypi {
+          pname = "netaddr";
+          inherit version;
+          hash = "sha256-6wRrVTVOelv4AcBJAq6SO9aZGQJC2JsJnolvmycktNM=";
+        };
+      });
     };
-
-    propagatedBuildInputs = [ service-identity ldap3 twisted ];
-
-    # ldaptor is not ready for py3 yet
-    doCheck = !isPy3k;
-    checkInputs = [ ldaptor mock ];
   };
 
-in buildPythonApplication rec {
+  plugins = python.pkgs.callPackage ./plugins { };
+  tools = callPackage ./tools { };
+in
+python.pkgs.buildPythonApplication rec {
   pname = "matrix-synapse";
-  version = "0.99.3.2";
+  version = "1.108.0";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0jcmav15ms3859174zpqf11hb7xdql4fgqmxlxpxjllzipq4fwiz";
+  src = fetchFromGitHub {
+    owner = "element-hq";
+    repo = "synapse";
+    rev = "v${version}";
+    hash = "sha256-Pvn6mf1EM7Dj3N7frBzPGU9YmTDhJuAVuvXbYgjnRqk=";
   };
 
-  patches = [
-    # adds an entry point for the service
-    ./homeserver-script.patch
+  cargoDeps = rustPlatform.fetchCargoTarball {
+    inherit src;
+    name = "${pname}-${version}";
+    hash = "sha256-R4V/Z8f2nbSifjlYP2NCP0B6KiAAa+YSmpVLdzeuXWY=";
+  };
+
+  postPatch = ''
+    # Remove setuptools_rust from runtime dependencies
+    # https://github.com/element-hq/synapse/blob/v1.69.0/pyproject.toml#L177-L185
+    sed -i '/^setuptools_rust =/d' pyproject.toml
+
+    # Remove version pin on build dependencies. Upstream does this on purpose to
+    # be extra defensive, but we don't want to deal with updating this
+    sed -i 's/"poetry-core>=\([0-9.]*\),<=[0-9.]*"/"poetry-core>=\1"/' pyproject.toml
+    sed -i 's/"setuptools_rust>=\([0-9.]*\),<=[0-9.]*"/"setuptools_rust>=\1"/' pyproject.toml
+
+    # Don't force pillow to be 10.0.1 because we already have patched it, and
+    # we don't use the pillow wheels.
+    sed -i 's/Pillow = ".*"/Pillow = ">=5.4.0"/' pyproject.toml
+  '';
+
+  nativeBuildInputs = with python.pkgs; [
+    poetry-core
+    rustPlatform.cargoSetupHook
+    setuptools-rust
+    cargo
+    rustc
   ];
 
-  propagatedBuildInputs = [
+  buildInputs = [
+    openssl
+  ] ++ lib.optionals stdenv.isDarwin [
+    libiconv
+  ];
+
+  propagatedBuildInputs = with python.pkgs; [
+    attrs
     bcrypt
     bleach
     canonicaljson
-    daemonize
-    frozendict
+    cryptography
+    ijson
+    immutabledict
     jinja2
     jsonschema
-    lxml
-    matrix-synapse-ldap3
+    matrix-common
     msgpack
     netaddr
+    packaging
     phonenumbers
     pillow
-    (prometheus_client.overrideAttrs (x: {
-      src = fetchPypi {
-        pname = "prometheus_client";
-        version = "0.3.1";
-        sha256 = "093yhvz7lxl7irnmsfdnf2030lkj4gsfkg6pcmy4yr1ijk029g0p";
-      };
-    }))
-    psutil
-    psycopg2
+    prometheus-client
     pyasn1
+    pyasn1-modules
+    pydantic
     pymacaroons
-    pynacl
     pyopenssl
-    pysaml2
     pyyaml
-    requests
+    service-identity
     signedjson
     sortedcontainers
     treq
     twisted
+    typing-extensions
     unpaddedbase64
-  ] ++ lib.optional enableSystemd systemd;
+  ]
+  ++ twisted.optional-dependencies.tls;
 
-  checkInputs = [ mock parameterized ];
+  passthru.optional-dependencies = with python.pkgs; {
+    postgres = if isPyPy then [
+      psycopg2cffi
+    ] else [
+      psycopg2
+    ];
+    saml2 = [
+      pysaml2
+    ];
+    oidc = [
+      authlib
+    ];
+    systemd = [
+      systemd
+    ];
+    url-preview = [
+      lxml
+    ];
+    sentry = [
+      sentry-sdk
+    ];
+    jwt = [
+      authlib
+    ];
+    redis = [
+      hiredis
+      txredisapi
+    ];
+    cache-memory = [
+      pympler
+    ];
+    user-search = [
+      pyicu
+    ];
+  };
+
+  nativeCheckInputs = [
+    openssl
+  ] ++ (with python.pkgs; [
+    mock
+    parameterized
+  ])
+  ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  doCheck = !stdenv.isDarwin;
 
   checkPhase = ''
-    PYTHONPATH=".:$PYTHONPATH" ${python3.interpreter} -m twisted.trial tests
+    runHook preCheck
+
+    # remove src module, so tests use the installed module instead
+    rm -rf ./synapse
+
+    # high parallelisem makes test suite unstable
+    # upstream uses 2 cores but 4 seems to be also stable
+    # https://github.com/element-hq/synapse/blob/develop/.github/workflows/latest_deps.yml#L103
+    if (( $NIX_BUILD_CORES > 4)); then
+      NIX_BUILD_CORES=4
+    fi
+
+    PYTHONPATH=".:$PYTHONPATH" ${python.interpreter} -m twisted.trial -j $NIX_BUILD_CORES tests
+
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://matrix.org;
+  passthru = {
+    tests = { inherit (nixosTests) matrix-synapse matrix-synapse-workers; };
+    inherit plugins tools python;
+  };
+
+  meta = with lib; {
+    homepage = "https://matrix.org";
+    changelog = "https://github.com/element-hq/synapse/releases/tag/v${version}";
     description = "Matrix reference homeserver";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ ralith roblabla ekleog pacien ];
+    license = licenses.agpl3Plus;
+    maintainers = teams.matrix.members;
   };
 }

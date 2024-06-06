@@ -1,25 +1,41 @@
-{ lib, buildPythonPackage, fetchPypi, django }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  django,
+  django-jinja,
+  python,
+}:
 
 buildPythonPackage rec {
   pname = "django-sites";
-  version = "0.10";
+  version = "0.11";
+  format = "setuptools";
 
-  meta = {
-    description = ''
-      Alternative implementation of django "sites" framework
-      based on settings instead of models.
-    '';
-    homepage = https://github.com/niwinz/django-sites;
-    license = lib.licenses.bsd3;
-  };
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f6f9ae55a05288a95567f5844222052b6b997819e174f4bde4e7c23763be6fc3";
+  src = fetchFromGitHub {
+    owner = "niwinz";
+    repo = "django-sites";
+    rev = version;
+    hash = "sha256-MQtQC+9DyS1ICXXovbqPpkKIQ5wpuJDgq3Lcd/1kORU=";
   };
 
   propagatedBuildInputs = [ django ];
 
-  # django.core.exceptions.ImproperlyConfigured: Requested settings, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
-  doCheck = false;
+  nativeCheckInputs = [ django-jinja ];
+
+  checkPhase = ''
+    runHook preCheck
+
+    ${python.interpreter} runtests.py
+
+    runHook postCheck
+  '';
+
+  meta = {
+    description = "Alternative implementation of django sites framework";
+    homepage = "https://github.com/niwinz/django-sites";
+    license = lib.licenses.bsd3;
+    # has not been updated for django>=4.0
+    broken = lib.versionAtLeast django.version "4";
+  };
 }

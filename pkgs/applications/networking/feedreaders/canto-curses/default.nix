@@ -1,4 +1,4 @@
-{ stdenv, fetchFromGitHub, python3Packages, readline, ncurses, canto-daemon }:
+{ lib, fetchFromGitHub, python3Packages, readline, ncurses, canto-daemon }:
 
 python3Packages.buildPythonApplication rec {
   version = "0.9.9";
@@ -16,6 +16,7 @@ python3Packages.buildPythonApplication rec {
 
   meta = {
     description = "An ncurses-based console Atom/RSS feed reader";
+    mainProgram = "canto-curses";
     longDescription = ''
       Canto is an Atom/RSS feed reader for the console that is meant to be
       quick, concise, and colorful. It's meant to allow you to crank through
@@ -24,9 +25,9 @@ python3Packages.buildPythonApplication rec {
       unreadable white text. An interface with almost infinite customization
       and extensibility using the excellent Python programming language.
     '';
-    homepage = https://codezen.org/canto-ng/;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.devhell ];
+    homepage = "https://codezen.org/canto-ng/";
+    license = lib.licenses.gpl2;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.devhell ];
   };
 }

@@ -1,8 +1,8 @@
-{ stdenv, requireFile, jdk }:
+{ lib, stdenv, requireFile, jdk }:
 
 stdenv.mkDerivation rec {
   version = "9542";
-  name = "ib-tws-${version}";
+  pname = "ib-tws";
 
   src = requireFile rec {
     name = "ibtws_${version}.jar";
@@ -15,8 +15,6 @@ stdenv.mkDerivation rec {
     '';
     sha256 = "1a2jiwwnr5g3xfba1a89c257bdbnq4zglri8hz021vk7f6s4rlrf";
   };
-
-  phases = [ "unpackPhase" "buildPhase" "installPhase" ];
 
   buildInputs = [ jdk ];
 
@@ -86,11 +84,12 @@ stdenv.mkDerivation rec {
     chmod u+x $out/bin/ib-gw
     '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Trader Work Station of Interactive Brokers";
-    homepage = https://www.interactivebrokers.com;
+    homepage = "https://www.interactivebrokers.com";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.unfree;
-    maintainers = [ maintainers.tstrobel ];
+    maintainers = [ ];
     platforms = platforms.linux;
   };
 }

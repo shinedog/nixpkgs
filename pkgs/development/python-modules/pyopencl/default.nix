@@ -1,37 +1,62 @@
-{ stdenv
-, fetchPypi
-, buildPythonPackage
-, Mako
-, pytest
-, numpy
-, cffi
-, pytools
-, decorator
-, appdirs
-, six
-, opencl-headers
-, ocl-icd
-, pybind11
+{
+  lib,
+  stdenv,
+  fetchPypi,
+  buildPythonPackage,
+  appdirs,
+  cffi,
+  decorator,
+  mako,
+  mesa_drivers,
+  numpy,
+  ocl-icd,
+  oldest-supported-numpy,
+  opencl-headers,
+  platformdirs,
+  pybind11,
+  pytestCheckHook,
+  pytools,
+  setuptools,
+  six,
+  wheel,
 }:
 
+let
+  os-specific-buildInputs = if stdenv.isDarwin then [ mesa_drivers.dev ] else [ ocl-icd ];
+in
 buildPythonPackage rec {
   pname = "pyopencl";
-  version = "2018.2.5";
-
-  checkInputs = [ pytest ];
-  buildInputs = [ opencl-headers ocl-icd pybind11 ];
-
-  propagatedBuildInputs = [ numpy cffi pytools decorator appdirs six Mako ];
+  version = "2024.1";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1qgi6diw9m7yldmql9kh08792053ib6zkplh8v2mqv6waaflmrnn";
+    hash = "sha256-7NVy7pQK2L2hY5w6e+tog0/JqYrX6z9uAarE99nUusE=";
   };
 
-  # py.test is not needed during runtime, so remove it from `install_requires`
-  postPatch = ''
-    substituteInPlace setup.py --replace "pytest>=2" ""
-  '';
+  nativeBuildInputs = [
+    oldest-supported-numpy
+    setuptools
+    wheel
+  ];
+
+  buildInputs = [
+    opencl-headers
+    pybind11
+  ] ++ os-specific-buildInputs;
+
+  propagatedBuildInputs = [
+    appdirs
+    cffi
+    decorator
+    mako
+    numpy
+    platformdirs
+    pytools
+    six
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   preBuild = ''
     export HOME=$(mktemp -d)
@@ -40,10 +65,11 @@ buildPythonPackage rec {
   # gcc: error: pygpu_language_opencl.cpp: No such file or directory
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "pyopencl" ];
+
+  meta = with lib; {
     description = "Python wrapper for OpenCL";
-    homepage = https://github.com/pyopencl/pyopencl;
+    homepage = "https://github.com/pyopencl/pyopencl";
     license = licenses.mit;
-    maintainers = [ maintainers.fridh ];
   };
 }

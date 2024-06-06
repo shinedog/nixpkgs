@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "office-code-pro";
   version = "1.004";
 
@@ -8,19 +8,19 @@ stdenv.mkDerivation rec {
     owner = "nathco";
     repo = "Office-Code-Pro";
     rev = version;
-    sha256 = "0znmjjyn5q83chiafy252bhsmw49r2nx2ls2cmhjp4ihidfr6cmb";
+    hash = "sha256-qzKTXYswkithZUJT0a3IifCq4RJFeKciZAPhYr2U1X4=";
   };
 
   installPhase = ''
-    fontDir=$out/share/fonts/opentype
-    docDir=$out/share/doc/${pname}-${version}
-    mkdir -p $fontDir $docDir
-    install -Dm644 README.md $docDir
-    install -t $fontDir -m644 'Fonts/Office Code Pro/OTF/'*.otf
-    install -t $fontDir -m644 'Fonts/Office Code Pro D/OTF/'*.otf
+    runHook preInstall
+
+    install -m644 -Dt $out/share/doc/${pname}-${version} README.md
+    install -m444 -Dt $out/share/fonts/opentype 'Fonts/Office Code Pro/OTF/'*.otf 'Fonts/Office Code Pro D/OTF/'*.otf
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A customized version of Source Code Pro";
     longDescription = ''
       Office Code Pro is a customized version of Source Code Pro, the monospaced
@@ -28,9 +28,8 @@ stdenv.mkDerivation rec {
       Incorporated. The customizations were made specifically for text editors
       and coding environments, but are still very usable in other applications.
     '';
-    homepage = https://github.com/nathco/Office-Code-Pro;
+    homepage = "https://github.com/nathco/Office-Code-Pro";
     license = licenses.ofl;
     maintainers = [ maintainers.AndersonTorres ];
-    platforms = platforms.unix;
   };
 }

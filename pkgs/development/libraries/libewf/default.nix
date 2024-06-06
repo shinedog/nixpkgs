@@ -1,23 +1,28 @@
-{ fetchurl, stdenv, zlib, openssl, libuuid, pkgconfig }:
+{ fetchurl, lib, stdenv, zlib, openssl, libuuid, pkg-config, bzip2 }:
 
 stdenv.mkDerivation rec {
-  version = "20171104";
-  name = "libewf-${version}";
+  version = "20231119";
+  pname = "libewf";
 
   src = fetchurl {
     url = "https://github.com/libyal/libewf/releases/download/${version}/libewf-experimental-${version}.tar.gz";
-    sha256 = "0h7036gpj5cryvh17aq6i2cpnbpwg5yswmfydxbbwvd9yfxd6dng";
+    hash = "sha256-7AjUEaXasOzJV9ErZK2a4HMTaqhcBbLKd8M+A5SbKrc=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ zlib openssl libuuid ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ zlib openssl libuuid ]
+    ++ lib.optionals stdenv.isDarwin [ bzip2 ];
+
+  # cannot run test program while cross compiling
+  configureFlags = lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    "ac_cv_openssl_xts_duplicate_keys=yes"
+  ];
 
   meta = {
     description = "Library for support of the Expert Witness Compression Format";
-    homepage = https://sourceforge.net/projects/libewf/;
-    license = stdenv.lib.licenses.lgpl3;
-    maintainers = [ stdenv.lib.maintainers.raskin ] ;
-    platforms = stdenv.lib.platforms.unix;
-    inherit version;
+    homepage = "https://sourceforge.net/projects/libewf/";
+    license = lib.licenses.lgpl3;
+    maintainers = [ lib.maintainers.raskin ] ;
+    platforms = lib.platforms.unix;
   };
 }

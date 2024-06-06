@@ -1,38 +1,50 @@
-{ stdenv, fetchurl, pkgconfig, libcap, readline, texinfo, nss, nspr
-, libseccomp, pps-tools }:
-
-assert stdenv.isLinux -> libcap != null;
+{ lib, stdenv, fetchurl, pkg-config
+, gnutls, libedit, nspr, nss, readline, texinfo
+, libcap, libseccomp, pps-tools
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "chrony-${version}";
-
-  version = "3.4";
+  pname = "chrony";
+  version = "4.5";
 
   src = fetchurl {
-    url = "https://download.tuxfamily.org/chrony/${name}.tar.gz";
-    sha256 = "17vb1sy79lsjif23v66mgn39lbgmxy59mf7mi9ffb9qh4ryf8xxg";
+    url = "https://download.tuxfamily.org/chrony/${pname}-${version}.tar.gz";
+    hash = "sha256-Gf4dn0Zk1EWmmpbHHo/bYLzY3yTHPROG4CKH9zZq1CI=";
   };
+
+  outputs = [ "out" "man" ];
+
+  nativeBuildInputs = [ pkg-config ];
+
+  buildInputs = [ gnutls libedit nspr nss readline texinfo ]
+    ++ lib.optionals stdenv.isLinux [ libcap libseccomp pps-tools ];
+
+  configureFlags = [
+    "--enable-ntp-signd"
+    "--sbindir=$(out)/bin"
+    "--chronyrundir=/run/chrony"
+  ] ++ lib.optional stdenv.isLinux "--enable-scfilter";
+
+  patches = [
+    # Cleanup the installation script
+    ./makefile.patch
+  ];
 
   postPatch = ''
     patchShebangs test
   '';
 
-  buildInputs = [ readline texinfo nss nspr ]
-    ++ stdenv.lib.optionals stdenv.isLinux [ libcap libseccomp pps-tools ];
-  nativeBuildInputs = [ pkgconfig ];
-
   hardeningEnable = [ "pie" ];
 
-  configureFlags = [ "--chronyvardir=$(out)/var/lib/chrony" ]
-    ++ stdenv.lib.optional stdenv.isLinux [ "--enable-scfilter" ];
+  passthru.tests = { inherit (nixosTests) chrony chrony-ptp; };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Sets your computer's clock from time servers on the Net";
-    homepage = https://chrony.tuxfamily.org/;
-    repositories.git = git://git.tuxfamily.org/gitroot/chrony/chrony.git;
-    license = licenses.gpl2;
+    homepage = "https://chrony.tuxfamily.org/";
+    license = licenses.gpl2Only;
     platforms = with platforms; linux ++ freebsd ++ openbsd;
-    maintainers = with maintainers; [ rickynils fpletz ];
+    maintainers = with maintainers; [ fpletz thoughtpolice ];
 
     longDescription = ''
       Chronyd is a daemon which runs in background on the system. It obtains

@@ -1,28 +1,27 @@
-{ stdenv, fetchFromGitHub, rustPlatform }:
+{ lib, rustPlatform, fetchCrate }:
 
-with rustPlatform;
+rustPlatform.buildRustPackage rec {
+  pname = "svd2rust";
+  version = "0.33.3";
 
-buildRustPackage rec {
-  name = "svd2rust-${version}";
-  version = "0.14.0";
-
-  src = fetchFromGitHub {
-    owner = "rust-embedded";
-    repo = "svd2rust";
-    rev = "v${version}";
-    sha256 = "1a0ldmjkhyv5c52gcq8p8avkj0cgj1b367w6hm85bxdf5j4y8rra";
+  src = fetchCrate {
+    inherit pname version;
+    hash = "sha256-Ed7dwVXjLOAtW9ZOh1g+yamnSzyoKo1lS4N2nyyqaJ8=";
   };
-  cargoPatches = [ ./cargo-lock.patch ];
 
-  cargoSha256 = "0wsiaa6q9hr9x1cbg6sc8ajg846jjci5qwhdga4d408fmqav72ih";
+  cargoHash = "sha256-BppPMYsv0v7K6z9URYEWrz0SHPx+oe2jeP3EzydFcuI=";
 
-  # doc tests fail due to missing dependency
-  doCheck = false;
+  # error: linker `aarch64-linux-gnu-gcc` not found
+  postPatch = ''
+    rm .cargo/config.toml
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Generate Rust register maps (`struct`s) from SVD files";
-    homepage = https://github.com/rust-embedded/svd2rust;
+    mainProgram = "svd2rust";
+    homepage = "https://github.com/rust-embedded/svd2rust";
+    changelog = "https://github.com/rust-embedded/svd2rust/blob/v${version}/CHANGELOG.md";
     license = with licenses; [ mit asl20 ];
-    platforms = platforms.all;
+    maintainers = with maintainers; [ newam ];
   };
 }

@@ -1,42 +1,74 @@
-{ buildPythonPackage, fetchFromGitHub, pytest, six, clint, pyyaml, docopt
-, requests, jsonpatch, args, schema, responses, backports_csv, isPy3k
-, lib, glibcLocales }:
+{
+  lib,
+  buildPythonPackage,
+  docopt,
+  fetchFromGitHub,
+  pytestCheckHook,
+  requests,
+  jsonpatch,
+  schema,
+  responses,
+  setuptools,
+  tqdm,
+  urllib3,
+  pythonOlder,
+  importlib-metadata,
+}:
 
 buildPythonPackage rec {
   pname = "internetarchive";
-  version = "1.8.1";
+  version = "4.1.0";
+  pyproject = true;
 
-  # Can't use pypi, data files for tests missing
+  disabled = pythonOlder "3.8";
+
   src = fetchFromGitHub {
     owner = "jjjake";
     repo = "internetarchive";
-    rev = "v${version}";
-    sha256 = "1fdb0kr9hzgyh0l8d02khcjpsgyd63nbablhc49ncdsav3dhhr3f";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-CqfwAKhrq4VEBU258x19JT8+ay2vOYIzVoFWjAzh3wY=";
   };
 
+  nativeBuildInputs = [ setuptools ];
+
   propagatedBuildInputs = [
-    six
-    clint
-    pyyaml
+    tqdm
     docopt
     requests
     jsonpatch
-    args
     schema
-  ] ++ lib.optional (!isPy3k) backports_csv;
+    urllib3
+  ] ++ lib.optionals (pythonOlder "3.10") [ importlib-metadata ];
 
-  checkInputs = [ pytest responses glibcLocales ];
+  nativeCheckInputs = [
+    responses
+    pytestCheckHook
+  ];
 
-  # tests depend on network
-  doCheck = false;
+  disabledTests = [
+    # Tests require network access
+    "test_get_item_with_kwargs"
+    "test_upload"
+    "test_upload_metadata"
+    "test_upload_queue_derive"
+    "test_upload_validate_identifie"
+    "test_upload_validate_identifier"
+  ];
 
-  checkPhase = ''
-    LC_ALL=en_US.utf-8 pytest tests
-  '';
+  disabledTestPaths = [
+    # Tests require network access
+    "tests/cli/test_ia.py"
+    "tests/cli/test_ia_download.py"
+  ];
+
+  pythonImportsCheck = [ "internetarchive" ];
 
   meta = with lib; {
-    description = "A python wrapper for the various Internet Archive APIs";
-    homepage = https://github.com/jjjake/internetarchive;
-    license = licenses.agpl3;
+    description = "A Python and Command-Line Interface to Archive.org";
+    homepage = "https://github.com/jjjake/internetarchive";
+    changelog = "https://github.com/jjjake/internetarchive/blob/v${version}/HISTORY.rst";
+    license = licenses.agpl3Plus;
+    maintainers = [ ];
+    mainProgram = "ia";
   };
 }

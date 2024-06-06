@@ -1,30 +1,44 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pbr
-, testtools
-, mock
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pbr,
+  setuptools,
+  testtools,
+  mock,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "fixtures";
-  version = "3.0.0";
+  version = "4.1.0";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "fcf0d60234f1544da717a9738325812de1f42c2fa085e2d9252d8fff5712b2ef";
+    hash = "sha256-grHF5p9hVSbvbAZxiKHmxgZ99/iDMlCcmfi4/buXdvM=";
   };
 
-  propagatedBuildInputs = [ pbr testtools mock ];
+  nativeBuildInputs = [
+    pbr
+    setuptools
+  ];
 
-  checkPhase = ''
-    ${python.interpreter} -m testtools.run fixtures.test_suite
-  '';
+  propagatedBuildInputs = [ pbr ];
+
+  passthru.optional-dependencies = {
+    streams = [ testtools ];
+  };
+
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+  ] ++ passthru.optional-dependencies.streams;
 
   meta = {
     description = "Reusable state for writing clean tests and more";
-    homepage = "https://pypi.python.org/pypi/fixtures";
+    homepage = "https://pypi.org/project/fixtures/";
+    changelog = "https://github.com/testing-cabal/fixtures/blob/${version}/NEWS";
     license = lib.licenses.asl20;
   };
 }

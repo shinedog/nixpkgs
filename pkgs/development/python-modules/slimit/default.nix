@@ -1,36 +1,35 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k, fetchpatch, python, ply }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  ply,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "slimit";
-  version = "0.8.1";
+  version = "unstable-2018-08-08";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    extension = "zip";
-    sha256 = "f433dcef899f166b207b67d91d3f7344659cb33b8259818f084167244e17720b";
+  src = fetchFromGitHub {
+    owner = "rspivak";
+    repo = "slimit";
+    rev = "3533eba9ad5b39f3a015ae6269670022ab310847";
+    hash = "sha256-J+8RGENM/+eaTNvoC54XXPP+aWmazlssjnZAY88J/F0=";
   };
-
-  # Some patches from https://github.com/rspivak/slimit/pull/65
-  patches = lib.optionals isPy3k [
-    (fetchpatch {
-      url = https://github.com/lelit/slimit/commit/a61e12d88cc123c4b7af2abef21d06fd182e561a.patch;
-      sha256 = "0lbhvkgn4l8g9fwvb81rfwjx7hsaq2pid8a5gczdk1ba65wfvdq5";
-    })
-    (fetchpatch {
-      url = https://github.com/lelit/slimit/commit/e8331659fb89e8a4613c5e4e338c877fead9c551.patch;
-      sha256 = "1hv4ysn09c9bfd5bxhhrp51hsi81hdidmx0y7zcrjjiich9ayrni";
-    })
-  ];
 
   propagatedBuildInputs = [ ply ];
 
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover -s src/slimit
-  '';
+  pythonImportsCheck = [ "slimit" ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   meta = with lib; {
-    description = "JavaScript minifier";
-    homepage = https://slimit.readthedocs.org/;
+    description = "SlimIt -  a JavaScript minifier/parser in Python";
+    mainProgram = "slimit";
+    homepage = "https://github.com/rspivak/slimit";
+    changelog = "https://github.com/rspivak/slimit/blob/${src.rev}/CHANGES";
     license = licenses.mit;
+    maintainers = with maintainers; [ hexa ];
   };
 }

@@ -1,39 +1,56 @@
-{ lib, fetchFromGitHub, meson, ninja, buildPythonPackage, pytest, pkgconfig, cairo, xlibsWrapper, isPy33, isPy3k }:
+{
+  lib,
+  pythonOlder,
+  fetchFromGitHub,
+  meson,
+  ninja,
+  buildPythonPackage,
+  pytestCheckHook,
+  pkg-config,
+  cairo,
+  libxcrypt,
+  python,
+}:
 
 buildPythonPackage rec {
   pname = "pycairo";
-  version = "1.18.1";
+  version = "1.26.0";
+
+  disabled = pythonOlder "3.6";
 
   format = "other";
-
-  disabled = isPy33;
 
   src = fetchFromGitHub {
     owner = "pygobject";
     repo = "pycairo";
-    rev = "v${version}";
-    sha256 = "0f4l7d1ibkk8xdspyv5zx8fah9z3x775bd91zirnp37vlgqds7xj";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-AUnMPsGFkCgVKUdQfym35ZqrA48wq31BNsvc2puoCl8=";
   };
 
   nativeBuildInputs = [
     meson
     ninja
-    pkgconfig
+    pkg-config
   ];
 
-  buildInputs = [
-    cairo
-    xlibsWrapper
+  buildInputs = [ cairo ] ++ lib.optionals (pythonOlder "3.9") [ libxcrypt ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  mesonFlags = [
+    # This is only used for figuring out what version of Python is in
+    # use, and related stuff like figuring out what the install prefix
+    # should be, but it does need to be able to execute Python code.
+    "-Dpython=${python.pythonOnBuildForHost.interpreter}"
   ];
-
-  checkInputs = [ pytest ];
-
-  mesonFlags = [ "-Dpython=${if isPy3k then "python3" else "python"}" ];
 
   meta = with lib; {
-    description = "Python 2/3 bindings for cairo";
-    homepage = https://pycairo.readthedocs.io/;
-    license = with licenses; [ lgpl2 mpl11 ];
+    description = "Python 3 bindings for cairo";
+    homepage = "https://pycairo.readthedocs.io/";
+    license = with licenses; [
+      lgpl21Only
+      mpl11
+    ];
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

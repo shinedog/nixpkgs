@@ -1,32 +1,51 @@
-{stdenv, fetchurl, fetchpatch, cmake, zlib, libxml2, eigen, python, cairo, pcre, pkgconfig }:
+{ stdenv, lib, fetchFromGitHub, cmake, perl, zlib, libxml2, eigen, python, cairo, pcre, pkg-config, swig, rapidjson }:
 
 stdenv.mkDerivation rec {
-  name = "openbabel-${version}";
-  version = "2.4.1";
+  pname = "openbabel";
+  version = "unstable-06-12-23";
 
-  src = fetchurl {
-    url = "https://github.com/openbabel/openbabel/archive/openbabel-${stdenv.lib.replaceStrings ["."] ["-"] version}.tar.gz";
-    sha256 = "0xm7y859ivq2cp0q08mwshfxm0jq31xkyr4x8s0j6l7khf57yk2r";
+  src = fetchFromGitHub {
+    owner = "openbabel";
+    repo = pname;
+    rev = "32cf131444c1555c749b356dab44fb9fe275271f";
+    hash = "sha256-V0wrZVrojCZ9Knc5H6cPzPoYWVosRZ6Sn4PX+UFEfHY=";
   };
 
-  patches = [
-    # ARM / AArch64 fixes.
-    (fetchpatch {
-      url = https://github.com/openbabel/openbabel/commit/ee11c98a655296550710db1207b294f00e168216.patch;
-      sha256 = "0wjqjrkr4pfirzzicdvlyr591vppydk572ix28jd2sagnfnf566g";
-    })
+  postPatch = ''
+    sed '1i#include <ctime>' -i include/openbabel/obutil.h # gcc12
+  '';
+
+  buildInputs = [ perl zlib libxml2 eigen python cairo pcre swig rapidjson ];
+
+  nativeBuildInputs = [ cmake pkg-config ];
+
+  pythonMajorMinor = "${python.sourceVersion.major}.${python.sourceVersion.minor}";
+
+  cmakeFlags = [
+    "-DRUN_SWIG=ON"
+    "-DPYTHON_BINDINGS=ON"
   ];
 
-  # TODO : perl & python bindings;
-  # TODO : wxGTK: I have no time to compile
-  # TODO : separate lib and apps
-  buildInputs = [ zlib libxml2 eigen python cairo pcre ];
+  # Setuptools only accepts PEP 440 version strings. The "unstable" identifier
+  # can not be used. Instead we pretend to be the 3.2 beta release.
+  postFixup = ''
+    cat <<EOF > $out/lib/python$pythonMajorMinor/site-packages/setup.py
+    from distutils.core import setup
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+    setup(
+        name = 'pyopenbabel',
+        version = '3.2b1',
+        packages = ['openbabel'],
+        package_data = {'openbabel' : ['_openbabel.so']}
+    )
+    EOF
+  '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ ];
-    license = stdenv.lib.licenses.gpl2Plus;
+  meta = with lib; {
+    description = "A toolbox designed to speak the many languages of chemical data";
+    homepage = "http://openbabel.org";
+    platforms = platforms.all;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ danielbarter ];
   };
 }

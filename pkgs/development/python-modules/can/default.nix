@@ -1,43 +1,101 @@
-{ lib
-, buildPythonPackage
-, fetchFromGitHub
-, pythonOlder
-, wrapt
-, typing
-, pyserial
-, nose
-, mock
-, hypothesis
-, future
-, pytest
-, pytest-timeout }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  future,
+  hypothesis,
+  packaging,
+  parameterized,
+  msgpack,
+  pyserial,
+  pytest-timeout,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  typing-extensions,
+  wrapt,
+  uptime,
+}:
 
 buildPythonPackage rec {
-  pname = "python-can";
-  version = "3.1.0";
+  pname = "can";
+  version = "4.3.1";
+  pyproject = true;
 
-  # PyPI tarball is missing some tests and is missing __init__.py in test
-  # directory causing the tests to fail. See:
-  # https://github.com/hardbyte/python-can/issues/518
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
-    repo = pname;
     owner = "hardbyte";
-    rev = "v${version}";
-    sha256 = "01lfsh7drm4qvv909x9i0vnhskdh27mcb5xa86sv9m3zfpq8cjis";
+    repo = "python-can";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-t2zt54nPOYcEE0RPb4fbW7sN4HzFXlDIHvHudstBwrM=";
   };
 
-  propagatedBuildInputs = [ wrapt pyserial ] ++ lib.optional (pythonOlder "3.5") typing;
-  checkInputs = [ nose mock pytest pytest-timeout hypothesis future ];
-
-  # Add the scripts to PATH
-  checkPhase = ''
-    PATH=$out/bin:$PATH pytest -c /dev/null
+  postPatch = ''
+    substituteInPlace tox.ini \
+      --replace " --cov=can --cov-config=tox.ini --cov-report=lcov --cov-report=term" ""
   '';
 
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    msgpack
+    packaging
+    typing-extensions
+    wrapt
+  ];
+
+  passthru.optional-dependencies = {
+    serial = [ pyserial ];
+    seeedstudio = [ pyserial ];
+    pcan = [ uptime ];
+  };
+
+  nativeCheckInputs = [
+    future
+    hypothesis
+    parameterized
+    pytest-timeout
+    pytestCheckHook
+  ] ++ passthru.optional-dependencies.serial;
+
+  disabledTestPaths = [
+    # We don't support all interfaces
+    "test/test_interface_canalystii.py"
+  ];
+
+  disabledTests =
+    [
+      # Tests require access socket
+      "BasicTestUdpMulticastBusIPv4"
+      "BasicTestUdpMulticastBusIPv6"
+      # pytest.approx is not supported in a boolean context (since pytest7)
+      "test_pack_unpack"
+      "test_receive"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # timing sensitive
+      "test_general"
+      "test_gap"
+    ];
+
+  preCheck = ''
+    export PATH="$PATH:$out/bin";
+    # skips timing senstive tests
+    export CI=1
+  '';
+
+  pythonImportsCheck = [ "can" ];
+
   meta = with lib; {
-    homepage = https://github.com/hardbyte/python-can;
     description = "CAN support for Python";
-    license = licenses.lgpl3;
-    maintainers = with maintainers; [ sorki ];
+    homepage = "https://python-can.readthedocs.io";
+    changelog = "https://github.com/hardbyte/python-can/releases/tag/v${version}";
+    license = licenses.lgpl3Only;
+    maintainers = with maintainers; [
+      fab
+      sorki
+    ];
   };
 }

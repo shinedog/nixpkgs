@@ -1,34 +1,47 @@
-{ buildPythonPackage
-, fetchPypi
-, isPy37
-, lib
-, six
-, attrs
-, pytest
-, testtools
+{
+  lib,
+  attrs,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pythonOlder,
+  six,
+  testtools,
 }:
+
 buildPythonPackage rec {
-  version = "0.12.0";
   pname = "effect";
+  version = "1.1.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0s8zsncq4l0ar2b4dijf8yzrk13x2swr1w2nb30s1p5jd6r24czl";
+    hash = "sha256-ev+2A3B8ZIsHsReB67eTpLmu6KzxrFdkw+0hEq3wyeo=";
   };
-  checkInputs = [
-    pytest
-    testtools
-  ];
-  propagatedBuildInputs = [
-    six
-    attrs
-  ];
-  checkPhase = ''
-    pytest
+
+  postPatch = ''
+    substituteInPlace effect/test_do.py \
+      --replace "py.test" "pytest"
   '';
+
+  propagatedBuildInputs = [
+    attrs
+    six
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  checkInputs = [ testtools ];
+
+  pythonImportsCheck = [ "effect" ];
+
   meta = with lib; {
     description = "Pure effects for Python";
-    homepage = https://github.com/python-effect/effect;
+    homepage = "https://effect.readthedocs.io/";
+    changelog = "https://github.com/python-effect/effect/releases/tag/${version}";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

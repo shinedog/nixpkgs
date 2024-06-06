@@ -29,12 +29,7 @@ in {
         description = "Whether to enable ejabberd server";
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.ejabberd;
-        defaultText = "pkgs.ejabberd";
-        description = "ejabberd server package to use";
-      };
+      package = mkPackageOption pkgs "ejabberd" { };
 
       user = mkOption {
         type = types.str;
@@ -76,7 +71,7 @@ in {
         type = types.listOf types.path;
         default = [];
         description = "Configuration dumps that should be loaded on the first startup";
-        example = literalExample "[ ./myejabberd.dump ]";
+        example = literalExpression "[ ./myejabberd.dump ]";
       };
 
       imagemagick = mkOption {
@@ -94,18 +89,18 @@ in {
   config = mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    users.users = optionalAttrs (cfg.user == "ejabberd") (singleton
-      { name = "ejabberd";
+    users.users = optionalAttrs (cfg.user == "ejabberd") {
+      ejabberd = {
         group = cfg.group;
         home = cfg.spoolDir;
         createHome = true;
         uid = config.ids.uids.ejabberd;
-      });
+      };
+    };
 
-    users.groups = optionalAttrs (cfg.group == "ejabberd") (singleton
-      { name = "ejabberd";
-        gid = config.ids.gids.ejabberd;
-      });
+    users.groups = optionalAttrs (cfg.group == "ejabberd") {
+      ejabberd.gid = config.ids.gids.ejabberd;
+    };
 
     systemd.services.ejabberd = {
       description = "ejabberd server";
@@ -124,6 +119,12 @@ in {
       preStart = ''
         if [ -z "$(ls -A '${cfg.spoolDir}')" ]; then
           touch "${cfg.spoolDir}/.firstRun"
+        fi
+
+        if ! test -e ${cfg.spoolDir}/.erlang.cookie; then
+          touch ${cfg.spoolDir}/.erlang.cookie
+          chmod 600 ${cfg.spoolDir}/.erlang.cookie
+          dd if=/dev/random bs=16 count=1 | base64 > ${cfg.spoolDir}/.erlang.cookie
         fi
       '';
 

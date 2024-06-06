@@ -1,67 +1,89 @@
-{ lib, python3 }:
+{ lib
+, python3
+, fetchFromGitHub
+}:
 
-# Flexget have been a trouble maker in the past,
-# if you see flexget breaking when updating packages, don't worry.
-# The current state is that we have no active maintainers for this package.
-# -- Mic92
+python3.pkgs.buildPythonApplication rec {
+  pname = "flexget";
+  version = "3.11.35";
+  pyproject = true;
 
-let
-  python' = python3.override { inherit packageOverrides; };
-
-  packageOverrides = self: super: {
-    guessit = super.guessit.overridePythonAttrs (old: rec {
-      version = "3.0.3";
-      src = old.src.override {
-        inherit version;
-        sha256 = "1q06b3k31bfb8cxjimpf1rkcrwnc596a9cppjw15minvdangl32r";
-      };
-    });
-  };
-
-in
-
-with python'.pkgs;
-
-buildPythonApplication rec {
-  pname = "FlexGet";
-  version = "2.20.22";
-
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1bk1ab7ivb6fikqw4v1f9df6brplgg4ybbn8d3vzgjabm5ic21nd";
+  # Fetch from GitHub in order to use `requirements.in`
+  src = fetchFromGitHub {
+    owner = "Flexget";
+    repo = "Flexget";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-L3A0bU35IfFfwDIbcNVAU4jGb00jODgq7Z67RQrT4u0=";
   };
 
   postPatch = ''
-    # remove dependency constraints
-    sed 's/==\([0-9]\.\?\)\+//' -i requirements.txt
+    # remove dependency constraints but keep environment constraints
+    sed 's/[~<>=][^;]*//' -i requirements.txt
   '';
+
+  build-system = with python3.pkgs; [
+    setuptools
+    wheel
+  ];
+
+  dependencies = with python3.pkgs; [
+    # See https://github.com/Flexget/Flexget/blob/master/requirements.txt
+    apscheduler
+    beautifulsoup4
+    click
+    colorama
+    commonmark
+    feedparser
+    guessit
+    html5lib
+    jinja2
+    jsonschema
+    loguru
+    more-itertools
+    packaging
+    pendulum
+    psutil
+    pynzb
+    pyrsistent
+    pyrss2gen
+    python-dateutil
+    pyyaml
+    rebulk
+    requests
+    rich
+    rpyc
+    sqlalchemy
+    typing-extensions
+
+    # WebUI requirements
+    cherrypy
+    flask-compress
+    flask-cors
+    flask-login
+    flask-restful
+    flask-restx
+    flask
+    pyparsing
+    werkzeug
+    zxcvbn
+
+    # Plugins requirements
+    transmission-rpc
+  ];
+
+  pythonImportsCheck = [
+    "flexget"
+    "flexget.plugins.clients.transmission"
+  ];
 
   # ~400 failures
   doCheck = false;
 
-  propagatedBuildInputs = [
-    # See https://github.com/Flexget/Flexget/blob/master/requirements.in
-    feedparser sqlalchemy pyyaml
-    beautifulsoup4 html5lib
-    PyRSS2Gen pynzb rpyc jinja2
-    requests dateutil jsonschema
-    pathpy guessit rebulk APScheduler
-    terminaltables colorclass
-    cherrypy flask flask-restful
-    flask-restplus flask-compress
-    flask_login flask-cors
-    pyparsing zxcvbn-python future
-    progressbar
-    # Optional requirements
-    deluge-client
-    # Plugins
-    transmissionrpc
-  ] ++ lib.optional (pythonOlder "3.4") pathlib;
-
   meta = with lib; {
-    homepage    = https://flexget.com/;
-    description = "Multipurpose automation tool for content like torrents";
-    license     = licenses.mit;
-    maintainers = with maintainers; [ ];
+    homepage = "https://flexget.com/";
+    changelog = "https://github.com/Flexget/Flexget/releases/tag/v${version}";
+    description = "Multipurpose automation tool for all of your media";
+    license = licenses.mit;
+    maintainers = with maintainers; [ pbsds ];
   };
 }

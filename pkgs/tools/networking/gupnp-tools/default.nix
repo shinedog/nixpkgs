@@ -1,57 +1,62 @@
 { stdenv
+, lib
 , fetchurl
 , meson
 , ninja
-, gupnp
-, gssdp
-, pkgconfig
+, gupnp_1_6
+, libsoup_3
+, gssdp_1_6
+, pkg-config
 , gtk3
-, libuuid
 , gettext
 , gupnp-av
 , gtksourceview4
-, gnome3
-, wrapGAppsHook
+, gnome
+, wrapGAppsHook3
 }:
 
 stdenv.mkDerivation rec {
   pname = "gupnp-tools";
-  version = "0.10.0";
+  version = "0.12.1";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "13d1qr1avz9r76989nvgxhhclmqzr025xjk4rfnja94fpbspznj1";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "U8+TEj85fo+PC46eQ2TIanUCpTNPTAvi4FSoJEeL1bo=";
   };
 
   nativeBuildInputs = [
     meson
     ninja
-    pkgconfig
+    pkg-config
     gettext
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
-    gupnp
-    libuuid
-    gssdp
+    gupnp_1_6
+    libsoup_3
+    gssdp_1_6
     gtk3
     gupnp-av
     gtksourceview4
-    gnome3.adwaita-icon-theme
   ];
 
+  # new libxml2 version
+  # TODO: can be dropped on next update
+  NIX_CFLAGS_COMPILE = [ "-Wno-error=deprecated-declarations" ];
+
   passthru = {
-    updateScript = gnome3.updateScript {
+    updateScript = gnome.updateScript {
       packageName = pname;
+      versionPolicy = "odd-unstable";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Set of utilities and demos to work with UPnP";
-    homepage = https://wiki.gnome.org/Projects/GUPnP;
+    homepage = "https://gitlab.gnome.org/GNOME/gupnp-tools";
     license = licenses.gpl2Plus;
-    maintainers = gnome3.maintainers;
-    platforms = platforms.linux;
+    maintainers = teams.gnome.members;
+    platforms = platforms.unix;
   };
 }

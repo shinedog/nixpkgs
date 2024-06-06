@@ -1,41 +1,66 @@
-{ stdenv, python3Packages, fetchurl, makeWrapper
-, coreutils, iptables, nettools, openssh, procps, fetchpatch }:
+{ lib
+, stdenv
+, python3Packages
+, fetchFromGitHub
+, installShellFiles
+, makeWrapper
+, sphinx
+, coreutils
+, iptables
+, nettools
+, openssh
+, procps
+}:
 
 python3Packages.buildPythonApplication rec {
-  name = "sshuttle-${version}";
-  version = "0.78.5";
+  pname = "sshuttle";
+  version = "1.1.2";
 
-  src = fetchurl {
-    sha256 = "0vp13xwrhx4m6zgsyzvai84lkq9mzkaw47j58dk0ll95kaymk2x8";
-    url = "mirror://pypi/s/sshuttle/${name}.tar.gz";
+  src = fetchFromGitHub {
+    owner = "sshuttle";
+    repo = "sshuttle";
+    rev = "v${version}";
+    hash = "sha256-7jiDTjtL4FiQ4GimSPtUDKPUA29l22a7XILN/s4/DQY=";
   };
 
   patches = [ ./sudo.patch ];
 
-  nativeBuildInputs = [ makeWrapper python3Packages.setuptools_scm ];
-  buildInputs =
-    [ coreutils openssh procps nettools ]
-    ++ stdenv.lib.optionals stdenv.isLinux [ iptables ];
-
-  checkInputs = with python3Packages; [ mock pytest pytestcov pytestrunner flake8 ];
-
-  postInstall = let
-    mapPath = f: x: stdenv.lib.concatStringsSep ":" (map f x);
-  in ''
-  wrapProgram $out/bin/sshuttle \
-    --prefix PATH : "${mapPath (x: "${x}/bin") buildInputs}" \
+  postPatch = ''
+    substituteInPlace setup.cfg \
+      --replace '--cov=sshuttle --cov-branch --cov-report=term-missing' ""
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/sshuttle/sshuttle/;
+  nativeBuildInputs = [
+    installShellFiles
+    makeWrapper
+    python3Packages.setuptools-scm
+    sphinx
+  ];
+
+  nativeCheckInputs = with python3Packages; [ pytestCheckHook ];
+
+  postBuild = ''
+    make man -C docs
+  '';
+
+  postInstall = ''
+    installManPage docs/_build/man/*
+
+    wrapProgram $out/bin/sshuttle \
+      --prefix PATH : "${lib.makeBinPath ([ coreutils openssh procps ] ++ lib.optionals stdenv.isLinux [ iptables nettools ])}" \
+  '';
+
+  meta = with lib; {
     description = "Transparent proxy server that works as a poor man's VPN";
+    mainProgram = "sshuttle";
     longDescription = ''
       Forward connections over SSH, without requiring administrator access to the
       target network (though it does require Python 2.7, Python 3.5 or later at both ends).
       Works with Linux and Mac OS and supports DNS tunneling.
     '';
-    license = licenses.gpl2;
+    homepage = "https://github.com/sshuttle/sshuttle";
+    changelog = "https://github.com/sshuttle/sshuttle/blob/v${version}/CHANGES.rst";
+    license = licenses.lgpl21Plus;
     maintainers = with maintainers; [ domenkozar carlosdagos ];
-    platforms = platforms.unix;
   };
 }

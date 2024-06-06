@@ -1,24 +1,25 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pillow
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pillow,
 }:
 
 buildPythonPackage rec {
   pname = "pillowfight";
-  version = "0.3";
+  version = "0.4";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "913869b0563c5982bcf08cb1ea56fb0f87e3573d738e3e3692301bf45dba6252";
+    sha256 = "4923f4d1e78be15f19f03a608fb34ba9cb71bf5205de3c9fe7461c49078167a7";
   };
 
   propagatedBuildInputs = [ pillow ];
 
-  meta = with stdenv.lib; {
-    description = "Pillow Fight";
+  meta = with lib; {
+    description = "Eases the transition from PIL to Pillow for Python packages";
     homepage = "https://github.com/beanbaginc/pillowfight";
     license = licenses.mit;
   };
-
 }

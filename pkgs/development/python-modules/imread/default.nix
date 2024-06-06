@@ -1,36 +1,64 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, nose
-, pkgconfig
-, libjpeg
-, libpng
-, libtiff
-, libwebp
-, numpy
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pkg-config,
+  setuptools,
+  libjpeg,
+  libpng,
+  libtiff,
+  libwebp,
+  numpy,
 }:
 
 buildPythonPackage rec {
-  pname = "python-imread";
-  version = "0.7.0";
+  pname = "imread";
+  version = "0.7.5";
+  pyproject = true;
 
   src = fetchPypi {
     inherit version;
     pname = "imread";
-    sha256 = "0yb0fmy6ilh5fvbk69wl2bzqgss2g0951668mx8z9yyj4jhr1z2y";
+    hash = "sha256-GiWpA128GuLlbBW1CQQHHVVeoZfu9Yyh2RFzSdtHDbc=";
   };
 
+  nativeBuildInputs = [
+    pkg-config
+    setuptools
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ nose libjpeg libpng libtiff libwebp ];
+  buildInputs = [
+    libjpeg
+    libpng
+    libtiff
+    libwebp
+  ];
+
   propagatedBuildInputs = [ numpy ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pytestFlagsArray = [
+    # verbose build outputs needed to debug hard-to-reproduce hydra failures
+    "-v"
+    "--pyargs"
+    "imread"
+  ];
+
+  pythonImportsCheck = [ "imread" ];
+
+  preCheck = ''
+    cd $TMPDIR
+    export HOME=$TMPDIR
+    export OMP_NUM_THREADS=1
+  '';
+
+  meta = with lib; {
     description = "Python package to load images as numpy arrays";
-    homepage = https://imread.readthedocs.io/en/latest/;
+    homepage = "https://imread.readthedocs.io/en/latest/";
     maintainers = with maintainers; [ luispedro ];
     license = licenses.mit;
     platforms = platforms.unix;
   };
-
 }

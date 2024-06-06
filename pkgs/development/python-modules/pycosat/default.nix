@@ -1,11 +1,13 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "pycosat";
   version = "0.6.3";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,7 +17,7 @@ buildPythonPackage rec {
 
   meta = {
     description = "Bindings to picosat SAT solver";
-    homepage = https://github.com/ContinuumIO/pycosat;
+    homepage = "https://github.com/ContinuumIO/pycosat";
     license = lib.licenses.mit;
   };
 }

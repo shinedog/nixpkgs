@@ -1,27 +1,26 @@
-{ stdenv, fetchurl, cmake, gcc, gcc-unwrapped }:
+{ lib, stdenv, fetchFromGitHub, cmake, gcc, gcc-unwrapped }:
 
 stdenv.mkDerivation rec {
-  version = "3.2.1"; 
-  name = "messer-slim-${version}";
+  version = "4.2.2";
+  pname = "messer-slim";
 
-  src = fetchurl {
-    url = "https://github.com/MesserLab/SLiM/archive/v${version}.tar.gz";
-    sha256 = "1j3ssjvxpsc21mmzj59kwimglz8pdazi5w6wplmx11x744k77wa1";
+  src = fetchFromGitHub {
+    owner = "MesserLab";
+    repo = "SLiM";
+    rev = "v${version}";
+    sha256 = "sha256-TlB7Hj4pVN4p4VanACWjQBeTxP9/DvRvdCdgelrXx60=";
   };
-
-  enableParallelBuilding = true;
 
   nativeBuildInputs = [ cmake gcc gcc-unwrapped ];
 
-  cmakeFlags = [ "-DCMAKE_AR=${gcc-unwrapped}/bin/gcc-ar" 
+  cmakeFlags = [ "-DCMAKE_AR=${gcc-unwrapped}/bin/gcc-ar"
                  "-DCMAKE_RANLIB=${gcc-unwrapped}/bin/gcc-ranlib" ];
 
   meta = {
      description = "An evolutionary simulation framework";
-     homepage = https://messerlab.org/slim/;
-     license = with stdenv.lib.licenses; [ gpl3 ];
-     maintainers = with stdenv.lib.maintainers; [ bzizou ];
-     platforms = stdenv.lib.platforms.all;
+     homepage = "https://messerlab.org/slim/";
+     license = with lib.licenses; [ gpl3 ];
+     maintainers = with lib.maintainers; [ bzizou ];
+     platforms = lib.platforms.all;
   };
 }
-

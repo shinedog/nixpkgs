@@ -1,31 +1,49 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  pythonOlder,
+  setuptools,
+
+  # passthru tests
+  apache-beam,
+  datasets,
 }:
 
 buildPythonPackage rec {
   pname = "dill";
-  version = "0.2.9";
+  version = "0.3.8";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f6d6046f9f9195206063dd0415dff185ad593d6ee8b0e67f12597c0f4df4986f";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "uqfoundation";
+    repo = pname;
+    rev = "refs/tags/${version}";
+    hash = "sha256-r65JgQH+5raiRX8NYELUB9B0zLy4z606EkFJaNpapNc=";
   };
 
-  # Messy test suite. Even when running the tests like tox does, it fails
-  doCheck = false;
-  checkPhase = ''
-    for test in tests/*.py; do
-      ${python.interpreter} $test
-    done
-  '';
-  # Following error without setting checkPhase
-  # TypeError: don't know how to make test from: {'byref': False, 'recurse': False, 'protocol': 3, 'fmode': 0}
+  nativeBuildInputs = [ setuptools ];
 
-  meta = {
+  checkPhase = ''
+    runHook preCheck
+    ${python.interpreter} dill/tests/__main__.py
+    runHook postCheck
+  '';
+
+  passthru.tests = {
+    inherit apache-beam datasets;
+  };
+
+  pythonImportsCheck = [ "dill" ];
+
+  meta = with lib; {
     description = "Serialize all of python (almost)";
-    homepage = http://www.cacr.caltech.edu/~mmckerns/dill.htm;
-    license = lib.licenses.bsd3;
+    homepage = "https://github.com/uqfoundation/dill/";
+    changelog = "https://github.com/uqfoundation/dill/releases/tag/dill-${version}";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ tjni ];
   };
 }

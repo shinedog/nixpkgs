@@ -1,45 +1,66 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, lxqt, qtbase, qttools,
-  qtx11extras, libfm-qt, menu-cache, lxmenu-data }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, layer-shell-qt
+, libexif
+, libfm-qt
+, lxqt-build-tools
+, lxqt-menu-data
+, menu-cache
+, pkg-config
+, qtbase
+, qtimageformats
+, qttools
+, qtwayland
+, qtsvg
+, wrapQtAppsHook
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
   pname = "pcmanfm-qt";
-  version = "0.14.1";
+  version = "2.0.0";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "1zchxlbyiifing94mqwh45pp7z3ihldknqiaz0kanq1cnma1jj6k";
+    hash = "sha256-PyCtcn+QHwX/iy85A3y7Phf8ogdSRrwtXrJYGxrjyLM=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
-    lxqt.lxqt-build-tools
+    pkg-config
+    lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qttools
-    qtx11extras
+    layer-shell-qt
+    libexif
     libfm-qt
-    libfm-qt
+    lxqt-menu-data
     menu-cache
-    lxmenu-data
+    qtbase
+    qtimageformats # add-on module to support more image file formats
+    qtwayland
+    qtsvg
   ];
 
+  passthru.updateScript = gitUpdater { };
+
   postPatch = ''
-    for dir in autostart config; do
-      substituteInPlace $dir/CMakeLists.txt \
-        --replace "DESTINATION \"\''${LXQT_ETC_XDG_DIR}" "DESTINATION \"etc/xdg"
-    done
+    substituteInPlace config/pcmanfm-qt/lxqt/settings.conf.in --replace-fail @LXQT_SHARE_DIR@ /run/current-system/sw/share/lxqt
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/pcmanfm-qt";
     description = "File manager and desktop icon manager (Qt port of PCManFM and libfm)";
-    homepage = https://github.com/lxqt/pcmanfm-qt;
-    license = licenses.gpl2;
+    mainProgram = "pcmanfm-qt";
+    license = licenses.gpl2Plus;
     platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    maintainers = teams.lxqt.members;
   };
 }

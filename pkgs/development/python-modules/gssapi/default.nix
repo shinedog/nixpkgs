@@ -1,34 +1,82 @@
-{ stdenv, lib, buildPythonPackage, fetchPypi, six, enum34, decorator,
-nose, gss, krb5Full, darwin }:
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+
+  # build-system
+  cython,
+  krb5,
+  setuptools,
+
+  # dependencies
+  decorator,
+
+  # native dependencies
+  GSS,
+
+  # tests
+  parameterized,
+  k5test,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "gssapi";
-  version = "1.5.1";
+  version = "1.8.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "76c9fda88a7178f41bf6454a06d64054c56b46f0dcbc73307f2e57bb8c25d8cc";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "pythongssapi";
+    repo = "python-${pname}";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-H1JfdvxJvX5dmC9aTqIOkjAqFEL44KoUXEhoYj2uRY8=";
   };
 
-  # It's used to locate headers
   postPatch = ''
     substituteInPlace setup.py \
-      --replace "get_output('krb5-config gssapi --prefix')" "'${lib.getDev krb5Full}'"
+      --replace 'get_output(f"{kc} gssapi --prefix")' '"${lib.getDev krb5}"'
   '';
 
-  LD_LIBRARY_PATH = "${krb5Full}/lib";
+  env = lib.optionalAttrs (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) {
+    GSSAPI_SUPPORT_DETECT = "false";
+  };
 
-  nativeBuildInputs = [ krb5Full ]
-  ++ ( if stdenv.isDarwin then [ darwin.apple_sdk.frameworks.GSS ] else [ gss ] );
+  build-system = [
+    cython
+    krb5
+    setuptools
+  ];
 
-  propagatedBuildInputs =  [ decorator enum34 six ];
+  dependencies = [ decorator ];
 
-  checkInputs = [ nose ];
+  buildInputs = lib.optionals stdenv.isDarwin [ GSS ];
 
-  doCheck = false; # No such file or directory: '/usr/sbin/kadmin.local'
+  # k5test is marked as broken on darwin
+  doCheck = !stdenv.isDarwin;
 
-  meta = with stdenv.lib; {
-    homepage = https://pypi.python.org/pypi/gssapi;
+  nativeCheckInputs = [
+    k5test
+    parameterized
+    pytestCheckHook
+  ];
+
+  preCheck = ''
+    mv gssapi/tests $TMPDIR/
+    pushd $TMPDIR
+  '';
+
+  postCheck = ''
+    popd
+  '';
+
+  pythonImportsCheck = [ "gssapi" ];
+
+  meta = with lib; {
+    homepage = "https://pypi.python.org/pypi/gssapi";
     description = "Python GSSAPI Wrapper";
     license = licenses.mit;
   };

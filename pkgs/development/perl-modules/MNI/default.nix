@@ -1,7 +1,8 @@
-{ fetchFromGitHub, buildPerlPackage, stdenv }:
+{ fetchFromGitHub, buildPerlPackage, lib }:
 
-buildPerlPackage rec {
-  name = "MNI-Perllib-2012-04-13";
+buildPerlPackage {
+  pname = "MNI-Perllib";
+  version = "2012-04-13";
 
   src = fetchFromGitHub {
     owner  = "BIC-MNI";
@@ -14,8 +15,10 @@ buildPerlPackage rec {
 
   doCheck = false;  # TODO: almost all tests fail ... is this a real problem?
 
-  meta = with stdenv.lib; {
-    license = with licenses; [ artistic1 gpl1Plus ];
-    maintainers = with maintainers; [ bcdarwin ];
+  meta = {
+    description = "MNI MINC perllib (not used much anymore)";
+    homepage = "https://github.com/BIC-MNI/mni-perllib";
+    license = with lib.licenses; [ artistic1 gpl1Plus ];
+    maintainers = with lib.maintainers; [ bcdarwin ];
   };
 }

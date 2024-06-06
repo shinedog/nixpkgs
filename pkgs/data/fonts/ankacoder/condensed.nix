@@ -1,21 +1,27 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let version = "1.100"; in
-fetchzip rec {
-  name = "ankacoder-condensed-${version}";
-  url = "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/anka-coder-fonts/AnkaCoderCondensed.${version}.zip";
+stdenvNoCC.mkDerivation rec {
+  pname = "ankacoder-condensed";
+  version = "1.100";
 
-  postFetch = ''
-    unzip $downloadedFile
+  src = fetchzip {
+    url = "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/anka-coder-fonts/AnkaCoderCondensed.${version}.zip";
+    stripRoot = false;
+    hash = "sha256-NHrkV4Sb7i+DC4e4lToEYzah3pI+sKyYf2rGbhWj7iY=";
+  };
+
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
     cp *.ttf $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
-  sha256 = "0i80zpr2y9368rg2i6x8jv0g7d03kdyr5h7w9yz7pjd7i9xd8439";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Anka/Coder Condensed font";
-    homepage = https://code.google.com/archive/p/anka-coder-fonts;
+    homepage = "https://code.google.com/archive/p/anka-coder-fonts";
     license = licenses.ofl;
     maintainers = with maintainers; [ dtzWill ];
     platforms = platforms.all;

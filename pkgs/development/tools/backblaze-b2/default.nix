@@ -1,50 +1,104 @@
-{ lib, buildPythonApplication, fetchFromGitHub
-, arrow, futures, logfury, requests, six, tqdm
+{ lib
+, python3Packages
+, fetchFromGitHub
+, installShellFiles
+, testers
+, backblaze-b2
+# executable is renamed to backblaze-b2 by default, to avoid collision with boost's 'b2'
+, execName ? "backblaze-b2"
 }:
 
-buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   pname = "backblaze-b2";
-  version = "1.3.8";
+  version = "3.19.1";
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "Backblaze";
     repo = "B2_Command_Line_Tool";
-    rev = "v${version}";
-    sha256 = "1y4z4w6fj92rh9mrjsi0nmnzcmrj5jikarq2vs5qznvjdjm62igw";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-/P1cgAC+a2YCcvbsysYdD+fEwibo+GyE0XY4A0+gMh4=";
   };
 
-  propagatedBuildInputs = [ arrow futures logfury requests six tqdm ];
+  nativeBuildInputs = with python3Packages; [
+    installShellFiles
+    argcomplete
+  ];
 
-  checkPhase = ''
-    python test_b2_command_line.py test
+  build-system = with python3Packages; [
+    pdm-backend
+  ];
+
+  dependencies = with python3Packages; [
+    argcomplete
+    arrow
+    b2sdk
+    phx-class-registry
+    docutils
+    rst2ansi
+    tabulate
+    tqdm
+    platformdirs
+    packaging
+    setuptools
+  ];
+
+  nativeCheckInputs = with python3Packages; [
+    backoff
+    more-itertools
+    pexpect
+    pytestCheckHook
+    pytest-xdist
+  ];
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
   '';
 
-  postPatch = ''
-    # b2 uses an upper bound on arrow, because arrow 0.12.1 is not
-    # compatible with Python 2.6:
-    #
-    # https://github.com/crsmithdev/arrow/issues/517
-    #
-    # However, since we use Python 2.7, newer versions of arrow are fine.
+  disabledTestPaths = [
+    # Test requires network
+    "test/integration/test_b2_command_line.py"
+    "test/integration/test_tqdm_closer.py"
+    # it's hard to make it work on nix
+    "test/integration/test_autocomplete.py"
+    "test/unit/test_console_tool.py"
+    # this one causes successive tests to fail
+    "test/unit/_cli/test_autocomplete_cache.py"
+  ];
 
-    sed -i 's/,<0.12.1//g' requirements.txt
+  disabledTests = [
+    # Autocomplete is not successful in a sandbox
+    "test_autocomplete_installer"
+    "test_help"
+    "test_install_autocomplete"
+  ];
+
+  postInstall = lib.optionalString (execName != "b2") ''
+    mv "$out/bin/b2" "$out/bin/${execName}"
+  ''
+  + ''
+    installShellCompletion --cmd ${execName} \
+      --bash <(register-python-argcomplete ${execName}) \
+      --zsh <(register-python-argcomplete ${execName})
   '';
 
-  postInstall = ''
-    mv "$out/bin/b2" "$out/bin/backblaze-b2"
-
-    sed 's/^_have b2 \&\&$/_have backblaze-b2 \&\&/'  -i contrib/bash_completion/b2
-    sed 's/^\(complete -F _b2\) b2/\1 backblaze-b2/' -i contrib/bash_completion/b2
-
-    mkdir -p "$out/etc/bash_completion.d"
-    cp contrib/bash_completion/b2 "$out/etc/bash_completion.d/backblaze-b2"
-  '';
+  passthru.tests.version = (testers.testVersion {
+    package = backblaze-b2;
+    command = "${execName} version --short";
+  }).overrideAttrs (old: {
+    # workaround the error: Permission denied: '/homeless-shelter'
+    # backblaze-b2 fails to create a 'b2' directory under the XDG config path
+    preHook = ''
+      export HOME=$(mktemp -d)
+    '';
+  });
 
   meta = with lib; {
     description = "Command-line tool for accessing the Backblaze B2 storage service";
-    homepage = https://github.com/Backblaze/B2_Command_Line_Tool;
+    homepage = "https://github.com/Backblaze/B2_Command_Line_Tool";
+    changelog = "https://github.com/Backblaze/B2_Command_Line_Tool/blob/v${version}/CHANGELOG.md";
     license = licenses.mit;
-    maintainers = with maintainers; [ hrdinka kevincox ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [ hrdinka tomhoule ];
+    mainProgram = "backblaze-b2";
   };
 }

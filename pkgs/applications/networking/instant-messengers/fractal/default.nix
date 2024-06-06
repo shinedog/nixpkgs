@@ -1,43 +1,93 @@
-{ stdenv, fetchurl, fetchFromGitLab, meson, ninja, gettext, cargo, rustc, python3, rustPlatform, pkgconfig, gtksourceview
-, hicolor-icon-theme, glib, libhandy, gtk3, libsecret, dbus, openssl, sqlite, gst_all_1, wrapGAppsHook }:
+{ stdenv
+, lib
+, fetchFromGitLab
+, nix-update-script
+, cargo
+, meson
+, ninja
+, rustPlatform
+, rustc
+, pkg-config
+, glib
+, gtk4
+, gtksourceview5
+, libadwaita
+, gst_all_1
+, desktop-file-utils
+, appstream-glib
+, openssl
+, pipewire
+, libshumate
+, wrapGAppsHook4
+, sqlite
+, xdg-desktop-portal
+}:
 
-rustPlatform.buildRustPackage rec {
-  version = "4.0.0";
-  name = "fractal-${version}";
+stdenv.mkDerivation rec {
+  pname = "fractal";
+  version = "7";
 
   src = fetchFromGitLab {
     domain = "gitlab.gnome.org";
-    owner = "GNOME";
+    owner = "World";
     repo = "fractal";
-    rev = version;
-    sha256 = "05q47jdgbi5jz01280msb8gxnbsrgf2jvglfm6k40f1xw4wxkrzy";
+    rev = "refs/tags/${version}";
+    hash = "sha256-IfcThpsGATMD3Uj9tvw/aK7IVbiVT8sdZ088gRUqnlg=";
+  };
+
+  cargoDeps = rustPlatform.importCargoLock {
+    lockFile = ./Cargo.lock;
+    outputHashes = {
+      "mas-http-0.8.0" = "sha256-IiYxF9qT/J/n8t/cVT/DRV3gl2MTA6/YfjshVIic/n4=";
+      "matrix-sdk-0.7.1" = "sha256-quwt9Dx0K6LDMwHBipc52Ek59zz5mlTAdOj+RXZBU3Q=";
+      "ruma-0.9.4" = "sha256-tp0EFS39UTXZJQPUDjeQixb8wzsMCzyFggVj6M8TRYg=";
+      "vodozemac-0.5.1" = "sha256-Hm0C696RmNX6n1Jx+hqkKMjpdbArliuzdiS4wCv3OIM=";
+    };
   };
 
   nativeBuildInputs = [
-    meson ninja pkgconfig gettext cargo rustc python3 wrapGAppsHook
+    glib
+    gtk4
+    meson
+    ninja
+    pkg-config
+    rustPlatform.bindgenHook
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
+    desktop-file-utils
+    appstream-glib
+    wrapGAppsHook4
   ];
+
   buildInputs = [
-    glib gtk3 libhandy dbus openssl sqlite gst_all_1.gstreamer gst_all_1.gst-plugins-base gst_all_1.gst-plugins-bad
-    gtksourceview hicolor-icon-theme libsecret
-  ];
+    glib
+    gtk4
+    gtksourceview5
+    libadwaita
+    openssl
+    pipewire
+    libshumate
+    sqlite
+    xdg-desktop-portal
+  ] ++ (with gst_all_1; [
+    gstreamer
+    gst-plugins-base
+    gst-plugins-bad
+    gst-plugins-good
+  ]);
 
-  postPatch = ''
-    patchShebangs scripts/meson_post_install.py
-  '';
+  passthru = {
+    updateScript = nix-update-script { };
+  };
 
-  # Don't use buildRustPackage phases, only use it for rust deps setup
-  configurePhase = null;
-  buildPhase = null;
-  checkPhase = null;
-  installPhase = null;
-
-  cargoSha256 = "0hlvdcdzkggc2adggmlxz0yxigwp3320wfav77gddlvfip1f90sw";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Matrix group messaging app";
-    homepage = https://gitlab.gnome.org/GNOME/fractal;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ dtzWill ];
+    homepage = "https://gitlab.gnome.org/GNOME/fractal";
+    changelog = "https://gitlab.gnome.org/World/fractal/-/releases/${version}";
+    license = licenses.gpl3Plus;
+    maintainers = teams.gnome.members ++ (with maintainers; [ anselmschueler dtzWill ]);
+    platforms = platforms.linux;
+    mainProgram = "fractal";
   };
 }
-

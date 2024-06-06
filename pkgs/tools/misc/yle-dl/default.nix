@@ -1,27 +1,38 @@
-{ stdenv, fetchFromGitHub, rtmpdump, php, pythonPackages, ffmpeg }:
+{ lib, fetchFromGitHub, rtmpdump, php, wget, python3Packages, ffmpeg
+, testers, yle-dl
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "yle-dl-${version}";
-  version = "2.31";
+python3Packages.buildPythonApplication rec {
+  pname = "yle-dl";
+  version = "20240130";
 
   src = fetchFromGitHub {
     owner = "aajanki";
     repo = "yle-dl";
     rev = version;
-    sha256 = "0k93p9csyjm0w33diwl5s22kzs3g78jl3n9k8nxxpqrybfjl912f";
+    hash = "sha256-I2DP14PfeU+cDst098SXn6OVx5FKrH/KgKtVfmRPVqE=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ lxml pyamf pycrypto requests future ffmpeg ];
-  pythonPath = [ rtmpdump php ];
+  propagatedBuildInputs = with python3Packages; [
+    attrs configargparse ffmpeg future lxml requests
+  ];
+  pythonPath = [ rtmpdump php wget ];
 
   doCheck = false; # tests require network access
-  checkInputs = with pythonPackages; [ pytest pytestrunner ];
+  nativeCheckInputs = with python3Packages; [ pytestCheckHook ];
 
-  meta = with stdenv.lib; {
+  passthru.tests.version = testers.testVersion {
+    package = yle-dl;
+    command = "yle-dl -h";
+  };
+
+  meta = with lib; {
     description = "Downloads videos from Yle (Finnish Broadcasting Company) servers";
-    homepage = https://aajanki.github.io/yle-dl/;
-    license = licenses.gpl3;
-    maintainers = [ maintainers.dezgeg ];
-    platforms = platforms.linux;
+    homepage = "https://aajanki.github.io/yle-dl/";
+    changelog = "https://github.com/aajanki/yle-dl/blob/${version}/ChangeLog";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ dezgeg ];
+    platforms = platforms.unix;
+    mainProgram = "yle-dl";
   };
 }

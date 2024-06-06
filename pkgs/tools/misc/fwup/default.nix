@@ -1,31 +1,70 @@
-{ stdenv, lib, fetchFromGitHub, autoreconfHook, makeWrapper, pkgconfig
-, zlib, lzma, bzip2, mtools, dosfstools, zip, unzip, libconfuse, libsodium
-, libarchive, darwin, coreutils }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, autoreconfHook
+, DiskArbitration
+, pkg-config
+, bzip2
+, libarchive
+, libconfuse
+, libsodium
+, xz
+, zlib
+, coreutils
+, dosfstools
+, mtools
+, unzip
+, zip
+, which
+, xdelta
+}:
 
 stdenv.mkDerivation rec {
-  name = "fwup-${version}";
-  version = "1.3.1";
+  pname = "fwup";
+  version = "1.10.2";
 
   src = fetchFromGitHub {
     owner = "fhunleth";
     repo = "fwup";
     rev = "v${version}";
-    sha256 = "058llxr8hbdjl721g76icm0gr50bglcgazwrbp3dxyd9jaa0bzc7";
+    sha256 = "sha256-SuagtYfLD8yXFpLHNl1J0m5/iapYU+Si6tJl0paStTY=";
   };
 
-  doCheck = true;
-  patches = lib.optional stdenv.isDarwin [ ./fix-testrunner-darwin.patch ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook makeWrapper ];
-  buildInputs = [ zlib lzma bzip2 libconfuse libsodium libarchive ]
-    ++ lib.optionals stdenv.isDarwin [
-      darwin.apple_sdk.frameworks.DiskArbitration
-    ];
-  propagatedBuildInputs = [ zip unzip mtools dosfstools coreutils ];
+  buildInputs = [
+    bzip2
+    libarchive
+    libconfuse
+    libsodium
+    xz
+    zlib
+  ] ++ lib.optionals stdenv.isDarwin [
+    DiskArbitration
+  ];
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    coreutils
+    unzip
+    zip
+  ] ++ lib.optionals doCheck [
+    mtools
+    dosfstools
+  ];
+
+  nativeCheckInputs = [
+    which
+    xdelta
+  ];
+
+  doCheck = !stdenv.isDarwin;
+
+  meta = with lib; {
     description = "Configurable embedded Linux firmware update creator and runner";
-    homepage = https://github.com/fhunleth/fwup;
+    homepage = "https://github.com/fhunleth/fwup";
     license = licenses.asl20;
     maintainers = [ maintainers.georgewhewell ];
     platforms = platforms.all;

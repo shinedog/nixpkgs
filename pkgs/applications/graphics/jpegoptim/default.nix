@@ -1,12 +1,14 @@
-{ stdenv, fetchurl, libjpeg }:
+{ lib, stdenv, fetchFromGitHub, libjpeg }:
 
 stdenv.mkDerivation rec {
-  version = "1.4.6";
-  name = "jpegoptim-${version}";
+  version = "1.5.5";
+  pname = "jpegoptim";
 
-  src = fetchurl {
-    url = "https://www.kokkonen.net/tjko/src/${name}.tar.gz";
-    sha256 = "1dss7907fclfl8zsw0bl4qcw0hhz6fqgi3867w0jyfm3q9jfpcc8";
+  src = fetchFromGitHub {
+    owner = "tjko";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-3p3kcUur1u09ROdKXG5H8eilu463Rzbn2yfYo5o6+KM=";
   };
 
   # There are no checks, it seems.
@@ -14,11 +16,12 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ libjpeg ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Optimize JPEG files";
-    homepage = https://www.kokkonen.net/tjko/projects.html ;
-    license = licenses.gpl2;
+    homepage = "https://www.kokkonen.net/tjko/projects.html";
+    license = licenses.gpl3Plus;
     maintainers = [ maintainers.aristid ];
     platforms = platforms.all;
+    mainProgram = "jpegoptim";
   };
 }

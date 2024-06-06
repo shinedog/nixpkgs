@@ -1,18 +1,34 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+, darwin
+}:
 
-stdenv.mkDerivation rec {
-  name = "ode-${version}";
-  version = "0.12";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ode";
+  version = "0.16.5";
 
   src = fetchurl {
-    url = "mirror://sourceforge/opende/ode-${version}.tar.bz2";
-    sha256 = "0l63ymlkgfp5cb0ggqwm386lxmc3al21nb7a07dd49f789d33ib5";
+    url = "https://bitbucket.org/odedevs/ode/downloads/ode-${finalAttrs.version}.tar.gz";
+    hash = "sha256-uode3RZFcJWHle6qcPFIU7/DTMmHH4rd6NpH4SvVRnk=";
   };
 
-  meta = with stdenv.lib; {
+  buildInputs = lib.optionals stdenv.isDarwin [
+    darwin.apple_sdk.frameworks.CoreServices
+    darwin.apple_sdk.frameworks.GLUT
+  ];
+
+  env.CXXFLAGS = lib.optionalString stdenv.cc.isClang (toString [
+    "-std=c++14"
+    "-Wno-error=c++11-narrowing"
+  ]);
+
+  meta = with lib; {
     description = "Open Dynamics Engine";
-    homepage = https://sourceforge.net/projects/opende;
-    platforms = platforms.linux;
-    license = with licenses; [ bsd3 lgpl21 lgpl3 zlib ];
+    mainProgram = "ode-config";
+    homepage = "https://www.ode.org";
+    license = with licenses; [ bsd3 lgpl21Only lgpl3Only zlib ];
+    maintainers = with maintainers; [ wegank ];
+    platforms = platforms.unix;
   };
-}
+})

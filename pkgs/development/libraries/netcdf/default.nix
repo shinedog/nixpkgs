@@ -1,19 +1,26 @@
-{ stdenv
-, fetchurl
+{ lib, stdenv
+, fetchurl, unzip
 , hdf5
+, bzip2
+, libzip
+, zstd
+, szipSupport ? false
+, szip
+, libxml2
 , m4
 , curl # for DAP
+, removeReferencesTo
 }:
 
 let
-  mpiSupport = hdf5.mpiSupport;
-  mpi = hdf5.mpi;
+  inherit (hdf5) mpiSupport mpi;
 in stdenv.mkDerivation rec {
-  name = "netcdf-4.6.1";
+  pname = "netcdf" + lib.optionalString mpiSupport "-mpi";
+  version = "4.9.2";
 
   src = fetchurl {
-    url = "https://www.unidata.ucar.edu/downloads/netcdf/ftp/${name}.tar.gz";
-    sha256 = "0hi61cdihwwvz5jz1l7yq712j7ca1cj4bhr8x0x7c2vlb1s9biw9";
+    url = "https://downloads.unidata.ucar.edu/netcdf-c/${version}/netcdf-c-${version}.tar.gz";
+    hash = "sha256-zxG6u725lj8J9VB54LAZ9tA3H1L44SZKW6jp/asabEg=";
   };
 
   postPatch = ''
@@ -23,28 +30,57 @@ in stdenv.mkDerivation rec {
     for a in ncdap_test/Makefile.am ncdap_test/Makefile.in; do
       substituteInPlace $a --replace testurl.sh " "
     done
+
+    # Prevent building the tests from prepending `#!/bin/bash` and wiping out the patched shenbangs.
+    substituteInPlace nczarr_test/Makefile.in \
+      --replace '#!/bin/bash' '${stdenv.shell}'
   '';
 
-  nativeBuildInputs = [ m4 ];
-  buildInputs = [ hdf5 curl mpi ];
+  nativeBuildInputs = [ m4 removeReferencesTo ];
+
+  buildInputs = [
+    curl
+    hdf5
+    libxml2
+    mpi
+    bzip2
+    libzip
+    zstd
+  ] ++ lib.optional szipSupport szip;
 
   passthru = {
-    mpiSupport = mpiSupport;
-    inherit mpi;
+    inherit mpiSupport mpi;
   };
 
   configureFlags = [
       "--enable-netcdf-4"
       "--enable-dap"
       "--enable-shared"
+      "--disable-dap-remote-tests"
+      "--with-plugin-dir=${placeholder "out"}/lib/hdf5-plugins"
   ]
-  ++ (stdenv.lib.optionals mpiSupport [ "--enable-parallel-tests" "CC=${mpi}/bin/mpicc" ]);
+  ++ (lib.optionals mpiSupport [ "--enable-parallel-tests" "CC=${lib.getDev mpi}/bin/mpicc" ]);
+
+  enableParallelBuilding = true;
+
+  disallowedReferences = [ stdenv.cc ];
+
+  postFixup = ''
+    remove-references-to -t ${stdenv.cc} "$(readlink -f $out/lib/libnetcdf.settings)"
+  '';
+
+  doCheck = !mpiSupport;
+  nativeCheckInputs = [ unzip ];
+
+  preCheck = ''
+    export HOME=$TEMP
+  '';
 
   meta = {
-      platforms = stdenv.lib.platforms.unix;
-      homepage = https://www.unidata.ucar.edu/software/netcdf/;
-      license = {
-        url = https://www.unidata.ucar.edu/software/netcdf/docs/copyright.html;
-      };
+    description = "Libraries for the Unidata network Common Data Format";
+    platforms = lib.platforms.unix;
+    homepage = "https://www.unidata.ucar.edu/software/netcdf/";
+    changelog = "https://docs.unidata.ucar.edu/netcdf-c/${version}/RELEASE_NOTES.html";
+    license = lib.licenses.bsd3;
   };
 }

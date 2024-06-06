@@ -1,41 +1,36 @@
-{ stdenv, fetchgit }:
+{ lib, stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "memtest86+-5.01+coreboot-20180113";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "memtest86+";
+  version = "7.00";
 
-  src = fetchgit {
-    url = "https://review.coreboot.org/memtest86plus";
-    rev = "5ca4eb9544e51254254d09ae6e70f93403469ec3";
-    sha256 = "08m4rjr0chhhb1whgggknz926zv9hm8bisnxqp8lffqiwhb55rgk";
+  src = fetchFromGitHub {
+    owner = "memtest86plus";
+    repo = "memtest86plus";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-DVYiE9yi20IR2AZs8bya1h9vK4si7nKdg9Nqef4WTrw=";
   };
 
+  # Binaries are booted directly by BIOS/UEFI or bootloader
+  # and should not be patched/stripped
+  dontPatchELF = true;
+  dontStrip = true;
+
+  passthru.efi = "${finalAttrs.finalPackage}/memtest.efi";
+
   preBuild = ''
-    # Really dirty hack to get Memtest to build without needing a Glibc
-    # with 32-bit libraries and headers.
-    if test "$system" = x86_64-linux; then
-        mkdir gnu
-        touch gnu/stubs-32.h
-    fi
+    cd ${if stdenv.isi686 then "build32" else "build64"}
   '';
 
-  NIX_CFLAGS_COMPILE = "-I. -std=gnu90";
-
-  hardeningDisable = [ "all" ];
-
-  buildFlags = "memtest.bin";
-
-  doCheck = false; # fails
-
   installPhase = ''
-    mkdir -p $out
-    chmod -x memtest.bin
-    cp memtest.bin $out/
+    install -Dm0444 -t $out/ memtest.bin memtest.efi
   '';
 
   meta = {
-    homepage = http://www.memtest.org/;
+    homepage = "https://www.memtest.org/";
     description = "A tool to detect memory errors";
-    license = stdenv.lib.licenses.gpl2;
+    license = lib.licenses.gpl2Only;
     platforms = [ "x86_64-linux" "i686-linux" ];
+    maintainers = [ lib.maintainers.LunNova ];
   };
-}
+})

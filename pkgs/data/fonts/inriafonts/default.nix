@@ -1,27 +1,27 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-
+stdenvNoCC.mkDerivation rec {
   pname = "inriafonts";
   version = "1.200";
-  name = "${pname}-${version}";
 
-src = fetchFromGitHub {
-  owner = "BlackFoundry";
-  repo = "InriaFonts";
-  rev = "v${version}";
-  sha256 = "06775y99lyh6hj5hzvrx56iybdck8a8xfqkipqd5c4cldg0a9hh8";
-};
+  src = fetchFromGitHub {
+    owner = "BlackFoundry";
+    repo = "InriaFonts";
+    rev = "v${version}";
+    hash = "sha256-CMKkwGuUEVYavnFi15FCk7Xloyk97w+LhAZ6mpIv5xg=";
+  };
 
-installPhase = ''
-  mkdir -p $out/share/fonts/truetype
-  cp fonts/*/TTF/*.ttf $out/share/fonts/truetype
-  mkdir -p $out/share/fonts/opentype
-  cp fonts/*/OTF/*.otf $out/share/fonts/opentype
-'';
+  installPhase = ''
+    runHook preInstall
 
-  meta = with stdenv.lib; {
-    homepage = https://black-foundry.com/work/inria;
+    install -m444 -Dt $out/share/fonts/truetype fonts/*/TTF/*.ttf
+    install -m444 -Dt $out/share/fonts/opentype fonts/*/OTF/*.otf
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://black-foundry.com/work/inria";
     description = "Inria Sans and Inria Serif";
     longDescription = ''
       Inria Sans and Inria Serif are the two members of a type family
@@ -32,7 +32,7 @@ installPhase = ''
       typeface with a unapologetically contemporary design as the
       Sans-serif part and a more rational axis and drawing for the
       serif. Both members comes in 3 weights with matching italics.
-      '';
+    '';
     license = licenses.ofl;
     maintainers = with maintainers; [ leenaars ];
     platforms = platforms.all;

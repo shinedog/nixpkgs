@@ -1,28 +1,56 @@
-{ stdenv, fetchurl, intltool, pkgconfig
-, gtk3, ibus, libhangul, python3
+{ lib, stdenv
+, fetchurl
+, substituteAll
+, appstream-glib
+, gettext
+, pkg-config
+, wrapGAppsHook3
+, gtk3
+, ibus
+, libhangul
+, python3
 }:
 
 stdenv.mkDerivation rec {
-  name = "ibus-hangul-${version}";
-  version = "1.5.1";
+  pname = "ibus-hangul";
+  version = "1.5.5";
 
   src = fetchurl {
-    url = "https://github.com/choehwanjin/ibus-hangul/releases/download/${version}/${name}.tar.gz";
-    sha256 = "0gha8dfdf54rx8fv3yfikbgdg6lqq6l883lhg7q68ybvkjx9bwbs";
+    url = "https://github.com/libhangul/ibus-hangul/releases/download/${version}/${pname}-${version}.tar.xz";
+    sha256 = "sha256-parIgobNGJYCKYYOPhp3iXinrqpIStms+kgoS4f9w7s=";
   };
 
-  buildInputs = [ gtk3 ibus libhangul python3 ];
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      libhangul = "${libhangul}/lib/libhangul.so.1";
+    })
+  ];
 
-  nativeBuildInputs = [ intltool pkgconfig python3.pkgs.wrapPython ];
+  nativeBuildInputs = [
+    appstream-glib
+    gettext
+    pkg-config
+    wrapGAppsHook3
+  ];
 
-  postFixup = "wrapPythonPrograms";
+  buildInputs = [
+    gtk3
+    ibus
+    libhangul
+    (python3.withPackages (pypkgs: with pypkgs; [
+      pygobject3
+      (toPythonModule ibus)
+    ]))
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     isIbusEngine = true;
-    description  = "Ibus Hangul engine";
-    homepage     = https://github.com/choehwanjin/ibus-hangul;
-    license      = licenses.gpl2;
-    platforms    = platforms.linux;
-    maintainers  = with maintainers; [ ericsagnes ];
+    description = "Ibus Hangul engine";
+    mainProgram = "ibus-setup-hangul";
+    homepage = "https://github.com/libhangul/ibus-hangul";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ericsagnes ];
+    platforms = platforms.linux;
   };
 }

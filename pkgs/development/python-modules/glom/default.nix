@@ -1,37 +1,70 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, boltons
-, attrs
-, face
-, pytest
-, pyyaml
-, isPy37
+{
+  lib,
+  attrs,
+  boltons,
+  buildPythonPackage,
+  face,
+  fetchPypi,
+  pytestCheckHook,
+  pythonAtLeast,
+  pythonOlder,
+  pyyaml,
 }:
 
 buildPythonPackage rec {
   pname = "glom";
-  version = "19.1.0";
+  version = "23.5.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5c47dc6dc97bb1c20e5607f3d58eac81e13b16880a284b52d503eea92d7b5fc2";
+    hash = "sha256-Bq9eNIaqzFk4K6NOU+vqvXqTRdePfby+4m8DuqS4O6w=";
   };
 
-  propagatedBuildInputs = [ boltons attrs face ];
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "face==20.1.1" "face"
+  '';
 
-  checkInputs = [ pytest pyyaml ];
-  checkPhase = "pytest glom/test";
+  propagatedBuildInputs = [
+    boltons
+    attrs
+    face
+  ];
 
-  doCheck = !isPy37; # https://github.com/mahmoud/glom/issues/72
+  nativeCheckInputs = [
+    pytestCheckHook
+    pyyaml
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mahmoud/glom;
+  preCheck = ''
+    # test_cli.py checks the output of running "glom"
+    export PATH=$out/bin:$PATH
+  '';
+
+  disabledTests =
+    [
+      # Test is outdated (was made for PyYAML 3.x)
+      "test_main_yaml_target"
+    ]
+    ++ lib.optionals (pythonAtLeast "3.11") [
+      "test_regular_error_stack"
+      "test_long_target_repr"
+    ];
+
+  pythonImportsCheck = [ "glom" ];
+
+  meta = with lib; {
     description = "Restructuring data, the Python way";
+    mainProgram = "glom";
     longDescription = ''
       glom helps pull together objects from other objects in a
       declarative, dynamic, and downright simple way.
     '';
+    homepage = "https://github.com/mahmoud/glom";
+    changelog = "https://github.com/mahmoud/glom/blob/v${version}/CHANGELOG.md";
     license = licenses.bsd3;
     maintainers = with maintainers; [ twey ];
   };

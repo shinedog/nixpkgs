@@ -1,8 +1,13 @@
-{ stdenv, fetchFromGitHub, buildPythonPackage }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+}:
 
 buildPythonPackage rec {
   pname = "beanstalkc";
   version = "0.5.2";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "bosondata";
@@ -13,10 +18,10 @@ buildPythonPackage rec {
 
   doCheck = false;
 
-  meta = {
+  meta = with lib; {
     description = "A simple beanstalkd client library for Python";
-    maintainers = with stdenv.lib.maintainers; [ aanderse ];
-    license = with stdenv.lib.licenses; [ asl20 ];
-    homepage = https://github.com/earl/beanstalkc;
+    maintainers = with maintainers; [ aanderse ];
+    license = licenses.asl20;
+    homepage = "https://github.com/earl/beanstalkc";
   };
 }

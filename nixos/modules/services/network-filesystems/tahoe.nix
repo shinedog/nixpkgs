@@ -18,7 +18,7 @@ in
             };
             tub.port = mkOption {
               default = 3458;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the introducer will listen.
               '';
@@ -32,15 +32,7 @@ in
                 If specified, the port should be included.
               '';
             };
-            package = mkOption {
-              default = pkgs.tahoelafs;
-              defaultText = "pkgs.tahoelafs";
-              type = types.package;
-              example = literalExample "pkgs.tahoelafs";
-              description = ''
-                The package to use for the Tahoe LAFS daemon.
-              '';
-            };
+            package = mkPackageOption pkgs "tahoelafs" { };
           };
         });
         description = ''
@@ -59,7 +51,7 @@ in
             };
             tub.port = mkOption {
               default = 3457;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the tub will listen.
 
@@ -81,7 +73,7 @@ in
             };
             web.port = mkOption {
               default = 3456;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the Web server will listen.
 
@@ -177,15 +169,7 @@ in
                 URL of the accounts server.
               '';
             };
-            package = mkOption {
-              default = pkgs.tahoelafs;
-              defaultText = "pkgs.tahoelafs";
-              type = types.package;
-              example = literalExample "pkgs.tahoelafs";
-              description = ''
-                The package to use for the Tahoe LAFS daemon.
-              '';
-            };
+            package = mkPackageOption pkgs "tahoelafs" { };
           };
         });
         description = ''
@@ -234,16 +218,19 @@ in
               Type = "simple";
               PIDFile = pidfile;
               # Believe it or not, Tahoe is very brittle about the order of
-              # arguments to $(tahoe start). The node directory must come first,
+              # arguments to $(tahoe run). The node directory must come first,
               # and arguments which alter Twisted's behavior come afterwards.
               ExecStart = ''
-                ${settings.package}/bin/tahoe start ${lib.escapeShellArg nodedir} -n -l- --pidfile=${lib.escapeShellArg pidfile}
+                ${settings.package}/bin/tahoe run ${lib.escapeShellArg nodedir} --pidfile=${lib.escapeShellArg pidfile}
               '';
             };
             preStart = ''
               if [ ! -d ${lib.escapeShellArg nodedir} ]; then
                 mkdir -p /var/db/tahoe-lafs
-                tahoe create-introducer ${lib.escapeShellArg nodedir}
+                # See https://github.com/NixOS/nixpkgs/issues/25273
+                tahoe create-introducer \
+                  --hostname="${config.networking.hostName}" \
+                  ${lib.escapeShellArg nodedir}
               fi
 
               # Tahoe has created a predefined tahoe.cfg which we must now
@@ -334,10 +321,10 @@ in
               Type = "simple";
               PIDFile = pidfile;
               # Believe it or not, Tahoe is very brittle about the order of
-              # arguments to $(tahoe start). The node directory must come first,
+              # arguments to $(tahoe run). The node directory must come first,
               # and arguments which alter Twisted's behavior come afterwards.
               ExecStart = ''
-                ${settings.package}/bin/tahoe start ${lib.escapeShellArg nodedir} -n -l- --pidfile=${lib.escapeShellArg pidfile}
+                ${settings.package}/bin/tahoe run ${lib.escapeShellArg nodedir} --pidfile=${lib.escapeShellArg pidfile}
               '';
             };
             preStart = ''

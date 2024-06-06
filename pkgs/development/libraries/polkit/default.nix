@@ -1,46 +1,139 @@
-{ stdenv, fetchurl, fetchpatch, autoreconfHook, pkgconfig, glib, expat, pam, perl
-, intltool, spidermonkey_60 , gobject-introspection, libxslt, docbook_xsl, dbus
-, docbook_xml_dtd_412, gtk-doc, coreutils
-, useSystemd ? stdenv.isLinux, systemd
-, withGnome ? true
-, doCheck ? stdenv.isLinux
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, glib
+, expat
+, pam
+, meson
+, mesonEmulatorHook
+, ninja
+, perl
+, python3
+, gettext
+, duktape
+, gobject-introspection
+, libxslt
+, docbook-xsl-nons
+, dbus
+, docbook_xml_dtd_412
+, gtk-doc
+, coreutils
+, useSystemd ? lib.meta.availableOn stdenv.hostPlatform systemdMinimal
+, systemdMinimal
+, elogind
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+# A few tests currently fail on musl (polkitunixusertest, polkitunixgrouptest, polkitidentitytest segfault).
+# Not yet investigated; it may be due to the "Make netgroup support optional"
+# patch not updating the tests correctly yet, or doing something wrong,
+# or being unrelated to that.
+, doCheck ? (stdenv.isLinux && !stdenv.hostPlatform.isMusl)
 }:
 
 let
-
   system = "/run/current-system/sw";
-  setuid = "/run/wrappers/bin"; #TODO: from <nixos> config.security.wrapperDir;
-
+  setuid = "/run/wrappers/bin";
 in
-
 stdenv.mkDerivation rec {
   pname = "polkit";
-  version = "0.116";
-
-  src = fetchurl {
-    url = "https://www.freedesktop.org/software/${pname}/releases/${pname}-${version}.tar.gz";
-    sha256 = "1c9lbpndh5zis22f154vjrhnqw65z8s85nrgl42v738yf6g0q5w8";
-  };
-
-  postPatch = stdenv.lib.optionalString stdenv.isDarwin ''
-    sed -i -e "s/-Wl,--as-needed//" configure.ac
-  '';
+  version = "124";
 
   outputs = [ "bin" "dev" "out" ]; # small man pages in $bin
 
-  nativeBuildInputs =
-    [ glib gtk-doc pkgconfig intltool perl ]
-    ++ [ libxslt docbook_xsl docbook_xml_dtd_412 ]; # man pages
-  buildInputs =
-    [ glib expat pam spidermonkey_60 ]
-    ++ stdenv.lib.optional useSystemd systemd
-    ++ stdenv.lib.optional withGnome gobject-introspection;
+  # Tarballs do not contain subprojects.
+  src = fetchFromGitHub {
+    owner = "polkit-org";
+    repo = "polkit";
+    rev = version;
+    hash = "sha256-Vc9G2xK6U1cX+xW2BnKp3oS/ACbSXS/lztbFP5oJOlM=";
+  };
 
-  NIX_CFLAGS_COMPILE = " -Wno-deprecated-declarations "; # for polkit 0.114 and glib 2.56
+  patches = [
+    # Allow changing base for paths in pkg-config file as before.
+    # https://gitlab.freedesktop.org/polkit/polkit/-/merge_requests/100
+    ./0001-build-Use-datarootdir-in-Meson-generated-pkg-config-.patch
+  ];
 
-  preConfigure = ''
-    chmod +x test/mocklibc/bin/mocklibc{,-test}.in
-    patchShebangs .
+  depsBuildBuild = [
+    pkg-config
+  ];
+
+  nativeBuildInputs = [
+    glib
+    pkg-config
+    gettext
+    meson
+    ninja
+    perl
+
+    # man pages
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_412
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+    gtk-doc
+  ] ++ lib.optionals (withIntrospection && !stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
+
+  buildInputs = [
+    expat
+    pam
+    dbus
+    duktape
+  ] ++ lib.optionals stdenv.isLinux [
+    # On Linux, fall back to elogind when systemd support is off.
+    (if useSystemd then systemdMinimal else elogind)
+  ];
+
+  propagatedBuildInputs = [
+    glib # in .pc Requires
+  ];
+
+  nativeCheckInputs = [
+    dbus
+    (python3.pythonOnBuildForHost.withPackages (pp: with pp; [
+      dbus-python
+      (python-dbusmock.overridePythonAttrs (attrs: {
+        # Avoid dependency cycle.
+        doCheck = false;
+      }))
+    ]))
+  ];
+
+  env = {
+    PKG_CONFIG_SYSTEMD_SYSTEMDSYSTEMUNITDIR = "${placeholder "out"}/lib/systemd/system";
+    PKG_CONFIG_SYSTEMD_SYSUSERS_DIR = "${placeholder "out"}/lib/sysusers.d";
+  };
+
+  mesonFlags = [
+    "--datadir=${system}/share"
+    "--sysconfdir=/etc"
+    "-Dpolkitd_user=polkituser" #TODO? <nixos> config.ids.uids.polkituser
+    "-Dos_type=redhat" # only affects PAM includes
+    "-Dintrospection=${lib.boolToString withIntrospection}"
+    "-Dtests=${lib.boolToString doCheck}"
+    "-Dgtk_doc=${lib.boolToString withIntrospection}"
+    "-Dman=true"
+  ] ++ lib.optionals stdenv.isLinux [
+    "-Dsession_tracking=${if useSystemd then "libsystemd-login" else "libelogind"}"
+  ];
+
+  # HACK: We want to install policy files files to $out/share but polkit
+  # should read them from /run/current-system/sw/share on a NixOS system.
+  # Similarly for config files in /etc.
+  # With autotools, it was possible to override Make variables
+  # at install time but Meson does not support this
+  # so we need to convince it to install all files to a temporary
+  # location using DESTDIR and then move it to proper one in postInstall.
+  env.DESTDIR = "dest";
+
+  inherit doCheck;
+
+  postPatch = ''
+    patchShebangs test/polkitbackend/polkitbackendjsauthoritytest-wrapper.py
 
     # ‘libpolkit-agent-1.so’ should call the setuid wrapper on
     # NixOS.  Hard-coding the path is kinda ugly.  Maybe we can just
@@ -50,42 +143,41 @@ stdenv.mkDerivation rec {
     substituteInPlace test/data/etc/polkit-1/rules.d/10-testing.rules \
       --replace   /bin/true ${coreutils}/bin/true \
       --replace   /bin/false ${coreutils}/bin/false
-
-  '' + stdenv.lib.optionalString useSystemd /* bogus chroot detection */ ''
-    sed '/libsystemd autoconfigured/s/.*/:/' -i configure
   '';
 
-  configureFlags = [
-    "--datadir=${system}/share"
-    "--sysconfdir=/etc"
-    "--with-systemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
-    "--with-polkitd-user=polkituser" #TODO? <nixos> config.ids.uids.polkituser
-    "--with-os-type=NixOS" # not recognized but prevents impurities on non-NixOS
-    (if withGnome then "--enable-introspection" else "--disable-introspection")
-  ] ++ stdenv.lib.optional (!doCheck) "--disable-test";
+  postConfigure = lib.optionalString doCheck ''
+    # Unpacked by meson
+    chmod +x subprojects/mocklibc-1.0/bin/mocklibc
+    patchShebangs subprojects/mocklibc-1.0/bin/mocklibc
+  '';
 
-  makeFlags = [
-    "INTROSPECTION_GIRDIR=${placeholder "out"}/share/gir-1.0"
-    "INTROSPECTION_TYPELIBDIR=${placeholder "out"}/lib/girepository-1.0"
-  ];
-
-  installFlags = [
-    "datadir=${placeholder "out"}/share"
-    "sysconfdir=${placeholder "out"}/etc"
-  ];
-
-  inherit doCheck;
-  checkInputs = [dbus];
   checkPhase = ''
+    runHook preCheck
+
     # tests need access to the system bus
-    dbus-run-session --config-file=${./system_bus.conf} -- sh -c 'DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS make check'
+    dbus-run-session --config-file=${./system_bus.conf} -- sh -c 'DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS meson test --print-errorlogs'
+
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.freedesktop.org/wiki/Software/polkit;
+  postInstall = ''
+    # Move stuff from DESTDIR to proper location.
+    # We need to be careful with the ordering to merge without conflicts.
+    for o in $(getAllOutputNames); do
+        mv "$DESTDIR/''${!o}" "''${!o}"
+    done
+    mv "$DESTDIR/etc" "$out"
+    mv "$DESTDIR${system}/share"/* "$out/share"
+    # Ensure we did not forget to install anything.
+    rmdir --parents --ignore-fail-on-non-empty "$DESTDIR${builtins.storeDir}" "$DESTDIR${system}/share"
+    ! test -e "$DESTDIR"
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/polkit-org/polkit";
     description = "A toolkit for defining and handling the policy that allows unprivileged processes to speak to privileged processes";
-    license = licenses.gpl2;
-    platforms = platforms.unix;
-    maintainers = [ ];
+    license = licenses.lgpl2Plus;
+    platforms = platforms.linux;
+    maintainers = teams.freedesktop.members ++ (with maintainers; [ ]);
   };
 }

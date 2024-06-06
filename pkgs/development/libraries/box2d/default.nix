@@ -1,38 +1,72 @@
-{ stdenv, fetchurl, unzip, cmake, libGLU_combined, freeglut, libX11, xorgproto
-, libXi, pkgconfig }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, libGLU
+, libGL
+, freeglut
+, libX11
+, libXcursor
+, libXinerama
+, libXrandr
+, xorgproto
+, libXi
+, pkg-config
+, Carbon
+, Cocoa
+, Kernel
+, OpenGL
+, settingsFile ? "include/box2d/b2_settings.h"
+}:
 
-stdenv.mkDerivation rec {
-  name = "box2d-${version}";
-  version = "2.3.1";
+let
+  inherit (lib) cmakeBool optionals;
 
-  src = fetchurl {
-    url = "https://github.com/erincatto/Box2D/archive/v${version}.tar.gz";
-    sha256 = "0llpcifl8zbjbpxdwz87drd01m3lwnv82xb4av6kca1xn4w2gmkm";
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "box2d";
+  version = "2.4.1";
+
+  src = fetchFromGitHub {
+    owner = "erincatto";
+    repo = "box2d";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-cL8L+WSTcswj+Bwy8kSOwuEqLyWEM6xa/j/94aBiSck=";
   };
 
-  sourceRoot = "Box2D-${version}/Box2D";
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  nativeBuildInputs = [ pkgconfig ];
   buildInputs = [
-    unzip cmake libGLU_combined freeglut libX11 xorgproto libXi
+    libGLU
+    libGL
+    freeglut
+    libX11
+    libXcursor
+    libXinerama
+    libXrandr
+    xorgproto
+    libXi
+  ] ++ optionals stdenv.isDarwin [
+    Carbon Cocoa Kernel OpenGL
   ];
 
   cmakeFlags = [
-    "-DBOX2D_INSTALL=ON"
-    "-DBOX2D_BUILD_SHARED=ON"
-    "-DBOX2D_BUILD_EXAMPLES=OFF"
+    (cmakeBool "BOX2D_BUILD_UNIT_TESTS" finalAttrs.doCheck)
   ];
 
   prePatch = ''
-    substituteInPlace Box2D/Common/b2Settings.h \
-      --replace 'b2_maxPolygonVertices	8' 'b2_maxPolygonVertices	15'
+    substituteInPlace ${settingsFile}  \
+      --replace-fail 'b2_maxPolygonVertices	8' 'b2_maxPolygonVertices	15'
   '';
 
-  meta = with stdenv.lib; {
+  # tests are broken on 2.4.1 and 2.3.x doesn't have tests: https://github.com/erincatto/box2d/issues/677
+  doCheck = lib.versionAtLeast finalAttrs.version "2.4.2";
+
+  meta = with lib; {
     description = "2D physics engine";
-    homepage = http://box2d.org/;
-    maintainers = [ maintainers.raskin ];
-    platforms = platforms.linux;
+    homepage = "https://box2d.org/";
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
     license = licenses.zlib;
   };
-}
+})

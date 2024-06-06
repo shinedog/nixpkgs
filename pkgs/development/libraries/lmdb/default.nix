@@ -1,32 +1,41 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitLab, windows }:
 
 stdenv.mkDerivation rec {
-  name = "lmdb-${version}";
-  version = "0.9.23";
+  pname = "lmdb";
+  version = "0.9.33";
 
-  src = fetchFromGitHub {
-    owner = "LMDB";
-    repo = "lmdb";
+  src = fetchFromGitLab {
+    domain = "git.openldap.org";
+    owner = "openldap";
+    repo = "openldap";
     rev = "LMDB_${version}";
-    sha256 = "0ag7l5180ajvm73y59m7sn3p52xm8m972d08cshxhpwgwa4v35k6";
+    sha256 = "sha256-5IBoJ3jaNXao5zVzb0LDM8RGid4s8DGQpjVqrVPLpXQ=";
   };
 
   postUnpack = "sourceRoot=\${sourceRoot}/libraries/liblmdb";
 
-  patches = [ ./hardcoded-compiler.patch ];
-  patchFlags = "-p3";
+  patches = [ ./hardcoded-compiler.patch ./bin-ext.patch ];
+  patchFlags = [ "-p3" ];
+
+  # Don't attempt the .so if static, as it would fail.
+  postPatch = lib.optionalString stdenv.hostPlatform.isStatic ''
+    sed 's/^ILIBS\>.*/ILIBS = liblmdb.a/' -i Makefile
+  '';
 
   outputs = [ "bin" "out" "dev" ];
+
+  buildInputs = lib.optional stdenv.hostPlatform.isWindows windows.pthreads;
 
   makeFlags = [
     "prefix=$(out)"
     "CC=${stdenv.cc.targetPrefix}cc"
     "AR=${stdenv.cc.targetPrefix}ar"
   ]
-    ++ stdenv.lib.optional stdenv.isDarwin "LDFLAGS=-Wl,-install_name,$(out)/lib/liblmdb.so";
+    ++ lib.optional stdenv.isDarwin "LDFLAGS=-Wl,-install_name,$(out)/lib/liblmdb.so"
+    ++ lib.optionals stdenv.hostPlatform.isWindows [ "SOEXT=.dll" "BINEXT=.exe" ];
 
   doCheck = true;
-  checkPhase = "make test";
+  checkTarget = "test";
 
   postInstall = ''
     moveToOutput bin "$bin"
@@ -42,9 +51,12 @@ stdenv.mkDerivation rec {
     Cflags: -I$dev/include
     Libs: -L$out/lib -llmdb
     EOF
+
+    # Expected by Rust libraries.
+    ln -s lmdb.pc "$dev/lib/pkgconfig/liblmdb.pc"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Lightning memory-mapped database";
     longDescription = ''
       LMDB is an ultra-fast, ultra-compact key-value embedded data store
@@ -53,7 +65,8 @@ stdenv.mkDerivation rec {
       offering the persistence of standard disk-based databases, and is only
       limited to the size of the virtual address space.
     '';
-    homepage = http://symas.com/mdb/;
+    homepage = "https://symas.com/lmdb/";
+    changelog = "https://git.openldap.org/openldap/openldap/-/blob/LMDB_${version}/libraries/liblmdb/CHANGES";
     maintainers = with maintainers; [ jb55 vcunat ];
     license = licenses.openldap;
     platforms = platforms.all;

@@ -1,57 +1,101 @@
-{ stdenv, fetchFromGitHub, lib
-, intltool, glib, pkgconfig, polkit, python, sqlite
-, gobject-introspection, vala, gtk-doc, autoreconfHook, autoconf-archive
-# TODO: set enableNixBackend to true, as soon as it builds
-, nix, enableNixBackend ? false, boost
+{ stdenv
+, fetchFromGitHub
+, lib
+, gettext
+, glib
+, pkg-config
+, polkit
+, python3
+, sqlite
+, gobject-introspection
+, vala
+, gtk-doc
+, boost
+, meson
+, ninja
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_42
+, libxml2
+, gst_all_1
+, gtk3
 , enableCommandNotFound ? false
-, enableBashCompletion ? false, bash-completion ? null
-, enableSystemd ? stdenv.isLinux, systemd }:
+, enableBashCompletion ? false
+, bash-completion ? null
+, enableSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
+, systemd
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "packagekit-${version}";
-  version = "1.1.12";
+  pname = "packagekit";
+  version = "1.2.8";
 
-  outputs = [ "out" "dev" ];
+  outputs = [ "out" "dev" "devdoc" ];
 
   src = fetchFromGitHub {
-    owner = "hughsie";
+    owner = "PackageKit";
     repo = "PackageKit";
-    rev = "PACKAGEKIT_${lib.replaceStrings ["."] ["_"] version}";
-    sha256 = "02wq3jw3mkdld90irh5vdfd5bri2g1p89mhrmj56kvif1fqak46x";
+    rev = "v${version}";
+    hash = "sha256-k51uQHar/uvdTDj/Ud60Oh6H7rfjEc9bfQnH5cvg8hc=";
   };
 
-  buildInputs = [ glib polkit python gobject-introspection ]
-                  ++ lib.optional enableSystemd systemd
-                  ++ lib.optional enableBashCompletion bash-completion;
-  propagatedBuildInputs = [ sqlite nix boost ];
-  nativeBuildInputs = [ vala intltool pkgconfig autoreconfHook autoconf-archive gtk-doc ];
+  buildInputs = [
+    glib
+    polkit
+    python3
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gtk3
+    sqlite
+    boost
+  ] ++ lib.optional enableSystemd systemd
+  ++ lib.optional enableBashCompletion bash-completion;
+  nativeBuildInputs = [
+    gobject-introspection
+    glib
+    vala
+    gettext
+    pkg-config
+    gtk-doc
+    meson
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_42
+    libxml2
+    ninja
+  ];
 
-  preAutoreconf = ''
-    gtkdocize
-    intltoolize
+  mesonFlags = [
+    (if enableSystemd then "-Dsystemd=true" else "-Dsystem=false")
+    # often fails to build with nix updates
+    # and remounts /nix/store as rw
+    # https://github.com/NixOS/nixpkgs/issues/177946
+    #"-Dpackaging_backend=nix"
+    "-Ddbus_sys=${placeholder "out"}/share/dbus-1/system.d"
+    "-Ddbus_services=${placeholder "out"}/share/dbus-1/system-services"
+    "-Dsystemdsystemunitdir=${placeholder "out"}/lib/systemd/system"
+    "-Dcron=false"
+    "-Dgtk_doc=true"
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ]
+  ++ lib.optional (!enableBashCompletion) "-Dbash_completion=false"
+  ++ lib.optional (!enableCommandNotFound) "-Dbash_command_not_found=false";
+
+  postPatch = ''
+    # HACK: we want packagekit to look in /etc for configs but install
+    # those files in $out/etc ; we just override the runtime paths here
+    # same for /var & $out/var
+    substituteInPlace etc/meson.build \
+      --replace "install_dir: join_paths(get_option('sysconfdir'), 'PackageKit')" "install_dir: join_paths('$out', 'etc', 'PackageKit')"
+    substituteInPlace data/meson.build \
+      --replace "install_dir: join_paths(get_option('localstatedir'), 'lib', 'PackageKit')," "install_dir: join_paths('$out', 'var', 'lib', 'PackageKit'),"
   '';
 
-  configureFlags = [
-    (if enableSystemd then "--enable-systemd" else "--disable-systemd")
-    "--disable-dummy"
-    "--disable-cron"
-    "--enable-introspection"
-    "--disable-offline-update"
-    "--localstatedir=/var"
-    "--sysconfdir=/etc"
-    "--with-dbus-sys=$(out)/etc/dbus-1/system.d"
-    "--with-systemdsystemunitdir=$(out)/lib/systemd/system/"
-  ]
-  ++ lib.optional enableNixBackend "--enable-nix"
-  ++ lib.optional (!enableBashCompletion) "--disable-bash-completion"
-  ++ lib.optional (!enableCommandNotFound) "--disable-command-not-found";
-
-  enableParallelBuilding = true;
-
-  installFlags = [
-    "sysconfdir=\${out}/etc"
-    "localstatedir=\${TMPDIR}"
-  ];
+  passthru.tests = {
+    nixos-test = nixosTests.packagekit;
+  };
 
   meta = with lib; {
     description = "System to facilitate installing and updating packages";
@@ -65,7 +109,7 @@ stdenv.mkDerivation rec {
       a common set of abstractions that can be used by standard GUI and text
       mode package managers.
     '';
-    homepage = http://www.packagekit.org/;
+    homepage = "https://github.com/PackageKit/PackageKit";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
     maintainers = with maintainers; [ matthewbauer ];

@@ -3,7 +3,7 @@
 , lib
 }:
 build-idris-package  {
-  name = "mapping";
+  pname = "mapping";
   version = "2018-02-27";
 
   src = fetchFromGitHub {
@@ -15,8 +15,8 @@ build-idris-package  {
 
   meta = {
     description = "Idris mapping library";
-    homepage = https://github.com/zaoqi/Mapping.idr;
-    license = lib.licenses.agpl3;
+    homepage = "https://github.com/zaoqi/Mapping.idr";
+    license = lib.licenses.agpl3Plus;
     maintainers = [ lib.maintainers.brainrape ];
   };
 }

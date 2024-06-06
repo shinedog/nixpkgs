@@ -1,47 +1,69 @@
-{ stdenv, buildPythonPackage, fetchPypi, substituteAll
-, geos, pytest, cython
-, numpy
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pythonOlder,
+
+  cython_0,
+  geos,
+  numpy,
+  oldest-supported-numpy,
+  setuptools,
+  wheel,
 }:
 
 buildPythonPackage rec {
-  pname = "Shapely";
-  version = "1.6.4.post2";
+  pname = "shapely";
+  version = "2.0.4";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c4b87bb61fc3de59fc1f85e71a79b0c709dc68364d9584473697aad4aa13240f";
+    hash = "sha256-Xcc2En+scACbjTCaDut08+CJeeUwz3AX8vUH72Lmz7g=";
   };
 
   nativeBuildInputs = [
+    cython_0
     geos # for geos-config
-    cython
+    oldest-supported-numpy
+    setuptools
+    wheel
   ];
 
-  checkInputs = [ pytest ];
+  buildInputs = [ geos ];
 
   propagatedBuildInputs = [ numpy ];
 
-  # environment variable used in shapely/_buildcfg.py
-  GEOS_LIBRARY_PATH = "${geos}/lib/libgeos_c${stdenv.hostPlatform.extensions.sharedLibrary}";
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  patches = [
-    (substituteAll {
-      src = ./library-paths.patch;
-      libgeos_c = GEOS_LIBRARY_PATH;
-      libc = "${stdenv.cc.libc}/lib/libc${stdenv.hostPlatform.extensions.sharedLibrary}"
-               + stdenv.lib.optionalString (!stdenv.isDarwin) ".6";
-    })
-  ];
-
-  # Disable the tests that improperly try to use the built extensions
-  checkPhase = ''
-    rm -r shapely # prevent import of local shapely
-    py.test tests
+  # Fix a ModuleNotFoundError. Investigated at:
+  # https://github.com/NixOS/nixpkgs/issues/255262
+  preCheck = ''
+    cd $out
   '';
 
-  meta = with stdenv.lib; {
-    description = "Geometric objects, predicates, and operations";
-    maintainers = with maintainers; [ knedlsepp ];
-    homepage = "https://pypi.python.org/pypi/Shapely/";
+  disabledTests = lib.optionals (stdenv.isDarwin && stdenv.isAarch64) [
+    # FIXME(lf-): these logging tests are broken, which is definitely our
+    # fault. I've tried figuring out the cause and failed.
+    #
+    # It is apparently some sandbox or no-sandbox related thing on macOS only
+    # though.
+    "test_error_handler_exception"
+    "test_error_handler"
+    "test_info_handler"
+  ];
+
+  pythonImportsCheck = [ "shapely" ];
+
+  meta = with lib; {
+    changelog = "https://github.com/shapely/shapely/blob/${version}/CHANGES.txt";
+    description = "Manipulation and analysis of geometric objects";
+    homepage = "https://github.com/shapely/shapely";
+    license = licenses.bsd3;
+    maintainers = teams.geospatial.members;
   };
 }

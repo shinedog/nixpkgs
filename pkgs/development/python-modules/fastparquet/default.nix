@@ -1,39 +1,88 @@
-{ lib, buildPythonPackage, isPy3k, fetchPypi, fetchpatch, numba, numpy, pandas,
-pytestrunner, thrift, pytest, python-snappy, lz4 }:
+{
+  lib,
+  buildPythonPackage,
+  cramjam,
+  cython,
+  fetchFromGitHub,
+  fsspec,
+  git,
+  numpy,
+  oldest-supported-numpy,
+  packaging,
+  pandas,
+  pytestCheckHook,
+  python-lzo,
+  python,
+  pythonOlder,
+  setuptools-scm,
+  setuptools,
+  wheel,
+}:
 
 buildPythonPackage rec {
   pname = "fastparquet";
-  version = "0.2.1";
+  version = "2024.5.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "183wdmhnhnlsd7908n3d2g4qnb49fcipqfshghwpbdwdzjpa0day";
-  };
+  disabled = pythonOlder "3.9";
 
-  # Fixes for recent pandas version
-  # See https://github.com/dask/fastparquet/pull/396
-  patches = fetchpatch {
-    url = https://github.com/dask/fastparquet/commit/31fb3115598d1ab62a5c8bf7923a27c16f861529.patch;
-    sha256 = "0r1ig4rydmy4j85dgb52qbsx6knxdwn4dn9h032fg3p6xqq0zlpm";
+  src = fetchFromGitHub {
+    owner = "dask";
+    repo = "fastparquet";
+    rev = "refs/tags/${version}";
+    hash = "sha256-YiaVkpPzH8ZmTiEtCom9xLbKzByIt7Ilig/WlmGrYH4=";
   };
 
   postPatch = ''
-    # FIXME: package zstandard
-    # removing the test dependency for now
-    substituteInPlace setup.py --replace "'zstandard'," ""
+    substituteInPlace pyproject.toml \
+      --replace-fail "numpy>=2.0.0rc1" "oldest-supported-numpy"
   '';
 
-  nativeBuildInputs = [ pytestrunner ];
-  propagatedBuildInputs = [ numba numpy pandas thrift ];
-  checkInputs = [ pytest python-snappy lz4 ];
+  build-system = [
+    setuptools
+    setuptools-scm
+    wheel
+  ];
 
-  # test_data/ missing in PyPI tarball
-  doCheck = false;
+  nativeBuildInputs = [
+    cython
+    git
+    oldest-supported-numpy
+  ];
+
+  dependencies = [
+    cramjam
+    fsspec
+    numpy
+    packaging
+    pandas
+  ];
+
+  passthru.optional-dependencies = {
+    lzo = [ python-lzo ];
+  };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  # Workaround https://github.com/NixOS/nixpkgs/issues/123561
+  preCheck = ''
+    mv fastparquet/test .
+    rm -r fastparquet
+    fastparquet_test="$out"/${python.sitePackages}/fastparquet/test
+    ln -s `pwd`/test "$fastparquet_test"
+  '';
+
+  postCheck = ''
+    rm "$fastparquet_test"
+  '';
+
+  pythonImportsCheck = [ "fastparquet" ];
 
   meta = with lib; {
-    description = "A python implementation of the parquet format";
-    homepage = https://github.com/dask/fastparquet;
-    license = with licenses; [ asl20 ];
+    description = "Implementation of the parquet format";
+    homepage = "https://github.com/dask/fastparquet";
+    changelog = "https://github.com/dask/fastparquet/blob/${version}/docs/source/releasenotes.rst";
+    license = licenses.asl20;
     maintainers = with maintainers; [ veprbl ];
   };
 }

@@ -1,9 +1,8 @@
-{ stdenv, fetchurl, jre8, unzip }:
+{ lib, stdenv, fetchurl, jre8, unzip }:
 
 stdenv.mkDerivation rec {
   pname = "galen";
   version = "2.4.4";
-  name = "${pname}-${version}";
 
   inherit jre8;
 
@@ -12,7 +11,7 @@ stdenv.mkDerivation rec {
     sha256 = "13dq8cf0yy24vym6z7p8hb0mybgpcl4j5crsaq8a6pjfxz6d17mq";
   };
 
-  buildInputs = [ unzip ];
+  nativeBuildInputs = [ unzip ];
 
   buildPhase = ''
   mkdir -p $out/bin
@@ -24,9 +23,11 @@ stdenv.mkDerivation rec {
   cp galen.jar $out/bin
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://galenframework.com;
+  meta = with lib; {
+    homepage = "http://galenframework.com";
     description = "Automated layout testing for websites";
+    mainProgram = "galen";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.asl20;
     maintainers = [ ];
     platforms = platforms.linux ++ platforms.darwin;

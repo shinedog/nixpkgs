@@ -1,5 +1,6 @@
-{ stdenv, fetchFromGitLab, rustPlatform, cmake, pkgconfig, openssl
-, darwin
+{ lib, stdenv, fetchFromGitLab, fetchpatch, rustPlatform, pkg-config, openssl
+, installShellFiles
+, Security, AppKit
 
 , x11Support ? stdenv.isLinux || stdenv.hostPlatform.isBSD
 , xclip ? null, xsel ? null
@@ -7,35 +8,62 @@
 }:
 
 let
-  usesX11 = stdenv.isLinux || stdenv.hostPlatform.isBSD;
+  usesX11 = stdenv.isLinux || stdenv.isBSD;
 in
 
 assert (x11Support && usesX11) -> xclip != null || xsel != null;
 
-with rustPlatform;
-
-buildRustPackage rec {
+rustPlatform.buildRustPackage rec {
   pname = "ffsend";
-  version = "0.2.46";
+  version = "0.2.76";
 
   src = fetchFromGitLab {
     owner = "timvisee";
     repo = "ffsend";
     rev = "v${version}";
-    sha256 = "048kmhy8l2dy7v1b3vzlhcw5qhnz82y1wki6wpd2nz8siyd7dnpi";
+    sha256 = "sha256-L1j1lXPxy9nWMeED9uzQHV5y7XTE6+DB57rDnXa4kMo=";
   };
 
-  cargoSha256 = "09i44vpxbww972zyv393xxwk7wz26cnqzq4gi1mg4703h02jkpjk";
+  cargoHash = "sha256-r1yIPV2sW/EpHJpdaJyi6pzE+rtNkBIxSUJF+XA8kbA=";
 
-  nativeBuildInputs = [ cmake pkgconfig ];
-  buildInputs = [ openssl ]
-  ++ stdenv.lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ CoreFoundation CoreServices Security AppKit ])
-  ;
+  cargoPatches = [
 
-  # Patch for v0.2.45 only
-  patches = [ ./Cargo.lock.patch ];
+    # Update dependencies (needed for the below patch to merge cleanly)
+    (fetchpatch {
+      name = "Update-dependencies-1";
+      url = "https://github.com/timvisee/ffsend/commit/afb004680b9ed672c7e87ff23f16bb2c51fea06e.patch";
+      hash = "sha256-eDcbyi05aOq+muVWdLmlLzLXUKcrv/9Y0R+0aHgL4+s=";
+    })
 
-  preBuild = stdenv.lib.optionalString (x11Support && usesX11) (
+    # Disable unused features in prettytable-rs crate (needed for the below patch to merge cleanly)
+    (fetchpatch {
+      name = "Disable-unused-features";
+      url = "https://github.com/timvisee/ffsend/commit/9b8dee12ea839f911ed207ff9602d929cab5d34b.patch";
+      hash = "sha256-6LK1Fqov+zEbPZ4+B6JCLXtXmgSad9vr9YO2oYodBSM=";
+    })
+
+    # Update dependencies (needed for the below patch to merge cleanly)
+    (fetchpatch {
+      name = "Update-dependencies-2";
+      url = "https://github.com/timvisee/ffsend/commit/fd5b38f9ab9cbc5f962d1024f4809eb36ba8986c.patch";
+      hash = "sha256-BDZKrVtQHpOewmB2Lb6kUfy02swcNK+CYZ3lj3kwFV4=";
+    })
+
+    # Fix seg fault
+    (fetchpatch {
+      name = "Fix-segfault";
+      url = "https://github.com/timvisee/ffsend/commit/3c1c2dc28ca1d88c45f87496a7a96052f5c37858.patch";
+      hash = "sha256-2hWlFXDopNy26Df74nJoB1J8qzPEOpf61wEOEtxOVx8=";
+    })
+  ];
+
+  nativeBuildInputs = [ installShellFiles ]
+    ++ lib.optionals stdenv.isLinux [ pkg-config ];
+  buildInputs =
+    if stdenv.isDarwin then [ Security AppKit ]
+    else [ openssl ];
+
+  preBuild = lib.optionalString (x11Support && usesX11) (
     if preferXsel && xsel != null then ''
       export XSEL_PATH="${xsel}/bin/xsel"
     '' else ''
@@ -44,13 +72,11 @@ buildRustPackage rec {
   );
 
   postInstall = ''
-    install -Dm644 contrib/completions/_ffsend "$out/share/zsh/site-functions/_ffsend"
-    install -Dm644 contrib/completions/ffsend.bash "$out/share/bash-completion/completions/ffsend.bash"
-    install -Dm644 contrib/completions/ffsend.fish "$out/share/fish/vendor_completions.d/ffsend.fish"
+    installShellCompletion contrib/completions/ffsend.{bash,fish} --zsh contrib/completions/_ffsend
   '';
   # There's also .elv and .ps1 completion files but I don't know where to install those
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Easily and securely share files from the command line. A fully featured Firefox Send client";
     longDescription = ''
       Easily and securely share files and directories from the command line through a safe, private
@@ -58,9 +84,10 @@ buildRustPackage rec {
       may be up to 2GB. Others are able to download these files with this tool, or through their
       web browser.
     '';
-    homepage = https://gitlab.com/timvisee/ffsend;
-    license = licenses.gpl3;
-    maintainers = [ maintainers.lilyball ];
+    homepage = "https://gitlab.com/timvisee/ffsend";
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ lilyball equirosa ];
     platforms = platforms.unix;
+    mainProgram = "ffsend";
   };
 }

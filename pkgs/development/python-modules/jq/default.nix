@@ -1,27 +1,55 @@
-{ buildPythonPackage, fetchPypi, lib, cython, jq }:
+{
+  lib,
+  buildPythonPackage,
+  cython,
+  fetchFromGitHub,
+  jq,
+  oniguruma,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "jq";
-  version = "0.1.6";
+  version = "1.6.0";
+  format = "setuptools";
 
-  srcs = fetchPypi {
-    inherit pname version;
-    sha256 = "34bdf9f9e49e522e1790afc03f3584c6b57329215ea0567fb2157867d6d6f602";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "mwilliamson";
+    repo = "jq.py";
+    rev = "refs/tags/${version}";
+    hash = "sha256-c6tJI/mPlBGIYTk5ObIQ1CUTq73HouQ2quMZVWG8FFg=";
   };
-  patches = [ ./jq-py-setup.patch ];
+
+  env.JQPY_USE_SYSTEM_LIBS = 1;
 
   nativeBuildInputs = [ cython ];
+
+  buildInputs = [
+    jq
+    oniguruma
+  ];
 
   preBuild = ''
     cython jq.pyx
   '';
 
-  buildInputs = [ jq ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  meta = {
+  disabledTests = [
+    # intentional behavior change in jq 1.7.1 not reflected upstream
+    "test_given_json_text_then_strings_containing_null_characters_are_preserved"
+  ];
+
+  pythonImportsCheck = [ "jq" ];
+
+  meta = with lib; {
     description = "Python bindings for jq, the flexible JSON processor";
     homepage = "https://github.com/mwilliamson/jq.py";
-    license = lib.licenses.bsd2;
-    maintainers = with lib.maintainers; [ benley ];
+    changelog = "https://github.com/mwilliamson/jq.py/blob/${version}/CHANGELOG.rst";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ benley ];
   };
 }

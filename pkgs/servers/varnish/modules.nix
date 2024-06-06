@@ -1,29 +1,52 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, varnish, python, docutils, removeReferencesTo }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, varnish, docutils, removeReferencesTo }:
+let
+  common = { version, hash, extraNativeBuildInputs ? [] }:
+    stdenv.mkDerivation rec {
+      pname = "${varnish.name}-modules";
+      inherit version;
 
-stdenv.mkDerivation rec {
-  version = "0.14.0";
-  name = "${varnish.name}-modules-${version}";
+      src = fetchFromGitHub {
+        owner = "varnish";
+        repo = "varnish-modules";
+        rev = version;
+        inherit hash;
+      };
 
-  src = fetchFromGitHub {
-    owner = "varnish";
-    repo = "varnish-modules";
-    rev = version;
-    sha256 = "17fkbr4i70qgdqsrx1x28ag20xkfyz1v3q3d3ywmv409aczqhm40";
+      nativeBuildInputs = [
+        autoreconfHook
+        docutils
+        pkg-config
+        removeReferencesTo
+        varnish.python  # use same python version as varnish server
+      ];
+
+      buildInputs = [ varnish ];
+
+      postPatch = ''
+        substituteInPlace bootstrap   --replace "''${dataroot}/aclocal"                  "${varnish.dev}/share/aclocal"
+        substituteInPlace Makefile.am --replace "''${LIBVARNISHAPI_DATAROOTDIR}/aclocal" "${varnish.dev}/share/aclocal"
+      '';
+
+      postInstall = "find $out -type f -exec remove-references-to -t ${varnish.dev} '{}' +"; # varnish.dev captured only as __FILE__ in assert messages
+
+      meta = with lib; {
+        description = "Collection of Varnish Cache modules (vmods) by Varnish Software";
+        homepage = "https://github.com/varnish/varnish-modules";
+        inherit (varnish.meta) license platforms maintainers;
+      };
+    };
+in
+{
+  modules15 = common {
+    version = "0.15.1";
+    hash = "1lwgjhgr5yw0d17kbqwlaj5pkn70wvaqqjpa1i0n459nx5cf5pqj";
   };
-
-  nativeBuildInputs = [ pkgconfig autoreconfHook docutils removeReferencesTo ];
-  buildInputs = [ varnish python ];
-
-  postPatch = ''
-    substituteInPlace bootstrap   --replace "''${dataroot}/aclocal"                  "${varnish.dev}/share/aclocal"
-    substituteInPlace Makefile.am --replace "''${LIBVARNISHAPI_DATAROOTDIR}/aclocal" "${varnish.dev}/share/aclocal"
-  '';
-
-  postInstall = "find $out -type f -exec remove-references-to -t ${varnish.dev} '{}' +"; # varnish.dev captured only as __FILE__ in assert messages
-
-  meta = with stdenv.lib; {
-    description = "Collection of Varnish Cache modules (vmods) by Varnish Software";
-    homepage = https://github.com/varnish/varnish-modules;
-    inherit (varnish.meta) license platforms maintainers;
+  modules23 = common {
+    version = "0.23.0";
+    hash = "sha256-Dd1pLMmRC59iRRpReDeQJ8Sv00ojb8InvaMrb+iRv4I=";
+  };
+  modules24 = common {
+    version = "0.24.0";
+    hash = "sha256-2MfcrhhkBz9GyQxEWzjipdn1CBEqnCvC3t1G2YSauak=";
   };
 }

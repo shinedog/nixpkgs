@@ -1,26 +1,73 @@
-{ stdenv, buildPythonPackage, fetchPypi, scikitlearn, pandas, nose, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  joblib,
+  keras,
+  numpy,
+  pandas,
+  scikit-learn,
+  scipy,
+  tensorflow,
+  threadpoolctl,
+  pytest-xdist,
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "imbalanced-learn";
-  version = "0.4.3";
+  version = "0.12.3";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "5bd9e86e40ce4001a57426541d7c79b18143cbd181e3330c1a3e5c5c43287083";
+    hash = "sha256-WwB5agFBnpECvUJeJ8MZ1Y0fbPLfp1HgLtf07fZ8PBs=";
   };
 
-  propagatedBuildInputs = [ scikitlearn ];
-  checkInputs = [ nose pytest pandas ];
-  checkPhase = ''
-    export HOME=$PWD
-    # skip some tests that fail because of minimal rounding errors
-    py.test imblearn --ignore=imblearn/metrics/classification.py
-    py.test doc/*.rst
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [
+    joblib
+    numpy
+    scikit-learn
+    scipy
+    threadpoolctl
+  ];
+
+  passthru.optional-dependencies = {
+    optional = [
+      keras
+      pandas
+      tensorflow
+    ];
+  };
+
+  pythonImportsCheck = [ "imblearn" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pandas
+  ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
   '';
 
-  meta = with stdenv.lib; {
+  disabledTestPaths = [
+    # require tensorflow and keras, but we don't want to
+    # add them to nativeCheckInputs just for this tests
+    "imblearn/keras/_generator.py"
+  ];
+
+  meta = with lib; {
     description = "Library offering a number of re-sampling techniques commonly used in datasets showing strong between-class imbalance";
-    homepage = https://github.com/scikit-learn-contrib/imbalanced-learn;
+    homepage = "https://github.com/scikit-learn-contrib/imbalanced-learn";
+    changelog = "https://github.com/scikit-learn-contrib/imbalanced-learn/releases/tag/${version}";
     license = licenses.mit;
+    maintainers = [ maintainers.rmcgibbo ];
   };
 }

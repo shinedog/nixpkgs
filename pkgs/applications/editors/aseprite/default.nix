@@ -1,7 +1,7 @@
-{ stdenv, lib, fetchFromGitHub, fetchpatch, cmake, pkgconfig
-, curl, freetype, giflib, harfbuzz, libjpeg, libpng, libwebp, pixman, tinyxml, zlib
-, libX11, libXext, libXcursor, libXxf86vm
-, unfree ? false
+{ stdenv, lib, callPackage, fetchFromGitHub, cmake, ninja, pkg-config
+, curl, freetype, giflib, libjpeg, libpng, libwebp, pixman, tinyxml, zlib
+, harfbuzzFull, glib, fontconfig, pcre
+, libX11, libXext, libXcursor, libXxf86vm, libGL, libXi
 , cmark
 }:
 
@@ -9,40 +9,40 @@
 # https://dev.aseprite.org/2016/09/01/new-source-code-license/
 # Consider supporting the developer: https://aseprite.org/#buy
 
+let
+  skia = callPackage ./skia.nix {};
+in
 stdenv.mkDerivation rec {
-  name = "aseprite-${version}";
-  version = if unfree then "1.2.9" else "1.1.7";
+  pname = "aseprite";
+  version = "1.3.6";
 
   src = fetchFromGitHub {
     owner = "aseprite";
     repo = "aseprite";
     rev = "v${version}";
     fetchSubmodules = true;
-    sha256 = if unfree
-      then "0a9xk163j0984n8nn6pqf27n83gr6w7g25wkiv591zx88pa6cpbd"
-      else "0gd49lns2bpzbkwax5jf9x1xmg1j8ij997kcxr2596cwiswnw4di";
+    hash = "sha256-17f6pIGsOIswnyY63pjHKEEYuCo43kf25mPLBv4vQAs=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [
+    cmake pkg-config ninja
+  ];
 
   buildInputs = [
-    curl freetype giflib harfbuzz libjpeg libpng libwebp pixman tinyxml zlib
+    curl freetype giflib libjpeg libpng libwebp pixman tinyxml zlib
     libX11 libXext libXcursor libXxf86vm
-  ] ++ lib.optionals unfree [ cmark harfbuzz ];
+    cmark
+    harfbuzzFull glib fontconfig pcre
+    skia libGL libXi
+  ];
 
-  patches = lib.optionals unfree [
-    (fetchpatch {
-      url = "https://github.com/aseprite/aseprite/commit/cfb4dac6feef1f39e161c23c886055a8f9acfd0d.patch";
-      sha256 = "1qhjfpngg8b1vvb9w26lhjjfamfx57ih0p31km3r5l96nm85l7f9";
-    })
-    (fetchpatch {
-      url = "https://github.com/orivej/aseprite/commit/ea87e65b357ad0bd65467af5529183b5a48a8c17.patch";
-      sha256 = "1vwn8ivap1pzdh444sdvvkndp55iz146nhmd80xbm8cyzn3qmg91";
-    })
+  patches = [
+    ./shared-libwebp.patch
+    ./shared-skia-deps.patch
   ];
 
   postPatch = ''
-    sed -i src/config.h -e "s-\\(#define VERSION\\) .*-\\1 \"$version\"-"
+    sed -i src/ver/CMakeLists.txt -e "s-set(VERSION \".*\")-set(VERSION \"$version\")-"
   '';
 
   cmakeFlags = [
@@ -56,17 +56,19 @@ stdenv.mkDerivation rec {
     "-DUSE_SHARED_PIXMAN=ON"
     "-DUSE_SHARED_TINYXML=ON"
     "-DUSE_SHARED_ZLIB=ON"
-    "-DWITH_DESKTOP_INTEGRATION=ON"
-    "-DWITH_WEBP_SUPPORT=ON"
-  ] ++ lib.optionals unfree [
     "-DUSE_SHARED_CMARK=ON"
     "-DUSE_SHARED_HARFBUZZ=ON"
-    # Aseprite needs internal freetype headers.
-    "-DUSE_SHARED_FREETYPE=OFF"
+    "-DUSE_SHARED_WEBP=ON"
     # Disable libarchive programs.
     "-DENABLE_CAT=OFF"
     "-DENABLE_CPIO=OFF"
     "-DENABLE_TAR=OFF"
+    # UI backend.
+    "-DLAF_WITH_EXAMPLES=OFF"
+    "-DLAF_OS_BACKEND=skia"
+    "-DENABLE_DESKTOP_INTEGRATION=ON"
+    "-DSKIA_DIR=${skia}"
+    "-DSKIA_LIBRARY_DIR=${skia}/out/Release"
   ];
 
   postInstall = ''
@@ -81,12 +83,29 @@ stdenv.mkDerivation rec {
     rm -rf "$out"/include "$out"/lib
   '';
 
-  enableParallelBuilding = true;
+  passthru = { inherit skia; };
 
   meta = with lib; {
-    homepage = https://www.aseprite.org/;
+    homepage = "https://www.aseprite.org/";
     description = "Animated sprite editor & pixel art tool";
-    license = if unfree then licenses.unfree else licenses.gpl2;
+    license = licenses.unfree;
+    longDescription =
+      ''Aseprite is a program to create animated sprites. Its main features are:
+
+          - Sprites are composed by layers & frames (as separated concepts).
+          - Supported color modes: RGBA, Indexed (palettes up to 256 colors), and Grayscale.
+          - Load/save sequence of PNG files and GIF animations (and FLC, FLI, JPG, BMP, PCX, TGA).
+          - Export/import animations to/from Sprite Sheets.
+          - Tiled drawing mode, useful to draw patterns and textures.
+          - Undo/Redo for every operation.
+          - Real-time animation preview.
+          - Multiple editors support.
+          - Pixel-art specific tools like filled Contour, Polygon, Shading mode, etc.
+          - Onion skinning.
+
+        This version is not redistributable: https://dev.aseprite.org/2016/09/01/new-source-code-license/
+        Consider supporting the developer: https://aseprite.org/#buy
+      '';
     maintainers = with maintainers; [ orivej ];
     platforms = platforms.linux;
   };

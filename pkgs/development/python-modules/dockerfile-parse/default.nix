@@ -1,25 +1,36 @@
-{ stdenv, buildPythonPackage, fetchPypi, six, pytestcov, pytest }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
-  version = "0.0.13";
   pname = "dockerfile-parse";
+  version = "2.0.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1p0x81q3m3nlj4rqal9a959xcbjhncb548wd4wr3l7dpiajqqc9c";
+    hash = "sha256-MYTM3FEyIZg+UDrADhqlBKKqj4Tl3mc8RrC27umex7w=";
   };
 
-  postPatch = ''
-    echo " " > tests/requirements.txt \
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  propagatedBuildInputs = [ six ];
+  pythonImportsCheck = [ "dockerfile_parse" ];
 
-  checkInputs = [ pytestcov pytest ];
+  disabledTests = [
+    # python-dockerfile-parse.spec is not present
+    "test_all_versions_match"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Python library for parsing Dockerfile files";
-    homepage = https://github.com/DBuildService/dockerfile-parse;
+  meta = with lib; {
+    description = "Library for parsing Dockerfile files";
+    homepage = "https://github.com/DBuildService/dockerfile-parse";
+    changelog = "https://github.com/containerbuildsystem/dockerfile-parse/releases/tag/${version}";
     license = licenses.bsd3;
     maintainers = with maintainers; [ leenaars ];
   };

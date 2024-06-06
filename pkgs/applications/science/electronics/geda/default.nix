@@ -1,23 +1,33 @@
-{ stdenv, fetchurl, pkgconfig, guile, gtk2, flex, gawk, perl }:
+{ lib, stdenv, fetchurl, fetchpatch, autoreconfHook, groff, pkg-config, guile, gtk2, flex, gawk, perl }:
 
 stdenv.mkDerivation rec {
-  name = "geda-${version}";
-  version = "1.8.2-20130925";
+  pname = "geda";
+  version = "1.10.2";
 
   src = fetchurl {
-    url = "http://ftp.geda-project.org/geda-gaf/stable/v1.8/1.8.2/geda-gaf-1.8.2.tar.gz";
-    sha256 = "08dpa506xk4gjbbi8vnxcb640wq4ihlgmhzlssl52nhvxwx7gx5v";
+    url = "http://ftp.geda-project.org/geda-gaf/stable/v${lib.versions.majorMinor version}/${version}/geda-gaf-${version}.tar.gz";
+    hash = "sha256-6GKrJBUoU4+jvuJzkmH1aAERArYMXjmi8DWGY8BCyKQ=";
   };
 
-  configureFlags = [
-    "--disable-update-xdg-database" 
+  patches = [
+    (fetchpatch {
+      name = "geda-1.10.2-drop-xorn.patch";
+      url = "https://gitweb.gentoo.org/repo/gentoo.git/plain/sci-electronics/geda/files/geda-1.10.2-drop-xorn.patch?id=5589cc7bc6c4f18f75c40725a550b8d76e7f5ca1";
+      hash = "sha256-jPQaHjEDwCEfZqDGku+xyIMl5WlWlVcpPv1W6Xf8Grs=";
+    })
   ];
-  nativeBuildInputs = [ pkgconfig ];
+
+  configureFlags = [
+    "--disable-update-xdg-database"
+    "--without-libfam"
+  ];
+
+  nativeBuildInputs = [ autoreconfHook groff pkg-config ];
   buildInputs = [ guile gtk2 flex gawk perl ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Full GPL'd suite of Electronic Design Automation tools";
-    homepage = http://www.geda-project.org/;
+    homepage = "http://www.geda-project.org/";
     maintainers = with maintainers; [ pjones ];
     platforms = platforms.linux;
     license = licenses.gpl2;

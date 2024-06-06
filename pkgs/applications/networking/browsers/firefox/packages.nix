@@ -1,267 +1,123 @@
-{ lib, callPackage, stdenv, fetchurl, fetchFromGitHub, fetchpatch, python3, overrideCC, gccStdenv, gcc6 }:
+{ stdenv, lib, callPackage, fetchurl, fetchpatch, nixosTests, buildMozillaMach }:
 
-let
-
-  common = opts: callPackage (import ./common.nix opts) {};
-
-  # Needed on older branches since rustc: 1.32.0 -> 1.33.0
-  missing-documentation-patch = fetchurl {
-    name = "missing-documentation.patch";
-    url = "https://aur.archlinux.org/cgit/aur.git/plain/deny_missing_docs.patch"
-        + "?h=firefox-esr&id=03bdd01f9cf";
-    sha256 = "1i33n3fgwc8d0v7j4qn7lbdax0an6swar12gay3q2nwrhg3ic4fb";
-  };
-in
-
-rec {
-
-  firefox = common rec {
+{
+  firefox = buildMozillaMach rec {
     pname = "firefox";
-    ffversion = "66.0.5";
+    version = "126.0.1";
     src = fetchurl {
-      url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "18bcpbwzhc2fi6cqhxhh6jiw5akhzr7qqs6s8irjbvh7q8f3z2n046vrlvpblhbkc2kv1n0s14n49yzv432adqwa9qi8d57jnxyfqkf";
+      url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
+      sha512 = "249605c4891ee9271def187d161369bd3ccbd347f5f0e175d0239aced3cb9ae9655d3c134b7705bda80ea1e63c0a2ee8eb4e76db0840019683376c00f20fc7ac";
     };
 
-    patches = [
-      ./no-buildconfig-ffx65.patch
+    extraPatches = [
     ];
-
-    extraNativeBuildInputs = [ python3 ];
 
     meta = {
+      changelog = "https://www.mozilla.org/en-US/firefox/${version}/releasenotes/";
       description = "A web browser built from Firefox source tree";
-      homepage = http://www.mozilla.com/en-US/firefox/;
-      maintainers = with lib.maintainers; [ eelco andir ];
+      homepage = "http://www.mozilla.com/en-US/firefox/";
+      maintainers = with lib.maintainers; [ lovesegfault hexa ];
       platforms = lib.platforms.unix;
+      badPlatforms = lib.platforms.darwin;
+      broken = stdenv.buildPlatform.is32bit; # since Firefox 60, build on 32-bit platforms fails with "out of memory".
+                                             # not in `badPlatforms` because cross-compilation on 64-bit machine might work.
+      maxSilent = 14400; # 4h, double the default of 7200s (c.f. #129212, #129115)
       license = lib.licenses.mpl20;
+      mainProgram = "firefox";
     };
+    tests = [ nixosTests.firefox ];
     updateScript = callPackage ./update.nix {
       attrPath = "firefox-unwrapped";
-      versionKey = "ffversion";
     };
   };
 
-  # Do not remove. This is the last version of Firefox that supports
-  # the old plugins. While this package is unsafe to use for browsing
-  # the web, there are many old useful plugins targeting offline
-  # activities (e.g. ebook readers, syncronous translation, etc) that
-  # will probably never be ported to WebExtensions API.
-  firefox-esr-52 = (common rec {
-    pname = "firefox-esr";
-    ffversion = "52.9.0esr";
+  firefox-beta = buildMozillaMach rec {
+    pname = "firefox-beta";
+    version = "127.0b2";
+    applicationName = "Mozilla Firefox Beta";
     src = fetchurl {
-      url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "bfca42668ca78a12a9fb56368f4aae5334b1f7a71966fbba4c32b9c5e6597aac79a6e340ac3966779d2d5563eb47c054ab33cc40bfb7306172138ccbd3adb2b9";
+      url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
+      sha512 = "ce3bb42674fb5c820ce46a1f86d482d9c7631f1e0f31fe63c0813436cb54b3bbae9b53f397dc6cfc48b28682f720bfd042bb68715a3c653046870f2d50e9ed04";
     };
 
-    patches = [
-      # this one is actually an omnipresent bug
-      # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
-      ./fix-pa-context-connect-retval.patch
-    ];
-
-    meta = firefox.meta // {
-      description = "A web browser built from Firefox Extended Support Release source tree";
-      knownVulnerabilities = [ "Support ended in August 2018." ];
+    meta = {
+      changelog = "https://www.mozilla.org/en-US/firefox/${lib.versions.majorMinor version}beta/releasenotes/";
+      description = "A web browser built from Firefox Beta Release source tree";
+      homepage = "http://www.mozilla.com/en-US/firefox/";
+      maintainers = with lib.maintainers; [ jopejoe1 ];
+      platforms = lib.platforms.unix;
+      badPlatforms = lib.platforms.darwin;
+      broken = stdenv.buildPlatform.is32bit; # since Firefox 60, build on 32-bit platforms fails with "out of memory".
+                                             # not in `badPlatforms` because cross-compilation on 64-bit machine might work.
+      maxSilent = 14400; # 4h, double the default of 7200s (c.f. #129212, #129115)
+      license = lib.licenses.mpl20;
+      mainProgram = "firefox";
     };
-  }).override {
-    stdenv = overrideCC gccStdenv gcc6; # gcc7 fails with "undefined reference to `__divmoddi4'"
-    gtk3Support = false;
-  };
-
-  firefox-esr-60 = common rec {
-    pname = "firefox-esr";
-    ffversion = "60.6.3esr";
-    src = fetchurl {
-      url = "mirror://mozilla/firefox/releases/${ffversion}/source/firefox-${ffversion}.source.tar.xz";
-      sha512 = "3zg75djd7mbr9alhkp7zqrky7g41apyf6ka0acv500dmpnhvn5v5i0wy9ks8v6vh7kcgw7bngf6msb7vbbps6whwdcqv3v4dqbg6yr2";
-    };
-
-    patches = [
-      ./no-buildconfig-ffx65.patch
-
-      # this one is actually an omnipresent bug
-      # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
-      ./fix-pa-context-connect-retval.patch
-
-      missing-documentation-patch
-    ];
-
-    meta = firefox.meta // {
-      description = "A web browser built from Firefox Extended Support Release source tree";
-    };
+    tests = [ nixosTests.firefox-beta ];
     updateScript = callPackage ./update.nix {
-      attrPath = "firefox-esr-60-unwrapped";
+      attrPath = "firefox-beta-unwrapped";
+      versionSuffix = "b[0-9]*";
+    };
+  };
+
+  firefox-devedition = buildMozillaMach rec {
+    pname = "firefox-devedition";
+    version = "127.0b2";
+    applicationName = "Mozilla Firefox Developer Edition";
+    requireSigning = false;
+    branding = "browser/branding/aurora";
+    src = fetchurl {
+      url = "mirror://mozilla/devedition/releases/${version}/source/firefox-${version}.source.tar.xz";
+      sha512 = "109e834e533db1a815151777170cdc0617a1f725ce8e5af04e63ac9e874edb22a33d51f2d85fcbb0c4132c3884785a54f6ea0ffaf7a0cc764e033fda311c48d6";
+    };
+
+    meta = {
+      changelog = "https://www.mozilla.org/en-US/firefox/${lib.versions.majorMinor version}beta/releasenotes/";
+      description = "A web browser built from Firefox Developer Edition source tree";
+      homepage = "http://www.mozilla.com/en-US/firefox/";
+      maintainers = with lib.maintainers; [ jopejoe1 ];
+      platforms = lib.platforms.unix;
+      badPlatforms = lib.platforms.darwin;
+      broken = stdenv.buildPlatform.is32bit; # since Firefox 60, build on 32-bit platforms fails with "out of memory".
+                                             # not in `badPlatforms` because cross-compilation on 64-bit machine might work.
+      maxSilent = 14400; # 4h, double the default of 7200s (c.f. #129212, #129115)
+      license = lib.licenses.mpl20;
+      mainProgram = "firefox";
+    };
+    tests = [ nixosTests.firefox-devedition ];
+    updateScript = callPackage ./update.nix {
+      attrPath = "firefox-devedition-unwrapped";
+      versionSuffix = "b[0-9]*";
+      baseUrl = "https://archive.mozilla.org/pub/devedition/releases/";
+    };
+  };
+
+  firefox-esr-115 = buildMozillaMach rec {
+    pname = "firefox-esr-115";
+    version = "115.11.0esr";
+    applicationName = "Mozilla Firefox ESR";
+    src = fetchurl {
+      url = "mirror://mozilla/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
+      sha512 = "0f3a87c99fb008088afd509d9259f893fdd44ea6bf6a5e69806fefb8d355415e81b9e8832a392acb9d0c1c50e4add7f1362a4aaadc35e1d9c2e55baf7136aed8";
+    };
+
+    meta = {
+      changelog = "https://www.mozilla.org/en-US/firefox/${lib.removeSuffix "esr" version}/releasenotes/";
+      description = "A web browser built from Firefox Extended Support Release source tree";
+      homepage = "http://www.mozilla.com/en-US/firefox/";
+      maintainers = with lib.maintainers; [ hexa ];
+      platforms = lib.platforms.unix;
+      badPlatforms = lib.platforms.darwin;
+      broken = stdenv.buildPlatform.is32bit; # since Firefox 60, build on 32-bit platforms fails with "out of memory".
+                                             # not in `badPlatforms` because cross-compilation on 64-bit machine might work.
+      license = lib.licenses.mpl20;
+      mainProgram = "firefox";
+    };
+    tests = [ nixosTests.firefox-esr-115 ];
+    updateScript = callPackage ./update.nix {
+      attrPath = "firefox-esr-115-unwrapped";
+      versionPrefix = "115";
       versionSuffix = "esr";
-      versionKey = "ffversion";
     };
   };
-
-} // (let
-
-  iccommon = args: common (args // {
-    pname = "icecat";
-    isIceCatLike = true;
-
-    meta = (args.meta or {}) // {
-      description = "The GNU version of the Firefox web browser";
-      longDescription = ''
-        GNUzilla is the GNU version of the Mozilla suite, and GNU
-        IceCat is the GNU version of the Firefox web browser.
-
-        Notable differences from mainline Firefox:
-
-        - entirely free software, no non-free plugins, addons,
-          artwork,
-        - no telemetry, no "studies",
-        - sane privacy and security defaults (for instance, unlike
-          Firefox, IceCat does _zero_ network requests on startup by
-          default, which means that with IceCat you won't need to
-          unplug your Ethernet cable each time you want to create a
-          new browser profile without announcing that action to a
-          bunch of data-hungry corporations),
-        - all essential privacy and security settings can be
-          configured directly from the main screen,
-        - optional first party isolation (like TorBrowser),
-        - comes with HTTPS Everywhere (like TorBrowser), Tor Browser
-          Button (like TorBrowser Bundle), LibreJS, and SpyBlock
-          plugins out of the box.
-
-        This package can be installed together with Firefox and
-        TorBrowser, it will use distinct binary names and profile
-        directories.
-      '';
-      homepage = "https://www.gnu.org/software/gnuzilla/";
-      platforms = lib.platforms.unix;
-      license = with lib.licenses; [ mpl20 gpl3Plus ];
-    };
-  });
-
-in rec {
-
-  icecat = iccommon rec {
-    ffversion = "60.3.0";
-    icversion = "${ffversion}-gnu1";
-
-    src = fetchurl {
-      url = "mirror://gnu/gnuzilla/${ffversion}/icecat-${icversion}.tar.bz2";
-      sha256 = "0icnl64nxcyf7dprpdpygxhabsvyhps8c3ixysj9bcdlj9q34ib1";
-    };
-
-    patches = [
-      ./no-buildconfig.patch
-      missing-documentation-patch
-    ];
-  };
-
-  # Similarly to firefox-esr-52 above.
-  icecat-52 = iccommon rec {
-    ffversion = "52.6.0";
-    icversion = "${ffversion}-gnu1";
-
-    src = fetchurl {
-      url = "mirror://gnu/gnuzilla/${ffversion}/icecat-${icversion}.tar.bz2";
-      sha256 = "09fn54glqg1aa93hnz5zdcy07cps09dbni2b4200azh6nang630a";
-    };
-
-    patches = [
-      # this one is actually an omnipresent bug
-      # https://bugzilla.mozilla.org/show_bug.cgi?id=1444519
-      ./fix-pa-context-connect-retval.patch
-    ];
-
-    meta.knownVulnerabilities = [ "Support ended in August 2018." ];
-  };
-
-}) // (let
-
-  tbcommon = args: common (args // {
-    pname = "tor-browser";
-    isTorBrowserLike = true;
-
-    unpackPhase = ''
-      # fetchFromGitHub produces ro sources, root dir gets a name that
-      # is too long for shebangs. fixing
-      cp -a $src tor-browser
-      chmod -R +w tor-browser
-      cd tor-browser
-
-      # set times for xpi archives
-      find . -exec touch -d'2010-01-01 00:00' {} \;
-    '';
-
-    meta = (args.meta or {}) // {
-      description = "A web browser built from TorBrowser source tree";
-      longDescription = ''
-        This is a version of TorBrowser with bundle-related patches
-        reverted.
-
-        I.e. it's a variant of Firefox with less fingerprinting and
-        some isolation features you can't get with any extensions.
-
-        Or, alternatively, a variant of TorBrowser that works like any
-        other UNIX program and doesn't expect you to run it from a
-        bundle.
-
-        It will use your default Firefox profile if you're not careful
-        even! Be careful!
-
-        It will clash with firefox binary if you install both. But it
-        should not be a problem because you should run browsers in
-        separate users/VMs anyway.
-
-        Create new profile by starting it as
-
-        $ firefox -ProfileManager
-
-        and then configure it to use your tor instance.
-
-        Or just use `tor-browser-bundle` package that packs this
-        `tor-browser` back into a sanely-built bundle.
-      '';
-      homepage = "https://www.torproject.org/projects/torbrowser.html";
-      platforms = lib.platforms.unix;
-      license = with lib.licenses; [ mpl20 bsd3 ];
-    };
-  });
-
-in rec {
-
-  tor-browser-7-5 = (tbcommon rec {
-    ffversion = "52.9.0esr";
-    tbversion = "7.5.6";
-
-    # FIXME: fetchFromGitHub is not ideal, unpacked source is >900Mb
-    src = fetchFromGitHub {
-      owner = "SLNOS";
-      repo  = "tor-browser";
-      # branch "tor-browser-52.9.0esr-7.5-2-slnos"
-      rev   = "95bb92d552876a1f4260edf68fda5faa3eb36ad8";
-      sha256 = "1ykn3yg4s36g2cpzxbz7s995c33ij8kgyvghx38z4i8siaqxdddy";
-    };
-  }).override {
-    gtk3Support = false;
-  };
-
-  tor-browser-8-0 = tbcommon rec {
-    ffversion = "60.6.1esr";
-    tbversion = "8.0.9";
-
-    # FIXME: fetchFromGitHub is not ideal, unpacked source is >900Mb
-    src = fetchFromGitHub {
-      owner = "SLNOS";
-      repo  = "tor-browser";
-      # branch "tor-browser-60.6.1esr-8.0-1-r2-slnos"
-      rev   = "d311540ce07f1f4f5e5789f9107f6e6ecc23988d";
-      sha256 = "0nz8vxv53vnqyk3ahakrr5xg6sgapvlmsb6s1pwwsb86fxk6pm5f";
-    };
-
-    patches = [
-      missing-documentation-patch
-    ];
-  };
-
-  tor-browser = tor-browser-8-0;
-
-})
+}

@@ -1,31 +1,57 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, gettext
-, gtk-doc, libxslt, docbook_xml_dtd_43, docbook_xsl
-, python3, pcre, gmp, mpfr
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, docbook_xml_dtd_43
+, docbook_xsl
+, gettext
+, gmp
+, gtk-doc
+, libxslt
+, mpfr
+, pcre2
+, pkg-config
+, python3
 }:
 
-let
-  version = "1.4";
-in stdenv.mkDerivation rec {
-  name = "libbytesize-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libbytesize";
+  version = "2.10";
 
   src = fetchFromGitHub {
     owner = "storaged-project";
     repo = "libbytesize";
-    rev = version;
-    sha256 = "1yxlc0f960rhqmh3fs3p0hvw0y2cikplgc27zsz6rn4h5dlrfmi2";
+    rev = finalAttrs.version;
+    hash = "sha256-IPBoYcnSQ1/ws3mzPUXxgbetZkXRWrGhtakXaVVFb6U=";
   };
 
-  outputs = [ "out" "dev" "devdoc" ];
+  outputs = [ "out" "dev" "devdoc" "man" ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig gettext gtk-doc libxslt docbook_xml_dtd_43 docbook_xsl python3 ];
+  nativeBuildInputs = [
+    autoreconfHook
+    docbook_xml_dtd_43
+    docbook_xsl
+    gettext
+    gtk-doc
+    libxslt
+    pkg-config
+    python3
+  ];
 
-  buildInputs = [ pcre gmp mpfr ];
+  buildInputs = [
+    gmp
+    mpfr
+    pcre2
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A tiny library providing a C “class” for working with arbitrary big sizes in bytes";
-    homepage = src.meta.homepage;
-    license = licenses.lgpl2Plus;
-    maintainers = with maintainers; [];
-    platforms = platforms.linux;
+  strictDeps = true;
+
+  meta = {
+    homepage = "https://github.com/storaged-project/libbytesize";
+    description = "A tiny library providing a C 'class' for working with arbitrary big sizes in bytes";
+    mainProgram = "bscalc";
+    license = lib.licenses.lgpl2Plus;
+    maintainers = with lib.maintainers; [ AndersonTorres ];
+    platforms = lib.platforms.linux;
   };
-}
+})

@@ -1,43 +1,52 @@
-{ stdenv, runCommand, mutter, elementary-default-settings, nixos-artwork, glib, gala, epiphany, elementary-settings-daemon, gtk3, plank, gsettings-desktop-schemas
+{ lib
+, runCommand
+, mutter
+, elementary-default-settings
+, glib
+, gala
+, epiphany
+, gnome-settings-daemon
+, gtk3
+, elementary-dock
+, gsettings-desktop-schemas
 , extraGSettingsOverrides ? ""
-, extraGSettingsOverridePackages ? []
+, extraGSettingsOverridePackages ? [ ]
 }:
 
 let
 
+  inherit (lib) concatMapStringsSep;
+
   gsettingsOverridePackages = [
-    elementary-settings-daemon
+    elementary-dock
+    gnome-settings-daemon
     epiphany
     gala
-    mutter
     gsettings-desktop-schemas
     gtk3
-    plank
+    mutter
   ] ++ extraGSettingsOverridePackages;
 
 in
 
-with stdenv.lib;
 
 # TODO: Having https://github.com/NixOS/nixpkgs/issues/54150 would supersede this
-runCommand "elementary-gsettings-desktop-schemas" {}
+runCommand "elementary-gsettings-desktop-schemas" { preferLocalBuild = true; }
   ''
-     mkdir -p $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas
-     cp -rf ${gsettings-desktop-schemas}/share/gsettings-schemas/gsettings-desktop-schemas*/glib-2.0/schemas/*.xml $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas
+    data_dir="$out/share/gsettings-schemas/nixos-gsettings-overrides"
+    schema_dir="$data_dir/glib-2.0/schemas"
 
-     ${concatMapStrings (pkg: "cp -rf ${pkg}/share/gsettings-schemas/*/glib-2.0/schemas/*.xml $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas\n") gsettingsOverridePackages}
+    mkdir -p "$schema_dir"
+    cp -rf "${glib.getSchemaPath gala}"/*.gschema.override "$schema_dir"
 
-     chmod -R a+w $out/share/gsettings-schemas/nixos-gsettings-overrides
-     cp ${elementary-default-settings}/share/glib-2.0/schemas/20-io.elementary.desktop.gschema.override \
-     $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas
+    ${concatMapStringsSep "\n" (pkg: "cp -rf \"${glib.getSchemaPath pkg}\"/*.xml \"$schema_dir\"") gsettingsOverridePackages}
 
-     cat - > $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas/nixos-defaults.gschema.override <<- EOF
-     [org.gnome.desktop.background]
-     picture-uri='${nixos-artwork.wallpapers.simple-dark-gray}/share/artwork/gnome/nix-wallpaper-simple-dark-gray.png'
-     primary-color='#000000'
+    chmod -R a+w "$data_dir"
+    cp "${glib.getSchemaPath elementary-default-settings}"/* "$schema_dir"
 
-     ${extraGSettingsOverrides}
-     EOF
+    cat - > "$schema_dir/nixos-defaults.gschema.override" <<- EOF
+    ${extraGSettingsOverrides}
+    EOF
 
-     ${glib.dev}/bin/glib-compile-schemas $out/share/gsettings-schemas/nixos-gsettings-overrides/glib-2.0/schemas/
+    ${glib.dev}/bin/glib-compile-schemas $schema_dir
   ''

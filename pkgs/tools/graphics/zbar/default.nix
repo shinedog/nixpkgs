@@ -1,36 +1,139 @@
-{ stdenv, fetchFromGitHub, imagemagickBig, pkgconfig, python2Packages, perl
-, libX11, libv4l, qt5, lzma, gtk2, xmlto, docbook_xsl, autoreconfHook
+{ stdenv
+, lib
+, fetchFromGitHub
+, fetchpatch
+, imagemagickBig
+, pkg-config
+, withXorg ? true
+, libX11
+, libv4l
+, qtbase
+, qtx11extras
+, wrapQtAppsHook
+, wrapGAppsHook3
+, gtk3
+, xmlto
+, docbook_xsl
+, autoreconfHook
+, dbus
 , enableVideo ? stdenv.isLinux
+  # The implementation is buggy and produces an error like
+  # Name Error (Connection ":1.4380" is not allowed to own the service "org.linuxtv.Zbar" due to security policies in the configuration file)
+  # for every scanned code.
+  # see https://github.com/mchehab/zbar/issues/104
+, enableDbus ? false
+, libintl
+, libiconv
+, Foundation
+, bash
+, python3
+, argp-standalone
 }:
 
-let
-  inherit (python2Packages) pygtk python;
-in stdenv.mkDerivation rec {
+stdenv.mkDerivation rec {
   pname = "zbar";
-  version = "0.22";
+  version = "0.23.92";
+
+  outputs = [ "out" "lib" "dev" "doc" "man" ];
 
   src = fetchFromGitHub {
     owner = "mchehab";
     repo = "zbar";
     rev = version;
-    sha256 = "0pz0vq6a97vnc3lcjw9k12dk2awgmws46cjfh16zin0jiz18d1xq";
+    sha256 = "sha256-VhVrngAX7pXZp+szqv95R6RGAJojp3svdbaRKigGb0w=";
   };
 
-  nativeBuildInputs = [ pkgconfig xmlto autoreconfHook docbook_xsl ];
+  patches = [
+    (fetchpatch {
+      name = "CVE-2023-40889.patch";
+      url = "https://salsa.debian.org/debian/zbar/-/raw/debian/0.23.92-9/debian/patches/0003-CVE-2023-40889-qrdec.c-Fix-array-out-of-bounds-acces.patch";
+      hash = "sha256-z0IADJwUt9PBoox5xJJN//5vrcRbIrWB9H7wtxNVUZU=";
+    })
+    (fetchpatch {
+      name = "CVE-2023-40890.patch";
+      url = "https://salsa.debian.org/debian/zbar/-/raw/debian/0.23.92-9/debian/patches/0004-Add-bounds-check-for-CVE-2023-40890.patch";
+      hash = "sha256-YgiptwXpRpz0qIcXBpARfIzSB8KYmksZR58o5yFPahs=";
+    })
+  ];
+
+  nativeBuildInputs = [
+    pkg-config
+    xmlto
+    autoreconfHook
+    docbook_xsl
+  ] ++ lib.optionals enableVideo [
+    wrapGAppsHook3
+    wrapQtAppsHook
+    qtbase
+  ];
 
   buildInputs = [
-    imagemagickBig python pygtk perl libX11
-  ] ++ stdenv.lib.optionals enableVideo [
-    libv4l gtk2 qt5.qtbase qt5.qtx11extras
+    imagemagickBig
+    libintl
+  ] ++ lib.optionals stdenv.isDarwin [
+    libiconv
+    Foundation
+  ] ++ lib.optionals enableDbus [
+    dbus
+  ] ++ lib.optionals withXorg [
+    libX11
+  ] ++ lib.optionals enableVideo [
+    libv4l
+    gtk3
+    qtbase
+    qtx11extras
   ];
+
+  nativeCheckInputs = [
+    bash
+    python3
+  ];
+
+  checkInputs = lib.optionals stdenv.isDarwin [
+    argp-standalone
+  ];
+
+  # Note: postConfigure instead of postPatch in order to include some
+  # autoconf-generated files. The template files for the autogen'd scripts are
+  # not chmod +x, so patchShebangs misses them.
+  postConfigure = ''
+    patchShebangs test
+  '';
+
+  # Disable assertions which include -dev QtBase file paths.
+  env.NIX_CFLAGS_COMPILE = "-DQT_NO_DEBUG";
 
   configureFlags = [
-    "--with-dbusconfdir=$out/etc/dbus-1/system.d"
-  ] ++ stdenv.lib.optionals (!enableVideo) [
-    "--disable-video" "--without-gtk" "--without-qt"
-  ];
+    "--without-python"
+  ] ++ (if enableDbus then [
+    "--with-dbusconfdir=${placeholder "out"}/share"
+  ] else [
+    "--without-dbus"
+  ]) ++ (if enableVideo then [
+    "--with-gtk=gtk3"
+  ] else [
+    "--disable-video"
+    "--without-gtk"
+    "--without-qt"
+  ]);
 
-  meta = with stdenv.lib; {
+  doCheck = true;
+
+  preCheck = lib.optionalString stdenv.isDarwin ''
+    export NIX_LDFLAGS="$NIX_LDFLAGS -largp"
+  '';
+
+  dontWrapQtApps = true;
+  dontWrapGApps = true;
+
+  postFixup = lib.optionalString enableVideo ''
+    wrapGApp "$out/bin/zbarcam-gtk"
+    wrapQtApp "$out/bin/zbarcam-qt"
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Bar code reader";
     longDescription = ''
       ZBar is an open source software suite for reading bar codes from various
@@ -39,9 +142,10 @@ in stdenv.mkDerivation rec {
       EAN-13/UPC-A, UPC-E, EAN-8, Code 128, Code 39, Interleaved 2 of 5 and QR
       Code.
     '';
-    maintainers = with maintainers; [ delroth raskin ];
+    maintainers = with maintainers; [ raskin ];
     platforms = platforms.unix;
     license = licenses.lgpl21;
-    homepage = https://github.com/mchehab/zbar;
+    homepage = "https://github.com/mchehab/zbar";
+    mainProgram = "zbarimg";
   };
 }
