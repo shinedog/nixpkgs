@@ -1,123 +1,176 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, fetchzip
-, alembic
-, ipython
-, jinja2
-, python-oauth2
-, prometheus_client
-, async_generator
-, pamela
-, sqlalchemy
-, tornado
-, traitlets
-, requests
-, notebook
-, pythonOlder
-, nodePackages
+{
+  lib,
+  stdenv,
+  alembic,
+  async-generator,
+  beautifulsoup4,
+  buildPythonPackage,
+  certipy,
+  configurable-http-proxy,
+  cryptography,
+  fetchFromGitHub,
+  fetchNpmDeps,
+  idna,
+  importlib-metadata,
+  jinja2,
+  jsonschema,
+  jupyter-events,
+  jupyterlab,
+  mock,
+  nbclassic,
+  nodejs,
+  npmHooks,
+  oauthlib,
+  packaging,
+  pamela,
+  playwright,
+  prometheus-client,
+  pydantic,
+  pytest-asyncio,
+  pytestCheckHook,
+  python-dateutil,
+  pythonOlder,
+  requests,
+  requests-mock,
+  setuptools,
+  setuptools-scm,
+  sqlalchemy,
+  tornado,
+  traitlets,
+  virtualenv,
 }:
-
-let
-  # js/css assets that setup.py tries to fetch via `npm install` when building
-  # from source.
-  bootstrap =
-    fetchzip {
-      url = "https://registry.npmjs.org/bootstrap/-/bootstrap-3.3.7.tgz";
-      sha256 = "0r7s54bbf68ri1na9bbabyf12mcpb6zk5ja2q6z82aw1fa4xi3yd";
-    };
-  font-awesome =
-    fetchzip {
-      url = "https://registry.npmjs.org/font-awesome/-/font-awesome-4.7.0.tgz";
-      sha256 = "1xnxbdlfdd60z5ix152m8r2kk9dkwlqwpypky1mm3dv64ajnzdbk";
-    };
-  jquery =
-    fetchzip {
-      url = "https://registry.npmjs.org/jquery/-/jquery-3.2.1.tgz";
-      sha256 = "1j6y18miwzafdj8kfpwbmbn9qvgnbnpc7l4arqrhqj33m04xrlgi";
-    };
-  moment =
-    fetchzip {
-      url = "https://registry.npmjs.org/moment/-/moment-2.22.2.tgz";
-      sha256 = "12gb3p0rz5wyjwykv9g0pix7dd352lx1z7rzdjsf2brhwc4ffyip";
-    };
-  requirejs =
-    fetchzip {
-      url = "https://registry.npmjs.org/requirejs/-/requirejs-2.3.4.tgz";
-      sha256 = "0q6mkj0iv341kks06dya6lfs2kdw0n6vc7n4a7aa3ia530fk9vja";
-    };
-
-in
 
 buildPythonPackage rec {
   pname = "jupyterhub";
-  version = "0.9.4";
-  disabled = pythonOlder "3.5";
+  version = "5.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "7848bbb299536641a59eb1977ec3c7c95d931bace4a2803d7e9b28b9256714da";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "jupyterhub";
+    repo = "jupyterhub";
+    rev = "refs/tags/${version}";
+    hash = "sha256-YGDbyWe3JSXbluOX6qyLqzl92Z/f5sD/5TPc2LR7W80=";
   };
 
-  # Most of this only applies when building from source (e.g. js/css assets are
-  # pre-built and bundled in the official release tarball on pypi).
-  #
-  # Stuff that's always needed:
-  #   * At runtime, we need configurable-http-proxy, so we substitute the store
-  #     path.
-  #
-  # Other stuff that's only needed when building from source:
-  #   * js/css assets are fetched from npm.
-  #   * substitute store path for `lessc` commmand.
-  #   * set up NODE_PATH so `lessc` can find `less-plugin-clean-css`.
-  #   * don't run `npm install`.
-  preBuild = ''
-    export NODE_PATH=${nodePackages.less-plugin-clean-css}/lib/node_modules
+  npmDeps = fetchNpmDeps {
+    inherit src;
+    hash = "sha256-7G/Y2yaMi9cyf20/o8rLXKIE6SdZ74HSWJ3Wfypl4Cc=";
+  };
 
-    substituteInPlace jupyterhub/proxy.py --replace \
+  postPatch = ''
+    substituteInPlace jupyterhub/proxy.py --replace-fail \
       "'configurable-http-proxy'" \
-      "'${nodePackages.configurable-http-proxy}/bin/configurable-http-proxy'"
+      "'${configurable-http-proxy}/bin/configurable-http-proxy'"
 
-    substituteInPlace jupyterhub/tests/test_proxy.py --replace \
+    substituteInPlace jupyterhub/tests/test_proxy.py --replace-fail \
       "'configurable-http-proxy'" \
-      "'${nodePackages.configurable-http-proxy}/bin/configurable-http-proxy'"
-
-    substituteInPlace setup.py --replace \
-      "'npm', 'run', 'lessc', '--'" \
-      "'${nodePackages.less}/bin/lessc'"
-
-    substituteInPlace setup.py --replace \
-      "'npm', 'install', '--progress=false'" \
-      "'true'"
-
-    declare -A deps
-    deps[bootstrap]=${bootstrap}
-    deps[font-awesome]=${font-awesome}
-    deps[jquery]=${jquery}
-    deps[moment]=${moment}
-    deps[requirejs]=${requirejs}
-
-    mkdir -p share/jupyter/hub/static/components
-    for dep in "''${!deps[@]}"; do
-      if [ ! -e share/jupyter/hub/static/components/$dep ]; then
-        cp -r ''${deps[$dep]} share/jupyter/hub/static/components/$dep
-      fi
-    done
+      "'${configurable-http-proxy}/bin/configurable-http-proxy'"
   '';
 
-  propagatedBuildInputs = [
-    alembic ipython jinja2 pamela python-oauth2 requests sqlalchemy tornado
-    traitlets prometheus_client async_generator notebook
+  nativeBuildInputs = [
+    nodejs
+    npmHooks.npmConfigHook
   ];
 
-  # Disable tests because they take an excessive amount of time to complete.
-  doCheck = false;
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
+  dependencies =
+    [
+      alembic
+      certipy
+      idna
+      jinja2
+      jupyter-events
+      oauthlib
+      packaging
+      pamela
+      prometheus-client
+      pydantic
+      python-dateutil
+      requests
+      sqlalchemy
+      tornado
+      traitlets
+    ]
+    ++ lib.optionals (pythonOlder "3.10") [
+      async-generator
+      importlib-metadata
+    ];
+
+  nativeCheckInputs = [
+    beautifulsoup4
+    cryptography
+    jsonschema
+    jupyterlab
+    mock
+    nbclassic
+    playwright
+    # require pytest-asyncio<0.23
+    # https://github.com/jupyterhub/jupyterhub/pull/4663
+    (pytest-asyncio.overrideAttrs (
+      final: prev: {
+        version = "0.21.2";
+        src = fetchFromGitHub {
+          inherit (prev.src) owner repo;
+          rev = "refs/tags/v${final.version}";
+          hash = "sha256-AVVvdo/CDF9IU6l779sLc7wKz5h3kzMttdDNTPLYxtQ=";
+        };
+      }
+    ))
+    pytestCheckHook
+    requests-mock
+    virtualenv
+  ];
+
+  preCheck = ''
+    export PATH=$out/bin:$PATH;
+  '';
+
+  disabledTests = [
+    # Tries to install older versions through pip
+    "test_upgrade"
+    # Testcase fails to find requests import
+    "test_external_service"
+    # Attempts to do TLS connection
+    "test_connection_notebook_wrong_certs"
+    # AttributeError: 'coroutine' object...
+    "test_valid_events"
+    "test_invalid_events"
+    "test_user_group_roles"
+  ];
+
+  disabledTestPaths = [
+    # Not testing with a running instance
+    # AttributeError: 'coroutine' object has no attribute 'db'
+    "docs/test_docs.py"
+    "jupyterhub/tests/browser/test_browser.py"
+    "jupyterhub/tests/test_api.py"
+    "jupyterhub/tests/test_auth_expiry.py"
+    "jupyterhub/tests/test_auth.py"
+    "jupyterhub/tests/test_metrics.py"
+    "jupyterhub/tests/test_named_servers.py"
+    "jupyterhub/tests/test_orm.py"
+    "jupyterhub/tests/test_pages.py"
+    "jupyterhub/tests/test_proxy.py"
+    "jupyterhub/tests/test_scopes.py"
+    "jupyterhub/tests/test_services_auth.py"
+    "jupyterhub/tests/test_singleuser.py"
+    "jupyterhub/tests/test_spawner.py"
+    "jupyterhub/tests/test_user.py"
+  ];
 
   meta = with lib; {
     description = "Serves multiple Jupyter notebook instances";
-    homepage = https://jupyter.org/;
+    homepage = "https://github.com/jupyterhub/jupyterhub";
+    changelog = "https://github.com/jupyterhub/jupyterhub/blob/${version}/docs/source/reference/changelog.md";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ ixxie cstrahan ];
+    maintainers = teams.jupyter.members;
+    # darwin: E   OSError: dlopen(/nix/store/43zml0mlr17r5jsagxr00xxx91hz9lky-openpam-20170430/lib/libpam.so, 6): image not found
+    broken = stdenv.isDarwin;
   };
 }

@@ -1,26 +1,32 @@
-{ stdenv, SDL2, fetchFromGitHub, makeWrapper, gzip, libvorbis, libmad, vulkan-headers, vulkan-loader }:
+{ lib, stdenv, fetchFromGitHub, makeWrapper
+, SDL2, gzip, libvorbis, libmad, vulkan-headers, vulkan-loader, moltenvk
+}:
 
 stdenv.mkDerivation rec {
-  name = "vkquake-${version}";
-  majorVersion = "1.01";
-  version = "${majorVersion}.0";
+  pname = "vkquake";
+  version = "1.22.3";
 
   src = fetchFromGitHub {
     owner = "Novum";
     repo = "vkQuake";
     rev = version;
-    sha256 = "1iwin8j5kbyrknbkhjgpy8nmm7pxqzr0daa9gn7p38qhg2mh0a39";
+    sha256 = "sha256-+8DU1QT3Lgqf1AIReVnXQ2Lq6R6eBb8VjdkJfAn/Rtc=";
   };
 
-  sourceRoot = "source/Quake";
+  sourceRoot = "${src.name}/Quake";
 
   nativeBuildInputs = [
-    makeWrapper vulkan-headers
+    makeWrapper
+    vulkan-headers
   ];
 
   buildInputs = [
-    gzip SDL2 libvorbis libmad vulkan-loader
-  ];
+    gzip
+    SDL2
+    libvorbis
+    libmad
+    vulkan-loader
+  ] ++ lib.optional stdenv.isDarwin moltenvk;
 
   buildFlags = [ "DO_USERDIRS=1" ];
 
@@ -30,14 +36,20 @@ stdenv.mkDerivation rec {
 
   makeFlags = [ "prefix=$(out) bindir=$(out)/bin" ];
 
+  env = lib.optionalAttrs stdenv.isDarwin {
+    NIX_CFLAGS_COMPILE = "-Wno-error=unused-but-set-variable";
+  };
+
   postFixup = ''
-    wrapProgram $out/bin/vkquake --prefix LD_LIBRARY_PATH : ${vulkan-loader}/lib
+    wrapProgram $out/bin/vkquake \
+      --prefix LD_LIBRARY_PATH : ${vulkan-loader}/lib
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with lib; {
     description = "Vulkan Quake port based on QuakeSpasm";
+    mainProgram = "vkquake";
     homepage = src.meta.homepage;
     longDescription = ''
       vkQuake is a Quake 1 port using Vulkan instead of OpenGL for rendering.
@@ -48,7 +60,7 @@ stdenv.mkDerivation rec {
       specialization constants, CPU/GPU parallelism and memory pooling.
     '';
 
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.gnidorah ];
+    platforms = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ ylh ];
   };
 }

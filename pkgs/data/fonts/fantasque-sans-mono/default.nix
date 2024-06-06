@@ -1,26 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
+stdenvNoCC.mkDerivation rec {
+  pname = "fantasque-sans-mono";
+  version = "1.8.0";
 
-  version = "1.7.2";
+  src = fetchzip {
+    url = "https://github.com/belluzj/fantasque-sans/releases/download/v${version}/FantasqueSansMono-Normal.zip";
+    stripRoot = false;
+    hash = "sha256-MNXZoDPi24xXHXGVADH16a3vZmFhwX0Htz02+46hWFc=";
+  };
 
-in
+  installPhase = ''
+    runHook preInstall
 
-fetchzip rec {
-  name = "fantasque-sans-mono-${version}";
+    install -Dm644 OTF/*.otf -t $out/share/fonts/opentype
+    install -Dm644 README.md -t $out/share/doc/${pname}-${version}
 
-  url = "https://github.com/belluzj/fantasque-sans/releases/download/v${version}/FantasqueSansMono-Normal.zip";
-
-  postFetch = ''
-    mkdir -p $out/share/{doc,fonts}
-    unzip -j $downloadedFile \*.otf    -d $out/share/fonts/opentype
-    unzip -j $downloadedFile README.md -d $out/share/doc/${name}
+    runHook postInstall
   '';
 
-  sha256 = "1fwvbqfrgb539xybwdawvwa8cg4f215kw905rgl9a6p0iwa1nxqk";
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/belluzj/fantasque-sans;
+  meta = with lib; {
+    homepage = "https://github.com/belluzj/fantasque-sans";
     description = "A font family with a great monospaced variant for programmers";
     license = licenses.ofl;
     platforms = platforms.all;

@@ -1,12 +1,25 @@
-{ lib, fetchFromGitLab, buildPythonPackage, pillow, six
-, tesseract, cuneiform, isPy3k, substituteAll, pytest, tox
+{
+  lib,
+  stdenv,
+  fetchFromGitLab,
+  buildPythonPackage,
+  pillow,
+  tesseract,
+  cuneiform,
+  isPy3k,
+  substituteAll,
+  pytestCheckHook,
+  setuptools,
+  setuptools-scm,
+  withTesseractSupport ? true,
+  withCuneiformSupport ? stdenv.hostPlatform.isLinux,
 }:
 
 buildPythonPackage rec {
   pname = "pyocr";
-  version = "0.5.3";
-  name = pname + "-" + version;
+  version = "0.8.5";
   disabled = !isPy3k;
+  format = "pyproject";
 
   # Don't fetch from PYPI because it doesn't contain tests.
   src = fetchFromGitLab {
@@ -15,53 +28,38 @@ buildPythonPackage rec {
     owner = "OpenPaperwork";
     repo = "pyocr";
     rev = version;
-    sha256 = "1nihf0qmbpg3yj3yp11jp6hp5z5dqf39nz6j9lqbvgi1nqbs7x15";
+    hash = "sha256-gE0+qbHCwpDdxXFY+4rjVU2FbUSfSVrvrVMcWUk+9FU=";
   };
 
-  patches = [ (substituteAll {
-    src = ./paths.patch;
-    inherit cuneiform tesseract;
-  })
+  patches =
+    [ ]
+    ++ (lib.optional withTesseractSupport (substituteAll {
+      src = ./paths-tesseract.patch;
+      inherit tesseract;
+      tesseractLibraryLocation = "${tesseract}/lib/libtesseract${stdenv.hostPlatform.extensions.sharedLibrary}";
+    }))
+    ++ (lib.optional stdenv.hostPlatform.isLinux (substituteAll {
+      src = ./paths-cuneiform.patch;
+      inherit cuneiform;
+    }));
+
+  propagatedBuildInputs = [ pillow ];
+
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
   ];
 
-  postPatch = ''
-    echo 'version = "${version}"' > src/pyocr/_version.py
+  nativeCheckInputs = [ pytestCheckHook ];
 
-    # Disable specific tests that are probably failing because of this issue:
-    # https://github.com/jflesch/pyocr/issues/52
-    for test in $disabledTests; do
-      file="''${test%%:*}"
-      fun="''${test#*:}"
-      echo "import pytest" >> "tests/tests_$file.py"
-      echo "$fun = pytest.mark.skip($fun)" >> "tests/tests_$file.py"
-    done
-  '';
-
-  disabledTests = [
-    "cuneiform:TestTxt.test_basic"
-    "cuneiform:TestTxt.test_european"
-    "cuneiform:TestTxt.test_french"
-    "cuneiform:TestWordBox.test_basic"
-    "cuneiform:TestWordBox.test_european"
-    "cuneiform:TestWordBox.test_french"
-    "libtesseract:TestBasicDoc.test_basic"
-    "libtesseract:TestDigitLineBox.test_digits"
-    "libtesseract:TestLineBox.test_japanese"
-    "libtesseract:TestTxt.test_japanese"
-    "libtesseract:TestWordBox.test_japanese"
-    "libtesseract:TestTxt.test_multi"
-    "tesseract:TestTxt.test_multi"
-    "tesseract:TestDigitLineBox.test_digits"
-    "tesseract:TestTxt.test_japanese"
-  ];
-
-  propagatedBuildInputs = [ pillow six ];
-  checkInputs = [ pytest tox ];
-  checkPhase = "pytest";
-
-  meta = {
+  meta = with lib; {
     inherit (src.meta) homepage;
+    changelog = "https://gitlab.gnome.org/World/OpenPaperwork/pyocr/-/blob/${version}/ChangeLog";
     description = "A Python wrapper for Tesseract and Cuneiform";
-    license = lib.licenses.gpl3Plus;
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [
+      symphorien
+      tomodachi94
+    ];
   };
 }

@@ -1,20 +1,22 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "docrep";
-  version = "0.2.5";
+  version = "0.3.2";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "a67c34d3a44892d3e2a0af0ac55c02b949a37ced9d55c0d7ade76362ba6692d7";
+    sha256 = "ed8a17e201abd829ef8da78a0b6f4d51fb99a4cbd0554adbed3309297f964314";
   };
 
-  checkInputs = [ pytest ];
+  nativeCheckInputs = [ pytest ];
   propagatedBuildInputs = [ six ];
 
   checkPhase = ''
@@ -26,8 +28,8 @@ buildPythonPackage rec {
 
   meta = {
     description = "Python package for docstring repetition";
-    homepage = https://github.com/Chilipp/docrep;
+    homepage = "https://github.com/Chilipp/docrep";
     license = lib.licenses.gpl2;
-    maintainers = with lib.maintainers; [ costrouc ];
+    maintainers = with lib.maintainers; [ ];
   };
 }

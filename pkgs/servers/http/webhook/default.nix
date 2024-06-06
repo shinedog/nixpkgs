@@ -1,22 +1,33 @@
-{ lib, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, nixosTests
+}:
 
-buildGoPackage rec {
-  name = "webhook-${version}";
-  version = "2.6.8";
-
-  goPackagePath = "github.com/adnanh/webhook";
-  excludedPackages = [ "test" ];
+buildGoModule rec {
+  pname = "webhook";
+  version = "2.8.1";
 
   src = fetchFromGitHub {
     owner = "adnanh";
     repo = "webhook";
     rev = version;
-    sha256 = "05q6nv04ml1gr4k79czg03i3ifl05xq29iapkgrl3k0a36czxlgs";
+    sha256 = "sha256-8OpVpm9nEroUlr41VgnyM6sxd/FlSvoQK5COOWvo4Y4=";
   };
 
+  vendorHash = null;
+
+  subPackages = [ "." ];
+
+  doCheck = false;
+
+  passthru.tests = { inherit (nixosTests) webhook; };
+
   meta = with lib; {
-    homepage = https://github.com/adnanh/webhook;
-    license = [ licenses.mit ];
-    description = "incoming webhook server that executes shell commands";
+    description = "Incoming webhook server that executes shell commands";
+    mainProgram = "webhook";
+    homepage = "https://github.com/adnanh/webhook";
+    license = licenses.mit;
+    maintainers = with maintainers; [ azahi ];
   };
 }

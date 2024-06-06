@@ -1,51 +1,62 @@
-{
-  stdenv, fetchFromGitHub, cmake, pkgconfig, lxqt-build-tools,
-  qtbase, qttools, qtx11extras, qtsvg, polkit-qt, kwindowsystem, liblxqt,
-  libqtxdg, pcre
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, kwindowsystem
+, liblxqt
+, libqtxdg
+, lxqt-build-tools
+, pcre
+, pkg-config
+, polkit
+, polkit-qt-1
+, qtbase
+, qtsvg
+, qttools
+, qtwayland
+, wrapQtAppsHook
+, gitUpdater
 }:
 
 stdenv.mkDerivation rec {
   pname = "lxqt-policykit";
-  version = "0.14.1";
+  version = "2.0.0";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "0mh9jw09r0mk8xmgvmzk3yyfix0pzqya28rcx71fqjpbdv1sc44l";
+    hash = "sha256-oYKvQBilpD2RLhN1K6qgRNNAfohCOqmBrKcWy1fXZT8=";
   };
 
   nativeBuildInputs = [
     cmake
-    pkgconfig
+    pkg-config
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qttools
-    qtx11extras
-    qtsvg
-    polkit-qt
     kwindowsystem
     liblxqt
     libqtxdg
     pcre
+    polkit
+    polkit-qt-1
+    qtbase
+    qtsvg
+    qtwayland
   ];
 
-  postPatch = ''
-    substituteInPlace autostart/CMakeLists.txt \
-      --replace "DESTINATION \"\''${LXQT_ETC_XDG_DIR}" "DESTINATION \"etc/xdg"
+  passthru.updateScript = gitUpdater { };
 
-    substituteInPlace CMakeLists.txt \
-      --replace "\''${LXQT_TRANSLATIONS_DIR}" "''${out}/share/lxqt/translations"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/lxqt-policykit";
     description = "The LXQt PolicyKit agent";
-    homepage = https://github.com/lxqt/lxqt-policykit;
-    license = licenses.lgpl21;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    mainProgram = "lxqt-policykit-agent";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
   };
 }

@@ -1,16 +1,15 @@
-{ stdenv, fetchurl, home ? "/var/lib/crowd"
+{ lib, stdenv, fetchurl, home ? "/var/lib/crowd"
 , port ? 8092, proxyUrl ? null, openidPassword ? "WILL_NEVER_BE_SET" }:
 
-stdenv.mkDerivation rec {
-  name = "atlassian-crowd-${version}";
-  version = "3.4.3";
+lib.warnIf (openidPassword != "WILL_NEVER_BE_SET") "Using `crowdProperties` is deprecated!"
+(stdenv.mkDerivation rec {
+  pname = "atlassian-crowd";
+  version = "5.0.1";
 
   src = fetchurl {
-    url = "https://www.atlassian.com/software/crowd/downloads/binary/${name}.tar.gz";
-    sha256 = "0swp41lr7n318jxl61w5c09485ygn261zc74p7xaisrwmh9ygyzs";
+    url = "https://www.atlassian.com/software/crowd/downloads/binary/${pname}-${version}.tar.gz";
+    sha256 = "sha256-ccXSNuiXP0+b9WObboikqVd0nKH0Fi2gMVEF3+WAx5M=";
   };
-
-  phases = [ "unpackPhase" "buildPhase" "installPhase" "fixupPhase" ];
 
   buildPhase = ''
     mv apache-tomcat/conf/server.xml apache-tomcat/conf/server.xml.dist
@@ -33,7 +32,7 @@ stdenv.mkDerivation rec {
                 "http://localhost:${toString port}/"
     sed -r -i crowd-openidserver-webapp/WEB-INF/classes/crowd.properties \
       -e 's,application.password\s+password,application.password ${openidPassword},'
-  '' + stdenv.lib.optionalString (proxyUrl != null) ''
+  '' + lib.optionalString (proxyUrl != null) ''
     sed -i crowd-openidserver-webapp/WEB-INF/classes/crowd.properties \
       -e 's,http://localhost:${toString port}/openidserver,${proxyUrl}/openidserver,'
   '';
@@ -42,10 +41,10 @@ stdenv.mkDerivation rec {
     cp -rva . $out
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Single sign-on and identity management tool";
-    homepage = https://www.atlassian.com/software/crowd;
+    homepage = "https://www.atlassian.com/software/crowd";
     license = licenses.unfree;
-    maintainers = with maintainers; [ fpletz globin ];
+    maintainers = with maintainers; [ ];
   };
-}
+})

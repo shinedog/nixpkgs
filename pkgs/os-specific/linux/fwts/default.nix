@@ -1,28 +1,34 @@
-{ stdenv, fetchzip, autoreconfHook, pkgconfig, glib, libtool, pcre
-, json_c, flex, bison, dtc, pciutils, dmidecode, iasl, libbsd }:
+{ lib, stdenv, fetchzip, autoreconfHook, pkg-config, gnumake42, glib, pcre
+, json_c, flex, bison, dtc, pciutils, dmidecode, acpica-tools, libbsd }:
 
 stdenv.mkDerivation rec {
-  name = "fwts-${version}";
-  version = "19.03.00";
+  pname = "fwts";
+  version = "24.03.00";
 
   src = fetchzip {
-    url = "http://fwts.ubuntu.com/release/fwts-V${version}.tar.gz";
-    sha256 = "1zri73qmpgc0dwmdcfbcywcvxld7dqz7rkwwqncfkvvfc9zchk5l";
+    url = "https://fwts.ubuntu.com/release/${pname}-V${version}.tar.gz";
+    sha256 = "sha256-UKL5q5sURSVXvEOzoZdG+wWBSS5f9YWo5stViY3F2vg=";
     stripRoot = false;
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig libtool ];
-  buildInputs = [ glib pcre json_c flex bison dtc pciutils dmidecode iasl libbsd ];
+  # fails with make 4.4
+  nativeBuildInputs = [ autoreconfHook pkg-config gnumake42 ];
+  buildInputs = [ glib pcre json_c flex bison dtc pciutils dmidecode acpica-tools libbsd ];
 
   postPatch = ''
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/bin/lspci"      "${pciutils}/bin/lspci"
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/sbin/dmidecode" "${dmidecode}/bin/dmidecode"
-    substituteInPlace src/lib/include/fwts_binpaths.h --replace "/usr/bin/iasl"       "${iasl}/bin/iasl"
+    substituteInPlace src/lib/include/fwts_binpaths.h \
+      --replace "/usr/bin/lspci"      "${pciutils}/bin/lspci" \
+      --replace "/usr/sbin/dmidecode" "${dmidecode}/bin/dmidecode" \
+      --replace "/usr/bin/iasl"       "${acpica-tools}/bin/iasl"
+
+    substituteInPlace src/lib/src/fwts_devicetree.c \
+                      src/devicetree/dt_base/dt_base.c \
+      --replace "dtc -I" "${dtc}/bin/dtc -I"
   '';
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://wiki.ubuntu.com/FirmwareTestSuite";
     description = "Firmware Test Suite";
     platforms = platforms.linux;

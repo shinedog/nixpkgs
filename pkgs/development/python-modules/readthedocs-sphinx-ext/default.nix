@@ -1,32 +1,37 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, requests
-, pytest
-, mock
-, sphinx
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  requests,
+  pytestCheckHook,
+  mock,
+  sphinx,
 }:
 
 buildPythonPackage rec {
   pname = "readthedocs-sphinx-ext";
-  version = "0.5.17";
+  version = "2.2.5";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "21097cbb37c9a0590e2cb444b55bd87302fc8f69640fa2d4f2d113e98e9558ff";
+    hash = "sha256-7l/VuZ258MGAsjlsvOUoqjZnGVG5UmuwJy2/zlUXvSc=";
   };
+
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [ requests ];
 
-  checkInputs = [ pytest mock sphinx ];
-
-  checkPhase = ''
-    py.test
-  '';
+  nativeCheckInputs = [
+    pytestCheckHook
+    mock
+    sphinx
+  ];
 
   meta = with lib; {
     description = "Sphinx extension for Read the Docs overrides";
-    homepage = https://github.com/rtfd/readthedocs-sphinx-ext;
+    homepage = "https://github.com/rtfd/readthedocs-sphinx-ext";
     license = licenses.mit;
   };
 }

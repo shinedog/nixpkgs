@@ -1,11 +1,13 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "extras";
   version = "1.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -16,8 +18,8 @@ buildPythonPackage rec {
   doCheck = false;
 
   meta = {
-    description = "A module provides basic functions for parsing mime-type names and matching them against a list of media-ranges";
-    homepage = https://code.google.com/p/mimeparse/;
+    description = "Useful extra bits for Python - things that should be in the standard library";
+    homepage = "https://github.com/testing-cabal/extras";
     license = lib.licenses.mit;
   };
 }

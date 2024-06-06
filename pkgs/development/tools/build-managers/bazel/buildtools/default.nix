@@ -1,25 +1,37 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "bazel-buildtools-${version}";
-  version = "0.22.0";
-
-  goPackagePath = "github.com/bazelbuild/buildtools";
+buildGoModule rec {
+  pname = "bazel-buildtools";
+  version = "7.1.2";
 
   src = fetchFromGitHub {
     owner = "bazelbuild";
     repo = "buildtools";
-    rev = "55b64c3d2ddfb57f06477c1d94ef477419c96bd6";
-    sha256 = "0n6q8pkgy3vvmwyrxvkmjfbcxc31i31czg2bjdzq7awwrr4fdbwy";
+    rev = "v${version}";
+    hash = "sha256-Ax7UKkClYsoqxaR+tsQnTv6BFafl9SkY7MC4kYJNmwY=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-DigTREfI6I48wxRpGp/bfH1NbUZ4E1B5UTQXpI0LY1A=";
 
-  meta = with stdenv.lib; {
-    description = "Tools for working with Google's bazel buildtool. Includes buildifier, buildozer, and unused_deps.";
-    homepage = https://github.com/bazelbuild/buildtools;
+  preBuild = ''
+    rm -r warn/docs
+  '';
+
+  proxyVendor = true;
+
+  doCheck = false;
+
+  excludedPackages = [ "generatetables" ];
+
+  ldflags = [ "-s" "-w" "-X main.buildVersion=${version}" "-X main.buildScmRevision=${src.rev}" ];
+
+  meta = with lib; {
+    description = "Tools for working with Google's bazel buildtool. Includes buildifier, buildozer, and unused_deps";
+    homepage = "https://github.com/bazelbuild/buildtools";
+    changelog = "https://github.com/bazelbuild/buildtools/releases/tag/v${version}";
     license = licenses.asl20;
-    maintainers = with maintainers; [ elasticdog uri-canva ];
-    platforms = platforms.all;
+    maintainers = with maintainers;
+      [ elasticdog uri-canva ]
+      ++ lib.teams.bazel.members;
   };
 }

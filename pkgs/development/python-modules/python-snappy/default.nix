@@ -1,39 +1,38 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPyPy
-, python
-, snappy
-, cffi
-, nose
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  cramjam,
+  setuptools,
+  snappy,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "python-snappy";
-  version = "0.5.4";
+  version = "0.7.1";
+  pyproject = true;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "d9c26532cfa510f45e8d135cde140e8a5603d3fb254cfec273ebc0ecf9f668e2";
+    hash = "sha256-G8KdNiEdRLufBPPXzPuurrvC9ittQPT8Tt0fsWvFLBM=";
   };
+
+  build-system = [
+    cramjam
+    setuptools
+  ];
 
   buildInputs = [ snappy ];
 
-  propagatedBuildInputs = lib.optional isPyPy cffi;
+  dependencies = [ cramjam ];
 
-  checkInputs = [ nose ];
-
-  checkPhase = ''
-    rm -r snappy # prevent local snappy from being picked up
-    nosetests test_snappy.py
-  '' + lib.optionalString isPyPy ''
-    nosetests test_snappy_cffi.py
-  '';
+  nativeCheckInputs = [ unittestCheckHook ];
 
   meta = with lib; {
     description = "Python library for the snappy compression library from Google";
-    homepage = https://github.com/andrix/python-snappy;
+    homepage = "https://github.com/intake/python-snappy";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

@@ -1,31 +1,29 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "kail-${version}";
-  version = "0.8.0";
+buildGoModule rec {
+  pname = "kail";
+  version = "0.17.4";
 
-  goPackagePath = "github.com/boz/kail";
+  ldflags = [
+    "-s"
+    "-w"
+    "-X main.version=${version}"
+  ];
 
   src = fetchFromGitHub {
     owner = "boz";
     repo = "kail";
     rev = "v${version}";
-    sha256 = "0ibk7j40pj6f2086qcnwp998wld61d2gvrv7yiy6hlkalhww2pq7";
+    sha256 = "sha256-G8U7UEYhgkcFbKeHOjbpf9AY6NW0hBgv6aARuzapE3M=";
   };
 
-  # regenerate deps.nix using following steps:
-  #
-  # go get -u github.com/boz/kail
-  # cd $GOPATH/src/github.com/boz/kail
-  # git checkout <version>
-  # dep init
-  # dep2nix
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-u6/LsLphaqYswJkAuqgrgknnm+7MnaeH+kf9BPcdtrc=";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Kubernetes log viewer";
-    homepage = https://github.com/boz/kail;
+    homepage = "https://github.com/boz/kail";
     license = licenses.mit;
     maintainers = with maintainers; [ offline vdemeester ];
+    mainProgram = "kail";
   };
 }

@@ -1,35 +1,50 @@
-{ stdenv, lib, fetchFromGitHub }:
+{ stdenv, lib, jekyll, cmake, fetchFromGitHub, gtest }:
 
 stdenv.mkDerivation rec {
-  name = "jsonnet-${version}";
-  version = "0.12.1";
+  pname = "jsonnet";
+  version = "0.20.0";
+  outputs = [ "out" "doc" ];
 
   src = fetchFromGitHub {
     rev = "v${version}";
     owner = "google";
     repo = "jsonnet";
-    sha256 = "13a0sf1k8ivxhc28w0d0axzr0sj3jccl9sjq6l0dkyzrnmbxzmkb";
+    sha256 = "sha256-FtVJE9alEl56Uik+nCpJMV5DMVVmRCnE1xMAiWdK39Y=";
   };
+
+  nativeBuildInputs = [ jekyll cmake ];
+  buildInputs = [ gtest ];
+
+  cmakeFlags = [
+    "-DUSE_SYSTEM_GTEST=ON"
+    "-DBUILD_STATIC_LIBS=${if stdenv.hostPlatform.isStatic then "ON" else "OFF"}"
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    "-DBUILD_SHARED_BINARIES=${if stdenv.hostPlatform.isStatic then "OFF" else "ON"}"
+  ];
+
+  # https://github.com/google/jsonnet/issues/778
+  patches = [
+    ./fix-cpp-unresolved-symbols.patch
+  ];
 
   enableParallelBuilding = true;
 
-  makeFlags = [
-    "jsonnet"
-    "libjsonnet.so"
-  ];
+  # Upstream writes documentation in html, not in markdown/rst, so no
+  # other output formats, sorry.
+  postBuild = ''
+    jekyll build --source ../doc --destination ./html
+  '';
 
-  installPhase = ''
-    mkdir -p $out/bin $out/lib $out/include
-    cp jsonnet $out/bin/
-    cp libjsonnet*.so $out/lib/
-    cp -a include/*.h $out/include/
+  postInstall = ''
+    mkdir -p $out/share/doc/jsonnet
+    cp -r ./html $out/share/doc/jsonnet
   '';
 
   meta = {
     description = "Purely-functional configuration language that helps you define JSON data";
     maintainers = with lib.maintainers; [ benley copumpkin ];
     license = lib.licenses.asl20;
-    homepage = https://github.com/google/jsonnet;
+    homepage = "https://github.com/google/jsonnet";
     platforms = lib.platforms.unix;
   };
 }

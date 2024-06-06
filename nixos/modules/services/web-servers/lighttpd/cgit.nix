@@ -4,7 +4,7 @@ with lib;
 
 let
   cfg = config.services.lighttpd.cgit;
-  pathPrefix = if stringLength cfg.subdir == 0 then "" else "/" + cfg.subdir;
+  pathPrefix = optionalString (stringLength cfg.subdir != 0) ("/" + cfg.subdir);
   configFile = pkgs.writeText "cgitrc"
     ''
       # default paths to static assets
@@ -41,9 +41,13 @@ in
 
     configText = mkOption {
       default = "";
-      example = ''
-        cache-size=1000
-        scan-path=/srv/git
+      example = literalExpression ''
+        '''
+          source-filter=''${pkgs.cgit}/lib/cgit/filters/syntax-highlighting.py
+          about-filter=''${pkgs.cgit}/lib/cgit/filters/about-formatting.sh
+          cache-size=1000
+          scan-path=/srv/git
+        '''
       '';
       type = types.lines;
       description = ''

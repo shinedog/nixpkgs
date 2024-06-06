@@ -1,9 +1,13 @@
-{ buildPythonPackage, fetchPypi, stdenv
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   pname = "colorlover";
   version = "0.3.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -13,10 +17,10 @@ buildPythonPackage rec {
   # no tests included in distributed archive
   doCheck = false;
 
-  meta = {
-    homepage = https://github.com/jackparmer/colorlover;
+  meta = with lib; {
+    homepage = "https://github.com/jackparmer/colorlover";
     description = "Color scales in Python for humans";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ globin ];
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

@@ -3,14 +3,13 @@
   pkgs ? import ../.. { inherit system config; }
 }:
 
-with import ../lib/testing.nix { inherit system pkgs; };
+with import ../lib/testing-python.nix { inherit system pkgs; };
 
 let
   readyFile  = "/tmp/readerReady";
   resultFile = "/tmp/readerResult";
 
   testReader = pkgs.writeScript "test-input-reader" ''
-    #!${pkgs.stdenv.shell}
     rm -f ${resultFile} ${resultFile}.tmp
     logger "testReader: START: Waiting for $1 characters, expecting '$2'."
     touch ${readyFile}
@@ -27,56 +26,83 @@ let
   '';
 
 
-  mkKeyboardTest = layout: { extraConfig ? {}, tests }: with pkgs.lib; let
-    combinedTests = foldAttrs (acc: val: acc ++ val) [] (builtins.attrValues tests);
-    perlStr = val: "'${escape ["'" "\\"] val}'";
-    lq = length combinedTests.qwerty;
-    le = length combinedTests.expect;
-    msg = "length mismatch between qwerty (${toString lq}) and expect (${toString le}) lists!";
-    send   = concatMapStringsSep ", " perlStr combinedTests.qwerty;
-    expect = if (lq == le) then concatStrings combinedTests.expect else throw msg;
-
-  in makeTest {
+  mkKeyboardTest = layout: { extraConfig ? {}, tests }: with pkgs.lib; makeTest {
     name = "keymap-${layout}";
 
-    machine.services.xserver.desktopManager.xterm.enable = false;
-    machine.i18n.consoleKeyMap = mkOverride 900 layout;
-    machine.services.xserver.layout = mkOverride 900 layout;
-    machine.imports = [ ./common/x11.nix extraConfig ];
+    nodes.machine.console.keyMap = mkOverride 900 layout;
+    nodes.machine.services.xserver.desktopManager.xterm.enable = false;
+    nodes.machine.services.xserver.xkb.layout = mkOverride 900 layout;
+    nodes.machine.imports = [ ./common/x11.nix extraConfig ];
 
     testScript = ''
+      import json
+      import shlex
 
-      sub mkTest ($$) {
-        my ($desc, $cmd) = @_;
 
-        subtest $desc, sub {
-          # prepare and start testReader
-          $machine->execute("rm -f ${readyFile} ${resultFile}");
-          $machine->succeed("$cmd ${testReader} ${toString le} ".q(${escapeShellArg expect} & ));
+      def run_test_case(cmd, xorg_keymap, test_case_name, inputs, expected):
+          with subtest(test_case_name):
+              assert len(inputs) == len(expected)
+              machine.execute("rm -f ${readyFile} ${resultFile}")
 
-          if ($desc eq "Xorg keymap") {
-            # make sure the xterm window is open and has focus
-            $machine->waitForWindow(qr/testterm/);
-            $machine->waitUntilSucceeds("${pkgs.xdotool}/bin/xdotool search --sync --onlyvisible --class testterm windowfocus --sync");
-          }
+              # set up process that expects all the keys to be entered
+              machine.succeed(
+                  "{} {} {} {} >&2 &".format(
+                      cmd,
+                      "${testReader}",
+                      len(inputs),
+                      shlex.quote("".join(expected)),
+                  )
+              )
 
-          # wait for reader to be ready
-          $machine->waitForFile("${readyFile}");
-          $machine->sleep(1);
+              if xorg_keymap:
+                  # make sure the xterm window is open and has focus
+                  machine.wait_for_window("testterm")
+                  machine.wait_until_succeeds(
+                      "${pkgs.xdotool}/bin/xdotool search --sync --onlyvisible "
+                      "--class testterm windowfocus --sync"
+                  )
 
-          # send all keys
-          foreach ((${send})) { $machine->sendKeys($_); };
+              # wait for reader to be ready
+              machine.wait_for_file("${readyFile}")
 
-          # wait for result and check
-          $machine->waitForFile("${resultFile}");
-          $machine->succeed("grep -q 'PASS:' ${resultFile}");
-        };
-      };
+              # send all keys
+              for key in inputs:
+                  machine.send_key(key)
 
-      $machine->waitForX;
+              # wait for result and check
+              machine.wait_for_file("${resultFile}")
+              machine.succeed("grep -q 'PASS:' ${resultFile}")
 
-      mkTest "VT keymap", "openvt -sw --";
-      mkTest "Xorg keymap", "DISPLAY=:0 xterm -title testterm -class testterm -fullscreen -e";
+
+      with open("${pkgs.writeText "tests.json" (builtins.toJSON tests)}") as json_file:
+          tests = json.load(json_file)
+
+      # These environments used to run in the opposite order, causing the
+      # following error at openvt startup.
+      #
+      # openvt: Couldn't deallocate console 1
+      #
+      # This error did not appear in successful runs.
+      # I don't know the exact cause, but I it seems that openvt and X are
+      # fighting over the virtual terminal. This does not appear to be a problem
+      # when the X test runs first.
+      keymap_environments = {
+          "Xorg Keymap": "DISPLAY=:0 xterm -title testterm -class testterm -fullscreen -e",
+          "VT Keymap": "openvt -sw --",
+      }
+
+      machine.wait_for_x()
+
+      for keymap_env_name, command in keymap_environments.items():
+          with subtest(keymap_env_name):
+              for test_case_name, test_data in tests.items():
+                  run_test_case(
+                      command,
+                      False,
+                      test_case_name,
+                      test_data["qwerty"],
+                      test_data["expect"],
+                  )
     '';
   };
 
@@ -89,8 +115,23 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       altgr.expect = [ "~"       "#"       "{"       "["       "|"       ];
     };
 
-    extraConfig.i18n.consoleKeyMap = "azerty/fr";
-    extraConfig.services.xserver.layout = "fr";
+    extraConfig.console.keyMap = "fr";
+    extraConfig.services.xserver.xkb.layout = "fr";
+  };
+
+  bone = {
+    tests = {
+      layer1.qwerty = [ "f"           "j"                     ];
+      layer1.expect = [ "e"           "n"                     ];
+      layer2.qwerty = [ "shift-f"     "shift-j"     "shift-6" ];
+      layer2.expect = [ "E"           "N"           "$"       ];
+      layer3.qwerty = [ "caps_lock-d" "caps_lock-f"           ];
+      layer3.expect = [ "{"           "}"                     ];
+    };
+
+    extraConfig.console.keyMap = "bone";
+    extraConfig.services.xserver.xkb.layout = "de";
+    extraConfig.services.xserver.xkb.variant = "bone";
   };
 
   colemak = {
@@ -99,9 +140,9 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       homerow.expect = [ "a" "r" "s" "t" "n" "e" "i" "o"         ];
     };
 
-    extraConfig.i18n.consoleKeyMap = "colemak/colemak";
-    extraConfig.services.xserver.layout = "us";
-    extraConfig.services.xserver.xkbVariant = "colemak";
+    extraConfig.console.keyMap = "colemak";
+    extraConfig.services.xserver.xkb.layout = "us";
+    extraConfig.services.xserver.xkb.variant = "colemak";
   };
 
   dvorak = {
@@ -111,9 +152,13 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       symbols.qwerty = [ "q" "w" "e" "minus" "equal" ];
       symbols.expect = [ "'" "," "." "["     "]"     ];
     };
+
+    extraConfig.console.keyMap = "dvorak";
+    extraConfig.services.xserver.xkb.layout = "us";
+    extraConfig.services.xserver.xkb.variant = "dvorak";
   };
 
-  dvp = {
+  dvorak-programmer = {
     tests = {
       homerow.qwerty = [ "a" "s" "d" "f" "j" "k" "l" "semicolon" ];
       homerow.expect = [ "a" "o" "e" "u" "h" "t" "n" "s"         ];
@@ -124,8 +169,9 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       symbols.expect = [ "&" "[" "{" "}" "(" "=" "*" ")" "+" "]" "!" ];
     };
 
-    extraConfig.services.xserver.layout = "us";
-    extraConfig.services.xserver.xkbVariant = "dvp";
+    extraConfig.console.keyMap = "dvorak-programmer";
+    extraConfig.services.xserver.xkb.layout = "us";
+    extraConfig.services.xserver.xkb.variant = "dvp";
   };
 
   neo = {
@@ -138,8 +184,9 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       layer3.expect = [ "{"           "}"                     ];
     };
 
-    extraConfig.services.xserver.layout = "de";
-    extraConfig.services.xserver.xkbVariant = "neo";
+    extraConfig.console.keyMap = "neo";
+    extraConfig.services.xserver.xkb.layout = "de";
+    extraConfig.services.xserver.xkb.variant = "neo";
   };
 
   qwertz = {
@@ -151,7 +198,36 @@ in pkgs.lib.mapAttrs mkKeyboardTest {
       altgr.expect = [ "@" "|"    "{" "[" "]" "}" ];
     };
 
-    extraConfig.i18n.consoleKeyMap = "de";
-    extraConfig.services.xserver.layout = "de";
+    extraConfig.console.keyMap = "de";
+    extraConfig.services.xserver.xkb.layout = "de";
+  };
+
+  custom = {
+    tests = {
+      us.qwerty = [ "a" "b" "g" "d" "z" "shift-2" "shift-3" ];
+      us.expect = [ "a" "b" "g" "d" "z" "@" "#" ];
+      greek.qwerty = map (x: "alt_r-${x}")
+                     [ "a" "b" "g" "d" "z" ];
+      greek.expect = [ "α" "β" "γ" "δ" "ζ" ];
+    };
+
+    extraConfig.console.useXkbConfig = true;
+    extraConfig.services.xserver.xkb.layout = "us-greek";
+    extraConfig.services.xserver.xkb.extraLayouts.us-greek =
+      { description = "US layout with alt-gr greek";
+        languages   = [ "eng" ];
+        symbolsFile = pkgs.writeText "us-greek" ''
+          xkb_symbols "us-greek"
+          {
+            include "us(basic)"
+            include "level3(ralt_switch)"
+            key <LatA> { [ a, A, Greek_alpha ] };
+            key <LatB> { [ b, B, Greek_beta  ] };
+            key <LatG> { [ g, G, Greek_gamma ] };
+            key <LatD> { [ d, D, Greek_delta ] };
+            key <LatZ> { [ z, Z, Greek_zeta  ] };
+          };
+        '';
+      };
   };
 }

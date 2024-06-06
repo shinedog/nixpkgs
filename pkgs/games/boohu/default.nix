@@ -1,32 +1,30 @@
-{stdenv, fetchurl, buildGoPackage}:
+{ lib, fetchurl, buildGoModule }:
 
-buildGoPackage rec {
-
-  name = "boohu-${version}";
-  version = "0.12.0";
-
-  goPackagePath = "git.tuxfamily.org/boohu/boohu.git";
+buildGoModule rec {
+  pname = "boohu";
+  version = "0.14.0";
 
   src = fetchurl {
     url = "https://download.tuxfamily.org/boohu/downloads/boohu-${version}.tar.gz";
-    sha256 = "0nf3xj3lda8279cqvjv5c3vpsb7d2kynwwna5yrsy7gq8c9n4rh8";
+    hash = "sha256-IB59C5/uuHP6LtKLypjpgHOo0MR9bFdCbudaRa+h7lI=";
   };
 
-  buildFlags = "--tags ansi";
+  vendorHash = "sha256-AVK4zE/Hs9SN8Qj2WYj/am2B0R74QKYoMNf3sRRjnU4=";
 
-  postInstall = "mv $bin/bin/boohu.git $bin/bin/boohu";
+  ldflags = [ "-s" "-w" ];
 
-  meta = with stdenv.lib; {
-    description = "A new roguelike game";
+  meta = with lib; {
+    description = "A new coffee-break roguelike game";
+    mainProgram = "boohu";
     longDescription = ''
       Break Out Of Hareka's Underground (Boohu) is a roguelike game mainly
       inspired from DCSS and its tavern, with some ideas from Brogue, but
       aiming for very short games, almost no character building, and a
       simplified inventory.
     '';
-    homepage = https://download.tuxfamily.org/boohu/index.html;
+    homepage = "https://download.tuxfamily.org/boohu/index.html";
     license = licenses.isc;
     platforms = platforms.unix;
-    maintainers = with maintainers; [freepotion];
+    maintainers = with maintainers; [ ];
   };
 }

@@ -1,39 +1,47 @@
-{ stdenv
-, buildPythonPackage
-, fetchFromGitHub
-, cython
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  cython,
+  pytestCheckHook,
+  pythonOlder,
 }:
+
 buildPythonPackage rec {
   pname = "cymem";
-  version = "2.0.2";
-  name = pname + "-" + version;
+  version = "2.0.8";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchFromGitHub {
     owner = "explosion";
     repo = "cymem";
-    rev = "v${version}";
-    sha256 = "109i67vwgql9za8mfvgbrd6rgraz4djkvpzb4gqvzl13214s6ava";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-e4lgV39lwC2Goqmd8Jjra+znuCpxsv2IsRXfFbQkGN8=";
   };
 
-  propagatedBuildInputs = [
-   cython
+  build-system = [
+    setuptools
+    cython
   ];
 
-  prePatch = ''
-    substituteInPlace setup.py \
-      --replace "wheel>=0.32.0,<0.33.0" "wheel>=0.31.0"
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  preCheck = ''
+    # remove src module, so tests use the installed module instead
+    mv ./cymem/tests ./tests
+    rm -r ./cymem
   '';
 
-  checkPhase = ''
-    cd cymem/tests
-    ${python.interpreter} -m unittest discover -p "*test*"
-  '';
+  pythonImportsCheck = [ "cymem" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Cython memory pool for RAII-style memory management";
-    homepage = https://github.com/explosion/cymem;
+    homepage = "https://github.com/explosion/cymem";
+    changelog = "https://github.com/explosion/cymem/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ sdll ];
-    };
+    maintainers = with maintainers; [ nickcao ];
+  };
 }

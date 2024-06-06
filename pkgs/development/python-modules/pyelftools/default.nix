@@ -1,31 +1,55 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, python
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "pyelftools";
-  version = "0.25";
+  version = "0.31";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "89c6da6f56280c37a5ff33468591ba9a124e17d71fe42de971818cbff46c1b24";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "eliben";
+    repo = "pyelftools";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-kX89fMXqrEvhMAAjqKHzHmrYizKBt1uCWMOJtFNNhy4=";
   };
+
+  build-system = [ setuptools ];
+
+  doCheck = stdenv.hostPlatform.system == "x86_64-linux" && stdenv.hostPlatform.isGnu;
 
   checkPhase = ''
-    ${python.interpreter} test/all_tests.py
+    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" test/external_tools/readelf
+    ${python.interpreter} test/run_all_unittests.py
+    ${python.interpreter} test/run_examples_test.py
+    ${python.interpreter} test/run_readelf_tests.py --parallel
   '';
 
-  # Tests cannot pass against system-wide readelf
-  # https://github.com/eliben/pyelftools/issues/65
-  doCheck = false;
+  pythonImportsCheck = [ "elftools" ];
 
-  meta = with stdenv.lib; {
-    description = "A library for analyzing ELF files and DWARF debugging information";
-    homepage = https://github.com/eliben/pyelftools;
-    license = licenses.publicDomain;
-    maintainers = [ maintainers.igsha ];
+  meta = {
+    description = "Python library for analyzing ELF files and DWARF debugging information";
+    homepage = "https://github.com/eliben/pyelftools";
+    changelog = "https://github.com/eliben/pyelftools/blob/v${version}/CHANGES";
+    license = with lib.licenses; [
+      # Public domain with Unlicense waiver.
+      unlicense
+      # pyelftools bundles construct library that is licensed under MIT license.
+      # See elftools/construct/{LICENSE,README} in the source code.
+      mit
+    ];
+    maintainers = with lib.maintainers; [
+      igsha
+      pamplemousse
+    ];
+    mainProgram = "readelf.py";
   };
-
 }

@@ -1,16 +1,16 @@
 {
   mkDerivation, lib, kdepimTeam,
   extra-cmake-modules, kdoctools,
-  qtwebengine, kio, kcalcore, kcontacts,
+  qtwebengine, kio, kcalendarcore, kcontacts,
   cyrus_sasl
 }:
 
 mkDerivation {
-  name = "libkgapi";
+  pname = "libkgapi";
   meta = {
-    license = with lib.licenses; [ gpl2 lgpl21 fdl12 ];
+    license = with lib.licenses; [ gpl2Plus lgpl21Plus fdl12Plus ];
     maintainers = kdepimTeam;
   };
   nativeBuildInputs = [ extra-cmake-modules kdoctools ];
-  buildInputs = [ qtwebengine kio kcalcore kcontacts cyrus_sasl ];
+  buildInputs = [ qtwebengine kio kcalendarcore kcontacts cyrus_sasl ];
 }

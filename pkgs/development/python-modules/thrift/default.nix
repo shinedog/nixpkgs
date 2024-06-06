@@ -1,28 +1,39 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonAtLeast,
+  pythonOlder,
+  setuptools,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "thrift";
-  version = "0.11.0";
+  version = "0.20.0";
+  pyproject = true;
+
+  # Still uses distutils
+  disabled = pythonOlder "3.7" || pythonAtLeast "3.12";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "7d59ac4fdcb2c58037ebd4a9da5f9a49e3e034bf75b3f26d9fe48ba3d8806e6b";
+    hash = "sha256-TdZi6t9riuvopBcpUnvWmt9s6qKoaBy+9k0Sc7Po/ro=";
   };
 
-  propagatedBuildInputs = [ six ];
+  build-system = [ setuptools ];
+
+  dependencies = [ six ];
 
   # No tests. Breaks when not disabling.
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "thrift" ];
+
+  meta = with lib; {
     description = "Python bindings for the Apache Thrift RPC system";
-    homepage = http://thrift.apache.org/;
+    homepage = "https://thrift.apache.org/";
     license = licenses.asl20;
     maintainers = with maintainers; [ hbunke ];
   };
-
 }

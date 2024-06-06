@@ -1,4 +1,4 @@
-{ stdenv, cmake, fetchFromGitLab
+{ lib, stdenv, cmake, fetchFromGitLab
 , json_c, libsodium, libxml2, ncurses }:
 
 let
@@ -15,7 +15,7 @@ in stdenv.mkDerivation rec {
     inherit rev;
   };
 
-  sourceRoot = "./source/platform-independent/c/cli";
+  sourceRoot = "${src.name}/platform-independent/c/cli";
 
   postPatch = ''
     rm build
@@ -43,7 +43,9 @@ in stdenv.mkDerivation rec {
     runHook postInstall
   '';
 
-  doCheck = true;
+  # Some tests are expected to fail on ARM64
+  # See: https://gitlab.com/spectre.app/cli/-/issues/27#note_962950844 (mpw is a predecessor to spectre-cli and this issue is relevant to mpw as well)
+  doCheck = !(stdenv.isLinux && stdenv.isAarch64);
 
   checkPhase = ''
     runHook preCheck
@@ -53,9 +55,10 @@ in stdenv.mkDerivation rec {
     runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A stateless password management solution";
-    homepage = https://masterpasswordapp.com/;
+    mainProgram = "mpw";
+    homepage = "https://masterpasswordapp.com/";
     license = licenses.gpl3;
     platforms = platforms.unix;
   };

@@ -17,7 +17,7 @@ let
       ttl ${toString proxy.ttl}
       ${render proxy.rules (ruleNetworkName: rule: ''
       rule ${prefer rule.network ruleNetworkName} {
-        ${rule.method}${if rule.method == "iface" then " ${rule.interface}" else ""}
+        ${rule.method}${optionalString (rule.method == "iface") " ${rule.interface}"}
       }'')}
     }'')}
   '');
@@ -43,7 +43,7 @@ let
       timeout = mkOption {
         type = types.int;
         description = ''
-          Controls how long to wait for a Neighbor Advertisment Message before 
+          Controls how long to wait for a Neighbor Advertisement Message before
           invalidating the entry, in milliseconds.
         '';
         default = 500;
@@ -51,7 +51,7 @@ let
       ttl = mkOption {
         type = types.int;
         description = ''
-          Controls how long a valid or invalid entry remains in the cache, in 
+          Controls how long a valid or invalid entry remains in the cache, in
           milliseconds.
         '';
         default = 30000;
@@ -74,7 +74,7 @@ let
         type = types.nullOr types.str;
         description = ''
           This is the target address is to match against. If no netmask
-          is provided, /128 is assumed. The addresses of serveral rules
+          is provided, /128 is assumed. The addresses of several rules
           may or may not overlap.
           Defaults to the name of the attrset.
         '';
@@ -108,7 +108,7 @@ in {
       type = types.nullOr types.str;
       description = ''
         Interface which is on link-level with router.
-        (Legacy option, use services.ndppd.proxies.&lt;interface&gt;.rules.&lt;network&gt; instead)
+        (Legacy option, use services.ndppd.proxies.\<interface\>.rules.\<network\> instead)
       '';
       default = null;
       example = "eth0";
@@ -117,7 +117,7 @@ in {
       type = types.nullOr types.str;
       description = ''
         Network that we proxy.
-        (Legacy option, use services.ndppd.proxies.&lt;interface&gt;.rules.&lt;network&gt; instead)
+        (Legacy option, use services.ndppd.proxies.\<interface\>.rules.\<network\> instead)
       '';
       default = null;
       example = "1111::/64";
@@ -142,7 +142,11 @@ in {
         messages, and respond to them according to a set of rules.
       '';
       default = {};
-      example = { "eth0".rules."1111::/64" = {}; };
+      example = literalExpression ''
+        {
+          eth0.rules."1111::/64" = {};
+        }
+      '';
     };
   };
 
@@ -153,7 +157,7 @@ in {
     '' ];
 
     services.ndppd.proxies = mkIf (cfg.interface != null && cfg.network != null) {
-      "${cfg.interface}".rules."${cfg.network}" = {};
+      ${cfg.interface}.rules.${cfg.network} = {};
     };
 
     systemd.services.ndppd = {
@@ -161,7 +165,25 @@ in {
       documentation = [ "man:ndppd(1)" "man:ndppd.conf(5)" ];
       after = [ "network-pre.target" ];
       wantedBy = [ "multi-user.target" ];
-      serviceConfig.ExecStart = "${pkgs.ndppd}/bin/ndppd -c ${ndppdConf}";
+      serviceConfig = {
+        ExecStart = "${pkgs.ndppd}/bin/ndppd -c ${ndppdConf}";
+
+        # Sandboxing
+        CapabilityBoundingSet = "CAP_NET_RAW CAP_NET_ADMIN";
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RestrictAddressFamilies = "AF_INET6 AF_PACKET AF_NETLINK";
+        RestrictNamespaces = true;
+        LockPersonality = true;
+        MemoryDenyWriteExecute = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+      };
     };
   };
 }

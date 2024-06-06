@@ -1,33 +1,56 @@
-{ stdenv, fetchFromGitHub, automake, autoconf, libtool, autoreconfHook, gmpxx }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, automake
+, autoconf
+, libtool
+, autoreconfHook
+, gmpxx
+}:
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "givaro";
-  version = "4.1.0";
+  version = "4.2.0";
   src = fetchFromGitHub {
     owner = "linbox-team";
-    repo = "${pname}";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "1l1172c964hni66mjdmhr7766l5k7y63zs3hgcpr10a8f1nx3iwp";
+    sha256 = "sha256-KR0WJc0CSvaBnPRott4hQJhWNBb/Wi6MIhcTExtVobQ=";
   };
+  patches = [
+    # Pull upstream fix for gcc-13:
+    #   https://github.com/linbox-team/givaro/pull/218
+    (fetchpatch {
+      name = "gcc-13.patch";
+      url = "https://github.com/linbox-team/givaro/commit/c7744bb133496cd7ac04688f345646d505e1bf52.patch";
+      hash = "sha256-aAA5o8Va10v0Pqgcpx7qM0TAZiNQgXoR6N9xecj7tDA=";
+    })
+    (fetchpatch {
+      name = "clang-16.patch";
+      url = "https://github.com/linbox-team/givaro/commit/a81d44b3b57c275bcb04ab00db79be02561deaa2.patch";
+      hash = "sha256-sSk+VWffoEjZRTJcHRISLHPyW6yuvI1u8knBOfxNUIE=";
+    })
+  ];
 
   enableParallelBuilding = true;
 
-  nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [autoconf automake libtool gmpxx];
+  nativeBuildInputs = [ autoreconfHook autoconf automake ];
+  buildInputs = [libtool];
+  propagatedBuildInputs = [ gmpxx ];
 
   configureFlags = [
-    "--disable-optimization"
-  ] ++ stdenv.lib.optionals stdenv.isx86_64 {
+    "--without-archnative"
+  ] ++ lib.optionals stdenv.isx86_64 [
     # disable SIMD instructions (which are enabled *when available* by default)
-    "default"        = [ "--disable-sse3" "--disable-ssse3" "--disable-sse41" "--disable-sse42" "--disable-avx" "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "westmere"       = [                                                                        "--disable-avx" "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "sandybridge"    = [                                                                                        "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "ivybridge"      = [                                                                                        "--disable-avx2" "--disable-fma" "--disable-fma4" ];
-    "haswell"        = [                                                                                                                         "--disable-fma4" ];
-    "broadwell"      = [                                                                                                                         "--disable-fma4" ];
-    "skylake"        = [                                                                                                                         "--disable-fma4" ];
-    "skylake-avx512" = [                                                                                                                         "--disable-fma4" ];
-  }.${stdenv.hostPlatform.platform.gcc.arch or "default"};
+    "--${if stdenv.hostPlatform.sse3Support   then "enable" else "disable"}-sse3"
+    "--${if stdenv.hostPlatform.ssse3Support  then "enable" else "disable"}-ssse3"
+    "--${if stdenv.hostPlatform.sse4_1Support then "enable" else "disable"}-sse41"
+    "--${if stdenv.hostPlatform.sse4_2Support then "enable" else "disable"}-sse42"
+    "--${if stdenv.hostPlatform.avxSupport    then "enable" else "disable"}-avx"
+    "--${if stdenv.hostPlatform.avx2Support   then "enable" else "disable"}-avx2"
+    "--${if stdenv.hostPlatform.fmaSupport    then "enable" else "disable"}-fma"
+    "--${if stdenv.hostPlatform.fma4Support   then "enable" else "disable"}-fma4"
+  ];
 
   # On darwin, tests are linked to dylib in the nix store, so we need to make
   # sure tests run after installPhase.
@@ -36,10 +59,10 @@ stdenv.mkDerivation rec {
   doCheck = false;
 
   meta = {
-    inherit version;
-    description = ''A C++ library for arithmetic and algebraic computations'';
-    license = stdenv.lib.licenses.cecill-b;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.unix;
+    description = "A C++ library for arithmetic and algebraic computations";
+    mainProgram = "givaro-config";
+    license = lib.licenses.cecill-b;
+    maintainers = [lib.maintainers.raskin];
+    platforms = lib.platforms.unix;
   };
 }

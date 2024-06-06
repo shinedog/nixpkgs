@@ -1,26 +1,24 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ stdenv, fetchFromGitHub, cmake, lib }:
 
-let
-  version = "2.8.1";
-in
-stdenv.mkDerivation {
-  name = "libversion-${version}";
+stdenv.mkDerivation rec {
+  pname = "libversion";
+  version = "3.0.3";
 
   src = fetchFromGitHub {
     owner = "repology";
     repo = "libversion";
     rev = version;
-    sha256 = "0h0yfcgxll09dckzjb1im3yf54cjkpsflr7r4kwz1jcr3fxq41fz";
+    hash = "sha256-REmXD0NFd7Af01EU/f2IGoTKiju6ErTI7WUinvrAzaA=";
   };
 
   nativeBuildInputs = [ cmake ];
 
-  doCheck = true;
   checkTarget = "test";
+  doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Advanced version string comparison library";
-    homepage = https://github.com/repology/libversion;
+    homepage = "https://github.com/repology/libversion";
     license = with licenses; [ mit ];
     maintainers = with maintainers; [ ryantm ];
     platforms = platforms.unix;

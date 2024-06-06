@@ -1,40 +1,68 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, mock
-, twisted
-, pyopenssl
-, service-identity
+{
+  buildPythonPackage,
+  fetchPypi,
+  lib,
+  mock,
+  pyopenssl,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  six,
+  twisted,
+  txi2p-tahoe,
+  txtorcon,
+  versioneer,
 }:
 
 buildPythonPackage rec {
   pname = "foolscap";
-  version = "0.13.1";
+  version = "23.3.0";
+
+  pyproject = true;
+  build-system = [
+    setuptools
+    versioneer
+  ];
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0sqxp4fshnpcv69c2j04v8c22pjak28iwscxv998h2s3054knxz2";
+    hash = "sha256-Vu7oXC1brsgBwr2q59TAgx8j1AFRbi5mjRNIWZTbkUU=";
   };
 
-  propagatedBuildInputs = [ mock twisted pyopenssl service-identity ];
-
-  checkPhase = ''
-    # Either uncomment this, or remove this custom check phase entirely, if
-    # you wish to do battle with the foolscap tests. ~ C.
-    # trial foolscap
+  postPatch = ''
+    # Remove vendorized versioneer.py
+    rm versioneer.py
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://foolscap.lothar.com/;
-    description = "Foolscap, an RPC protocol for Python that follows the distributed object-capability model";
-    longDescription = ''
-      "Foolscap" is the name for the next-generation RPC protocol,
-      intended to replace Perspective Broker (part of Twisted).
-      Foolscap is a protocol to implement a distributed
-      object-capabilities model in Python.
-    '';
-    # See http://foolscap.lothar.com/trac/browser/LICENSE.
-    license = licenses.mit;
+  dependencies = [
+    six
+    twisted
+    pyopenssl
+  ] ++ twisted.optional-dependencies.tls;
+
+  passthru.optional-dependencies = {
+    i2p = [ txi2p-tahoe ];
+    tor = [ txtorcon ];
   };
 
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  pythonImportsCheck = [ "foolscap" ];
+
+  meta = with lib; {
+    description = "RPC protocol for Python that follows the distributed object-capability model";
+    longDescription = ''
+      "Foolscap" is the name for the next-generation RPC protocol, intended to
+      replace Perspective Broker (part of Twisted). Foolscap is a protocol to
+      implement a distributed object-capabilities model in Python.
+    '';
+    homepage = "https://github.com/warner/foolscap";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
+  };
 }

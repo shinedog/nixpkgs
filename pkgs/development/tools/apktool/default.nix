@@ -1,37 +1,46 @@
-{ stdenv, fetchurl, makeWrapper, jre, build-tools }:
+{ lib
+, stdenv
+, fetchurl
+, makeWrapper
+, jdk_headless
+, aapt
+}:
 
 stdenv.mkDerivation rec {
-  name = "apktool-${version}";
-  version = "2.4.0";
+  pname = "apktool";
+  version = "2.9.3";
 
   src = fetchurl {
     urls = [
       "https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_${version}.jar"
       "https://github.com/iBotPeaches/Apktool/releases/download/v${version}/apktool_${version}.jar"
     ];
-    sha256 = "1hdwgsw3ggmdzv523wq037kjxhxqp1xq8n8m1qb22vvdj7l1dwd0";
+    hash = "sha256-eVbrBBlDAM4NCoStGHce68lLifuNHdzOjqTAVoGGRvQ=";
   };
 
-  phases = [ "installPhase" ];
+  dontUnpack = true;
 
   nativeBuildInputs = [ makeWrapper ];
 
   sourceRoot = ".";
 
-  installPhase = ''
-    install -D ${src} "$out/libexec/apktool/apktool.jar"
-    mkdir -p "$out/bin"
-    makeWrapper "${jre}/bin/java" "$out/bin/apktool" \
-        --add-flags "-jar $out/libexec/apktool/apktool.jar" \
-        --prefix PATH : "${builtins.head build-tools}/libexec/android-sdk/build-tools/28.0.3"
-  '';
+  installPhase =
+    ''
+      install -D ${src} "$out/libexec/apktool/apktool.jar"
+      mkdir -p "$out/bin"
+      makeWrapper "${jdk_headless}/bin/java" "$out/bin/apktool" \
+          --add-flags "-jar $out/libexec/apktool/apktool.jar" \
+          --prefix PATH : ${lib.getBin aapt}
+    '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A tool for reverse engineering Android apk files";
-    homepage    = https://ibotpeaches.github.io/Apktool/;
-    license     = licenses.asl20;
+    mainProgram = "apktool";
+    homepage = "https://ibotpeaches.github.io/Apktool/";
+    changelog = "https://github.com/iBotPeaches/Apktool/releases/tag/v${version}";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
+    license = licenses.asl20;
     maintainers = with maintainers; [ offline ];
-    platforms   = with platforms; unix;
+    platforms = with platforms; unix;
   };
-
 }

@@ -1,17 +1,20 @@
-{ stdenv, fetchgit, utillinux, ncurses, flex, bison }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, util-linux, ncurses, flex, bison }:
 
 stdenv.mkDerivation rec {
-  name = "unnethack-5.3.1";
+  pname = "unnethack";
+  version = "5.3.2";
 
-  src = fetchgit {
-    url = "https://github.com/UnNetHack/UnNetHack";
-    rev = "63677eb256b5a75430f190cfb0f76bdd9bd0b9dd";
-    sha256 = "0w6vyg0j2xdvr5vdlyf3dwliyxjzcr5fdbx5maygxiql44j104v3";
+  src = fetchFromGitHub {
+    name = "UnNetHack";
+    owner = "UnNetHack";
+    repo = "UnNetHack";
+    rev = version;
+    sha256 = "1rg0mqyplgn3dfh3wz09a600qxk7aidqw4d84kyiincljvhyb7ps";
   };
 
   buildInputs = [ ncurses ];
 
-  nativeBuildInputs = [ utillinux flex bison ];
+  nativeBuildInputs = [ util-linux flex bison ];
 
   configureFlags = [ "--enable-curses-graphics"
                      "--disable-tty-graphics"
@@ -21,6 +24,25 @@ stdenv.mkDerivation rec {
                    ];
 
   makeFlags = [ "GAMEPERM=744" ];
+  patches = [
+    # fix regression with bison, merged in master
+    (fetchpatch {
+      name = "fix-bison.patch";
+      url = "https://github.com/UnNetHack/UnNetHack/commit/04f0a3a850a94eb8837ddcef31303968240d1c31.patch";
+      sha256 = "1zblbwqqz9nx16k6n31wi2hdvz775lvzmkjblmrx18nbm4ylj0n9";
+    })
+  ];
+
+  # Fails at startup due to off-by-one:
+  #   https://github.com/NixOS/nixpkgs/issues/292113#issuecomment-1969989058
+  # TODO: drop it once 6.x branch releases.
+  hardeningDisable = [ "fortify3" ];
+
+  # Fails the build occasionally due to missing buid depends:
+  #   ./../sys/unix/unixmain.c:9:10: fatal error: date.h: No such file or directory
+  # TODO: remove once upstream issue is fixed:
+  #   https://github.com/UnNetHack/UnNetHack/issues/56
+  enableParallelBuilding = false;
 
   postInstall = ''
     cp -r /tmp/unnethack $out/share/unnethack/profile
@@ -45,11 +67,12 @@ stdenv.mkDerivation rec {
     chmod +x $out/bin/unnethack
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Fork of NetHack";
-    homepage = https://unnethack.wordpress.com/;
+    mainProgram = "unnethack";
+    homepage = "https://unnethack.wordpress.com/";
     license = "nethack";
     platforms = platforms.all;
     maintainers = with maintainers; [ abbradar ];
-  }; 
+  };
 }

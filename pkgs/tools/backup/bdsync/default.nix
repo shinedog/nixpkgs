@@ -1,43 +1,41 @@
-{ stdenv, fetchFromGitHub, openssl, coreutils, which }:
+{ lib, stdenv, fetchFromGitHub
+, openssl
+, pandoc
+, which
+}:
 
 stdenv.mkDerivation rec {
-
-  name = "${pname}-${version}";
   pname = "bdsync";
-  version = "0.10.1";
+  version = "0.11.3";
 
   src = fetchFromGitHub {
-    owner = "TargetHolding";
+    owner = "rolffokkens";
     repo = pname;
     rev = "v${version}";
-    sha256 = "144hlbk3k29l7sja6piwhd2jsnzzsak13fcjbahd6m8yimxyb2nf";
+    sha256 = "sha256-58yoF6s0WjH+1mTY7X5OX53YgcnDmGxoCR8Kvl6lP+A=";
   };
+
+  nativeBuildInputs = [ pandoc which ];
+  buildInputs = [ openssl ];
 
   postPatch = ''
     patchShebangs ./tests.sh
     patchShebangs ./tests/
   '';
 
-  buildInputs = [ openssl coreutils which ];
-
   doCheck = true;
-  checkPhase = ''
-    make test
-  '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/share/man/man1
-    cp bdsync $out/bin/
-    cp bdsync.1 $out/share/man/man1/
+    install -Dm755 bdsync -t $out/bin/
+    install -Dm644 bdsync.1 -t $out/share/man/man1/
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Fast block device synchronizing tool";
-    homepage = https://github.com/TargetHolding/bdsync;
-    license = licenses.gpl2;
+    homepage = "https://github.com/rolffokkens/bdsync";
+    license = licenses.gpl2Only;
     platforms = platforms.linux;
     maintainers = with maintainers; [ jluttine ];
+    mainProgram = "bdsync";
   };
-
 }

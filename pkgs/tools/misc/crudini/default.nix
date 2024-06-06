@@ -1,48 +1,59 @@
-{ stdenv, fetchFromGitHub, python2Packages, help2man }:
+{ lib
+, fetchFromGitHub
+, python3Packages
+, help2man
+, installShellFiles
+}:
 
-python2Packages.buildPythonApplication rec {
-  name = "crudini-${version}";
-  version = "0.9";
+python3Packages.buildPythonApplication rec {
+  pname = "crudini";
+  version = "0.9.5";
+  format = "pyproject";
 
   src = fetchFromGitHub {
-    owner  = "pixelb";
-    repo   = "crudini";
-    rev    = version;
-    sha256 = "0x9z9lsygripj88gadag398pc9zky23m16wmh8vbgw7ld1nhkiav";
+    owner = "pixelb";
+    repo = "crudini";
+    rev = version;
+    hash = "sha256-BU4u7uBsNyDOwWUjOIlBWcf1AeUXXZ+johAe+bjws1U=";
   };
 
-  nativeBuildInputs = [ help2man ];
-  propagatedBuildInputs = with python2Packages; [ iniparse ];
-
-  doCheck = true;
-
-  prePatch = ''
-    # make runs the unpatched version in src so we need to patch them in addition to tests
-    patchShebangs .
+  postPatch = ''
+    patchShebangs crudini.py crudini-help tests/test.sh
   '';
 
-  postBuild = ''
-    make all
-  '';
+  nativeBuildInputs = [
+    help2man
+    installShellFiles
+    python3Packages.setuptools
+    python3Packages.setuptools-scm
+    python3Packages.wheel
+  ];
+
+  propagatedBuildInputs = with python3Packages; [ iniparse ];
 
   postInstall = ''
-    mkdir -p $out/share/{man/man1,doc/crudini}
+    # this just creates the man page
+    make all
 
-    cp README EXAMPLES $out/share/doc/crudini/
-    for f in *.1 ; do
-      gzip -c $f > $out/share/man/man1/$(basename $f).gz
-    done
+    install -Dm444 -t $out/share/doc/${pname} README.md EXAMPLES
+    installManPage *.1
   '';
 
   checkPhase = ''
+    runHook preCheck
+
     pushd tests >/dev/null
     ./test.sh
+    popd >/dev/null
+
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A utility for manipulating ini files ";
-    homepage = http://www.pixelbeat.org/programs/crudini/;
-    license = licenses.gpl2;
+    homepage = "https://www.pixelbeat.org/programs/crudini/";
+    license = licenses.gpl2Only;
     maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "crudini";
   };
 }

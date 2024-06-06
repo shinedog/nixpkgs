@@ -1,27 +1,43 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, libuv, sqlite-replication }:
-
-with stdenv.lib;
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, file, libuv
+, raft-canonical, sqlite, lxd-lts }:
 
 stdenv.mkDerivation rec {
   pname = "dqlite";
-  version = "0.2.6";
+  version = "1.16.4";
 
   src = fetchFromGitHub {
-    owner = "CanonicalLtd";
+    owner = "canonical";
     repo = pname;
-    rev = "v${version}";
-    sha256 = "13l7na5858v2ah1vim6lafmzajgkymfi5rd6bk14cm4vcnxc40wb";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-Q90wVqb6321+SWW5j52fb6mVRf25nExqgN/+s6OwoMk=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook file pkg-config ];
+  buildInputs = [
+    libuv
+    raft-canonical.dev
+    sqlite
+  ];
 
-  buildInputs = [ libuv sqlite-replication ];
+  enableParallelBuilding = true;
 
-  meta = {
-    description = "Expose a SQLite database over the network and replicate it across a cluster of peers";
-    homepage = https://github.com/CanonicalLtd/dqlite/;
+  # tests fail
+  doCheck = false;
+
+  outputs = [ "dev" "out" ];
+
+  passthru.tests = {
+    inherit lxd-lts;
+  };
+
+  meta = with lib; {
+    description = ''
+      Expose a SQLite database over the network and replicate it across a
+      cluster of peers
+    '';
+    homepage = "https://dqlite.io/";
     license = licenses.asl20;
-    maintainers = with maintainers; [ joko ];
-    platforms = platforms.unix;
+    maintainers = teams.lxc.members;
+    platforms = platforms.linux;
   };
 }

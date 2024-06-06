@@ -1,24 +1,64 @@
-{ stdenv, python3Packages, xpdf, imagemagick, tesseract }:
+{ lib
+, fetchFromGitHub
+, fetchpatch
+, ghostscript
+, imagemagick
+, poppler_utils
+, python3
+, tesseract5
+}:
 
-python3Packages.buildPythonPackage rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "invoice2data";
-  version = "0.2.93";
+  version = "0.4.4";
+  format = "setuptools";
 
-  src = python3Packages.fetchPypi {
-    inherit pname version;
-    sha256 = "1phz0a8jxg074k0im7shrrdfvdps7bn1fa4zwcf8q3sa2iig26l4";
+  src = fetchFromGitHub {
+    owner = "invoice-x";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-pAvkp8xkHYi/7ymbxaT7/Jhu44j2P8emm8GyXC6IBnI=";
   };
 
-  makeWrapperArgs = ["--prefix" "PATH" ":" "${stdenv.lib.makeBinPath [ imagemagick xpdf tesseract ]}" ];
+  patches = [
+    # https://github.com/invoice-x/invoice2data/pull/522
+    (fetchpatch {
+      name = "clean-up-build-dependencies.patch";
+      url = "https://github.com/invoice-x/invoice2data/commit/ccea3857c7c8295ca51dc24de6cde78774ea7e64.patch";
+      hash = "sha256-BhqPW4hWG/EaR3qBv5a68dcvIMrCCT74GdDHr0Mss5Q=";
+    })
+  ];
 
-  propagatedBuildInputs = with python3Packages; [ unidecode dateparser pyyaml pillow chardet pdfminer ];
+  nativeBuildInputs = with python3.pkgs; [
+    setuptools-git
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    dateparser
+    pdfminer-six
+    pillow
+    pyyaml
+    setuptools
+  ];
+
+  makeWrapperArgs = ["--prefix" "PATH" ":" (lib.makeBinPath [
+    ghostscript
+    imagemagick
+    tesseract5
+    poppler_utils
+  ])];
 
   # Tests fails even when ran manually on my ubuntu machine !!
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [
+    "invoice2data"
+  ];
+
+  meta = with lib; {
     description = "Data extractor for PDF invoices";
-    homepage = https://github.com/invoice-x/invoice2data;
+    mainProgram = "invoice2data";
+    homepage = "https://github.com/invoice-x/invoice2data";
     license = licenses.mit;
     maintainers = with maintainers; [ psyanticy ];
   };

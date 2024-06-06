@@ -1,20 +1,27 @@
-{ stdenv, fetchFromGitHub, SDL, SDL_ttf, SDL_gfx, SDL_mixer, autoreconfHook,
-  libpng, glew, makeDesktopItem }:
+{ lib, stdenv, fetchFromGitHub, SDL, SDL_ttf, SDL_gfx, SDL_mixer, libpng
+, glew, dejavu_fonts, makeDesktopItem }:
 
 stdenv.mkDerivation rec {
-  name = "hyperrogue-${version}";
-  version = "10.5e";
+  pname = "hyperrogue";
+  version = "13.0i";
 
   src = fetchFromGitHub {
     owner = "zenorogue";
     repo = "hyperrogue";
     rev = "v${version}";
-    sha256 = "1sjr26if3xv8xv52app1hkxs0bbgbviagydm4mdwbxjpd6v3d1aa";
+    sha256 = "sha256-jXiZ/+XvDluXvNFmSp4suAFVsQvbHEx6fa4iztu+n6c=";
   };
 
-  CPPFLAGS = "-I${SDL.dev}/include/SDL";
+  CXXFLAGS = [
+    "-I${lib.getDev SDL}/include/SDL"
+    "-DHYPERPATH='\"${placeholder "out"}/share/hyperrogue/\"'"
+    "-DRESOURCEDESTDIR=HYPERPATH"
+    "-DHYPERFONTPATH='\"${dejavu_fonts}/share/fonts/truetype/\"'"
+  ];
+  HYPERROGUE_USE_GLEW = 1;
+  HYPERROGUE_USE_PNG = 1;
 
-  buildInputs = [ autoreconfHook SDL SDL_ttf SDL_gfx SDL_mixer libpng glew ];
+  buildInputs = [ SDL SDL_ttf SDL_gfx SDL_mixer libpng glew ];
 
   desktopItem = makeDesktopItem {
     name = "hyperrogue";
@@ -23,10 +30,17 @@ stdenv.mkDerivation rec {
     comment = meta.description;
     icon = "hyperrogue";
     exec = "hyperrogue";
-    categories = "Game;AdventureGame;";
+    categories = [ "Game" "AdventureGame" ];
   };
 
-  postInstall = ''
+  installPhase = ''
+    install -d $out/share/hyperrogue/{sounds,music}
+
+    install -m 555 -D hyperrogue $out/bin/hyperrogue
+    install -m 444 -D hyperrogue-music.txt *.dat $out/share/hyperrogue
+    install -m 444 -D music/* $out/share/hyperrogue/music
+    install -m 444 -D sounds/* $out/share/hyperrogue/sounds
+
     install -m 444 -D ${desktopItem}/share/applications/hyperrogue.desktop \
       $out/share/applications/hyperrogue.desktop
     install -m 444 -D hyperroid/app/src/main/res/drawable-ldpi/icon.png \
@@ -45,9 +59,10 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://www.roguetemple.com/z/hyper/;
+  meta = with lib; {
+    homepage = "https://www.roguetemple.com/z/hyper/";
     description = "A roguelike game set in hyperbolic geometry";
+    mainProgram = "hyperrogue";
     maintainers = with maintainers; [ rardiol ];
     license = licenses.gpl2;
     platforms = platforms.all;

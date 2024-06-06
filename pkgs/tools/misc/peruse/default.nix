@@ -1,33 +1,62 @@
-{
-  mkDerivation, fetchFromGitHub, lib,
-  extra-cmake-modules, kdoctools, wrapGAppsHook,
-  baloo, karchive, kconfig, kcrash, kfilemetadata, kinit, kirigami2, knewstuff, plasma-framework
+{ stdenv
+, fetchurl
+, lib
+, extra-cmake-modules
+, kdoctools
+, wrapQtAppsHook
+, baloo
+, karchive
+, kconfig
+, kcrash
+, kfilemetadata
+, kinit
+, kirigami2
+, knewstuff
+, okular
+, plasma-framework
 }:
 
-let
+stdenv.mkDerivation (finalAttrs: {
   pname = "peruse";
-  version = "1.2.20180816";
+  # while technically a beta, the latest release is from 2016 and doesn't build without a lot of
+  # patching
+  version = "1.80";
 
-in mkDerivation rec {
-  name = "${pname}-${version}";
-
-  # The last formal release from 2016 uses kirigami1 which is deprecated
-  src = fetchFromGitHub {
-    owner  = "KDE";
-    repo   = pname;
-    rev    = "f50027c6c9c680c4e2ce1dba4ec43364e661e7a3";
-    sha256 = "1217fa6w9ryh499agcc67mnp8k9dah4r0sw74qzsbk4p154jbgch";
+  src = fetchurl {
+    url = "mirror://kde/stable/peruse/peruse-${finalAttrs.version}.tar.xz";
+    hash = "sha256-xnSVnKF20jbxVoFW41A22NZWVZUry/F7G+Ts5NK6M1E=";
   };
 
-  nativeBuildInputs = [ extra-cmake-modules kdoctools wrapGAppsHook ];
+  nativeBuildInputs = [
+    extra-cmake-modules
+    kdoctools
+    wrapQtAppsHook
+  ];
 
-  propagatedBuildInputs = [ baloo karchive kconfig kcrash kfilemetadata kinit kirigami2 knewstuff plasma-framework ];
+  propagatedBuildInputs = [
+    baloo
+    karchive
+    kconfig
+    kcrash
+    kfilemetadata
+    kinit
+    kirigami2
+    knewstuff
+    okular
+    plasma-framework
+  ];
 
-  pathsToLink = [ "/etc/xdg/peruse.knsrc"];
+  # the build is otherwise crazy loud
+  cmakeFlags = [ "-Wno-dev" ];
+
+  pathsToLink = [ "/etc/xdg/peruse.knsrc" ];
 
   meta = with lib; {
-    license = licenses.gpl2;
+    description = "A comic book reader";
+    homepage = "https://peruse.kde.org";
+    license = licenses.gpl2Only;
     maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "peruse";
+    inherit (kirigami2.meta) platforms;
   };
-
-}
+})

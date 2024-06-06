@@ -1,20 +1,32 @@
-{ stdenv, buildPythonPackage, fetchPypi, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  six,
+  pytest,
+}:
 
 buildPythonPackage rec {
   pname = "latexcodec";
-  version = "1.0.6";
+  version = "3.0.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0s4wdbg0w2l8pj3i0y4510i0s04p8nhxcsa2z41bjsv0k66npb81";
+    sha256 = "sha256-kX3F/iQnYswZ2WPmVItC1joRgCjN0zYdYjl+O2OLa8U=";
   };
 
   propagatedBuildInputs = [ six ];
 
-  meta = {
+  nativeCheckInputs = [ pytest ];
+
+  checkPhase = ''
+    pytest
+  '';
+
+  meta = with lib; {
     homepage = "https://github.com/mcmtroffaes/latexcodec";
     description = "Lexer and codec to work with LaTeX code in Python";
-    license = stdenv.lib.licenses.mit;
+    license = licenses.mit;
   };
-
 }

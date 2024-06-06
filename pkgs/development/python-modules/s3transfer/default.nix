@@ -1,53 +1,56 @@
-{ stdenv
-, fetchPypi
-, pythonOlder
-, buildPythonPackage
-, docutils
-, mock
-, nose
-, coverage
-, wheel
-, unittest2
-, botocore
-, futures
+{
+  lib,
+  stdenv,
+  botocore,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
   pname = "s3transfer";
-  version = "0.2.0";
+  version = "0.10.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f23d5cb7d862b104401d9021fc82e5fa0e0cf57b7660a1331425aab0c691d021";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "boto";
+    repo = "s3transfer";
+    rev = "refs/tags/${version}";
+    hash = "sha256-EHNkYviafnuU8AADp9oyaDuAnoPOdOVNSLCcoONnHPY=";
   };
 
-  foo = 1;
+  nativeBuildInputs = [ setuptools ];
 
-  propagatedBuildInputs =
-    [ botocore
-    ] ++ stdenv.lib.optional (pythonOlder "3") futures;
+  propagatedBuildInputs = [ botocore ];
 
-  buildInputs = [
-    docutils
-    mock
-    nose
-    coverage
-    wheel
-    unittest2
-  ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    pushd s3transfer/tests
-    nosetests -v unit/ functional/
-    popd
-  '';
+  disabledTestPaths =
+    [
+      # Requires network access
+      "tests/integration"
+    ]
+    ++
+    # There was a change in python 3.8 that defaults multiprocessing to spawn instead of fork on macOS
+    # See https://bugs.python.org/issue33725 and https://github.com/python/cpython/pull/13603.
+    # I suspect the underlying issue here is that upstream tests aren't compatible with spawn multiprocessing, and pass on linux where the default is still fork
+    lib.optionals stdenv.isDarwin [ "tests/unit/test_compat.py" ];
 
-  # version on pypi has no tests/ dir
-  doCheck = false;
+  pythonImportsCheck = [ "s3transfer" ];
 
-  meta = {
-    homepage = https://github.com/boto/s3transfer;
-    license = stdenv.lib.licenses.asl20;
-    description = "A library for managing Amazon S3 transfers";
+  passthru.optional-dependencies = {
+    crt = [ botocore.optional-dependencies.crt ];
+  };
+
+  meta = with lib; {
+    description = "Library for managing Amazon S3 transfers";
+    homepage = "https://github.com/boto/s3transfer";
+    changelog = "https://github.com/boto/s3transfer/blob/${version}/CHANGELOG.rst";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ nickcao ];
   };
 }

@@ -1,61 +1,77 @@
-{ stdenv
-, python3Packages
+{ lib
+, python3
 , fetchFromGitHub
 , systemd
-, xrandr }:
+, xrandr
+, installShellFiles
+, desktop-file-utils
+}:
 
-let
-  python = python3Packages.python;
-  version = "1.8.1";
-in
-  stdenv.mkDerivation {
-    name = "autorandr-${version}";
+python3.pkgs.buildPythonApplication rec {
+  pname = "autorandr";
+  version = "1.14";
+  format = "other";
 
-    buildInputs = [ python ];
+  src = fetchFromGitHub {
+    owner = "phillipberndt";
+    repo = "autorandr";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Ru3nQF0DB98rKSew6QtxAZQEB/9nVlIelNX3M7bNYHk=";
+  };
 
-    # no wrapper, as autorandr --batch does os.environ.clear()
-    buildPhase = ''
-      substituteInPlace autorandr.py \
-        --replace 'os.popen("xrandr' 'os.popen("${xrandr}/bin/xrandr' \
-        --replace '["xrandr"]' '["${xrandr}/bin/xrandr"]'
-    '';
+  nativeBuildInputs = [ installShellFiles desktop-file-utils ];
+  propagatedBuildInputs = with python3.pkgs; [ packaging ];
 
-    installPhase = ''
-      runHook preInstall
-      make install TARGETS='autorandr' PREFIX=$out
+  buildPhase = ''
+    substituteInPlace autorandr.py \
+      --replace 'os.popen("xrandr' 'os.popen("${xrandr}/bin/xrandr' \
+      --replace '["xrandr"]' '["${xrandr}/bin/xrandr"]'
+  '';
 
-      make install TARGETS='bash_completion' DESTDIR=$out/share/bash-completion/completions
+  patches = [ ./0001-don-t-use-sys.executable.patch ];
 
-      make install TARGETS='autostart_config' PREFIX=$out DESTDIR=$out
+  outputs = [ "out" "man" ];
 
-      ${if systemd != null then ''
-        make install TARGETS='systemd udev' PREFIX=$out DESTDIR=$out \
-          SYSTEMD_UNIT_DIR=/lib/systemd/system \
-          UDEV_RULES_DIR=/etc/udev/rules.d
-        substituteInPlace $out/etc/udev/rules.d/40-monitor-hotplug.rules \
-          --replace /bin/systemctl "${systemd}/bin/systemctl"
-      '' else ''
-        make install TARGETS='pmutils' DESTDIR=$out \
-          PM_SLEEPHOOKS_DIR=/lib/pm-utils/sleep.d
-        make install TARGETS='udev' PREFIX=$out DESTDIR=$out \
-          UDEV_RULES_DIR=/etc/udev/rules.d
-      ''}
+  installPhase = ''
+    runHook preInstall
+    make install TARGETS='autorandr' PREFIX=$out
 
-      runHook postInstall
-    '';
+    # zsh completions exist but currently have no make target, use
+    # installShellCompletions for both
+    # see https://github.com/phillipberndt/autorandr/issues/197
+    installShellCompletion --cmd autorandr \
+        --bash contrib/bash_completion/autorandr \
+        --zsh contrib/zsh_completion/_autorandr \
+        --fish contrib/fish_copletion/autorandr.fish
+    # In the line above there's a typo that needs to be fixed in the next
+    # release
 
-    src = fetchFromGitHub {
-      owner = "phillipberndt";
-      repo = "autorandr";
-      rev = "${version}";
-      sha256 = "1bp1cqkrpg77rjyh4lq1agc719fmxn92jkiicf6nbhfl8kf3l3vy";
-    };
+    make install TARGETS='autostart_config' PREFIX=$out DESTDIR=$out
 
-    meta = {
-      homepage = https://github.com/phillipberndt/autorandr/;
-      description = "Auto-detect the connect display hardware and load the appropiate X11 setup using xrandr";
-      license = stdenv.lib.licenses.gpl3Plus;
-      maintainers = [ stdenv.lib.maintainers.coroa ];
-      platforms = stdenv.lib.platforms.unix;
-    };
-  }
+    make install TARGETS='manpage' PREFIX=$man
+
+    ${if systemd != null then ''
+      make install TARGETS='systemd udev' PREFIX=$out DESTDIR=$out \
+        SYSTEMD_UNIT_DIR=/lib/systemd/system \
+        UDEV_RULES_DIR=/etc/udev/rules.d
+      substituteInPlace $out/etc/udev/rules.d/40-monitor-hotplug.rules \
+        --replace /bin/systemctl "/run/current-system/systemd/bin/systemctl"
+    '' else ''
+      make install TARGETS='pmutils' DESTDIR=$out \
+        PM_SLEEPHOOKS_DIR=/lib/pm-utils/sleep.d
+      make install TARGETS='udev' PREFIX=$out DESTDIR=$out \
+        UDEV_RULES_DIR=/etc/udev/rules.d
+    ''}
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/phillipberndt/autorandr/";
+    description = "Automatically select a display configuration based on connected devices";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ coroa ];
+    platforms = platforms.unix;
+    mainProgram = "autorandr";
+  };
+}

@@ -1,20 +1,46 @@
-{ lib, fetchFromGitHub, buildPythonApplication }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  python,
+  graphviz,
+  pythonOlder,
+}:
 
-buildPythonApplication {
-  name = "gprof2dot-2017-09-19";
+buildPythonPackage rec {
+  pname = "gprof2dot";
+  version = "2022.07.29";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchFromGitHub {
     owner = "jrfonseca";
     repo = "gprof2dot";
-    rev = "2017.09.19";
-    sha256 = "1b5wvjv5ykbhz7aix7l3y7mg1hxi0vgak4a49gr92sdlz8blj51v";
+    rev = "refs/tags/${version}";
+    hash = "sha256-nIsBO6KTyG2VZZRXrkU/T/a9Ki1x6hda5Vv3rZv/mJM=";
   };
 
+  makeWrapperArgs = [ "--prefix PATH : ${lib.makeBinPath [ graphviz ]}" ];
+
+  # Needed so dot is on path of the test script
+  nativeCheckInputs = [ graphviz ];
+
+  checkPhase = ''
+    runHook preCheck
+
+    # if options not specified, will use unwrapped gprof2dot from original source
+    ${python.interpreter} tests/test.py --python bash --gprof2dot $out/bin/gprof2dot
+
+    runHook postCheck
+  '';
+
   meta = with lib; {
-    homepage = https://github.com/jrfonseca/gprof2dot;
     description = "Python script to convert the output from many profilers into a dot graph";
+    mainProgram = "gprof2dot";
+    homepage = "https://github.com/jrfonseca/gprof2dot";
+    changelog = "https://github.com/jrfonseca/gprof2dot/releases/tag/${version}";
     license = licenses.lgpl3Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.pmiddend ];
+    maintainers = with maintainers; [ pmiddend ];
   };
 }

@@ -1,17 +1,39 @@
-{ stdenv, fetchurl, pkgconfig, intltool, iconnamingutils, librsvg, hicolor-icon-theme, gtk3 }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, iconnamingutils
+, librsvg
+, gtk3
+, hicolor-icon-theme
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "mate-icon-theme-${version}";
-  version = "1.22.1";
+  pname = "mate-icon-theme";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1pn1xbmr4w4mi45nwk1qh18z9rlngmkhp9bw671yn4k6sii8fi3k";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "lNYHkGDKXfdFQpId5O6ji30C0HVhyRk1bZXeh2+abTo=";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool iconnamingutils ];
+  nativeBuildInputs = [
+    pkg-config
+    gettext
+    iconnamingutils
+  ];
 
-  buildInputs = [ librsvg hicolor-icon-theme ];
+  buildInputs = [
+    librsvg
+  ];
+
+  propagatedBuildInputs = [
+    hicolor-icon-theme
+  ];
+
+  dontDropIconThemeCache = true;
 
   postInstall = ''
     for theme in "$out"/share/icons/*; do
@@ -19,11 +41,15 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Icon themes from MATE";
-    homepage = https://mate-desktop.org;
-    license = stdenv.lib.licenses.lgpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
+    homepage = "https://mate-desktop.org";
+    license = licenses.lgpl3Plus;
+    platforms = platforms.linux;
+    maintainers = teams.mate.members;
   };
 }

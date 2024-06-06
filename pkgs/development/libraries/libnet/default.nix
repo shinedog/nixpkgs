@@ -1,19 +1,28 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub, autoconf, automake, libtool }:
 
 stdenv.mkDerivation rec {
-  name = "libnet-${version}";
-  version = "1.2-rc3";
+  pname = "libnet";
+  version = "1.3";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/libnet-dev/${name}.tar.gz";
-    sha256 = "0qsapqa7dzq9f6lb19kzilif0pj82b64fjv5bq086hflb9w81hvj";
+  src = fetchFromGitHub {
+    owner = "sam-github";
+    repo = "libnet";
+    rev = "v${version}";
+    hash = "sha256-P3LaDMMNPyEnA8nO1Bm7H0mW/hVBr0cFdg+p2JmWcGI=";
   };
 
-  patches = [ ./fix-includes.patch ];
+  nativeBuildInputs = [
+    autoconf
+    automake
+    libtool
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/sam-github/libnet;
+  preConfigure = "./autogen.sh";
+
+  meta = with lib; {
+    homepage = "https://github.com/sam-github/libnet";
     description = "Portable framework for low-level network packet construction";
+    mainProgram = "libnet-config";
     license = licenses.bsd3;
     platforms = platforms.unix;
   };

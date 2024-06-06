@@ -1,31 +1,25 @@
-{ lib, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, nixosTests }:
 
-buildGoPackage rec {
-  name = "restic-rest-server-${version}";
-  version = "0.9.7";
-
-  goPackagePath = "github.com/restic/rest-server";
+buildGoModule rec {
+  pname = "restic-rest-server";
+  version = "0.12.1";
 
   src = fetchFromGitHub {
     owner = "restic";
     repo = "rest-server";
     rev = "v${version}";
-    sha256 = "1g47ly1pxwn0znbj3v5j6kqhn66d4wf0d5gjqzig75pzknapv8qj";
+    hash = "sha256-0zmUI7LUKVXUdPsNxY7RQxbsAraY0GrTMAS3kORIU6I=";
   };
 
-  buildPhase = ''
-    cd go/src/${goPackagePath}
-    go run build.go
-  '';
+  vendorHash = "sha256-tD5ffIYULMBqu99l1xCL0RnLB9zNpwNPs1qVFqezUc8=";
 
-  installPhase = ''
-    install -Dt $bin/bin rest-server
-  '';
+  passthru.tests.restic = nixosTests.restic-rest-server;
 
   meta = with lib; {
-    inherit (src.meta) homepage;
+    changelog = "https://github.com/restic/rest-server/blob/${src.rev}/CHANGELOG.md";
     description = "A high performance HTTP server that implements restic's REST backend API";
-    platforms = platforms.unix;
+    mainProgram = "rest-server";
+    homepage = "https://github.com/restic/rest-server";
     license = licenses.bsd2;
     maintainers = with maintainers; [ dotlambda ];
   };

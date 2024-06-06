@@ -1,31 +1,51 @@
-{ lib, fetchurl, buildPythonPackage, python, isPyPy, sip-module ? "sip" }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  packaging,
+  ply,
+  toml,
+  tomli,
+
+  # tests
+  poppler-qt5,
+  qgis,
+  qgis-ltr,
+}:
 
 buildPythonPackage rec {
-  pname = sip-module;
-  version = "4.19.13";
-  format = "other";
+  pname = "sip";
+  version = "6.8.3";
+  pyproject = true;
 
-  disabled = isPyPy;
-
-  src = fetchurl {
-    url = "mirror://sourceforge/pyqt/sip/sip-${version}/sip-${version}.tar.gz";
-    sha256 = "0pniq03jk1n5bs90yjihw3s3rsmjd8m89y9zbnymzgwrcl2sflz3";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-iIVHsBi7JMNq3tUZ6T0+UT1MaqC6VbfMGv+9Rc8Qdiw=";
   };
 
-  configurePhase = ''
-    ${python.executable} ./configure.py \
-      --sip-module ${sip-module} \
-      -d $out/lib/${python.libPrefix}/site-packages \
-      -b $out/bin -e $out/include
-  '';
+  nativeBuildInputs = [ setuptools ];
 
-  enableParallelBuilding = true;
+  propagatedBuildInputs = [
+    packaging
+    setuptools
+  ] ++ lib.optionals (pythonOlder "3.11") [ tomli ];
+
+  # There aren't tests
+  doCheck = false;
+
+  pythonImportsCheck = [ "sipbuild" ];
+
+  passthru.tests = {
+    # test depending packages
+    inherit poppler-qt5 qgis qgis-ltr;
+  };
 
   meta = with lib; {
     description = "Creates C++ bindings for Python modules";
-    homepage    = "http://www.riverbankcomputing.co.uk/";
-    license     = licenses.gpl2Plus;
-    maintainers = with maintainers; [ lovek323 sander ];
-    platforms   = platforms.all;
+    homepage = "https://riverbankcomputing.com/";
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ nrdxp ];
   };
 }

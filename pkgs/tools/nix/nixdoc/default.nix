@@ -1,25 +1,29 @@
-{ stdenv, callPackage, fetchFromGitHub, rustPlatform, darwin }:
+{ lib, stdenv, fetchFromGitHub, rustPlatform, darwin }:
 
 rustPlatform.buildRustPackage rec {
-  name    = "nixdoc-${version}";
-  version = "1.0.1";
+  pname = "nixdoc";
+  version = "3.0.5";
 
   src = fetchFromGitHub {
-    owner = "tazjin";
-    repo  = "nixdoc";
+    owner = "nix-community";
+    repo = "nixdoc";
     rev = "v${version}";
-    sha256 = "14d4dq06jdqazxvv7fq5872zy0capxyb0fdkp8qg06gxl1iw201s";
+    sha256 = "sha256-6aPfpkcUoAYaGYqBPFJJQvQ9dMGne9TWJ2HAx95JujY=";
   };
 
-  buildInputs =  stdenv.lib.optional stdenv.isDarwin [ darwin.Security ];
+  cargoHash = "sha256-5bWP8dhApnQyK/gQNkPrLeqFvRVbSlVNRG6pRDb/fdk=";
 
-  cargoSha256 = "1bfn1x1jhpyidai4cjwip5r1ibkqp26ivmqq3vjm71l00m6avb94";
+  buildInputs = lib.optionals stdenv.isDarwin [ darwin.Security ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Generate documentation for Nix functions";
-    homepage    = https://github.com/tazjin/nixdoc;
+    mainProgram = "nixdoc";
+    homepage    = "https://github.com/nix-community/nixdoc";
     license     = [ licenses.gpl3 ];
-    maintainers = [ maintainers.tazjin ];
+    maintainers = with maintainers; [
+      infinisil
+      hsjobeki
+    ];
     platforms   = platforms.unix;
   };
 }

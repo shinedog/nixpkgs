@@ -1,24 +1,27 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, nixosTests }:
 
-buildGoPackage rec {
-  name = "dnsmasq_exporter-${version}";
-  version = "0.1.0";
-
-  goPackagePath = "github.com/google/dnsmasq_exporter";
+buildGoModule rec {
+  pname = "dnsmasq_exporter";
+  version = "unstable-2024-05-06";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "dnsmasq_exporter";
-    sha256 = "0pl4jkp0kssplv32wbg8yk06x9c2hidilpix32hdvk287l3ys201";
-    rev = "v${version}";
+    rev = "03f84edc208fa88e31cf00533db42e7e0c9717ca";
+    hash = "sha256-YFQ4XO3vnj2Ka3D/LS5aG6WX+qOCVTlq5khDxLoQllo=";
   };
 
-  goDeps = ./dnsmasq-exporter-deps.nix;
+  vendorHash = "sha256-oD68TCNJKwjY3iwE/pUosMIMGOhsWj9cHC/+hq3xxI4=";
 
-  meta = with stdenv.lib; {
+  doCheck = false;
+
+  passthru.tests = { inherit (nixosTests.prometheus-exporters) dnsmasq; };
+
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "A dnsmasq exporter for Prometheus";
+    mainProgram = "dnsmasq_exporter";
     license = licenses.asl20;
-    maintainers = with maintainers; [ willibutz ];
+    maintainers = with maintainers; [ willibutz globin ];
   };
 }

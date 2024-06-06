@@ -1,23 +1,46 @@
-{ stdenv, buildPythonPackage, glibcLocales, fetchPypi, six, pytz }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  glibcLocales,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  six,
+}:
 
 buildPythonPackage rec {
   pname = "feedgenerator";
-  version = "1.9";
+  version = "2.1.0";
+  format = "setuptools";
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "01mirwkm7xfx539hmvj7g9da1j51gw5lsx74dr0glizskjm5vq2s";
+    sha256 = "sha256-8HXyPyj9In8JfDayEhYcbPAS4cbKr3/1PV1rsCzUK50=";
   };
+
+  postPatch = ''
+    sed -i '/cov/d' setup.cfg
+  '';
 
   buildInputs = [ glibcLocales ];
 
-  LC_ALL="en_US.UTF-8";
+  LC_ALL = "en_US.UTF-8";
 
-  propagatedBuildInputs = [ six pytz ];
+  propagatedBuildInputs = [
+    pytz
+    six
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Standalone version of django.utils.feedgenerator, compatible with Py3k";
-    homepage = https://github.com/dmdm/feedgenerator-py3k.git;
-    maintainers = with maintainers; [ garbas ];
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "feedgenerator" ];
+
+  meta = with lib; {
+    description = "Standalone version of Django's feedgenerator module";
+    homepage = "https://github.com/getpelican/feedgenerator";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

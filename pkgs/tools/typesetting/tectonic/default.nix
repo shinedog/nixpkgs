@@ -1,32 +1,61 @@
-{ stdenv, fetchFromGitHub, rustPlatform
-, darwin, fontconfig, harfbuzz, openssl, pkgconfig }:
+/*
+  This file provides the `tectonic-unwrapped` package. On the other hand,
+  the `tectonic` package is defined in `./wrapper.nix`, by wrapping
+  - [`tectonic-unwrapped`](./default.nix) i.e. this package, and
+  - [`biber-for-tectonic`](./biber.nix),
+    which provides a compatible version of `biber`.
+*/
+
+{ lib
+, stdenv
+, fetchFromGitHub
+, rustPlatform
+, darwin
+, fontconfig
+, harfbuzz
+, openssl
+, pkg-config
+, icu
+}:
 
 rustPlatform.buildRustPackage rec {
-  name = "tectonic-${version}";
-  version = "0.1.11";
+  pname = "tectonic";
+  version = "0.15.0";
 
   src = fetchFromGitHub {
     owner = "tectonic-typesetting";
     repo = "tectonic";
-    rev = "v${version}";
-    sha256 = "1j98qxlq74vs8nf2jsn2xw9iyrf8kih4v0hrvznkhcab6bpibp2x";
+    rev = "tectonic@${version}";
+    sha256 = "sha256-xZHYiaQ8ASUwu0ieHIXcjRaH06SQoB6OR1y7Ok+FjAs=";
   };
 
-  cargoSha256 = "1zgav5zxfvdnrr7himykj5ha20cb5ldxpcpl8y6d19dirxvcmpc6";
+  cargoHash = "sha256-niMgb4zsTWHw5yaa4kJOZzpOzO5gMG4k3cTHwSV+wmY=";
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
-  buildInputs = [ fontconfig harfbuzz openssl ]
-    ++ stdenv.lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ ApplicationServices Cocoa Foundation ]);
+  buildFeatures = [ "external-harfbuzz" ];
 
-  # tests fail due to read-only nix store
-  doCheck = false;
+  buildInputs = [ icu fontconfig harfbuzz openssl ]
+    ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ ApplicationServices Cocoa Foundation ]);
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    # Makes it possible to automatically use the V2 CLI API
+    ln -s $out/bin/tectonic $out/bin/nextonic
+  '' + lib.optionalString stdenv.isLinux ''
+    substituteInPlace dist/appimage/tectonic.desktop \
+      --replace Exec=tectonic Exec=$out/bin/tectonic
+    install -D dist/appimage/tectonic.desktop -t $out/share/applications/
+    install -D dist/appimage/tectonic.svg -t $out/share/icons/hicolor/scalable/apps/
+  '';
+
+  doCheck = true;
+
+  meta = with lib; {
     description = "Modernized, complete, self-contained TeX/LaTeX engine, powered by XeTeX and TeXLive";
-    homepage = https://tectonic-typesetting.github.io/;
+    homepage = "https://tectonic-typesetting.github.io/";
+    changelog = "https://github.com/tectonic-typesetting/tectonic/blob/tectonic@${version}/CHANGELOG.md";
     license = with licenses; [ mit ];
-    maintainers = [ maintainers.lluchs ];
-    platforms = platforms.all;
+    mainProgram = "tectonic";
+    maintainers = with maintainers; [ lluchs doronbehar bryango ];
   };
 }

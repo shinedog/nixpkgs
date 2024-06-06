@@ -1,36 +1,68 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
-, gevent
-, certifi
-, six
-, backports_ssl_match_hostname
+{
+  lib,
+  brotli,
+  buildPythonPackage,
+  certifi,
+  dpkt,
+  fetchFromGitHub,
+  gevent,
+  llhttp,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+  six,
+  stdenv,
+  urllib3,
 }:
 
 buildPythonPackage rec {
   pname = "geventhttpclient";
-  version = "1.3.1";
+  version = "2.3.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "bd87af8854f5fb05738916c8973671f7035568aec69b7c842887d6faf9c0a01d";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "geventhttpclient";
+    repo = "geventhttpclient";
+    rev = "refs/tags/${version}";
+    # TODO: unvendor llhttp
+    fetchSubmodules = true;
+    hash = "sha256-uOGnwPbvTam14SFTUT0UrwxHfP4a5cn3a7EhLoGBUrA=";
   };
 
-  buildInputs = [ pytest ];
-  propagatedBuildInputs = [ gevent certifi six backports_ssl_match_hostname ];
+  build-system = [ setuptools ];
 
-  # Several tests fail that require network
-  doCheck = false;
-  checkPhase = ''
-    py.test $out
+  dependencies = [
+    brotli
+    certifi
+    gevent
+    urllib3
+  ];
+
+  nativeCheckInputs = [
+    dpkt
+    pytestCheckHook
+  ];
+
+  # lots of: [Errno 48] Address already in use: ('127.0.0.1', 54323)
+  doCheck = !stdenv.isDarwin;
+
+  __darwinAllowLocalNetworking = true;
+
+  preCheck = ''
+    rm -rf geventhttpclient
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/gwik/geventhttpclient;
-    description = "HTTP client library for gevent";
+  pytestFlagsArray = [ "-m 'not network'" ];
+
+  pythonImportsCheck = [ "geventhttpclient" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/geventhttpclient/geventhttpclient";
+    description = "High performance, concurrent HTTP client library using gevent";
+    changelog = "https://github.com/geventhttpclient/geventhttpclient/releases/tag/${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ koral ];
   };
-
 }

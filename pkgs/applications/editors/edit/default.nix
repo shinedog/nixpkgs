@@ -1,40 +1,54 @@
-{ stdenv, fetchgit, unzip, pkgconfig, ncurses, libX11, libXft, cwebbin }:
+{ lib
+, stdenv
+, fetchgit
+, cwebbin
+, libX11
+, libXft
+, ncurses
+, pkg-config
+, unzip
+}:
 
-stdenv.mkDerivation rec {
-  name = "edit-nightly-${version}";
-  version = "20160425";
+stdenv.mkDerivation {
+  pname = "edit";
+  version = "unstable-2021-04-05";
 
   src = fetchgit {
-    url = git://c9x.me/ed.git;
-    rev = "323d49b68c5e804ed3b8cada0e2274f1589b3484";
-    sha256 = "0wv8i3ii7cd9bqhjpahwp2g5fcmyk365nc7ncmvl79cxbz3f7y8v";
+    url = "git://c9x.me/ed.git";
+    rev = "bc24e3d4f716b0afacef559f952c40f0be5a1c58";
+    hash = "sha256-DzQ+3B96+UzQqL3lhn0DfYmZy2LOANtibj1e1iVR+Jo=";
   };
 
-  buildInputs = [
-     unzip
-     pkgconfig
-     ncurses
-     libX11
-     libXft
-     cwebbin
+  nativeBuildInputs = [
+    cwebbin
+    pkg-config
+    unzip
   ];
 
-  buildPhase = ''
-    ctangle *.w
-    make
+  buildInputs = [
+    libX11
+    libXft
+    ncurses
+  ];
+
+  preBuild = ''
+    ctangle vicmd.w
   '';
 
   installPhase = ''
-    mkdir -p $out/bin/
-    cp obj/edit $out/bin/edit
+    runHook preInstall
+
+    install -Dm755 obj/edit -t $out/bin
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "A relaxing mix of Vi and ACME";
-    homepage = http://c9x.me/edit;
-    license = licenses.publicDomain;
-    maintainers = [ maintainers.vrthra ];
-    platforms = platforms.linux;
+    homepage = "https://c9x.me/edit";
+    license = lib.licenses.publicDomain;
+    maintainers = with lib.maintainers; [ AndersonTorres vrthra ];
+    platforms = lib.platforms.unix;
+    mainProgram = "edit";
   };
 }
-

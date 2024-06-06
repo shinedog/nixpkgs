@@ -1,5 +1,7 @@
-{ stdenv, fetchFromGitHub, audiofile, libvorbis, fltk, fftw, fftwFloat,
-minixml, pkgconfig, libmad, libjack2, portaudio, libsamplerate }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch
+, audiofile, libvorbis, fltk, fftw, fftwFloat
+, minixml, pkg-config, libmad, libjack2, portaudio, libsamplerate
+}:
 
 stdenv.mkDerivation {
   pname = "paulstretch";
@@ -12,7 +14,7 @@ stdenv.mkDerivation {
     sha256 = "06dy03dbz1yznhsn0xvsnkpc5drzwrgxbxdx0hfpsjn2xcg0jrnc";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
     audiofile
@@ -27,6 +29,14 @@ stdenv.mkDerivation {
     libsamplerate
   ];
 
+  patches = [
+    # https://github.com/paulnasca/paulstretch_cpp/pull/12
+    (fetchpatch {
+      url = "https://github.com/paulnasca/paulstretch_cpp/commit/d8671b36135fe66839b11eadcacb474cc8dae0d1.patch";
+      sha256 = "0lx1rfrs53afkiz1drp456asqgj5yv6hx3lkc01165cv1jsbw6q4";
+    })
+  ];
+
   buildPhase = ''
     bash compile_linux_fftw_jack.sh
   '';
@@ -35,7 +45,7 @@ stdenv.mkDerivation {
     install -Dm555 ./paulstretch $out/bin/paulstretch
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Produces high quality extreme sound stretching";
     longDescription = ''
       This is a program for stretching the audio. It is suitable only for
@@ -43,8 +53,9 @@ stdenv.mkDerivation {
       special effects by "spectral smoothing" the sounds.
       It can transform any sound/music to a texture.
     '';
-    homepage = http://hypermammut.sourceforge.net/paulstretch/;
+    homepage = "https://hypermammut.sourceforge.net/paulstretch/";
     platforms = platforms.linux;
     license = licenses.gpl2;
+    mainProgram = "paulstretch";
   };
 }

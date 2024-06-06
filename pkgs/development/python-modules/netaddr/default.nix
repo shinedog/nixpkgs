@@ -1,41 +1,37 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
-, fetchpatch
-, glibcLocales
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "netaddr";
-  version = "0.7.19";
+  version = "1.2.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "38aeec7cdd035081d3a4c306394b19d677623bf76fa0913f6695127c7753aefd";
+    sha256 = "sha256-brj+3wQSxtKU0GiFwRDelFz00i0rUQ0EBPTgaVCFeYc=";
   };
 
-  LC_ALL = "en_US.UTF-8";
-  checkInputs = [ glibcLocales pytest ];
+  nativeBuildInputs = [ setuptools ];
 
-  checkPhase = ''
-    # fails on python3.7: https://github.com/drkjam/netaddr/issues/182
-    py.test \
-      -k 'not test_ip_splitter_remove_prefix_larger_than_input_range' \
-      netaddr/tests
-  '';
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  patches = [
-    (fetchpatch {
-      url = https://github.com/drkjam/netaddr/commit/2ab73f10be7069c9412e853d2d0caf29bd624012.patch;
-      sha256 = "0s1cdn9v5alpviabhcjmzc0m2pnpq9dh2fnnk2x96dnry1pshg39";
-    })
-  ];
+  pythonImportsCheck = [ "netaddr" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/drkjam/netaddr/;
+  meta = with lib; {
     description = "A network address manipulation library for Python";
+    mainProgram = "netaddr";
+    homepage = "https://netaddr.readthedocs.io/";
+    downloadPage = "https://github.com/netaddr/netaddr/releases";
+    changelog = "https://github.com/netaddr/netaddr/blob/${version}/CHANGELOG";
     license = licenses.mit;
+    maintainers = with maintainers; [ fab ];
   };
-
 }

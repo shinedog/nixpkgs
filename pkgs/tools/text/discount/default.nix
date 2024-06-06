@@ -1,29 +1,43 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  version = "2.2.4";
-  name = "discount-${version}";
+  version = "3.0.0d";
+  pname = "discount";
 
-  src = fetchurl {
-    url = "http://www.pell.portland.or.us/~orc/Code/discount/discount-${version}.tar.bz2";
-    sha256 = "199hwajpspqil0a4y3yxsmhdp2dm73gqkzfk4mrwzsmlq8y1xzbl";
+  src = fetchFromGitHub {
+    owner = "Orc";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-fFSlW9qnH3NL9civ793LrScOJSuRe9i377BgpNzOXa0=";
   };
 
-  patches = ./fix-configure-path.patch;
+  patches = [ ./fix-configure-path.patch ];
   configureScript = "./configure.sh";
-
   configureFlags = [
-    "--enable-all-features"
-    "--pkg-config"
     "--shared"
-    "--with-fenced-code"
+    "--debian-glitch" # use deterministic mangling
+    "--pkg-config"
+    "--h1-title"
   ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+  installTargets = [ "install.everything" ];
+
+  doCheck = true;
+
+  postFixup = lib.optionalString stdenv.isDarwin ''
+    install_name_tool -id "$out/lib/libmarkdown.dylib" "$out/lib/libmarkdown.dylib"
+    for exe in $out/bin/*; do
+      install_name_tool -change libmarkdown.dylib "$out/lib/libmarkdown.dylib" "$exe"
+    done
+  '';
+
+  meta = with lib; {
     description = "Implementation of Markdown markup language in C";
-    homepage = http://www.pell.portland.or.us/~orc/Code/discount/;
+    homepage = "http://www.pell.portland.or.us/~orc/Code/discount/";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ shell ndowens ];
+    maintainers = with maintainers; [ shell ];
+    mainProgram = "markdown";
     platforms = platforms.unix;
   };
 }

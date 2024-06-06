@@ -1,18 +1,70 @@
-{ fetchPypi, buildPythonPackage }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  pythonOlder,
+
+  # propagates
+  async-timeout,
+  deprecated,
+  importlib-metadata,
+  packaging,
+  typing-extensions,
+
+  # extras: hiredis
+  hiredis,
+
+  # extras: ocsp
+  cryptography,
+  pyopenssl,
+  requests,
+}:
+
 buildPythonPackage rec {
   pname = "redis";
-  version = "3.1.0";
+  version = "5.0.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "7ba8612bbfd966dea8c62322543fed0095da2834dbd5a7c124afbc617a156aa7";
+    hash = "sha256-SXO650RMD77WSga4dEb3k2HLfk7BU4wCLWlu16UBVYA=";
   };
 
-  # tests require a running redis
+  propagatedBuildInputs = [
+    async-timeout
+    deprecated
+    packaging
+    typing-extensions
+  ] ++ lib.optionals (pythonOlder "3.8") [ importlib-metadata ];
+
+  passthru.optional-dependencies = {
+    hiredis = [ hiredis ];
+    ocsp = [
+      cryptography
+      pyopenssl
+      requests
+    ];
+  };
+
+  pythonImportsCheck = [
+    "redis"
+    "redis.client"
+    "redis.cluster"
+    "redis.connection"
+    "redis.exceptions"
+    "redis.sentinel"
+    "redis.utils"
+  ];
+
+  # Tests require a running redis
   doCheck = false;
 
-  meta = {
+  meta = with lib; {
     description = "Python client for Redis key-value store";
-    homepage = "https://pypi.python.org/pypi/redis/";
+    homepage = "https://github.com/redis/redis-py";
+    changelog = "https://github.com/redis/redis-py/releases/tag/v${version}";
+    license = with licenses; [ mit ];
   };
 }

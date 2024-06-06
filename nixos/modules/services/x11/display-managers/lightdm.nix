@@ -5,13 +5,12 @@ with lib;
 let
 
   xcfg = config.services.xserver;
-  dmcfg = xcfg.displayManager;
-  xEnv = config.systemd.services."display-manager".environment;
-  cfg = dmcfg.lightdm;
+  dmcfg = config.services.displayManager;
+  xEnv = config.systemd.services.display-manager.environment;
+  cfg = xcfg.displayManager.lightdm;
+  sessionData = dmcfg.sessionData;
 
-  dmDefault = xcfg.desktopManager.default;
-  wmDefault = xcfg.windowManager.default;
-  hasDefaultUserSession = dmDefault != "none" || wmDefault != "none";
+  setSessionScript = pkgs.callPackage ./account-service-util.nix { };
 
   inherit (pkgs) lightdm writeScript writeText;
 
@@ -27,13 +26,13 @@ let
       else additionalArgs="-logfile /var/log/X.$display.log"
       fi
 
-      exec ${dmcfg.xserverBin} ${toString dmcfg.xserverArgs} $additionalArgs "$@"
+      exec ${xcfg.displayManager.xserverBin} ${toString xcfg.displayManager.xserverArgs} $additionalArgs "$@"
     '';
 
   usersConf = writeText "users.conf"
     ''
       [UserList]
-      minimum-uid=500
+      minimum-uid=1000
       hidden-users=${concatStringsSep " " dmcfg.hiddenUsers}
       hidden-shells=/run/current-system/sw/bin/nologin
     '';
@@ -45,35 +44,35 @@ let
         greeter-user = ${config.users.users.lightdm.name}
         greeters-directory = ${cfg.greeter.package}
       ''}
-      sessions-directory = ${dmcfg.session.desktops}/share/xsessions
+      sessions-directory = ${dmcfg.sessionData.desktops}/share/xsessions:${dmcfg.sessionData.desktops}/share/wayland-sessions
       ${cfg.extraConfig}
 
       [Seat:*]
       xserver-command = ${xserverWrapper}
-      session-wrapper = ${dmcfg.session.wrapper}
+      session-wrapper = ${dmcfg.sessionData.wrapper}
       ${optionalString cfg.greeter.enable ''
         greeter-session = ${cfg.greeter.name}
       ''}
-      ${optionalString cfg.autoLogin.enable ''
-        autologin-user = ${cfg.autoLogin.user}
+      ${optionalString dmcfg.autoLogin.enable ''
+        autologin-user = ${dmcfg.autoLogin.user}
         autologin-user-timeout = ${toString cfg.autoLogin.timeout}
-        autologin-session = ${defaultSessionName}
+        autologin-session = ${sessionData.autologinSession}
       ''}
-      ${optionalString hasDefaultUserSession ''
-        user-session=${defaultSessionName}
-      ''}
-      ${optionalString (dmcfg.setupCommands != "") ''
+      ${optionalString (xcfg.displayManager.setupCommands != "") ''
         display-setup-script=${pkgs.writeScript "lightdm-display-setup" ''
           #!${pkgs.bash}/bin/bash
-          ${dmcfg.setupCommands}
+          ${xcfg.displayManager.setupCommands}
         ''}
       ''}
       ${cfg.extraSeatDefaults}
     '';
 
-  defaultSessionName = dmDefault + optionalString (wmDefault != "none") ("+" + wmDefault);
 in
 {
+  meta = with lib; {
+    maintainers = with maintainers; [ ] ++ teams.pantheon.members;
+  };
+
   # Note: the order in which lightdm greeter modules are imported
   # here determines the default: later modules (if enable) are
   # preferred.
@@ -82,6 +81,22 @@ in
     ./lightdm-greeters/mini.nix
     ./lightdm-greeters/enso-os.nix
     ./lightdm-greeters/pantheon.nix
+    ./lightdm-greeters/lomiri.nix
+    ./lightdm-greeters/tiny.nix
+    ./lightdm-greeters/slick.nix
+    ./lightdm-greeters/mobile.nix
+    (mkRenamedOptionModule [ "services" "xserver" "displayManager" "lightdm" "autoLogin" "enable" ] [
+      "services"
+      "displayManager"
+      "autoLogin"
+      "enable"
+    ])
+    (mkRenamedOptionModule [ "services" "xserver" "displayManager" "lightdm" "autoLogin" "user" ] [
+     "services"
+     "displayManager"
+     "autoLogin"
+     "user"
+    ])
   ];
 
   options = {
@@ -114,7 +129,7 @@ in
 
         };
         name = mkOption {
-          type = types.string;
+          type = types.str;
           description = ''
             The name of a .desktop file in the directory specified
             in the 'package' option.
@@ -132,8 +147,9 @@ in
       };
 
       background = mkOption {
-        type = types.str;
-        default = "${pkgs.nixos-artwork.wallpapers.simple-dark-gray-bottom}/share/artwork/gnome/nix-wallpaper-simple-dark-gray_bottom.png";
+        type = types.either types.path (types.strMatching "^#[0-9]\{6\}$");
+        # Manual cannot depend on packages, we are actually setting the default in config below.
+        defaultText = literalExpression "pkgs.nixos-artwork.wallpapers.simple-dark-gray-bottom.gnomeFilePath";
         description = ''
           The background image or color to use.
         '';
@@ -148,39 +164,13 @@ in
         description = "Extra lines to append to SeatDefaults section.";
       };
 
-      autoLogin = mkOption {
-        default = {};
+      # Configuration for automatic login specific to LightDM
+      autoLogin.timeout = mkOption {
+        type = types.int;
+        default = 0;
         description = ''
-          Configuration for automatic login.
+          Show the greeter for this many seconds before automatic login occurs.
         '';
-
-        type = types.submodule {
-          options = {
-            enable = mkOption {
-              type = types.bool;
-              default = false;
-              description = ''
-                Automatically log in as the specified <option>autoLogin.user</option>.
-              '';
-            };
-
-            user = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = ''
-                User to be used for the automatic login.
-              '';
-            };
-
-            timeout = mkOption {
-              type = types.int;
-              default = 0;
-              description = ''
-                Show the greeter for this many seconds before automatic login occurs.
-              '';
-            };
-          };
-        };
       };
 
     };
@@ -194,19 +184,12 @@ in
           LightDM requires services.xserver.enable to be true
         '';
       }
-      { assertion = cfg.autoLogin.enable -> cfg.autoLogin.user != null;
+      { assertion = dmcfg.autoLogin.enable -> sessionData.autologinSession != null;
         message = ''
-          LightDM auto-login requires services.xserver.displayManager.lightdm.autoLogin.user to be set
+          LightDM auto-login requires that services.displayManager.defaultSession is set.
         '';
       }
-      { assertion = cfg.autoLogin.enable -> dmDefault != "none" || wmDefault != "none";
-        message = ''
-          LightDM auto-login requires that services.xserver.desktopManager.default and
-          services.xserver.windowManager.default are set to valid values. The current
-          default session: ${defaultSessionName} is not valid.
-        '';
-      }
-      { assertion = !cfg.greeter.enable -> (cfg.autoLogin.enable && cfg.autoLogin.timeout == 0);
+      { assertion = !cfg.greeter.enable -> (dmcfg.autoLogin.enable && cfg.autoLogin.timeout == 0);
         message = ''
           LightDM can only run without greeter if automatic login is enabled and the timeout for it
           is set to zero.
@@ -214,11 +197,64 @@ in
       }
     ];
 
+    # Keep in sync with the defaultText value from the option definition.
+    services.xserver.displayManager.lightdm.background = mkDefault pkgs.nixos-artwork.wallpapers.simple-dark-gray-bottom.gnomeFilePath;
+
+    # Set default session in session chooser to a specified values – basically ignore session history.
+    # Auto-login is already covered by a config value.
+    services.displayManager.preStart = optionalString (!dmcfg.autoLogin.enable && dmcfg.defaultSession != null) ''
+      ${setSessionScript}/bin/set-session ${dmcfg.defaultSession}
+    '';
+
+    # setSessionScript needs session-files in XDG_DATA_DIRS
+    services.displayManager.environment.XDG_DATA_DIRS = "${dmcfg.sessionData.desktops}/share/";
+
+    # setSessionScript wants AccountsService
+    systemd.services.display-manager.wants = [
+      "accounts-daemon.service"
+    ];
+
     # lightdm relaunches itself via just `lightdm`, so needs to be on the PATH
-    services.xserver.displayManager.job.execCmd = ''
+    services.displayManager.execCmd = ''
       export PATH=${lightdm}/sbin:$PATH
       exec ${lightdm}/sbin/lightdm
     '';
+
+    # Replaces getty
+    systemd.services.display-manager.conflicts = [
+      "getty@tty7.service"
+      # TODO: Add "plymouth-quit.service" so LightDM can control when plymouth
+      # quits. Currently this breaks switching to configurations with plymouth.
+     ];
+
+    # Pull in dependencies of services we replace.
+    systemd.services.display-manager.after = [
+      "rc-local.service"
+      "systemd-machined.service"
+      "systemd-user-sessions.service"
+      "getty@tty7.service"
+      "user.slice"
+    ];
+
+    # user.slice needs to be present
+    systemd.services.display-manager.requires = [
+      "user.slice"
+    ];
+
+    # lightdm stops plymouth so when it fails make sure plymouth stops.
+    systemd.services.display-manager.onFailure = [
+      "plymouth-quit.service"
+    ];
+
+    systemd.services.display-manager.serviceConfig = {
+      BusName = "org.freedesktop.DisplayManager";
+      IgnoreSIGPIPE = "no";
+      # This allows lightdm to pass the LUKS password through to PAM.
+      # login keyring is unlocked automatic when autologin is used.
+      KeyringMode = "shared";
+      KillMode = "mixed";
+      StandardError = "inherit";
+    };
 
     environment.etc."lightdm/lightdm.conf".source = lightdmConf;
     environment.etc."lightdm/users.conf".source = usersConf;
@@ -232,36 +268,43 @@ in
     # Enable the accounts daemon to find lightdm's dbus interface
     environment.systemPackages = [ lightdm ];
 
-    security.pam.services.lightdm = {
-      allowNullPassword = true;
-      startSession = true;
-    };
-    security.pam.services.lightdm-greeter = {
-      allowNullPassword = true;
-      startSession = true;
-      text = ''
-        auth     required pam_env.so envfile=${config.system.build.pamEnvironment}
-        auth     required pam_permit.so
+    security.polkit.enable = true;
 
-        account  required pam_permit.so
+    security.pam.services.lightdm.text = ''
+        auth      substack      login
+        account   include       login
+        password  substack      login
+        session   include       login
+    '';
 
-        password required pam_deny.so
+    security.pam.services.lightdm-greeter.text = ''
+        auth     required       pam_succeed_if.so audit quiet_success user = lightdm
+        auth     optional       pam_permit.so
 
-        session  required pam_env.so envfile=${config.system.build.pamEnvironment}
-        session  required pam_unix.so
-        session  optional ${pkgs.systemd}/lib/security/pam_systemd.so
-      '';
-    };
+        account  required       pam_succeed_if.so audit quiet_success user = lightdm
+        account  sufficient     pam_unix.so
+
+        password required       pam_deny.so
+
+        session  required       pam_succeed_if.so audit quiet_success user = lightdm
+        session  required       pam_env.so conffile=/etc/pam/environment readenv=0
+        session  optional       ${config.systemd.package}/lib/security/pam_systemd.so
+        session  optional       pam_keyinit.so force revoke
+        session  optional       pam_permit.so
+    '';
+
     security.pam.services.lightdm-autologin.text = ''
-        auth     requisite pam_nologin.so
-        auth     required  pam_succeed_if.so uid >= 1000 quiet
-        auth     required  pam_permit.so
+        auth      requisite     pam_nologin.so
 
-        account  include   lightdm
+        auth      required      pam_succeed_if.so uid >= 1000 quiet
+        auth      required      pam_permit.so
 
-        password include   lightdm
+        account   sufficient    pam_unix.so
 
-        session  include   lightdm
+        password  requisite     pam_unix.so nullok yescrypt
+
+        session   optional      pam_keyinit.so revoke
+        session   include       login
     '';
 
     users.users.lightdm = {
@@ -271,7 +314,7 @@ in
     };
 
     systemd.tmpfiles.rules = [
-      "d /run/lightdm 0711 lightdm lightdm 0"
+      "d /run/lightdm 0711 lightdm lightdm -"
       "d /var/cache/lightdm 0711 root lightdm -"
       "d /var/lib/lightdm 1770 lightdm lightdm -"
       "d /var/lib/lightdm-data 1775 lightdm lightdm -"

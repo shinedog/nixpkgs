@@ -13,12 +13,7 @@ in {
       default = false;
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.unclutter;
-      defaultText = "pkgs.unclutter";
-      description = "unclutter derivation to use.";
-    };
+    package = mkPackageOption pkgs "unclutter" { };
 
     keystroke = mkOption {
       description = "Wait for a keystroke before hiding the cursor";
@@ -32,7 +27,7 @@ in {
       default = 1;
     };
 
-    threeshold = mkOption {
+    threshold = mkOption {
       description = "Minimum number of pixels considered cursor movement";
       type = types.int;
       default = 1;
@@ -61,7 +56,7 @@ in {
       serviceConfig.ExecStart = ''
         ${cfg.package}/bin/unclutter \
           -idle ${toString cfg.timeout} \
-          -jitter ${toString (cfg.threeshold - 1)} \
+          -jitter ${toString (cfg.threshold - 1)} \
           ${optionalString cfg.keystroke "-keystroke"} \
           ${concatMapStrings (x: " -"+x) cfg.extraOptions} \
           -not ${concatStringsSep " " cfg.excluded} \
@@ -71,4 +66,12 @@ in {
       serviceConfig.Restart = "always";
     };
   };
+
+  imports = [
+    (mkRenamedOptionModule [ "services" "unclutter" "threeshold" ]
+                           [ "services"  "unclutter" "threshold" ])
+  ];
+
+  meta.maintainers = with lib.maintainers; [ rnhmjoj ];
+
 }

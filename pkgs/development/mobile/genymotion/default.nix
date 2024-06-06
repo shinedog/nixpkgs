@@ -1,35 +1,53 @@
-{ stdenv, requireFile, makeWrapper, which, zlib, libGL, glib, xorg, libxkbcommon
-, xdg_utils
+{ stdenv, lib, fetchurl, makeWrapper, which, zlib, libGL, glib, xorg, libxkbcommon
+, xdg-utils, libXrender, fontconfig, freetype, systemd, libpulseaudio
+, cairo, gdk-pixbuf, gtk3, pixman
 # For glewinfo
 , libXmu, libXi, libXext }:
 
 let
   packages = [
-    stdenv.cc.cc zlib glib xorg.libX11 libxkbcommon libXmu libXi libXext libGL
+    stdenv.cc.cc
+    zlib
+    glib
+    xorg.libX11
+    libxkbcommon
+    libXmu
+    libXi
+    libXext
+    libGL
+    libXrender
+    fontconfig
+    freetype
+    systemd
+    libpulseaudio
+    cairo
+    gdk-pixbuf
+    gtk3
+    pixman
   ];
-  libPath = "${stdenv.lib.makeLibraryPath packages}";
+  libPath = lib.makeLibraryPath packages;
 in
 stdenv.mkDerivation rec {
-  name = "genymotion-${version}";
-  version = "2.8.0";
-  src = requireFile {
-    url = https://www.genymotion.com/download/;
+  pname = "genymotion";
+  version = "3.7.0";
+  src = fetchurl {
+    url = "https://dl.genymotion.com/releases/genymotion-${version}/genymotion-${version}-linux_x64.bin";
     name = "genymotion-${version}-linux_x64.bin";
-    sha256 = "0lvfdlpmmsyq2i9gs4mf6a8fxkfimdr4rhyihqnfhjij3fzxz4lk";
+    sha256 = "sha256-JBz6rfKm4hX+Mr+xU3VgzxbFKj+SDr9/ulJ6KrmzAnM=";
   };
 
-  buildInputs = [ makeWrapper which xdg_utils ];
+  nativeBuildInputs = [ makeWrapper which xdg-utils ];
 
   unpackPhase = ''
     mkdir -p phony-home $out/share/applications
     export HOME=$TMP/phony-home
 
-    mkdir ${name}
-    echo "y" | sh $src -d ${name}
-    sourceRoot=${name}
+    mkdir ${pname}
+    echo "y" | sh $src -d ${pname}
+    sourceRoot=${pname}
 
     substitute phony-home/.local/share/applications/genymobile-genymotion.desktop \
-      $out/share/applications/genymobile-genymotion.desktop --replace "$TMP/${name}" "$out/libexec"
+      $out/share/applications/genymobile-genymotion.desktop --replace "$TMP/${pname}" "$out/libexec"
   '';
 
   installPhase = ''
@@ -47,7 +65,9 @@ stdenv.mkDerivation rec {
     patchExecutable() {
       patchInterpreter "$1"
       wrapProgram "$out/libexec/genymotion/$1" \
-        --set "LD_LIBRARY_PATH" "${libPath}"
+        --set "LD_LIBRARY_PATH" "${libPath}" \
+        --unset "QML2_IMPORT_PATH" \
+        --unset "QT_PLUGIN_PATH"
     }
 
     patchTool() {
@@ -58,6 +78,8 @@ stdenv.mkDerivation rec {
 
     patchExecutable genymotion
     patchExecutable player
+    patchInterpreter qemu/x86_64/bin/qemu-img
+    patchInterpreter qemu/x86_64/bin/qemu-system-x86_64
 
     patchTool adb
     patchTool aapt
@@ -66,16 +88,17 @@ stdenv.mkDerivation rec {
     rm $out/libexec/genymotion/libxkbcommon*
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Fast and easy Android emulation";
     longDescription = ''
       Genymotion is a relatively fast Android emulator which comes with
       pre-configured Android (x86 with OpenGL hardware acceleration) images,
       suitable for application testing.
      '';
-    homepage = https://www.genymotion.com/;
-    license = stdenv.lib.licenses.unfree;
+    homepage = "https://www.genymotion.com/";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = licenses.unfree;
     platforms = ["x86_64-linux"];
-    maintainers = [ stdenv.lib.maintainers.puffnfresh ];
+    maintainers = [ maintainers.puffnfresh ];
   };
 }

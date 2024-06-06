@@ -1,28 +1,40 @@
-{ stdenv, fetchurl, python, qmake,
-  qtwebengine, qtxmlpatterns,
-  qttools, unzip }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  python3,
+  qmake,
+  qtwebengine,
+  qtxmlpatterns,
+  qttools,
+}:
 
-stdenv.mkDerivation rec {
-  version = "3.2";
-  name = "python-qt-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "python-qt";
+  version = "3.5.2";
 
-  src = fetchurl {
-    url="mirror://sourceforge/pythonqt/PythonQt${version}.zip";
-    sha256="13hzprk58m3yj39sj0xn6acg8796lll1256mpd81kw0z3yykyl8c";
+  src = fetchFromGitHub {
+    owner = "MeVisLab";
+    repo = "pythonqt";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-Mpi1pAPS/UuzaBK7I1kI0HlS3dphcKiVXIPuJwdEDXM=";
   };
 
-  hardeningDisable = [ "all" ];
+  nativeBuildInputs = [
+    qmake
+    qttools
+    qtxmlpatterns
+    qtwebengine
+  ];
 
-  nativeBuildInputs = [ qmake qtwebengine  qtxmlpatterns qttools ];
+  buildInputs = [ python3 ];
 
-  buildInputs = [ python unzip ];
+  qmakeFlags = [
+    "PYTHON_DIR=${python3}"
+    "PYTHON_VERSION=3.${python3.sourceVersion.minor}"
+  ];
 
-  qmakeFlags = [ "PythonQt.pro"
-                 "INCLUDEPATH+=${python}/include/python3.6"
-                 "PYTHON_PATH=${python}/bin"
-                 "PYTHON_LIB=${python}/lib"];
-
-  unpackCmd = "unzip $src";
+  dontWrapQtApps = true;
 
   installPhase = ''
     mkdir -p $out/include/PythonQt
@@ -32,11 +44,20 @@ stdenv.mkDerivation rec {
     cp -r ./extensions $out/include/PythonQt
   '';
 
-  meta = with stdenv.lib; {
-    description = "PythonQt is a dynamic Python binding for the Qt framework. It offers an easy way to embed the Python scripting language into your C++ Qt applications.";
-    homepage = http://pythonqt.sourceforge.net/;
+  preFixup = lib.optionalString stdenv.isDarwin ''
+    install_name_tool -id \
+      $out/lib/libPythonQt-Qt5-Python3.${python3.sourceVersion.minor}.dylib \
+      $out/lib/libPythonQt-Qt5-Python3.${python3.sourceVersion.minor}.dylib
+    install_name_tool -id \
+      $out/lib/libPythonQt_QtAll-Qt5-Python3.${python3.sourceVersion.minor}.dylib \
+      $out/lib/libPythonQt_QtAll-Qt5-Python3.${python3.sourceVersion.minor}.dylib
+  '';
+
+  meta = with lib; {
+    description = "PythonQt is a dynamic Python binding for the Qt framework. It offers an easy way to embed the Python scripting language into your C++ Qt applications";
+    homepage = "https://pythonqt.sourceforge.net/";
     license = licenses.lgpl21;
     platforms = platforms.all;
     maintainers = with maintainers; [ hlolli ];
   };
-}
+})

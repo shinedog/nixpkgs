@@ -1,17 +1,30 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, coverage }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
+  coverage,
+  toml,
+  tomli,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-cov";
-  version = "2.6.1";
+  version = "4.1.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0ab664b25c6aa9716cbf203b17ddb301932383046082c081b9848a0edf5add33";
+    hash = "sha256-OQSxPfv+xH8AO453/VtYnNEZBKId3xqzimTyBNahDvY=";
   };
 
   buildInputs = [ pytest ];
-  propagatedBuildInputs = [ coverage ];
+
+  propagatedBuildInputs = [
+    coverage
+    toml
+    tomli
+  ];
 
   # xdist related tests fail with the following error
   # OSError: [Errno 13] Permission denied: 'py/_code'
@@ -22,9 +35,11 @@ buildPythonPackage rec {
     py.test tests
   '';
 
-  meta = with stdenv.lib; {
+  pythonImportsCheck = [ "pytest_cov" ];
+
+  meta = with lib; {
     description = "Plugin for coverage reporting with support for both centralised and distributed testing, including subprocesses and multiprocessing";
-    homepage = https://github.com/pytest-dev/pytest-cov;
+    homepage = "https://github.com/pytest-dev/pytest-cov";
     license = licenses.mit;
   };
 }

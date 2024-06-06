@@ -1,24 +1,51 @@
-{ stdenv, rustPlatform , fetchFromGitHub, Security }:
+{
+  lib,
+  stdenv,
+  cmake,
+  rustPlatform,
+  pkg-config,
+  fetchFromGitHub,
+  atk,
+  gtk3,
+  glib,
+  openssl,
+  Security,
+  nix-update-script,
+}:
+
 rustPlatform.buildRustPackage rec {
-  name = "whitebox_tools-${version}";
-  version = "0.9.0";
+  pname = "whitebox_tools";
+  version = "2.4.0";
 
   src = fetchFromGitHub {
     owner = "jblindsay";
     repo = "whitebox-tools";
-    rev = "6221cdf327be70f0ee4f2053b76bfa01c3f37caa";
-    sha256 = "1423ga964mz7qkl88vkcm8qfprsksx04aq4sz9v5ghnmdzzvl89x";
+    rev = "v${version}";
+    hash = "sha256-kvtfEEydwonoDux1VbAxqrF/Hf8Qh8mhprYnROGOC6g=";
   };
 
-  buildInputs = stdenv.lib.optional stdenv.isDarwin Security;
+  cargoHash = "sha256-6v/3b6BHh/n7M2ZhLVKRvv0Va2xbLUSsxUb5paOStbQ=";
 
-  cargoSha256 = "1gbgirng21ak0kl3fiyr6lxwzrjd5v79gcrbzf941nb8y8rlvz7k";
+  buildInputs = [
+    atk
+    glib
+    gtk3
+    openssl
+  ] ++ lib.optional stdenv.isDarwin Security;
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
+
+  doCheck = false;
+
+  passthru.updateScript = nix-update-script { };
+
+  meta = {
+    homepage = "https://jblindsay.github.io/ghrg/WhiteboxTools/index.html";
     description = "An advanced geospatial data analysis platform";
-    homepage = http://www.uoguelph.ca/~hydrogeo/WhiteboxTools/index.html;
-    license = licenses.mit;
-    maintainers = [ maintainers.mpickering ];
-    platforms = platforms.all;
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ mpickering ];
   };
 }

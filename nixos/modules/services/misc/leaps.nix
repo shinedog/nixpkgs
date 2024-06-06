@@ -9,9 +9,9 @@ in
 {
   options = {
     services.leaps = {
-      enable = mkEnableOption "leaps";
+      enable = mkEnableOption "leaps, a pair programming service";
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8080;
         description = "A port where leaps listens for incoming http requests";
       };
@@ -55,7 +55,7 @@ in
         Restart = "on-failure";
         WorkingDirectory = stateDir;
         PrivateTmp = true;
-        ExecStart = "${pkgs.leaps.bin}/bin/leaps -path ${toString cfg.path} -address ${cfg.address}:${toString cfg.port}";
+        ExecStart = "${pkgs.leaps}/bin/leaps -path ${toString cfg.path} -address ${cfg.address}:${toString cfg.port}";
       };
     };
   };

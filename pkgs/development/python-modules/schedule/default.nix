@@ -1,24 +1,39 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, mock
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  mock,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "schedule";
-  version = "0.6.0";
+  version = "1.2.1";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "f9fb5181283de4db6e701d476dd01b6a3dd81c38462a54991ddbb9d26db857c9";
+    hash = "sha256-hDvAU4uZyT8CuLUOPjmIbAby0AOyT0jhqkyt+j80Enk=";
   };
 
   buildInputs = [ mock ];
 
-  meta = with stdenv.lib; {
-    description = "Python job scheduling for humans";
-    homepage = https://github.com/dbader/schedule;
-    license = licenses.mit;
-  };
+  preCheck = ''
+    # https://github.com/dbader/schedule/issues/488
+    substituteInPlace test_schedule.py --replace \
+      "self.assertRaises(ScheduleValueError, every().day.until, datetime.time(hour=5))" \
+      "# self.assertRaises(ScheduleValueError, every().day.until, datetime.time(hour=5))"
+  '';
 
+  pythonImportsCheck = [ "schedule" ];
+
+  meta = with lib; {
+    description = "Python job scheduling for humans";
+    homepage = "https://github.com/dbader/schedule";
+    changelog = "https://github.com/dbader/schedule/blob/${version}/HISTORY.rst";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
+  };
 }

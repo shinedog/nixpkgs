@@ -1,24 +1,32 @@
-{ stdenv, fetchurl, python }:
+{ lib, stdenv, fetchurl, python3, autoconf, automake, libtool }:
 
 stdenv.mkDerivation rec {
-  name = "jbig2dec-0.14";
+  pname = "jbig2dec";
+  version = "0.20";
 
   src = fetchurl {
-    url = "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs922/${name}.tar.gz";
-    sha256 = "0k01hp0q4275fj4rbr1gy64svfraw5w7wvwl08yjhvsnpb1rid11";
+    url = "https://github.com/ArtifexSoftware/jbig2dec/archive/${version}/jbig2dec-${version}.tar.gz";
+    hash = "sha256-qXBTaaZjOrpTJpNFDsgCxWI5fhuCRmLegJ7ekvZ6/yE=";
   };
 
   postPatch = ''
     patchShebangs test_jbig2dec.py
   '';
 
-  checkInputs = [ python ];
-  doCheck = false; # fails 1 of 4 tests
+  nativeBuildInputs = [ autoconf automake libtool ];
+
+  # `autogen.sh` runs `configure`, and expects that any flags needed
+  # by `configure` (like `--host`) are passed to `autogen.sh`.
+  configureScript = "./autogen.sh";
+
+  nativeCheckInputs = [ python3 ];
+  doCheck = true;
 
   meta = {
-    homepage = https://www.jbig2dec.com/;
+    homepage = "https://www.jbig2dec.com/";
     description = "Decoder implementation of the JBIG2 image compression format";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "jbig2dec";
+    license = lib.licenses.agpl3Only;
+    platforms = lib.platforms.unix;
   };
 }

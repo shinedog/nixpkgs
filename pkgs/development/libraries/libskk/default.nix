@@ -1,10 +1,10 @@
-{ stdenv, fetchFromGitHub,
-  libtool, gettext, pkgconfig,
+{ lib, stdenv, fetchFromGitHub,
+  libtool, gettext, pkg-config,
   vala, gnome-common, gobject-introspection,
   libgee, json-glib, skk-dicts, libxkbcommon }:
 
 stdenv.mkDerivation rec {
-  name = "libskk-${version}";
+  pname = "libskk";
   version = "1.0.5";
 
   src = fetchFromGitHub {
@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
   };
 
   buildInputs = [ skk-dicts libxkbcommon ];
-  nativeBuildInputs = [ vala gnome-common gobject-introspection libtool gettext pkgconfig ];
+  nativeBuildInputs = [ vala gnome-common gobject-introspection libtool gettext pkg-config ];
   propagatedBuildInputs = [ libgee json-glib ];
 
   preConfigure = ''
@@ -33,6 +33,7 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "A library to deal with Japanese kana-to-kanji conversion method";
+    mainProgram = "skk";
     longDescription = ''
       Libskk is a library that implements basic features of SKK including:
       new word registration, completion, numeric conversion, abbrev mode, kuten input,
@@ -41,9 +42,9 @@ stdenv.mkDerivation rec {
       as well as various dictionary types including: file dictionary (such as SKK-JISYO.[SML]),
       user dictionary, skkserv, and CDB format dictionary.
     '';
-    homepage = https://github.com/ueno/libskk;
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with stdenv.lib.maintainers; [ yuriaisaka ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/ueno/libskk";
+    license = lib.licenses.gpl3Plus;
+    maintainers = with lib.maintainers; [ yuriaisaka ];
+    platforms = lib.platforms.linux;
   };
 }

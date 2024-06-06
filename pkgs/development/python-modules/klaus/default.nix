@@ -1,14 +1,29 @@
-{ lib, python, fetchFromGitHub }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  isPy3k,
+  flask,
+  pygments,
+  dulwich,
+  httpauth,
+  humanize,
+  pytest,
+  requests,
+  python-ctags3,
+  mock,
+}:
 
-python.pkgs.buildPythonPackage rec {
+buildPythonPackage rec {
   pname = "klaus";
-  version = "1.3.0";
+  version = "2.0.3";
+  format = "setuptools";
 
   src = fetchFromGitHub {
     owner = "jonashaag";
     repo = pname;
     rev = version;
-    sha256 = "04zjvrpx66x2c0v74nvmq8x7s7c8994cv1zwd5hfn9alq82hqcgr";
+    hash = "sha256-VAwIdmwdo/Rim2sVlR605Wo5/zkNOMiGkh40qLrENmU=";
   };
 
   prePatch = ''
@@ -16,12 +31,18 @@ python.pkgs.buildPythonPackage rec {
       --replace "mkdir -p \$builddir" "mkdir -p \$builddir && pwd"
   '';
 
-  propagatedBuildInputs = with python.pkgs; [
-    six flask pygments dulwich httpauth humanize
+  propagatedBuildInputs = [
+    flask
+    pygments
+    dulwich
+    httpauth
+    humanize
   ];
 
-  checkInputs = with python.pkgs; [
-    pytest requests python-ctags3
+  nativeCheckInputs = [
+    pytest
+    requests
+    python-ctags3
   ] ++ lib.optional (!isPy3k) mock;
 
   checkPhase = ''
@@ -33,8 +54,9 @@ python.pkgs.buildPythonPackage rec {
 
   meta = with lib; {
     description = "The first Git web viewer that Just Works";
-    homepage    = https://github.com/jonashaag/klaus;
-    license     = licenses.isc;
+    mainProgram = "klaus";
+    homepage = "https://github.com/jonashaag/klaus";
+    license = licenses.isc;
     maintainers = with maintainers; [ pSub ];
   };
 }

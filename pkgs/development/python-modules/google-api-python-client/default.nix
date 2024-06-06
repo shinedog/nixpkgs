@@ -1,24 +1,56 @@
-{ lib, buildPythonPackage, fetchPypi, isPy3k
-, httplib2, google_auth, google-auth-httplib2, six, uritemplate, oauth2client }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  google-auth,
+  google-auth-httplib2,
+  google-api-core,
+  httplib2,
+  uritemplate,
+  oauth2client,
+  setuptools,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "google-api-python-client";
-  version = "1.7.8";
+  version = "2.126.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0n18frf0ghmwf5lxmkyski4b5h1rsx93ibq3iw0k3s2wxl371406";
+    hash = "sha256-l8BBBjDivr0ZTZnpG9Yg2rW8a27AvwM/mpEJtwC4Oss=";
   };
+
+  build-system = [ setuptools ];
+
+  dependencies = [
+    google-auth
+    google-auth-httplib2
+    google-api-core
+    httplib2
+    uritemplate
+    oauth2client
+  ];
 
   # No tests included in archive
   doCheck = false;
 
-  propagatedBuildInputs = [ httplib2 google_auth google-auth-httplib2 six uritemplate oauth2client ];
+  pythonImportsCheck = [ "googleapiclient" ];
 
   meta = with lib; {
-    description = "The core Python library for accessing Google APIs";
-    homepage = https://github.com/google/google-api-python-client;
+    description = "The official Python client library for Google's discovery based APIs";
+    longDescription = ''
+      These client libraries are officially supported by Google. However, the
+      libraries are considered complete and are in maintenance mode. This means
+      that we will address critical bugs and security issues but will not add
+      any new features.
+    '';
+    homepage = "https://github.com/google/google-api-python-client";
+    changelog = "https://github.com/googleapis/google-api-python-client/releases/tag/v${version}";
     license = licenses.asl20;
-    maintainers = with maintainers; [ primeos ];
+    maintainers = with maintainers; [ ];
   };
 }

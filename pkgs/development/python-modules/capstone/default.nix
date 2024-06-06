@@ -1,38 +1,53 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, fetchpatch
+{
+  lib,
+  buildPythonPackage,
+  capstone,
+  stdenv,
+  setuptools,
+  pythonAtLeast,
 }:
 
 buildPythonPackage rec {
   pname = "capstone";
-  version = "3.0.4";
+  version = lib.getVersion capstone;
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "945d3b8c3646a1c3914824c416439e2cf2df8969dd722c8979cdcc23b40ad225";
-  };
+  # distutils usage
+  disabled = pythonAtLeast "3.12";
 
-  patches = [
-    (fetchpatch {
-      stripLen = 2;
-      url = "https://patch-diff.githubusercontent.com/raw/aquynh/capstone/pull/783/commits/23fe9f36622573c747e2bab6119ff245437bf276.patch";
-      sha256 = "0yizqrdlxqxn16873593kdx2vrr7gvvilhgcf9xy6hr0603d3m5r";
-    })
+  src = capstone.src;
+  sourceRoot = "${src.name}/bindings/python";
+
+  # libcapstone.a is not built with BUILD_SHARED_LIBS. For some reason setup.py
+  # checks if it exists but it is not really needed. Most likely a bug in setup.py.
+  postPatch = ''
+    ln -s ${capstone}/lib/libcapstone${stdenv.targetPlatform.extensions.sharedLibrary} prebuilt/
+    touch prebuilt/libcapstone${stdenv.targetPlatform.extensions.staticLibrary}
+    substituteInPlace setup.py --replace manylinux1 manylinux2014
+  '';
+
+  # aarch64 only available from MacOS SDK 11 onwards, so fix the version tag.
+  # otherwise, bdist_wheel may detect "macosx_10_6_arm64" which doesn't make sense.
+  setupPyBuildFlags = lib.optionals (stdenv.isDarwin && stdenv.isAarch64) [
+    "--plat-name"
+    "macosx_11_0"
   ];
 
-  postPatch = ''
-    patchShebangs src/make.sh
+  propagatedBuildInputs = [ setuptools ];
+
+  checkPhase = ''
+    mv capstone capstone.hidden
+    patchShebangs test_*
+    make check
   '';
 
-  preCheck = ''
-    mv src/libcapstone.so capstone
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "http://www.capstone-engine.org/";
     license = licenses.bsdOriginal;
-    description = "Capstone disassembly engine";
-    maintainers = with maintainers; [ bennofs ];
+    description = "Python bindings for Capstone disassembly engine";
+    maintainers = with maintainers; [
+      bennofs
+      ris
+    ];
   };
 }

@@ -1,41 +1,84 @@
-{ fetchurl, stdenv, cmake, boost, ogre, mygui, ois, SDL2, libvorbis, pkgconfig
-, makeWrapper, enet, libXcursor, bullet, openal }:
+{ lib
+, fetchFromGitHub
+, stdenv
+, cmake
+, boost
+, ogre_13
+, mygui
+, ois
+, SDL2
+, libvorbis
+, pkg-config
+, makeWrapper
+, enet
+, libXcursor
+, bullet
+, openal
+, tinyxml
+, tinyxml-2
+}:
+
+let
+  stuntrally_ogre = ogre_13.overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DOGRE_NODELESS_POSITIONING=ON"
+      "-DOGRE_RESOURCEMANAGER_STRICT=0"
+    ];
+  });
+  stuntrally_mygui = mygui.override {
+    withOgre = true;
+    ogre = stuntrally_ogre;
+  };
+in
 
 stdenv.mkDerivation rec {
-  name = "stunt-rally-${version}";
-  version = "2.6.1";
+  pname = "stuntrally";
+  version = "2.7";
 
-  src = fetchurl {
-    url = "https://github.com/stuntrally/stuntrally/archive/${version}.tar.gz";
-    sha256 = "1zxq3x2g9pzafa2awx9jzqd33z6gnqj231cs07paxzrm89y51w4v";
+  src = fetchFromGitHub {
+    owner = "stuntrally";
+    repo = "stuntrally";
+    rev = version;
+    hash = "sha256-0Eh9ilIHSh/Uz8TuPnXxLQfy7KF7qqNXUgBXQUCz9ys=";
+  };
+  tracks = fetchFromGitHub {
+    owner = "stuntrally";
+    repo = "tracks";
+    rev = version;
+    hash = "sha256-fglm1FetFGHM/qGTtpxDb8+k2iAREn5DQR5GPujuLms=";
   };
 
-  tracks = fetchurl {
-    url = "https://github.com/stuntrally/tracks/archive/${version}.tar.gz";
-    sha256 = "0x6lgpa4c2grl0vrhqrcs7jcysa3mmvpdl1v5xa0dsf6vkvfr0zs";
-  };
-
-  # include/OGRE/OgreException.h:265:126: error: invalid conversion from
-  # 'int' to 'Ogre::Exception::ExceptionCodes' [-fpermissive]
-  NIX_CFLAGS_COMPILE="-fpermissive";
-
-  preConfigure = ''
-    pushd data
-    tar xf ${tracks}
-    mv tracks-${version} tracks
-    popd
+  postPatch = ''
+    substituteInPlace config/*-default.cfg \
+      --replace "screenshot_png = off" "screenshot_png = on"
+    substituteInPlace source/*/BaseApp_Create.cpp \
+      --replace "Codec_FreeImage" "Codec_STBI"
   '';
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ cmake boost ogre mygui ois SDL2 libvorbis 
-    makeWrapper enet libXcursor bullet openal
+  preConfigure = ''
+    rmdir data/tracks
+    ln -s ${tracks}/ data/tracks
+  '';
+
+  nativeBuildInputs = [ cmake pkg-config makeWrapper ];
+  buildInputs = [
+    boost
+    stuntrally_ogre
+    stuntrally_mygui
+    ois
+    SDL2
+    libvorbis
+    enet
+    libXcursor
+    bullet
+    openal
+    tinyxml
+    tinyxml-2
   ];
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Stunt Rally game with Track Editor, based on VDrift and OGRE";
-    homepage = http://stuntrally.tuxfamily.org/;
+    homepage = "http://stuntrally.tuxfamily.org/";
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.linux;

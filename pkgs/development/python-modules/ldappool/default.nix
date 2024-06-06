@@ -1,30 +1,56 @@
-{ lib, buildPythonPackage, fetchPypi
-, pbr, ldap, prettytable, fixtures, testresources, testtools }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  pbr,
+  python-ldap,
+  prettytable,
+  six,
+  unittestCheckHook,
+  fixtures,
+  testresources,
+  testtools,
+}:
 
 buildPythonPackage rec {
-  name = "ldappool-${version}";
-  version = "2.4.1";
+  pname = "ldappool";
+  version = "3.0.0";
+  pyproject = true;
 
   src = fetchPypi {
     pname = "ldappool";
     inherit version;
-    sha256 = "23edef09cba4b1ae764f1ddada828d8e39d72cf32a457e599f5a70064310ea00";
+    hash = "sha256-S7WbfWsRQH9I7gGngSZ+PIupjZH0JoBqxyCGEq4Ie4Y=";
   };
 
-  postPatch = ''
-    # Tests run without most of the dependencies
-    echo "" > test-requirements.txt
-  '';
+  build-system = [
+    setuptools
+    pbr
+  ];
 
-  nativeBuildInputs = [ pbr ];
+  dependencies = [
+    python-ldap
+    prettytable
+    six
+  ];
 
-  propagatedBuildInputs = [ ldap prettytable ];
+  nativeCheckInputs = [
+    unittestCheckHook
+    fixtures
+    testresources
+    testtools
+  ];
 
-  checkInputs = [ fixtures testresources testtools ];
+  pythonImportsCheck = [ "ldappool" ];
 
   meta = with lib; {
     description = "A simple connector pool for python-ldap";
-    homepage = https://git.openstack.org/cgit/openstack/ldappool;
-    license = licenses.mpl20;
+    homepage = "https://opendev.org/openstack/ldappool/";
+    license = with licenses; [
+      mpl11
+      lgpl21Plus
+      gpl2Plus
+    ];
   };
 }

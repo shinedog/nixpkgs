@@ -1,11 +1,10 @@
-{ stdenv, pythonPackages }:
+{ lib, python3Packages, fetchPypi }:
 
-pythonPackages.buildPythonApplication rec {
+python3Packages.buildPythonApplication rec {
   pname = "dotfiles";
-  name = "${pname}-${version}";
   version = "0.6.4";
 
-  src = pythonPackages.fetchPypi {
+  src = fetchPypi {
     inherit version pname;
     sha256 = "03qis6m9r2qh00sqbgwsm883s4bj1ibwpgk86yh4l235mdw8jywv";
   };
@@ -13,12 +12,13 @@ pythonPackages.buildPythonApplication rec {
   # No tests in archive
   doCheck = false;
 
-  checkInputs = with pythonPackages; [ pytest ];
-  propagatedBuildInputs = with pythonPackages; [ click ];
+  nativeCheckInputs = with python3Packages; [ pytest ];
+  propagatedBuildInputs = with python3Packages; [ click ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Easily manage your dotfiles";
-    homepage = https://github.com/jbernard/dotfiles;
+    mainProgram = "dotfiles";
+    homepage = "https://github.com/jbernard/dotfiles";
     license = licenses.isc;
   };
 }

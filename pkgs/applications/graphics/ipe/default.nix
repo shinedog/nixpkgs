@@ -1,47 +1,95 @@
-{ stdenv, fetchurl, makeWrapper, pkgconfig, zlib, freetype, cairo, lua5, texlive, ghostscript
-, libjpeg, libpng, qtbase
+{ lib
+, stdenv
+, makeDesktopItem
+, fetchurl
+, pkg-config
+, copyDesktopItems
+, cairo
+, freetype
+, ghostscript
+, gsl
+, libjpeg
+, libpng
+, libspiro
+, lua5
+, qtbase
+, qtsvg
+, texliveSmall
+, wrapQtAppsHook
+, zlib
+, withTeXLive ? true
+, buildPackages
 }:
 
 stdenv.mkDerivation rec {
-  name = "ipe-7.2.11";
+  pname = "ipe";
+  version = "7.2.27";
 
   src = fetchurl {
-    url = "https://dl.bintray.com/otfried/generic/ipe/7.2/${name}-src.tar.gz";
-    sha256 = "09d71fdpiz359mcnb57460w2mcfizvlnidd6g1k4c3v6rglwlbd2";
+    url = "https://github.com/otfried/ipe/releases/download/v${version}/ipe-${version}-src.tar.gz";
+    sha256 = "sha256-wx/bZy8kB7dpZsz58BeRGdS1BzbrIoafgEmLyFg7wZU=";
   };
 
-  sourceRoot = "${name}/src";
-
-  IPEPREFIX="${placeholder "out"}";
-  URWFONTDIR="${texlive}/texmf-dist/fonts/type1/urw/";
-  LUA_PACKAGE = "lua";
+  nativeBuildInputs = [ pkg-config copyDesktopItems wrapQtAppsHook ];
 
   buildInputs = [
-    libjpeg libpng zlib qtbase freetype cairo lua5 texlive ghostscript
+    cairo
+    freetype
+    ghostscript
+    gsl
+    libjpeg
+    libpng
+    libspiro
+    lua5
+    qtbase
+    qtsvg
+    zlib
+  ] ++ (lib.optionals withTeXLive [
+    texliveSmall
+  ]);
+
+  makeFlags = [
+    "-C src"
+    "IPEPREFIX=${placeholder "out"}"
+    "LUA_PACKAGE=lua"
+    "MOC=${buildPackages.qt6Packages.qtbase}/libexec/moc"
+    "IPE_NO_SPELLCHECK=1" # qtSpell is not yet packaged
   ];
 
-  nativeBuildInputs = [ makeWrapper pkgconfig ];
-
-  postFixup = ''
-    for prog in $out/bin/*; do
-      wrapProgram "$prog" --prefix PATH : "${texlive}/bin"
-    done
-  '';
+  qtWrapperArgs = lib.optionals withTeXLive [ "--prefix PATH : ${lib.makeBinPath [ texliveSmall ]}" ];
 
   enableParallelBuilding = true;
 
-  #TODO: make .desktop entry
+  desktopItems = [
+    (makeDesktopItem {
+      name = pname;
+      desktopName = "Ipe";
+      genericName = "Drawing editor";
+      comment = "A drawing editor for creating figures in PDF format";
+      exec = "ipe";
+      icon = "ipe";
+      mimeTypes = [ "text/xml" "application/pdf" ];
+      categories = [ "Graphics" "Qt" ];
+      startupNotify = true;
+      startupWMClass = "ipe";
+    })
+  ];
 
-  meta = {
+  postInstall = ''
+    mkdir -p $out/share/icons/hicolor/128x128/apps
+    ln -s $out/share/ipe/${version}/icons/icon_128x128.png $out/share/icons/hicolor/128x128/apps/ipe.png
+  '';
+
+  meta = with lib; {
     description = "An editor for drawing figures";
-    homepage = http://ipe.otfried.org;
-    license = stdenv.lib.licenses.gpl3Plus;
+    homepage = "http://ipe.otfried.org"; # https not available
+    license = licenses.gpl3Plus;
     longDescription = ''
       Ipe is an extensible drawing editor for creating figures in PDF and Postscript format.
       It supports making small figures for inclusion into LaTeX-documents
       as well as presentations in PDF.
     '';
-    maintainers = [ stdenv.lib.maintainers.ttuegel ];
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ ttuegel ];
+    platforms = platforms.linux;
   };
 }

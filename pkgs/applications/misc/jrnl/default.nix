@@ -1,30 +1,73 @@
-{ stdenv
-, python3
+{
+  lib,
+  fetchFromGitHub,
+  python3,
+  testers,
+  jrnl,
 }:
 
-with python3.pkgs;
-
-buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "jrnl";
-  version = "1.9.8";
+  version = "4.1";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "d254c9c8f24dcf985b98a1d5311337c7f416e6305107eec34c567f58c95b06f4";
+  src = fetchFromGitHub {
+    owner = "jrnl-org";
+    repo = "jrnl";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-DtujXSDJWnOrHjVgJEJNKJMhSrNBHlR2hvHeHLSIF2o=";
   };
 
-  propagatedBuildInputs = [
-    pytz six tzlocal keyring dateutil
-    parsedatetime pycrypto
+  postPatch = ''
+    # Support pytest_bdd 7.1.2 and later, https://github.com/jrnl-org/jrnl/pull/1878
+    substituteInPlace tests/lib/when_steps.py \
+      --replace-fail "from pytest_bdd.steps import inject_fixture" "from pytest_bdd.compat import inject_fixture"
+  '';
+
+  build-system = with python3.pkgs; [ poetry-core ];
+
+  dependencies = with python3.pkgs; [
+    asteval
+    colorama
+    cryptography
+    keyring
+    parsedatetime
+    python-dateutil
+    pytz
+    pyxdg
+    pyyaml
+    tzlocal
+    ruamel-yaml
+    rich
   ];
 
-  # No tests in archive
-  doCheck = false;
+  nativeCheckInputs = with python3.pkgs; [
+    pytest-bdd
+    pytest-xdist
+    (pytestCheckHook.override { pytest = pytest_7; })
+    toml
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://maebert.github.io/jrnl/;
-    description = "A simple command line journal application that stores your journal in a plain text file";
-    license = licenses.mit;
-    maintainers = with maintainers; [ zalakain ];
+  preCheck = ''
+    export HOME=$(mktemp -d);
+  '';
+
+  pythonImportsCheck = [ "jrnl" ];
+
+  passthru.tests.version = testers.testVersion {
+    package = jrnl;
+    version = "v${version}";
+  };
+
+  meta = with lib; {
+    description = "Command line journal application that stores your journal in a plain text file";
+    homepage = "https://jrnl.sh/";
+    changelog = "https://github.com/jrnl-org/jrnl/releases/tag/v${version}";
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [
+      bryanasdev000
+      zalakain
+    ];
+    mainProgram = "jrnl";
   };
 }

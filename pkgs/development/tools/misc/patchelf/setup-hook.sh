@@ -2,13 +2,13 @@
 # directories from the RPATH of every library or executable in every
 # output.
 
-fixupOutputHooks+=('if [ -z "$dontPatchELF" ]; then patchELF "$prefix"; fi')
+fixupOutputHooks+=('if [ -z "${dontPatchELF-}" ]; then patchELF "$prefix"; fi')
 
 patchELF() {
     local dir="$1"
     [ -e "$dir" ] || return 0
 
-    header "shrinking RPATHs of ELF executables and libraries in $dir"
+    echo "shrinking RPATHs of ELF executables and libraries in $dir"
 
     local i
     while IFS= read -r -d $'\0' i; do
@@ -17,6 +17,4 @@ patchELF() {
         echo "shrinking $i"
         patchelf --shrink-rpath "$i" || true
     done < <(find "$dir" -type f -print0)
-
-    stopNest
 }

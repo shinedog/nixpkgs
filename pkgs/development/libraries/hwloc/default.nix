@@ -1,22 +1,19 @@
-{ stdenv, fetchurl, pkgconfig, expat, ncurses, pciutils, numactl
-, x11Support ? false, libX11 ? null, cairo ? null
+{ lib, stdenv, fetchurl, pkg-config, expat, ncurses, pciutils, numactl
+, x11Support ? false
+, libX11
+, cairo
+, config
+, enableCuda ? config.cudaSupport
+, cudaPackages
 }:
 
-assert x11Support -> libX11 != null && cairo != null;
-
-with stdenv.lib;
-
-let
-  version = "2.0.3";
-  versmm = versions.major version + "." + versions.minor version;
-  name = "hwloc-${version}";
-
-in stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "hwloc";
+  version = "2.10.0";
 
   src = fetchurl {
-    url = "http://www.open-mpi.org/software/hwloc/v${versmm}/downloads/${name}.tar.bz2";
-    sha256 = "09f7ajak8wv5issr0hw72vs3jkldc7crcc7z5fd34sspkvrsm4z3";
+    url = "https://www.open-mpi.org/software/hwloc/v${lib.versions.majorMinor version}/downloads/hwloc-${version}.tar.bz2";
+    sha256 = "sha256-AwXdYMneL75lGf4qTo/cbT243ldKDKeBK5LoDAWuE5I=";
   };
 
   configureFlags = [
@@ -25,34 +22,30 @@ in stdenv.mkDerivation {
   ];
 
   # XXX: libX11 is not directly needed, but needed as a propagated dep of Cairo.
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ]
+  ++ lib.optionals enableCuda [ cudaPackages.cuda_nvcc ];
 
-  # Filter out `null' inputs.  This allows users to `.override' the
-  # derivation and set optional dependencies to `null'.
-  buildInputs = stdenv.lib.filter (x: x != null)
-   ([ expat ncurses ]
-     ++  (optionals x11Support [ cairo libX11 ])
-     ++  (optionals stdenv.isLinux [ numactl ]));
+  buildInputs = [ expat ncurses ]
+    ++ lib.optionals x11Support [ cairo libX11 ]
+    ++ lib.optionals stdenv.isLinux [ numactl ]
+    ++ lib.optionals enableCuda [ cudaPackages.cuda_cudart ];
 
-  propagatedBuildInputs =
-    # Since `libpci' appears in `hwloc.pc', it must be propagated.
-    optional stdenv.isLinux pciutils;
+  # Since `libpci' appears in `hwloc.pc', it must be propagated.
+  propagatedBuildInputs = lib.optional stdenv.isLinux pciutils;
 
   enableParallelBuilding = true;
 
-  postInstall =
-    optionalString (stdenv.isLinux && numactl != null)
-      '' if [ -d "${numactl}/lib64" ]
-         then
-             numalibdir="${numactl}/lib64"
-         else
-             numalibdir="${numactl}/lib"
-             test -d "$numalibdir"
-         fi
+  postInstall = lib.optionalString stdenv.isLinux ''
+    if [ -d "${numactl}/lib64" ]; then
+      numalibdir="${numactl}/lib64"
+    else
+      numalibdir="${numactl}/lib"
+      test -d "$numalibdir"
+    fi
 
-         sed -i "$lib/lib/libhwloc.la" \
-             -e "s|-lnuma|-L$numalibdir -lnuma|g"
-      '';
+    sed -i "$lib/lib/libhwloc.la" \
+      -e "s|-lnuma|-L$numalibdir -lnuma|g"
+    '';
 
   # Checks disabled because they're impure (hardware dependent) and
   # fail on some build machines.
@@ -60,7 +53,7 @@ in stdenv.mkDerivation {
 
   outputs = [ "out" "lib" "dev" "doc" "man" ];
 
-  meta = {
+  meta = with lib; {
     description = "Portable abstraction of hierarchical architectures for high-performance computing";
     longDescription = ''
        hwloc provides a portable abstraction (across OS,
@@ -77,10 +70,9 @@ in stdenv.mkDerivation {
        gather information about the hardware, bind processes, and much
        more.
     '';
-
-    # http://www.open-mpi.org/projects/hwloc/license.php
+    # https://www.open-mpi.org/projects/hwloc/license.php
     license = licenses.bsd3;
-    homepage = https://www.open-mpi.org/projects/hwloc/;
+    homepage = "https://www.open-mpi.org/projects/hwloc/";
     maintainers = with maintainers; [ fpletz markuskowa ];
     platforms = platforms.all;
   };

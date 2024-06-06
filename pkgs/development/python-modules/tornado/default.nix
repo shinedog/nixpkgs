@@ -1,52 +1,74 @@
-{ lib
-, python
-, buildPythonPackage
-, fetchPypi
-, backports_abc
-, backports_ssl_match_hostname
-, certifi
-, singledispatch
-, pythonOlder
-, futures
-, version ? "5.1"
+{
+  lib,
+  python,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+
+  # for passthru.tests
+  distributed,
+  jupyter-server,
+  jupyterlab,
+  matplotlib,
+  mitmproxy,
+  pytest-tornado,
+  pytest-tornasync,
+  pyzmq,
+  sockjs-tornado,
+  urllib3,
 }:
-
-let
-  versionMap = {
-    "4.5.3" = {
-      sha256 = "02jzd23l4r6fswmwxaica9ldlyc2p6q8dk6dyff7j58fmdzf853d";
-    };
-    "5.1" = {
-      sha256 = "4f66a2172cb947387193ca4c2c3e19131f1c70fa8be470ddbbd9317fd0801582";
-    };
-  };
-in
-
-with versionMap.${version};
 
 buildPythonPackage rec {
   pname = "tornado";
-  inherit version;
+  version = "6.3.3";
+  format = "setuptools";
 
-  propagatedBuildInputs = [ backports_abc  certifi singledispatch ]
-    ++ lib.optional (pythonOlder "3.5") backports_ssl_match_hostname
-    ++ lib.optional (pythonOlder "3.2") futures;
-
-  # We specify the name of the test files to prevent
-  # https://github.com/NixOS/nixpkgs/issues/14634
-  checkPhase = ''
-    ${python.interpreter} -m unittest discover *_test.py
-  '';
-
-  src = fetchPypi {
-    inherit pname sha256 version;
+  src = fetchFromGitHub {
+    owner = "tornadoweb";
+    repo = "tornado";
+    rev = "v${version}";
+    hash = "sha256-l9Ce/c2wDSmsySr9yXu5Fl/+63QkQay46aDSUTJmetA=";
   };
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTestPaths = [
+    # additional tests that have extra dependencies, run slowly, or produce more output than a simple pass/fail
+    # https://github.com/tornadoweb/tornado/blob/v6.2.0/maint/test/README
+    "maint/test"
+
+    # AttributeError: 'TestIOStreamWebMixin' object has no attribute 'io_loop'
+    "tornado/test/iostream_test.py"
+  ];
+
+  disabledTests = [
+    # Exception: did not get expected log message
+    "test_unix_socket_bad_request"
+  ];
+
+  pythonImportsCheck = [ "tornado" ];
 
   __darwinAllowLocalNetworking = true;
 
-  meta = {
+  passthru.tests = {
+    inherit
+      distributed
+      jupyter-server
+      jupyterlab
+      matplotlib
+      mitmproxy
+      pytest-tornado
+      pytest-tornasync
+      pyzmq
+      sockjs-tornado
+      urllib3
+      ;
+  };
+
+  meta = with lib; {
     description = "A web framework and asynchronous networking library";
-    homepage = http://www.tornadoweb.org/;
-    license = lib.licenses.asl20;
+    homepage = "https://www.tornadoweb.org/";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ ];
   };
 }

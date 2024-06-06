@@ -1,36 +1,32 @@
-{ stdenv, fetchFromGitHub
-, guile, pkgconfig, glib, loudmouth, gmp, libidn, readline, libtool
+{ lib, stdenv, fetchurl
+, guile, pkg-config, glib, loudmouth, gmp, libidn, readline, libtool
 , libunwind, ncurses, curl, jansson, texinfo
-, automake, autoconf
-}:
-
+, argp-standalone }:
 stdenv.mkDerivation rec {
-  name = "freetalk-${version}";
-  version = "4.1";
-  
-  src = fetchFromGitHub {
-    owner = "GNUFreetalk";
-    repo = "freetalk";
-    rev = "v${version}";
-    sha256 = "09jwk2i8qd8c7wrn9xbqcwm32720dwxis22kf3jpbg8mn6w6i757";
+  pname = "freetalk";
+  version = "4.2";
+
+  src = fetchurl {
+    url = "mirror://gnu/freetalk/freetalk-${version}.tar.gz";
+    hash = "sha256-u1tPKacGry+JGYeAIgDia3N7zs5EM4FyQZdV8e7htYA=";
   };
 
-  preConfigure = ''
-    ./autogen.sh
-  '';
-
- nativeBuildInputs = [ pkgconfig ];
- buildInputs = [
+  nativeBuildInputs = [ pkg-config texinfo ];
+  buildInputs = [
     guile glib loudmouth gmp libidn readline libtool
-    libunwind ncurses curl jansson texinfo
-    autoconf automake
+    libunwind ncurses curl jansson
+  ] ++ lib.optionals stdenv.isDarwin [
+    argp-standalone
   ];
 
-  meta = with stdenv.lib; {
+  env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-largp";
+
+  meta = with lib; {
     description =  "Console XMPP client";
+    mainProgram = "freetalk";
     license = licenses.gpl3Plus ;
     maintainers = with maintainers; [ raskin ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     downloadPage = "https://www.gnu.org/software/freetalk/";
   };
 }

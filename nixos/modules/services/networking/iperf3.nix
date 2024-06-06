@@ -7,7 +7,7 @@ let
     port = mkOption {
       type        = types.ints.u16;
       default     = 5201;
-      description = "Server port to listen on for iperf3 client requsts.";
+      description = "Server port to listen on for iperf3 client requests.";
     };
     affinity = mkOption {
       type        = types.nullOr types.ints.unsigned;
@@ -18,6 +18,11 @@ let
       type        = types.nullOr types.str;
       default     = null;
       description = "Bind to the specific interface associated with the given address.";
+    };
+    openFirewall = mkOption {
+      type = types.bool;
+      default = false;
+      description = "Open ports in the firewall for iperf3.";
     };
     verbose = mkOption {
       type        = types.bool;
@@ -52,6 +57,11 @@ let
   };
 
   imp = {
+
+    networking.firewall = mkIf cfg.openFirewall {
+      allowedTCPPorts = [ cfg.port ];
+    };
+
     systemd.services.iperf3 = {
       description = "iperf3 daemon";
       unitConfig.Documentation = "man:iperf3(1) https://iperf.fr/iperf-doc.php";

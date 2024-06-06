@@ -1,35 +1,31 @@
-{ lib, python3Packages }:
+{ lib, python3, fetchPypi }:
 
-python3Packages.buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "luigi";
-  version = "2.8.0";
+  version = "3.5.1";
 
-  src = python3Packages.fetchPypi {
+  src = fetchPypi {
     inherit pname version;
-    sha256 = "1869lb6flmca6s7ccws7mvyn66nvrqjky40jwf2liv9fg0lp8899";
+    sha256 = "sha256-/HkLJ0dRXdGcZz77uOTJrOX0xc3DH45/k9xmfesuxsg=";
   };
 
-  # Relax version constraint
-  postPatch = ''
-    sed -i 's/<2.2.0//' setup.py
-  '';
-
-  propagatedBuildInputs = with python3Packages; [ tornado_4 python-daemon boto3 ];
+  propagatedBuildInputs = with python3.pkgs; [ python-dateutil tornado python-daemon boto3 tenacity ];
 
   # Requires tox, hadoop, and google cloud
   doCheck = false;
 
   # This enables accessing modules stored in cwd
-  makeWrapperArgs = ["--prefix PYTHONPATH . :"];
+  makeWrapperArgs = [ "--prefix PYTHONPATH . :" ];
 
   meta = with lib; {
-    homepage = https://github.com/spotify/luigi;
     description = "Python package that helps you build complex pipelines of batch jobs";
     longDescription = ''
       Luigi handles dependency resolution, workflow management, visualization,
       handling failures, command line integration, and much more.
     '';
-    license =  [ licenses.asl20 ];
+    homepage = "https://github.com/spotify/luigi";
+    changelog = "https://github.com/spotify/luigi/releases/tag/${version}";
+    license = [ licenses.asl20 ];
     maintainers = [ maintainers.bhipple ];
   };
 }

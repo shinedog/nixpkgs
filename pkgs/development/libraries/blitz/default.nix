@@ -1,74 +1,75 @@
-{ stdenv, fetchurl, pkgconfig, gfortran, texinfo
-
-# Select SIMD alignment width (in bytes) for vectorization.
+{ stdenv
+, lib
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, pkg-config
+, gfortran
+, texinfo
+, python3
+, boost
+  # Select SIMD alignment width (in bytes) for vectorization.
 , simdWidth ? 1
-
-# Pad arrays to simdWidth by default?
-# Note: Only useful if simdWidth > 1
+  # Pad arrays to simdWidth by default?
+  # Note: Only useful if simdWidth > 1
 , enablePadding ? false
-
-# Activate serialization through Boost.Serialize?
-, enableSerialization ? true, boost ? null
-
-# Activate test-suite?
-# WARNING: Some of the tests require up to 1700MB of memory to compile.
+  # Activate serialization through Boost.Serialize?
+, enableSerialization ? true
+  # Activate test-suite?
+  # WARNING: Some of the tests require up to 1700MB of memory to compile.
 , doCheck ? true
-
 }:
 
-assert enableSerialization -> boost != null;
-
 let
-  inherit (stdenv.lib) optional optionals;
+  inherit (lib) optional optionals;
 in
-
 stdenv.mkDerivation rec {
-  name = "blitz++-0.10";
-  src = fetchurl {
-    url = mirror://sourceforge/blitz/blitz-0.10.tar.gz;
-    sha256 = "153g9sncir6ip9l7ssl6bhc4qzh0qr3lx2d15qm68hqxj7kg0kl0";
+  pname = "blitz++";
+  version = "1.0.2";
+
+  src = fetchFromGitHub {
+    owner = "blitzpp";
+    repo = "blitz";
+    rev = version;
+    hash = "sha256-wZDg+4lCd9iHvxuQQE/qs58NorkxZ0+mf+8PKQ57CDE=";
   };
 
-  patches = [ ./blitz-gcc47.patch ./blitz-testsuite-stencil-et.patch ];
+  patches = [
+    # https://github.com/blitzpp/blitz/pull/180
+    (fetchpatch {
+      name = "use-cmake-install-full-dir.patch";
+      url = "https://github.com/blitzpp/blitz/commit/020f1d768c7fa3265cec244dc28f3dc8572719c5.patch";
+      hash = "sha256-8hYFNyWrejjIWPN/HzIOphD4Aq6Soe0FFUBmwV4tpWQ=";
+    })
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ gfortran texinfo ]
-    ++ optional (boost != null) boost;
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    python3
+    texinfo
+  ];
 
-  configureFlags =
-    [ "--enable-shared"
-      "--disable-static"
-      "--enable-fortran"
-      "--enable-optimize"
-      "--with-pic=yes"
-      "--enable-html-docs"
-      "--disable-doxygen"
-      "--disable-dot"
-      "--disable-latex-docs"
-      "--enable-simd-width=${toString simdWidth}"
-    ]
-    ++ optional enablePadding "--enable-array-length-padding"
-    ++ optional enableSerialization "--enable-serialization"
-    ++ optionals (boost != null) [ "--with-boost=${boost.dev}"
-                                   "--with-boost-libdir=${boost.out}/lib" ]
-    ++ optional stdenv.is64bit "--enable-64bit"
-    ;
+  buildInputs = [ gfortran texinfo boost ];
+
+  cmakeFlags = optional enablePadding "-DARRAY_LENGTH_PADDING=ON"
+    ++ optional enableSerialization "-DENABLE_SERIALISATION=ON"
+    ++ optional stdenv.is64bit "-DBZ_FULLY64BIT=ON";
+    # FIXME ++ optional doCheck "-DBUILD_TESTING=ON";
+
+  # skip broken library name detection
+  ax_boost_user_serialization_lib = lib.optionalString stdenv.isDarwin "boost_serialization";
 
   enableParallelBuilding = true;
 
-  buildFlags = "lib info pdf html";
-  installTargets = [ "install" "install-info" "install-pdf" "install-html" ];
-
   inherit doCheck;
-  checkTarget = "check-testsuite check-examples";
 
-  meta = {
+  meta = with lib; {
     description = "Fast multi-dimensional array library for C++";
-    homepage = https://sourceforge.net/projects/blitz/;
-    license = stdenv.lib.licenses.lgpl3;
-    platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
-    maintainers = [ stdenv.lib.maintainers.aherrmann ];
-
+    homepage = "https://sourceforge.net/projects/blitz/";
+    license = with licenses; [ artistic2 /* or */ bsd3 /* or */ lgpl3Plus ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ ToxicFrog ];
     longDescription = ''
       Blitz++ is a C++ class library for scientific computing which provides
       performance on par with Fortran 77/90. It uses template techniques to
@@ -76,7 +77,5 @@ stdenv.mkDerivation rec {
       random number generators, and small vectors (useful for representing
       multicomponent or vector fields).
     '';
-
-    broken = true; # failing test, ancient version, no library user in nixpkgs => if you care to fix it, go ahead
   };
 }

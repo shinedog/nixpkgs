@@ -1,14 +1,57 @@
-{ stdenv, fetchzip }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, python
+, cmake
+, ninja
+}:
 
-fetchzip {
-  url = https://github.com/lief-project/LIEF/releases/download/0.9.0/LIEF-0.9.0-Linux.tar.gz;
-  sha256 = "1c47hwd00bp4mqd4p5b6xjfl89c3wwk9ccyc3a2gk658250g2la6";
+let
+  pyEnv = python.withPackages (ps: [ ps.setuptools ps.tomli ps.pip ps.setuptools ]);
+in
+stdenv.mkDerivation rec {
+  pname = "lief";
+  version = "0.13.2";
 
-  meta = with stdenv.lib; {
+  src = fetchFromGitHub {
+    owner = "lief-project";
+    repo = "LIEF";
+    rev = version;
+    sha256 = "sha256-lH4SqwPB2Jp/wUI2Cll67PQbHbwMqpNuLy/ei8roiHg=";
+  };
+
+  outputs = [ "out" "py" ];
+
+  nativeBuildInputs = [
+    cmake
+    ninja
+  ];
+
+  # Not a propagatedBuildInput because only the $py output needs it; $out is
+  # just the library itself (e.g. C/C++ headers).
+  buildInputs = [
+    python
+  ];
+
+  env.CXXFLAGS = toString (lib.optional stdenv.isDarwin [ "-faligned-allocation" "-fno-aligned-new" "-fvisibility=hidden" ]);
+
+  postBuild = ''
+    pushd ../api/python
+    ${pyEnv.interpreter} setup.py build --parallel=$NIX_BUILD_CORES
+    popd
+  '';
+
+  postInstall = ''
+    pushd ../api/python
+    ${pyEnv.interpreter} setup.py install --skip-build --root=/ --prefix=$py
+    popd
+  '';
+
+  meta = with lib; {
     description = "Library to Instrument Executable Formats";
-    homepage = https://lief.quarkslab.com/;
+    homepage = "https://lief.quarkslab.com/";
     license = [ licenses.asl20 ];
-    platforms = platforms.linux;
-    maintainers = [ maintainers.lassulus ];
+    platforms = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ lassulus genericnerdyusername ];
   };
 }

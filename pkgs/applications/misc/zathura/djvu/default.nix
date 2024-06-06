@@ -1,20 +1,43 @@
-{ stdenv, fetchurl, meson, ninja, pkgconfig, gtk, zathura_core, girara, djvulibre, gettext }:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  meson,
+  ninja,
+  pkg-config,
+  gtk,
+  zathura_core,
+  girara,
+  djvulibre,
+  gettext,
+}:
 
 stdenv.mkDerivation rec {
-  name = "zathura-djvu-0.2.8";
+  pname = "zathura-djvu";
+  version = "0.2.9";
 
   src = fetchurl {
-    url = "https://pwmt.org/projects/zathura/plugins/download/${name}.tar.xz";
-    sha256 = "0axkv1crdxn0z44whaqp2ibkdqcykhjnxk7qzms0dp1b67an9rnh";
+    url = "https://pwmt.org/projects/${pname}/download/${pname}-${version}.tar.xz";
+    hash = "sha256-lub4pu5TIxBzsvcAMmSHL4RQHmPD2nvwWY0EYoawwgA=";
   };
 
-  nativeBuildInputs = [ meson ninja pkgconfig ];
-  buildInputs = [ djvulibre gettext zathura_core gtk girara ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
+  buildInputs = [
+    djvulibre
+    gettext
+    zathura_core
+    gtk
+    girara
+  ];
 
   PKG_CONFIG_ZATHURA_PLUGINDIR = "lib/zathura";
 
-  meta = with stdenv.lib; {
-    homepage = https://pwmt.org/projects/zathura-djvu/;
+  meta = with lib; {
+    homepage = "https://pwmt.org/projects/zathura-djvu/";
     description = "A zathura DJVU plugin";
     longDescription = ''
       The zathura-djvu plugin adds DjVu support to zathura by using the
@@ -22,7 +45,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.zlib;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ garbas ];
+    maintainers = with maintainers; [ ];
   };
 }
-

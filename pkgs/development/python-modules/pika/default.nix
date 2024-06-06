@@ -1,35 +1,73 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, nose
-, mock
-, pyyaml
-, unittest2
-, pyev
-, twisted
-, tornado
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  gevent,
+  twisted,
+  tornado,
+
+  # tests
+  nose2,
+  mock,
+
 }:
 
 buildPythonPackage rec {
   pname = "pika";
-  version = "1.0.1";
+  version = "1.3.2";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "5ba83d3daffccb92788d24facdab62a3db6aa03b8a6d709b03dc792d35c0dfe8";
+  src = fetchFromGitHub {
+    owner = "pika";
+    repo = "pika";
+    rev = "refs/tags/${version}";
+    hash = "sha256-60Z+y3YXazUghfnOy4e7HzM18iju5m5OEt4I3Wg6ty4=";
   };
 
-  # Tests require twisted which is only availalble for python-2.x
-  doCheck = !isPy3k;
+  nativeBuildInputs = [ setuptools ];
 
-  buildInputs = [ nose mock pyyaml unittest2 pyev ]
-    ++ stdenv.lib.optionals (!isPy3k) [ twisted tornado ];
+  propagatedBuildInputs = [
+    gevent
+    tornado
+    twisted
+  ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    nose2
+    mock
+  ];
+
+  postPatch = ''
+    # don't stop at first test failure
+    # don't run acceptance tests because they access the network
+    # don't report test coverage
+    substituteInPlace nose2.cfg \
+      --replace "stop = 1" "stop = 0" \
+      --replace "tests=tests/unit,tests/acceptance" "tests=tests/unit" \
+      --replace "with-coverage = 1" "with-coverage = 0"
+  '';
+
+  doCheck = false; # tests require rabbitmq instance, unsure how to skip
+
+  checkPhase = ''
+    runHook preCheck
+
+    PIKA_TEST_TLS=true nose2 -v
+
+    runHook postCheck
+  '';
+
+  meta = with lib; {
+    changelog = "https://github.com/pika/pika/releases/tag/${version}";
     description = "Pure-Python implementation of the AMQP 0-9-1 protocol";
-    homepage = https://pika.readthedocs.org;
+    downloadPage = "https://github.com/pika/pika";
+    homepage = "https://pika.readthedocs.org";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
-
 }

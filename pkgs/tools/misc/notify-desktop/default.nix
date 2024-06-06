@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, dbus, pkgconfig }:
+{ lib, stdenv, fetchFromGitHub, dbus, pkg-config }:
 
-stdenv.mkDerivation rec {
-  name = "notify-desktop-${version}";
+stdenv.mkDerivation {
+  pname = "notify-desktop";
   version = "0.2.0";
 
   src = fetchFromGitHub {
@@ -11,14 +11,15 @@ stdenv.mkDerivation rec {
     sha256 = "1brcvl2fx0yzxj9mc8hzfl32zdka1f1bxpzsclcsjplyakyinr1a";
   };
 
-  buildInputs = [ dbus pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ dbus ];
 
   installPhase = ''
     mkdir -p $out/bin
     install -m 755 bin/notify-desktop $out/bin/notify-desktop
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Little application that lets you send desktop notifications with one command";
     longDescription = ''
       It's basically clone of notify-send from libnotify,
@@ -26,8 +27,9 @@ stdenv.mkDerivation rec {
       It also does not use any external dependencies (except from libdbus of course).
     '';
     homepage = "https://github.com/nowrep/notify-desktop";
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.unix;
     maintainers = with maintainers; [ ylwghst ];
+    mainProgram = "notify-desktop";
   };
 }

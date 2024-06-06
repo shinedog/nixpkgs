@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchFromGitHub, cmake, boost
+{ stdenv, lib, fetchFromGitHub, fetchpatch, cmake, boost, tbb
 , gmp, llvm, clang, sqlite, python3
 , ocamlPackages, mpfr, ppl, doxygen, graphviz
 }:
@@ -10,25 +10,39 @@ let
 in
 
 stdenv.mkDerivation rec {
-  name = "ikos";
-  version = "2.1";
+  pname = "ikos";
+  version = "3.1";
 
   src = fetchFromGitHub {
     owner = "NASA-SW-VnV";
-    repo = name;
+    repo = "ikos";
     rev = "v${version}";
-    sha256 = "09nf47hpk5w5az4c0hcr5hhwvpz8zg1byyg185542cpzbq1xj8cb";
+    hash = "sha256-scaFkUhCkIi41iR6CGPbEndzXkgqTKMb3PDNvhgVbCE=";
   };
 
-  buildInputs = [ cmake boost gmp clang llvm sqlite python
+  patches = [ (fetchpatch {
+    url = "https://github.com/NASA-SW-VnV/ikos/commit/2e647432427b3f0dbb639e0371d976ab6406f290.patch";
+    hash = "sha256-ffzjlqEp4qp76Kwl5zpyQlg/xUMt8aLDSSP4XA4ndS8=";
+  })
+  # Fix build with GCC 13
+  # https://github.com/NASA-SW-VnV/ikos/pull/262
+  (fetchpatch {
+    name = "gcc-13.patch";
+    url = "https://github.com/NASA-SW-VnV/ikos/commit/73c816641fb9780f0d3b5e448510363a3cf21ce2.patch";
+    hash = "sha256-bkeSAtxrL+z+6QNiGOWSg7kN8XiZqMxlJiu5Dquhca0=";
+  })
+  ];
+
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ boost tbb gmp clang llvm sqlite python
                   ocamlPackages.apron mpfr ppl doxygen graphviz ];
 
-  cmakeFlags = "-DAPRON_ROOT=${ocamlPackages.apron}";
+  cmakeFlags = [ "-DAPRON_ROOT=${ocamlPackages.apron}" ];
 
   postBuild = "make doc";
 
   meta = with lib; {
-    homepage = https://github.com/NASA-SW-VnV/ikos;
+    homepage = "https://github.com/NASA-SW-VnV/ikos";
     description = "Static analyzer for C/C++ based on the theory of Abstract Interpretation";
     license = licenses.nasa13;
     maintainers = with maintainers; [ atnnn ];

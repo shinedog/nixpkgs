@@ -1,33 +1,55 @@
-{ stdenv, fetchFromGitHub
-, wrapGAppsHook, cmake, gettext
-, maxima, wxGTK, gnome3 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, wrapGAppsHook3
+, cmake
+, gettext
+, maxima
+, wxGTK
+, gnome
+, glib
+}:
 
-stdenv.mkDerivation rec {
-  name = "wxmaxima-${version}";
-  version = "19.03.0";
+stdenv.mkDerivation (finalAttrs:{
+  pname = "wxmaxima";
+  version = "24.05.0";
 
   src = fetchFromGitHub {
-    owner = "andrejv";
+    owner = "wxMaxima-developers";
     repo = "wxmaxima";
-    rev = "Version-${version}";
-    sha256 = "0s7bdykc77slqix28cyaa6x8wvxrn8461mkdgxflvi2apwsl56aa";
+    rev = "Version-${finalAttrs.version}";
+    hash = "sha256-pl3sO28HANL9F41aaJznxUsH2Y7W/FO82Rik2/ik2Ag=";
   };
 
-  buildInputs = [ wxGTK maxima gnome3.adwaita-icon-theme ];
+  buildInputs = [
+    wxGTK
+    maxima
+    # So it won't embed svg files into headers.
+    gnome.adwaita-icon-theme
+    # So it won't crash under Sway.
+    glib
+  ];
 
-  nativeBuildInputs = [ wrapGAppsHook cmake gettext ];
+  nativeBuildInputs = [
+    wrapGAppsHook3
+    cmake
+    gettext
+  ];
+
+  cmakeFlags = [
+    "-DwxWidgets_LIBRARIES=${wxGTK}/lib"
+  ];
 
   preConfigure = ''
     gappsWrapperArgs+=(--prefix PATH ":" ${maxima}/bin)
   '';
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Cross platform GUI for the computer algebra system Maxima";
+    mainProgram = "wxmaxima";
     license = licenses.gpl2;
-    homepage = https://wxmaxima-developers.github.io/wxmaxima/;
+    homepage = "https://wxmaxima-developers.github.io/wxmaxima/";
+    maintainers = with maintainers; [ doronbehar ];
     platforms = platforms.linux;
-    maintainers = [ maintainers.peti ];
   };
-}
+})

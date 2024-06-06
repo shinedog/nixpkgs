@@ -1,58 +1,87 @@
-{ stdenv, fetchFromGitHub, alsaLib, boost
-, qt4, libpulseaudio, codec2, libconfig
-, gnuradio, gnuradio-osmosdr, gsm
-, libopus, libjpeg, protobuf, qwt, speex
-} :
+{ lib
+, fetchFromGitHub
+, libpulseaudio
+, libconfig
+# Needs a gnuradio built with qt gui support
+, gnuradio3_8
+, thrift
+# Not gnuradioPackages'
+, codec2
+, gmp
+, gsm
+, libopus
+, libjpeg
+, libsndfile
+, libftdi
+, limesuite
+, soapysdr-with-plugins
+, protobuf
+, speex
+, speexdsp
+, cppzmq
+}:
 
-let
-  version = "0.5.0";
-
-in stdenv.mkDerivation {
-  name = "qradiolink-${version}";
+gnuradio3_8.pkgs.mkDerivation rec {
+  pname = "qradiolink";
+  version = "0.8.11-1";
 
   src = fetchFromGitHub {
-    owner = "kantooon";
+    owner = "qradiolink";
     repo = "qradiolink";
-    rev = "${version}";
-    sha256 = "0xhg5zhjznmls5m3rhpk1qx0dipxmca12s85w15d0i7qwva2f1gi";
+    rev = version;
+    sha256 = "sha256-62+eKaLt9DlTebbnLPVJFx68bfWb7BrdQHocyJTfK28=";
   };
 
   preBuild = ''
-    cd ext
+    cd src/ext
     protoc --cpp_out=. Mumble.proto
     protoc --cpp_out=. QRadioLink.proto
-    cd ..
+    cd ../..
     qmake
   '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp qradiolink $out/bin
+    install -D qradiolink $out/bin/qradiolink
+    install -Dm644 src/res/icon.png $out/share/pixmaps/qradiolink.png
+    install -Dm644 qradiolink.desktop $out/share/applications/qradiolink.desktop
   '';
 
   buildInputs = [
-    qt4
-    alsaLib
-    boost
-    libpulseaudio
+    gnuradio3_8.unwrapped.boost
     codec2
+    gnuradio3_8.unwrapped.logLib
+    gmp
+    libpulseaudio
     libconfig
     gsm
-    gnuradio
-    gnuradio-osmosdr
+    gnuradio3_8.pkgs.osmosdr
     libopus
     libjpeg
-    protobuf
+    limesuite
+    soapysdr-with-plugins
     speex
-    qwt
+    speexdsp
+    gnuradio3_8.qt.qtbase
+    gnuradio3_8.qt.qtmultimedia
+    libftdi
+    libsndfile
+    cppzmq
+    gnuradio3_8.qwt
+  ] ++ lib.optionals (gnuradio3_8.hasFeature "gr-ctrlport") [
+    thrift
+    gnuradio3_8.unwrapped.python.pkgs.thrift
+  ];
+  nativeBuildInputs = [
+    protobuf
+    gnuradio3_8.qt.qmake
+    gnuradio3_8.qt.wrapQtAppsHook
   ];
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "SDR transceiver application for analog and digital modes";
-    homepage = http://qradiolink.org/;
-    license = licenses.agpl3;
+    mainProgram = "qradiolink";
+    homepage = "http://qradiolink.org/";
+    license = licenses.agpl3Plus;
     maintainers = [ maintainers.markuskowa ];
     platforms = platforms.linux;
   };

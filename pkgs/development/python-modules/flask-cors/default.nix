@@ -1,21 +1,39 @@
-{ stdenv, fetchPypi, buildPythonPackage
-, nose, flask, six }:
+{
+  lib,
+  fetchFromGitHub,
+  buildPythonPackage,
+  flask,
+  packaging,
+  pytestCheckHook,
+  setuptools,
+}:
 
 buildPythonPackage rec {
-  pname = "Flask-Cors";
-  version = "3.0.7";
+  pname = "flask-cors";
+  version = "4.0.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1v6gq4vjgyxi8q8lxawpdfhq01adb4bznnabp08ks5nzbwibz43y";
+  src = fetchFromGitHub {
+    owner = "corydolphin";
+    repo = "flask-cors";
+    rev = "refs/tags/${version}";
+    hash = "sha256-o//ulROKKBv/CBJIGPBFP/+T0TpMHUVjr23Y5g1V05g=";
   };
 
-  buildInputs = [ nose ];
-  propagatedBuildInputs = [ flask six ];
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [ flask ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    packaging
+  ];
+
+  meta = with lib; {
     description = "A Flask extension adding a decorator for CORS support";
-    homepage = https://github.com/corydolphin/flask-cors;
+    homepage = "https://github.com/corydolphin/flask-cors";
+    changelog = "https://github.com/corydolphin/flask-cors/releases/tag/v${version}";
     license = with licenses; [ mit ];
+    maintainers = with maintainers; [ nickcao ];
   };
 }

@@ -1,31 +1,36 @@
-{ lib, buildPythonPackage, fetchPypi, fetchpatch, pyusb }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pyusb,
+}:
 
 buildPythonPackage rec {
-  pname = "BlinkStick";
-  version = "1.1.8";
+  pname = "blinkstick";
+  version = "unstable-2023-05-04";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "3edf4b83a3fa1a7bd953b452b76542d54285ff6f1145b6e19f9b5438120fa408";
+  src = fetchFromGitHub {
+    owner = "arvydas";
+    repo = "blinkstick-python";
+    rev = "8140b9fa18a9ff4f0e9df8e70c073f41cb8f1d35";
+    hash = "sha256-9bc7TD/Ilc952ywLauFd0+3Lh64lQlYuDC1KG9eWDgs=";
   };
-
-  patches = [
-    (fetchpatch {
-      url = https://github.com/arvydas/blinkstick-python/commit/a9227d0.patch;
-      sha256 = "1mcmxlnkbfxwp84qz32l5rlc7r9anh9yhnqaj1y8rny5s13jb01f";
-    })
-    (fetchpatch {
-      url = https://github.com/arvydas/blinkstick-python/pull/54.patch;
-      sha256 = "1gjq6xbai794bbdyrv82i96l1a7qkwvlhzd6sa937dy5ivv6s6hl";
-    })
-  ];
 
   propagatedBuildInputs = [ pyusb ];
 
-  meta = with lib; {
+  # Project has no tests
+  doCheck = false;
+  pythonImportsCheck = [ "blinkstick" ];
+
+  meta = {
     description = "Python package to control BlinkStick USB devices";
-    homepage = https://pypi.python.org/pypi/BlinkStick/;
-    license = licenses.bsd3;
-    maintainers = with maintainers; [ np ];
+    mainProgram = "blinkstick";
+    homepage = "https://github.com/arvydas/blinkstick-python";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [
+      np
+      perstark
+    ];
   };
 }

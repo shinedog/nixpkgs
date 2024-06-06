@@ -1,23 +1,24 @@
-{ stdenv, fetchurl, alsaLib, fluidsynth, libjack2, qt5, autoconf, pkgconfig }:
+{ lib, stdenv, fetchurl, alsa-lib, fluidsynth, libjack2, cmake, pkg-config
+, qtbase, qttools, qtx11extras, wrapQtAppsHook
+}:
 
-stdenv.mkDerivation  rec {
-  name = "qsynth-${version}";
-  version = "0.5.6";
+stdenv.mkDerivation rec {
+  pname = "qsynth";
+  version = "0.9.91";
 
   src = fetchurl {
-    url = "mirror://sourceforge/qsynth/${name}.tar.gz";
-    sha256 = "0h4hhja8qbyzd6v24flw9wr4mwl03nplryx1gyrppn7sg13l1sx6";
+    url = "mirror://sourceforge/qsynth/${pname}-${version}.tar.gz";
+    hash = "sha256-CS/rCvm7IuVwDN1PURO6ADVXTZkX7OYzKJP8xfOHN4E=";
   };
 
-  nativeBuildInputs = [ autoconf pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config wrapQtAppsHook ];
 
-  buildInputs = [ alsaLib fluidsynth libjack2 qt5.qtbase qt5.qttools qt5.qtx11extras ];
+  buildInputs = [ alsa-lib fluidsynth libjack2 qtbase qttools qtx11extras ];
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Fluidsynth GUI";
-    homepage = https://sourceforge.net/projects/qsynth;
+    mainProgram = "qsynth";
+    homepage = "https://sourceforge.net/projects/qsynth";
     license = licenses.gpl2Plus;
     maintainers = with maintainers; [ goibhniu ];
     platforms = platforms.linux;

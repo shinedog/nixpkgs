@@ -1,16 +1,20 @@
-{ stdenv, fetchFromGitHub
+{ lib
+, stdenv
+, fetchFromGitHub
 , libpcap
+, testers
+, ubridge
 }:
 
 stdenv.mkDerivation rec {
-  name = "ubridge-${version}";
-  version = "0.9.15";
+  pname = "ubridge";
+  version = "0.9.18";
 
   src = fetchFromGitHub {
     owner = "GNS3";
     repo = "ubridge";
     rev = "v${version}";
-    sha256 = "0fl07zyall04map6v2l1bclqh8y3rrhsx61s2v0sr8b00j201jg4";
+    sha256 = "0jg66jhhpv4c9340fsdp64hf9h253i8r81fknxa0gq241ripp3jn";
   };
 
   postPatch = ''
@@ -21,11 +25,23 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ libpcap ];
 
-  preInstall = ''
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/bin
+    install -Dm755 ubridge $out/bin/ubridge
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru = {
+    tests.version = testers.testVersion {
+      package = ubridge;
+      command = "ubridge -v";
+    };
+  };
+
+  meta = with lib; {
     description = "Bridge for UDP tunnels, Ethernet, TAP, and VMnet interfaces";
     longDescription = ''
       uBridge is a simple application to create user-land bridges between
@@ -33,8 +49,10 @@ stdenv.mkDerivation rec {
       and TAP interfaces is supported. Packet capture is also supported.
     '';
     inherit (src.meta) homepage;
+    changelog = "https://github.com/GNS3/ubridge/releases/tag/v${version}";
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
+    mainProgram = "ubridge";
     maintainers = with maintainers; [ primeos ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

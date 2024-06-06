@@ -1,11 +1,11 @@
-{ stdenv, fetchurl, fetchpatch, libX11, libXext, xorgproto, libICE, libSM, libpng12, zlib }:
+{ lib, stdenv, fetchurl, fetchpatch, libX11, libXext, xorgproto, libICE, libSM, libpng12, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "lincity-${version}";
+  pname = "lincity";
   version = "1.13.1";
 
   src = fetchurl {
-    url = "mirror://sourceforge/lincity/${name}.tar.gz";
+    url = "mirror://sourceforge/lincity/${pname}-${version}.tar.gz";
     sha256 = "0p81wl7labyfb6rgp0hi42l2akn3n7r2bnxal1wyvjylzw8vsk3v";
   };
 
@@ -25,9 +25,19 @@ stdenv.mkDerivation rec {
     })
   ];
 
-  meta = with stdenv.lib; {
+  # Workaround build failure on -fno-common toolchains like upstream
+  # gcc-10. Otherwise build fails as:
+  #   ld: modules/.libs/libmodules.a(rocket_pad.o):/build/lincity-1.13.1/modules/../screen.h:23:
+  #     multiple definition of `monthgraph_style'; ldsvguts.o:/build/lincity-1.13.1/screen.h:23: first defined here
+  env.NIX_CFLAGS_COMPILE = "-fcommon";
+
+  meta = with lib; {
     description = "City simulation game";
+    mainProgram = "xlincity";
     license = licenses.gpl2Plus;
-    homepage = https://sourceforge.net/projects/lincity;
+    homepage = "https://sourceforge.net/projects/lincity";
+    maintainers = with maintainers; [ ];
+    # ../lcintl.h:14:10: fatal error: 'libintl.h' file not found
+    broken = stdenv.isDarwin;
   };
 }

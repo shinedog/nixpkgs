@@ -1,35 +1,54 @@
-{ stdenv, fetchFromGitHub, cmake, makeWrapper, itk, vtk }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, makeBinaryWrapper
+, itk
+, vtk
+, Cocoa
+}:
 
-stdenv.mkDerivation rec {
-  _name    = "ANTs";
-  _version = "2.2.0";
-  name  = "${_name}-${_version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ANTs";
+  version = "2.5.1";
 
   src = fetchFromGitHub {
-    owner  = "ANTsX";
-    repo   = "ANTs";
-    rev    = "37ad4e20be3a5ecd26c2e4e41b49e778a0246c3d";
-    sha256 = "1hrdwv3m9xh3yf7l0rm2ggxc2xzckfb8srs88g485ibfszx7i03q";
+    owner = "ANTsX";
+    repo = "ANTs";
+    rev = "refs/tags/v${finalAttrs.version}";
+    hash = "sha256-q252KC6SKUN5JaQWAcsVmDprVkLXDvkYzNhC7yHJNpk=";
   };
 
-  nativeBuildInputs = [ cmake makeWrapper ];
-  buildInputs = [ itk vtk ];
+  nativeBuildInputs = [
+    cmake
+    makeBinaryWrapper
+  ];
 
-  cmakeFlags = [ "-DANTS_SUPERBUILD=FALSE" "-DUSE_VTK=TRUE" ];
+  buildInputs = [
+    itk
+    vtk
+  ] ++ lib.optionals stdenv.isDarwin [
+    Cocoa
+  ];
 
-  enableParallelBuilding = true;
+  cmakeFlags = [
+    "-DANTS_SUPERBUILD=FALSE"
+    "-DUSE_VTK=TRUE"
+  ];
 
   postInstall = ''
     for file in $out/bin/*; do
-      wrapProgram $file --set ANTSPATH "$out/bin"
+      wrapProgram $file --set PATH "$out/bin"
     done
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/ANTxS/ANTs;
+  meta = {
+    changelog = "https://github.com/ANTsX/ANTs/releases/tag/v${finalAttrs.version}";
     description = "Advanced normalization toolkit for medical image registration and other processing";
-    maintainers = with maintainers; [ bcdarwin ];
-    platforms = platforms.unix;
-    license = licenses.bsd3;
+    homepage = "https://github.com/ANTsX/ANTs";
+    license = lib.licenses.asl20;
+    mainProgram = "antsRegistration";
+    maintainers = with lib.maintainers; [ bcdarwin ];
+    platforms = lib.platforms.unix;
   };
-}
+})

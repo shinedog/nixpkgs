@@ -1,51 +1,39 @@
-{ config, stdenv, fetchurl, fetchpatch, pkgconfig, libiconv
-, libintl, expat, zlib, libpng, pixman, fontconfig, freetype
-, x11Support? !stdenv.isDarwin, libXext, libXrender
+{ lib, stdenv, fetchurl, gtk-doc, meson, ninja, pkg-config, python3
+, docbook_xsl, fontconfig, freetype, libpng, pixman, zlib
+, x11Support? !stdenv.isDarwin || true, libXext, libXrender
 , gobjectSupport ? true, glib
-, xcbSupport ? x11Support, libxcb, xcbutil # no longer experimental since 1.12
-, libGLSupported
-, glSupport ? config.cairo.gl or (libGLSupported && stdenv.isLinux && !stdenv.isAarch32 && !stdenv.isMips)
-, libGL ? null # libGLU_combined is no longer a big dependency
-, pdfSupport ? true
+, xcbSupport ? x11Support, libxcb
 , darwin
+, testers
 }:
 
-assert glSupport -> libGL != null;
-
 let
-  version = "1.16.0";
-  inherit (stdenv.lib) optional optionals;
-in stdenv.mkDerivation rec {
-  name = "cairo-${version}";
+  inherit (lib) optional optionals;
+in stdenv.mkDerivation (finalAttrs: let
+  inherit (finalAttrs) pname version;
+in {
+  pname = "cairo";
+  version = "1.18.0";
 
   src = fetchurl {
-    url = "https://cairographics.org/${if stdenv.lib.mod (builtins.fromJSON (stdenv.lib.versions.minor version)) 2 == 0 then "releases" else "snapshots"}/${name}.tar.xz";
-    sha256 = "0c930mk5xr2bshbdljv005j3j8zr47gqmkry3q6qgvqky6rjjysy";
+    url = "https://cairographics.org/${if lib.mod (builtins.fromJSON (lib.versions.minor version)) 2 == 0 then "releases" else "snapshots"}/${pname}-${version}.tar.xz";
+    hash = "sha256-JDoHNrl4oz3uKfnMp1IXM7eKZbVBggb+970cPUzxC2Q=";
   };
-
-  patches = [
-    # Fixes CVE-2018-19876; see Nixpkgs issue #55384
-    # CVE information: https://nvd.nist.gov/vuln/detail/CVE-2018-19876
-    # Upstream PR: https://gitlab.freedesktop.org/cairo/cairo/merge_requests/5
-    #
-    # This patch is the merged commit from the above PR.
-    (fetchpatch {
-      name   = "CVE-2018-19876.patch";
-      url    = "https://gitlab.freedesktop.org/cairo/cairo/commit/6edf572ebb27b00d3c371ba5ae267e39d27d5b6d.patch";
-      sha256 = "112hgrrsmcwxh1r52brhi5lksq4pvrz4xhkzcf2iqp55jl2pb7n1";
-    })
-  ];
 
   outputs = [ "out" "dev" "devdoc" ];
   outputBin = "dev"; # very small
+  separateDebugInfo = true;
 
   nativeBuildInputs = [
-    pkgconfig
+    gtk-doc
+    meson
+    ninja
+    pkg-config
+    python3
   ];
 
   buildInputs = [
-    libiconv
-    libintl
+    docbook_xsl
   ] ++ optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
     CoreGraphics
     CoreText
@@ -53,68 +41,76 @@ in stdenv.mkDerivation rec {
     Carbon
   ]);
 
-  propagatedBuildInputs = [ fontconfig expat freetype pixman zlib libpng ]
+  propagatedBuildInputs = [ fontconfig freetype pixman libpng zlib ]
     ++ optionals x11Support [ libXext libXrender ]
-    ++ optionals xcbSupport [ libxcb xcbutil ]
+    ++ optionals xcbSupport [ libxcb ]
     ++ optional gobjectSupport glib
-    ++ optional glSupport libGL
     ; # TODO: maybe liblzo but what would it be for here?
 
-  configureFlags = if stdenv.isDarwin then [
-    "--disable-dependency-tracking"
-    "--enable-quartz"
-    "--enable-quartz-font"
-    "--enable-quartz-image"
-    "--enable-ft"
-  ] else ([ "--enable-tee" ]
-    ++ optional xcbSupport "--enable-xcb"
-    ++ optional glSupport "--enable-gl"
-    ++ optional pdfSupport "--enable-pdf"
-  );
+  mesonFlags = [
+    "-Dgtk_doc=true"
 
-  preConfigure =
-  # On FreeBSD, `-ldl' doesn't exist.
-    stdenv.lib.optionalString stdenv.isFreeBSD
-       '' for i in "util/"*"/Makefile.in" boilerplate/Makefile.in
-          do
-            cat "$i" | sed -es/-ldl//g > t
-            mv t "$i"
-          done
-       ''
-    +
-    ''
-    # Work around broken `Requires.private' that prevents Freetype
-    # `-I' flags to be propagated.
-    sed -i "src/cairo.pc.in" \
-        -es'|^Cflags:\(.*\)$|Cflags: \1 -I${freetype.dev}/include/freetype2 -I${freetype.dev}/include|g'
-    substituteInPlace configure --replace strings $STRINGS
-    '';
+    # error: #error config.h must be included before this header
+    "-Dsymbol-lookup=disabled"
+
+    # Only used in tests, causes a dependency cycle
+    "-Dspectre=disabled"
+
+    (lib.mesonEnable "glib" gobjectSupport)
+    (lib.mesonEnable "tests" finalAttrs.finalPackage.doCheck)
+    (lib.mesonEnable "xlib" x11Support)
+    (lib.mesonEnable "xcb" xcbSupport)
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    "--cross-file=${builtins.toFile "cross-file.conf" ''
+      [properties]
+      ipc_rmid_deferred_release = ${
+        {
+          linux = "true";
+          freebsd = "true";
+          netbsd = "false";
+        }.${stdenv.hostPlatform.parsed.kernel.name} or
+          (throw "Unknown value for ipc_rmid_deferred_release")
+      }
+    ''}"
+  ];
+
+  preConfigure = ''
+    patchShebangs version.py
+  '';
 
   enableParallelBuilding = true;
 
   doCheck = false; # fails
 
-  postInstall = stdenv.lib.optionalString stdenv.isDarwin glib.flattenInclude;
+  postInstall = ''
+    # Work around broken `Requires.private' that prevents Freetype
+    # `-I' flags to be propagated.
+    sed -i "$out/lib/pkgconfig/cairo.pc" \
+        -es'|^Cflags:\(.*\)$|Cflags: \1 -I${freetype.dev}/include/freetype2 -I${freetype.dev}/include|g'
+  '' + lib.optionalString stdenv.isDarwin glib.flattenInclude;
 
-  meta = with stdenv.lib; {
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+
+  meta = with lib; {
     description = "A 2D graphics library with support for multiple output devices";
-
+    mainProgram = "cairo-trace";
     longDescription = ''
       Cairo is a 2D graphics library with support for multiple output
       devices.  Currently supported output targets include the X
-      Window System, Quartz, Win32, image buffers, PostScript, PDF,
-      and SVG file output.  Experimental backends include OpenGL
-      (through glitz), XCB, BeOS, OS/2, and DirectFB.
+      Window System, XCB, Quartz, Win32, image buffers, PostScript,
+      PDF, and SVG file output.
 
       Cairo is designed to produce consistent output on all output
       media while taking advantage of display hardware acceleration
       when available (e.g., through the X Render Extension).
     '';
-
-    homepage = http://cairographics.org/;
-
+    homepage = "http://cairographics.org/";
     license = with licenses; [ lgpl2Plus mpl10 ];
-
+    pkgConfigModules = [
+      "cairo-pdf"
+      "cairo-ps"
+      "cairo-svg"
+    ] ++ lib.optional gobjectSupport "cairo-gobject";
     platforms = platforms.all;
   };
-}
+})

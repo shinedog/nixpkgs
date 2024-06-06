@@ -1,38 +1,70 @@
-{ stdenv, pkgconfig, buildGoPackage, fetchFromGitHub
-, makeWrapper, coreutils, gnupg, gnutar, squashfsTools, debootstrap
+{ lib
+, pkg-config
+, buildGoModule
+, fetchFromGitHub
+, makeWrapper
+, coreutils
+, gnupg
+, gnutar
+, squashfsTools
+, debootstrap
+, callPackage
+, nixosTests
 }:
 
-let binPath = stdenv.lib.makeBinPath [
-  coreutils gnupg gnutar squashfsTools debootstrap
-];
+let
+  bins = [
+    coreutils
+    gnupg
+    gnutar
+    squashfsTools
+    debootstrap
+  ];
 in
-buildGoPackage rec {
-  name = "distrobuilder-${version}";
-  version = "2018_10_04";
-  rev = "d2329be9569d45028a38836186d2353b8ddfe1ca";
+buildGoModule rec {
+  pname = "distrobuilder";
+  version = "3.0";
 
-  goPackagePath = "github.com/lxc/distrobuilder";
+  vendorHash = "sha256-pFrEkZnrcx0d3oM1klQrNHH+MiLvO4V1uFQdE0kXUqM=";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "lxc";
     repo = "distrobuilder";
-    sha256 = "1sn1wif86p089kr6zq83k81hjd1d73kamnawc2p0k0vd0w91d3v4";
+    rev = "refs/tags/distrobuilder-${version}";
+    sha256 = "sha256-JfME9VaqaQnrhnzhSLGUy9uU+tki1hXdnwqBUD/5XH0=";
+    fetchSubmodules = false;
   };
 
-  goDeps = ./deps.nix;
+  buildInputs = bins;
+
+
+  # tests require a local keyserver (mkg20001/nixpkgs branch distrobuilder-with-tests) but gpg is currently broken in tests
+  doCheck = false;
+
+  nativeBuildInputs = [
+    pkg-config
+    makeWrapper
+  ] ++ bins;
 
   postInstall = ''
-    wrapProgram $bin/bin/distrobuilder --prefix PATH ":" ${binPath}
+    wrapProgram $out/bin/distrobuilder --prefix PATH ":" ${lib.makeBinPath bins}
   '';
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
 
-  meta = with stdenv.lib; {
+  passthru = {
+    tests = {
+      incus-legacy-init = nixosTests.incus.container-legacy-init;
+      incus-systemd-init = nixosTests.incus.container-systemd-init;
+    };
+
+    generator = callPackage ./generator.nix { inherit src version; };
+  };
+
+  meta = {
     description = "System container image builder for LXC and LXD";
     homepage = "https://github.com/lxc/distrobuilder";
-    license = licenses.asl20;
-    maintainers = with maintainers; [ megheaiulian ];
-    platforms = platforms.linux;
+    license = lib.licenses.asl20;
+    maintainers = lib.teams.lxc.members;
+    platforms = lib.platforms.linux;
+    mainProgram = "distrobuilder";
   };
 }
-

@@ -1,75 +1,85 @@
 { stdenv, lib, fetchurl, doxygen, extra-cmake-modules, graphviz, kdoctools
-, fetchpatch
+, wrapQtAppsHook
+, autoPatchelfHook
 
 , akonadi, alkimia, aqbanking, gmp, gwenhywfar, kactivities, karchive
-, kcmutils, kcontacts, kdewebkit, kdiagram, kholidays, kidentitymanagement
+, kcmutils, kcontacts, qtwebengine, kdiagram, kholidays, kidentitymanagement
 , kitemmodels, libical, libofx, qgpgme
 
 , sqlcipher
 
 # Needed for running tests:
-, qtbase, xvfb_run
+, xvfb-run
 
-# For weboob, which only supports Python 2.x:
-, python2Packages
+, python3
 }:
 
 stdenv.mkDerivation rec {
-  name = "kmymoney-${version}";
-  version = "5.0.4";
+  pname = "kmymoney";
+  version = "5.1.3";
 
   src = fetchurl {
-    url = "mirror://kde/stable/kmymoney/${version}/src/${name}.tar.xz";
-    sha256 = "06lbavhl9b8cybnss2mmy3g5w8qn2vl6zhipvbl11lsr3j9bsa8q";
+    url = "mirror://kde/stable/kmymoney/${version}/src/${pname}-${version}.tar.xz";
+    sha256 = "sha256-OTi4B4tzkboy4Su0I5di+uE0aDoMLsGnUQXDAso+Xj8=";
   };
 
-  # Hidden dependency that wasn't included in CMakeLists.txt:
-  NIX_CFLAGS_COMPILE = "-I${kitemmodels.dev}/include/KF5";
+  cmakeFlags = [
+    # Remove this when upgrading to a KMyMoney release that includes
+    # https://invent.kde.org/office/kmymoney/-/merge_requests/118
+    "-DENABLE_WEBENGINE=ON"
+  ];
 
-  enableParallelBuilding = true;
+  # Hidden dependency that wasn't included in CMakeLists.txt:
+  env.NIX_CFLAGS_COMPILE = "-I${kitemmodels.dev}/include/KF5";
 
   nativeBuildInputs = [
-    doxygen extra-cmake-modules graphviz kdoctools python2Packages.wrapPython
+    doxygen extra-cmake-modules graphviz kdoctools
+    python3.pkgs.wrapPython wrapQtAppsHook autoPatchelfHook
   ];
 
   buildInputs = [
     akonadi alkimia aqbanking gmp gwenhywfar kactivities karchive kcmutils
-    kcontacts kdewebkit kdiagram kholidays kidentitymanagement kitemmodels
+    kcontacts qtwebengine kdiagram kholidays kidentitymanagement kitemmodels
     libical libofx qgpgme
     sqlcipher
 
     # Put it into buildInputs so that CMake can find it, even though we patch
     # it into the interface later.
-    python2Packages.weboob
+    python3.pkgs.woob
   ];
 
-  weboobPythonPath = [ python2Packages.weboob ];
-
-  postInstall = ''
-    buildPythonPath "$weboobPythonPath"
-    patchPythonScript "$out/share/kmymoney/weboob/kmymoneyweboob.py"
+  postPatch = ''
+    buildPythonPath "${python3.pkgs.woob}"
+    patchPythonScript "kmymoney/plugins/woob/interface/kmymoneywoob.py"
 
     # Within the embedded Python interpreter, sys.argv is unavailable, so let's
     # assign it to a dummy value so that the assignment of sys.argv[0] injected
     # by patchPythonScript doesn't fail:
     sed -i -e '1i import sys; sys.argv = [""]' \
-      "$out/share/kmymoney/weboob/kmymoneyweboob.py"
+      "kmymoney/plugins/woob/interface/kmymoneywoob.py"
   '';
 
   doInstallCheck = stdenv.hostPlatform == stdenv.buildPlatform;
-  installCheckInputs = [ xvfb_run ];
-  installCheckPhase = let
-    pluginPath = "${qtbase.bin}/${qtbase.qtPluginPrefix}";
-  in lib.optionalString doInstallCheck ''
-    QT_PLUGIN_PATH=${lib.escapeShellArg pluginPath} \
+  nativeInstallCheckInputs = [ xvfb-run ];
+  installCheckPhase =
+    lib.optionalString doInstallCheck ''
       xvfb-run -s '-screen 0 1024x768x24' make test \
-      ARGS="-E '(reports-chart-test)'" # Test fails, so exclude it for now.
+        ARGS="-E '(reports-chart-test)'" # Test fails, so exclude it for now.
+    '';
+
+  # libpython is required by the python interpreter embedded in kmymoney, so we
+  # need to explicitly tell autoPatchelf about it.
+  postFixup = ''
+    patchelf --debug --add-needed libpython${python3.pythonVersion}.so \
+      "$out/bin/.kmymoney-wrapped"
   '';
 
   meta = {
     description = "Personal finance manager for KDE";
-    homepage = https://kmymoney.org/;
+    mainProgram = "kmymoney";
+    homepage = "https://kmymoney.org/";
     platforms = lib.platforms.linux;
     license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ aidalgol das-g ];
   };
 }

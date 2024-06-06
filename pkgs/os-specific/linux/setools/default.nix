@@ -1,28 +1,28 @@
-{ stdenv, fetchFromGitHub, bison, flex, python3 , swig
+{ lib, fetchFromGitHub, python3
 , libsepol, libselinux, checkpolicy
 , withGraphics ? false
 }:
 
-with stdenv.lib;
+with lib;
 with python3.pkgs;
 
 buildPythonApplication rec {
   pname = "setools";
-  version = "2017-11-10";
+  version = "4.5.1";
 
   src = fetchFromGitHub {
-    owner = "TresysTechnology";
+    owner = "SELinuxProject";
     repo = pname;
-    rev = "a1aa0f33f5c428d3f9fe82960ed5de36f38047f7";
-    sha256 = "0iyj35fff93cprjkzbkg9dn5xz8dg5h2kjx3476fl625nxxskndn";
+    rev = "refs/tags/${version}";
+    hash = "sha256-/6dOzSz2Do4d6TSS50fuak0CysoQ532zJ0bJ532BUCE=";
   };
 
-  nativeBuildInputs = [ bison flex swig ];
+  nativeBuildInputs = [ cython ];
   buildInputs = [ libsepol ];
-  propagatedBuildInputs = [ enum34 libselinux networkx ]
+  propagatedBuildInputs = [ enum34 libselinux networkx setuptools ]
     ++ optionals withGraphics [ pyqt5 ];
 
-  checkInputs = [ tox checkpolicy ];
+  nativeCheckInputs = [ tox checkpolicy ];
   preCheck = ''
     export CHECKPOLICY=${checkpolicy}/bin/checkpolicy
   '';
@@ -30,12 +30,12 @@ buildPythonApplication rec {
   setupPyBuildFlags = [ "-i" ];
 
   preBuild = ''
-    export SEPOL="${stdenv.lib.getLib libsepol}/lib/libsepol.a"
+    export SEPOL="${lib.getLib libsepol}/lib/libsepol.a"
   '';
 
   meta = {
-    description = "SELinux Tools";
-    homepage = https://github.com/TresysTechnology/setools/wiki;
+    description = "SELinux Policy Analysis Tools";
+    homepage = "https://github.com/SELinuxProject/setools";
     license = licenses.gpl2;
     platforms = platforms.linux;
   };

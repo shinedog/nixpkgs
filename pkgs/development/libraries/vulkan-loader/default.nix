@@ -1,38 +1,53 @@
-{ stdenv, fetchFromGitHub, cmake, python3, vulkan-headers, pkgconfig
-, xlibsWrapper, libxcb, libXrandr, libXext, wayland, libGL_driver }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, libX11, libxcb
+, libXrandr, wayland, moltenvk, vulkan-headers, addOpenGLRunpath
+, testers }:
 
-let
-  version = "1.1.106";
-in
-
-assert version == vulkan-headers.version;
-stdenv.mkDerivation rec {
-  name = "vulkan-loader-${version}";
-  inherit version;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "vulkan-loader";
+  version = "1.3.283.0";
 
   src = fetchFromGitHub {
     owner = "KhronosGroup";
     repo = "Vulkan-Loader";
-    rev = "sdk-${version}";
-    sha256 = "0zhrwj1gi90x2w8gaaaw5h4b969a8gfy244kn0drrplhhb1nqz3b";
+    rev = "vulkan-sdk-${finalAttrs.version}";
+    hash = "sha256-pe4WYbfB20yRI5Pg+RxgmQcmdXsSoRxbBkQ3DdAL8r4=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ cmake python3 xlibsWrapper libxcb libXrandr libXext wayland ];
-  enableParallelBuilding = true;
+  patches = [ ./fix-pkgconfig.patch ];
 
-  cmakeFlags = [
-    "-DFALLBACK_DATA_DIRS=${libGL_driver.driverLink}/share:/usr/local/share:/usr/share"
-    "-DVULKAN_HEADERS_INSTALL_DIR=${vulkan-headers}"
-  ];
+  nativeBuildInputs = [ cmake pkg-config ];
+  buildInputs = [ vulkan-headers ]
+    ++ lib.optionals stdenv.isLinux [ libX11 libxcb libXrandr wayland ];
+
+  cmakeFlags = [ "-DCMAKE_INSTALL_INCLUDEDIR=${vulkan-headers}/include" ]
+    ++ lib.optional stdenv.isDarwin "-DSYSCONFDIR=${moltenvk}/share"
+    ++ lib.optional stdenv.isLinux "-DSYSCONFDIR=${addOpenGLRunpath.driverLink}/share"
+    ++ lib.optional (stdenv.buildPlatform != stdenv.hostPlatform) "-DUSE_GAS=OFF";
 
   outputs = [ "out" "dev" ];
 
-  meta = with stdenv.lib; {
+  doInstallCheck = true;
+
+  installCheckPhase = ''
+    grep -q "${vulkan-headers}/include" $dev/lib/pkgconfig/vulkan.pc || {
+      echo vulkan-headers include directory not found in pkg-config file
+      exit 1
+    }
+  '';
+
+  passthru = {
+    tests.pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+    };
+  };
+
+  meta = with lib; {
     description = "LunarG Vulkan loader";
-    homepage    = https://www.lunarg.com;
-    platforms   = platforms.linux;
+    homepage    = "https://www.lunarg.com";
+    platforms   = platforms.unix ++ platforms.windows;
     license     = licenses.asl20;
     maintainers = [ maintainers.ralith ];
+    broken = finalAttrs.version != vulkan-headers.version;
+    pkgConfigModules = [ "vulkan" ];
   };
-}
+})

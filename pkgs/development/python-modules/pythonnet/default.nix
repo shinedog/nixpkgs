@@ -1,84 +1,83 @@
-{ lib
-, fetchPypi
-, fetchNuGet
-, buildPythonPackage
-, python
-, pytest
-, pycparser
-, pkgconfig
-, dotnetbuildhelpers
-, clang
-, mono
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  pytestCheckHook,
+  pycparser,
+  psutil,
+  dotnet-sdk,
+  buildDotnetModule,
+  clr-loader,
+  setuptools,
 }:
 
 let
-
-  UnmanagedExports127 = fetchNuGet {
-    baseName = "UnmanagedExports";
-    version = "1.2.7";
-    sha256 = "0bfrhpmq556p0swd9ssapw4f2aafmgp930jgf00sy89hzg2bfijf";
-    outputFiles = [ "*" ];
-  };
-
-  NUnit360 = fetchNuGet {
-    baseName = "NUnit";
-    version = "3.6.0";
-    sha256 = "0wz4sb0hxlajdr09r22kcy9ya79lka71w0k1jv5q2qj3d6g2frz1";
-    outputFiles = [ "*" ];
-  };
-
-in
-
-buildPythonPackage rec {
   pname = "pythonnet";
-  version = "2.3.0";
-
+  version = "3.0.3";
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "1hxnkrfj8ark9sbamcxzd63p98vgljfvdwh79qj3ac8pqrgghq80";
+    pname = "pythonnet";
+    inherit version;
+    hash = "sha256-jUsulxWKAjh1+GR0WKWPOIF/T+Oa9gq91rDYrfHXfnU=";
   };
+
+  # This buildDotnetModule is used only to get nuget sources, the actual
+  # build is done in `buildPythonPackage` below.
+  dotnet-build = buildDotnetModule {
+    inherit pname version src;
+    nugetDeps = ./deps.nix;
+  };
+in
+buildPythonPackage {
+  inherit pname version src;
+
+  format = "pyproject";
 
   postPatch = ''
-    substituteInPlace setup.py --replace 'self._install_packages()' '#self._install_packages()'
-  '';
-
-  preConfigure = ''
-    [ -z "$dontPlacateNuget" ] && placate-nuget.sh
-    [ -z "$dontPlacatePaket" ] && placate-paket.sh
+    substituteInPlace pyproject.toml \
+      --replace 'dynamic = ["version"]' 'version = "${version}"'
   '';
 
   nativeBuildInputs = [
-    pytest
+    setuptools
+    dotnet-sdk
+  ];
+
+  propagatedBuildInputs = [
     pycparser
-
-    pkgconfig
-    dotnetbuildhelpers
-    clang
-
-    NUnit360
-    UnmanagedExports127
+    clr-loader
   ];
 
-  buildInputs = [
-    mono
+  pytestFlagsArray = [
+    # Run tests using .NET Core, Mono is unsupported for now due to find_library problem in clr-loader
+    "--runtime coreclr"
   ];
 
-  preBuild = ''
-    rm -rf packages
-    mkdir packages
+  nativeCheckInputs = [
+    pytestCheckHook
+    psutil # needed for memory leak tests
+  ];
 
-    ln -s ${NUnit360}/lib/dotnet/NUnit/ packages/NUnit.3.6.0
-    ln -s ${UnmanagedExports127}/lib/dotnet/NUnit/ packages/UnmanagedExports.1.2.7
+  # Perform dotnet restore based on the nuget-source
+  preConfigure = ''
+    dotnet restore \
+      -p:ContinuousIntegrationBuild=true \
+      -p:Deterministic=true \
+      --source ${dotnet-build.nuget-source}
   '';
 
-  checkPhase = ''
-    ${python.interpreter} -m pytest
-  '';
+  # Rerun this when updating to refresh Nuget dependencies
+  passthru.fetch-deps = dotnet-build.fetch-deps;
 
   meta = with lib; {
-    description = ".Net and Mono integration for Python";
-    homepage = https://pythonnet.github.io;
+    description = ".NET integration for Python";
+    homepage = "https://pythonnet.github.io";
+    changelog = "https://github.com/pythonnet/pythonnet/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ jraygauthier ];
+    # <https://github.com/pythonnet/pythonnet/issues/898>
+    badPlatforms = [ "aarch64-linux" ];
+    maintainers = with maintainers; [
+      jraygauthier
+      mdarocha
+    ];
   };
 }

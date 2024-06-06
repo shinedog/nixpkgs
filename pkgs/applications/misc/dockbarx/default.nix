@@ -1,38 +1,82 @@
-{ stdenv, fetchFromGitHub, pythonPackages, gnome2, keybinder }:
+{ lib
+, fetchFromGitHub
+, glib
+, gobject-introspection
+, gtk3
+, keybinder3
+, libwnck
+, python3Packages
+, wrapGAppsHook3
+}:
 
-pythonPackages.buildPythonApplication rec {
-  ver = "0.93";
-  name = "dockbarx-${ver}";
+python3Packages.buildPythonApplication rec {
+  pname = "dockbarx";
+  version = "1.0-beta2";
 
   src = fetchFromGitHub {
-    owner = "M7S";
+    owner = "xuzhen";
     repo = "dockbarx";
-    rev = ver;
-    sha256 = "1h1g2vag5vnx87sa1f0qi8rq7wlr2ymvkrdr08kk7cma4wk0x6hg";
+    rev = version;
+    sha256 = "sha256-WMRTtprDHUbOOYVHshx7WpBlYshbiDjI12Rw3tQQuPI=";
   };
 
+  nativeBuildInputs = [
+    glib.dev
+    gobject-introspection
+    python3Packages.polib
+    wrapGAppsHook3
+  ];
+
+  buildInputs = [
+    gtk3
+    libwnck
+    keybinder3
+  ];
+
+  propagatedBuildInputs = with python3Packages; [
+    dbus-python
+    pillow
+    pygobject3
+    pyxdg
+    xlib
+  ];
+
+  # no tests
+  doCheck = false;
+
+  dontWrapGApps = true;
+
   postPatch = ''
-    substituteInPlace setup.py                                --replace /usr/                   ""
-    substituteInPlace setup.py                                --replace '"/", "usr", "share",'  '"share",'
-    substituteInPlace dockbarx/applets.py                     --replace /usr/share/             $out/share/
-    substituteInPlace dockbarx/dockbar.py                     --replace /usr/share/             $out/share/
-    substituteInPlace dockbarx/iconfactory.py                 --replace /usr/share/             $out/share/
-    substituteInPlace dockbarx/theme.py                       --replace /usr/share/             $out/share/
-    substituteInPlace dockx_applets/battery_status.py         --replace /usr/share/             $out/share/
-    substituteInPlace dockx_applets/namebar.py                --replace /usr/share/             $out/share/
-    substituteInPlace dockx_applets/namebar_window_buttons.py --replace /usr/share/             $out/share/
-    substituteInPlace dockx_applets/volume-control.py         --replace /usr/share/             $out/share/
+    substituteInPlace setup.py \
+      --replace /usr/ "" \
+      --replace '"/", "usr", "share",' '"share",'
+
+    for f in \
+      dbx_preference \
+      dockbarx/applets.py \
+      dockbarx/dockbar.py \
+      dockbarx/iconfactory.py \
+      dockbarx/theme.py \
+      mate_panel_applet/dockbarx_mate_applet
+    do
+      substituteInPlace $f --replace /usr/share/ $out/share/
+    done
   '';
 
-  propagatedBuildInputs = (with pythonPackages; [ pygtk pyxdg dbus-python pillow xlib ])
-    ++ (with gnome2; [ gnome_python gnome_python_desktop ])
-    ++ [ keybinder ];
+  postInstall = ''
+    glib-compile-schemas $out/share/glib-2.0/schemas
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://launchpad.net/dockbar/;
-    description = "DockBarX is a lightweight taskbar / panel replacement for Linux which works as a stand-alone dock";
-    license = licenses.gpl3;
+  # Arguments to be passed to `makeWrapper`, only used by buildPython*
+  preFixup = ''
+    makeWrapperArgs+=("''${gappsWrapperArgs[@]}")
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/xuzhen/dockbarx";
+    description = "Lightweight taskbar/panel replacement which works as a stand-alone dock";
+    license = licenses.gpl3Only;
     platforms = platforms.linux;
-    maintainers = [ maintainers.volth ];
+    maintainers = [ maintainers.romildo ];
   };
 }

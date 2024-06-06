@@ -1,62 +1,77 @@
-{ stdenv
-, isPy3k
-, buildPythonPackage
-, fetchPypi
-, numpy
-, scipy
-, sympy
-, matplotlib
-, networkx
-, ply
-, pillow
-, cffi
-, requests
-, requests_ntlm
-, IBMQuantumExperience
-, jsonschema
-, psutil
-, cmake
-, llvmPackages 
+{
+  lib,
+  pythonOlder,
+  buildPythonPackage,
+  fetchFromGitHub,
+
+  # build-system
+  setuptools,
+
+  # Python Inputs
+  qiskit-aer,
+  qiskit-ibmq-provider,
+  qiskit-ignis,
+  qiskit-terra,
+  # Optional inputs
+  withOptionalPackages ? true,
+  qiskit-finance,
+  qiskit-machine-learning,
+  qiskit-nature,
+  qiskit-optimization,
+  # Check Inputs
+  pytestCheckHook,
 }:
 
+let
+  optionalQiskitPackages = [
+    qiskit-finance
+    qiskit-machine-learning
+    qiskit-nature
+    qiskit-optimization
+  ];
+in
 buildPythonPackage rec {
   pname = "qiskit";
-  version = "0.7.3";
+  # NOTE: This version denotes a specific set of subpackages. See https://qiskit.org/documentation/release_notes.html#version-history
+  version = "1.0.1";
+  pyproject = true;
 
-  disabled = !isPy3k;
+  disabled = pythonOlder "3.6";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "63e7a7c3033fe955d715cc825b3fb61d27c25ad66e1761493ca2243b5dbfb4f9";
+  src = fetchFromGitHub {
+    owner = "Qiskit";
+    repo = "qiskit";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Cjfn+9h8W08FcAlVC7b7O8Z+VGx5UeHosSgYJin/evE=";
   };
 
-  buildInputs = [ cmake ]
-    ++ stdenv.lib.optional stdenv.isDarwin llvmPackages.openmp;
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [
-    numpy
-    matplotlib
-    networkx
-    ply
-    scipy
-    sympy
-    pillow
-    cffi
-    requests
-    requests_ntlm
-    IBMQuantumExperience
-    jsonschema
-    psutil
+    qiskit-aer
+    qiskit-ibmq-provider
+    qiskit-ignis
+    qiskit-terra
+  ] ++ lib.optionals withOptionalPackages optionalQiskitPackages;
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [
+    "qiskit"
+    "qiskit.circuit"
+    "qiskit.ignis"
+    "qiskit.providers.aer"
+    "qiskit.providers.ibmq"
   ];
 
-  # Pypi's tarball doesn't contain tests
-  doCheck = false;
-
-  meta = {
-    description = "Quantum Software Development Kit for writing quantum computing experiments, programs, and applications";
-    homepage    = https://github.com/QISKit/qiskit-terra;
-    license     = stdenv.lib.licenses.asl20;
-    maintainers = with stdenv.lib.maintainers; [
+  meta = with lib; {
+    description = "Software for developing quantum computing programs";
+    homepage = "https://qiskit.org";
+    downloadPage = "https://github.com/QISKit/qiskit/releases";
+    changelog = "https://qiskit.org/documentation/release_notes.html";
+    license = licenses.asl20;
+    maintainers = with maintainers; [
+      drewrisinger
       pandaman
     ];
   };

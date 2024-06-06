@@ -1,29 +1,41 @@
-{ buildPythonPackage, lib, fetchPypi, glibcLocales, isPy3k, contextvars
-, pythonOlder
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  setuptools,
+  setuptools-scm,
+  glibcLocales,
+  isPy3k,
+  pytestCheckHook,
+  curio,
 }:
 
 buildPythonPackage rec {
   pname = "sniffio";
-  version = "1.0.0";
+  version = "1.3.1";
+  pyproject = true;
+
+  disabled = !isPy3k;
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1dzb0nx3m1hpjgsv6s6w5ac2jcmywcz6gqnfkw8rwz1vkr1836rf";
+    hash = "sha256-9DJO3GcKD0l1CoG4lfNcOtuEPMpG8FMPefwbq7I3idw=";
   };
 
-  # breaks with the following error:
-  # > TypeError: 'encoding' is an invalid keyword argument for this function
-  disabled = !isPy3k;
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
   buildInputs = [ glibcLocales ];
 
-  propagatedBuildInputs = lib.optionals (pythonOlder "3.7") [ contextvars ];
-
-  # no tests distributed with PyPI
-  doCheck = false;
+  nativeCheckInputs = [
+    curio
+    pytestCheckHook
+  ];
 
   meta = with lib; {
-    homepage = https://github.com/python-trio/sniffio;
+    homepage = "https://github.com/python-trio/sniffio";
     license = licenses.asl20;
     description = "Sniff out which async library your code is running under";
   };

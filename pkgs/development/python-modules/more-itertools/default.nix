@@ -1,31 +1,38 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, six
-, stdenv
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  flit-core,
+  pytestCheckHook,
+  six,
+  stdenv,
 }:
-
 
 buildPythonPackage rec {
   pname = "more-itertools";
-  version = "6.0.0";
+  version = "10.2.0";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "590044e3942351a1bdb1de960b739ff4ce277960f2425ad4509446dbace8d9d1";
+    hash = "sha256-j8y0gMQ9PpmgAIdjTAbdArDVD78IizgN5aQaAV7COeE=";
   };
 
-  checkInputs = [ nose ];
+  nativeBuildInputs = [ flit-core ];
+
   propagatedBuildInputs = [ six ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
 
   # iterable = range(10 ** 10)  # Is efficiently reversible
   # OverflowError: Python int too large to convert to C long
   doCheck = !stdenv.hostPlatform.is32bit;
 
-  meta = {
-    homepage = https://more-itertools.readthedocs.org;
+  meta = with lib; {
+    homepage = "https://more-itertools.readthedocs.org";
+    changelog = "https://more-itertools.readthedocs.io/en/stable/versions.html";
     description = "Expansion of the itertools module";
-    license = lib.licenses.mit;
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

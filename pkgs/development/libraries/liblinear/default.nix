@@ -1,39 +1,42 @@
-{stdenv, fetchurl}:
+{ lib, stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "liblinear-${version}";
-  version = "2.30";
+let
+  soVersion = "5";
+in stdenv.mkDerivation rec {
+  pname = "liblinear";
+  version = "2.47";
 
-  src = fetchurl {
-    url = "https://www.csie.ntu.edu.tw/~cjlin/liblinear/liblinear-${version}.tar.gz";
-    sha256 = "1b66jpg9fdwsq7r52fccr8z7nqcivrin5d8zg2f134ygqqwp0748";
+  src = fetchFromGitHub {
+    owner = "cjlin1";
+    repo = "liblinear";
+    rev = "v${builtins.replaceStrings ["."] [""] version}";
+    sha256 = "sha256-so7uCc/52NdN0V2Ska8EUdw/wSegaudX5AF+c0xe5jk=";
   };
 
-  buildPhase = ''
-    make
-    make lib
+  makeFlags = [ "AR=${stdenv.cc.targetPrefix}ar" "RANLIB=${stdenv.cc.targetPrefix}ranlib" ];
+
+  outputs = [ "bin" "dev" "out" ];
+
+  buildFlags = [ "lib" "predict" "train" ];
+
+  installPhase = ''
+    ${if stdenv.isDarwin then ''
+      install -D liblinear.so.${soVersion} $out/lib/liblinear.${soVersion}.dylib
+      ln -s $out/lib/liblinear.${soVersion}.dylib $out/lib/liblinear.dylib
+    '' else ''
+      install -Dt $out/lib liblinear.so.${soVersion}
+      ln -s $out/lib/liblinear.so.${soVersion} $out/lib/liblinear.so
+    ''}
+    install -D train $bin/bin/liblinear-train
+    install -D predict $bin/bin/liblinear-predict
+    install -Dm444 -t $dev/include linear.h
   '';
 
-  installPhase = let
-    libSuff = stdenv.hostPlatform.extensions.sharedLibrary;
-  in ''
-    mkdir -p $out/lib $out/bin $out/include
-    cp liblinear.so.3 $out/lib/liblinear.3${libSuff}
-    ln -s $out/lib/liblinear.3${libSuff} $out/lib/liblinear${libSuff}
-    cp train $out/bin/liblinear-train
-    cp predict $out/bin/liblinear-predict
-    cp linear.h $out/include
-  '';
-
-  postFixup = stdenv.lib.optionalString stdenv.isDarwin ''
-    install_name_tool -id liblinear.3.dylib $out/lib/liblinear.3.dylib
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library for large linear classification";
-    homepage = https://www.csie.ntu.edu.tw/~cjlin/liblinear/;
+    homepage = "https://www.csie.ntu.edu.tw/~cjlin/liblinear/";
     license = licenses.bsd3;
-    maintainers = [ maintainers.danieldk ];
+    maintainers = [ ];
     platforms = platforms.unix;
   };
 }

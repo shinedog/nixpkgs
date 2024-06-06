@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "xkcd-font";
   version = "unstable-2017-08-24";
 
@@ -8,21 +8,23 @@ stdenv.mkDerivation rec {
     owner = "ipython";
     repo = pname;
     rev = "5632fde618845dba5c22f14adc7b52bf6c52d46d";
-    sha256 = "01wpfc1yp93b37r472mx2b459il5gywnv5sl7pp9afpycb3i4f6l";
+    hash = "sha256-1DgSx2L+OpXuPVSXbbl/hcZUyBK9ikPyGWuk6wNzlwc=";
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
-
   installPhase = ''
+    runHook preInstall
+
     install -Dm444 -t $out/share/fonts/opentype/ xkcd/build/xkcd.otf
     install -Dm444 -t $out/share/fonts/truetype/ xkcd-script/font/xkcd-script.ttf
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The xkcd font";
-    homepage = https://github.com/ipython/xkcd-font;
+    homepage = "https://github.com/ipython/xkcd-font";
     license = licenses.cc-by-nc-30;
     platforms = platforms.all;
-    maintainers = [ maintainers.marsam ];
+    maintainers = [ ];
   };
 }

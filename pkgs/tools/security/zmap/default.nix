@@ -1,28 +1,27 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, libjson, json_c, gengetopt, flex, byacc, gmp
-, libpcap
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, libjson, json_c, gengetopt, flex, byacc, gmp
+, libpcap, libunistring
 }:
 
 stdenv.mkDerivation rec {
   pname = "zmap";
-  version = "2.1.1";
+  version = "3.0.0";
 
   src = fetchFromGitHub {
     owner = "zmap";
     repo = pname;
     rev = "v${version}";
-    sha256 = "0yaahaiawkjk020hvsb8pndbrk8k10wxkfba1irp12a4sj6rywcs";
+    sha256 = "sha256-OJZKcnsuBi3z/AI05RMBitgn01bhVTqx2jFYJLuIJk4=";
   };
 
   cmakeFlags = [ "-DRESPECT_INSTALL_PREFIX_CONFIG=ON" ];
-  dontUseCmakeBuildDir = true;
 
-  nativeBuildInputs = [ cmake pkgconfig gengetopt flex byacc ];
-  buildInputs = [ libjson json_c gmp libpcap ];
+  nativeBuildInputs = [ cmake pkg-config gengetopt flex byacc ];
+  buildInputs = [ libjson json_c gmp libpcap libunistring ];
 
   outputs = [ "out" "man" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://zmap.io/;
+  meta = with lib; {
+    homepage = "https://zmap.io/";
     license = licenses.asl20;
     description = "Fast single packet network scanner designed for Internet-wide network surveys";
     maintainers = with maintainers; [ ma27 ];

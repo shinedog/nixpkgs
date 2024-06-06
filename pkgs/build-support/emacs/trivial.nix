@@ -1,12 +1,10 @@
 # trivial builder for Emacs packages
 
-{ lib, stdenv, texinfo, ... }@envargs:
-
-with lib;
+{ callPackage, lib, ... }@envargs:
 
 args:
 
-import ./generic.nix envargs ({
+callPackage ./generic.nix envargs ({
   buildPhase = ''
     runHook preBuild
 
@@ -21,6 +19,7 @@ import ./generic.nix envargs ({
     LISPDIR=$out/share/emacs/site-lisp
     install -d $LISPDIR
     install *.el *.elc $LISPDIR
+    emacs --batch -l package --eval "(package-generate-autoloads \"${args.pname}\" \"$LISPDIR\")"
 
     runHook postInstall
   '';

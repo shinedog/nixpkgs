@@ -1,41 +1,63 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, click
-, mock
-, pytest
-, futures
-, google_auth
-, requests_oauthlib
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  click,
+  mock,
+  pytestCheckHook,
+  google-auth,
+  requests-oauthlib,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "google-auth-oauthlib";
-  version = "0.3.0";
+  version = "1.2.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "03rq2rjac0zh16vsw0q914sp62l9f8fp033wn3191pqd2cchqix0";
+    hash = "sha256-KS0tN4M0nysHNKCgIHseHjIqwZPCwJ2PfGE/t8xQHqg=";
   };
 
-  checkInputs = [
-    click mock pytest
-  ] ++ lib.optionals (!isPy3k) [ futures ];
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [
-    google_auth requests_oauthlib
+    google-auth
+    requests-oauthlib
   ];
 
-  checkPhase = ''
-    rm -fr tests/__pycache__/
-    py.test
-  '';
+  passthru.optional-dependencies = {
+    tool = [ click ];
+  };
+
+  nativeCheckInputs = [
+    mock
+    pytestCheckHook
+  ] ++ passthru.optional-dependencies.tool;
+
+  disabledTests =
+    [
+      # Flaky test. See https://github.com/NixOS/nixpkgs/issues/288424#issuecomment-1941609973.
+      "test_run_local_server_occupied_port"
+    ]
+    ++ lib.optionals stdenv.isDarwin [
+      # This test fails if the hostname is not associated with an IP (e.g., in `/etc/hosts`).
+      "test_run_local_server_bind_addr"
+    ];
+
+  pythonImportsCheck = [ "google_auth_oauthlib" ];
 
   meta = with lib; {
+    changelog = "https://github.com/googleapis/google-auth-library-python-oauthlib/blob/v${version}/CHANGELOG.md";
     description = "Google Authentication Library: oauthlib integration";
-    homepage = https://github.com/GoogleCloudPlatform/google-auth-library-python-oauthlib;
+    homepage = "https://github.com/GoogleCloudPlatform/google-auth-library-python-oauthlib";
     license = licenses.asl20;
+    mainProgram = "google-oauthlib-tool";
     maintainers = with maintainers; [ terlar ];
   };
 }

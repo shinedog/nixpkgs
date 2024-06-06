@@ -1,29 +1,40 @@
-{ stdenv, rustPlatform, fetchFromGitHub, CoreServices, darwin }:
+{ lib, stdenv, rustPlatform, fetchFromGitHub, Cocoa, AppKit, installShellFiles }:
 
 rustPlatform.buildRustPackage rec {
-  name = "watchexec-${version}";
-  version = "1.10.1";
+  pname = "watchexec";
+  version = "2.1.1";
 
   src = fetchFromGitHub {
-    owner = "watchexec";
-    repo = "watchexec";
-    rev = version;
-    sha256 = "0azfnqx5v1shsd7jdxzn41awh9dbjykv8h1isrambc86ygr1c1cy";
+    owner = pname;
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-S0c/UqdbEqhZRkxZonW1TPQLmGbZeiK14yPbW5dpI70=";
   };
 
-  cargoSha256 = "1xlcfr2q2pw47sav9iryjva7w9chv90g18hszq8s0q0w71sccv6j";
+  cargoHash = "sha256-IuubIEu2mY3h1i9gJgQlyVoGwUYWsdp8+hKYyz0j3is=";
 
-  buildInputs = stdenv.lib.optionals stdenv.isDarwin [
-    CoreServices
-    # This is needed to avoid an undefined symbol error "_CFURLResourceIsReachable"
-    darwin.cf-private
-  ];
+  nativeBuildInputs = [ installShellFiles ];
 
-  meta = with stdenv.lib; {
+  buildInputs = lib.optionals stdenv.isDarwin [ Cocoa AppKit ];
+
+  NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-framework AppKit";
+
+  checkFlags = [ "--skip=help" "--skip=help_short" ];
+
+  postPatch = ''
+    rm .cargo/config
+  '';
+
+  postInstall = ''
+    installManPage doc/watchexec.1
+    installShellCompletion --zsh --name _watchexec completions/zsh
+  '';
+
+  meta = with lib; {
     description = "Executes commands in response to file modifications";
-    homepage = https://github.com/watchexec/watchexec;
+    homepage = "https://watchexec.github.io/";
     license = with licenses; [ asl20 ];
     maintainers = [ maintainers.michalrus ];
-    platforms = platforms.linux ++ platforms.darwin;
+    mainProgram = "watchexec";
   };
 }

@@ -1,9 +1,35 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
   cfg = config.services.kubernetes;
+  opt = options.services.kubernetes;
+
+  defaultContainerdSettings = {
+    version = 2;
+    root = "/var/lib/containerd";
+    state = "/run/containerd";
+    oom_score = 0;
+
+    grpc = {
+      address = "/run/containerd/containerd.sock";
+    };
+
+    plugins."io.containerd.grpc.v1.cri" = {
+      sandbox_image = "pause:latest";
+
+      cni = {
+        bin_dir = "/opt/cni/bin";
+        max_conf_num = 0;
+      };
+
+      containerd.runtimes.runc = {
+        runtime_type = "io.containerd.runc.v2";
+        options.SystemdCgroup = true;
+      };
+    };
+  };
 
   mkKubeConfig = name: conf: pkgs.writeText "${name}-kubeconfig" (builtins.toJSON {
     apiVersion = "v1";
@@ -25,8 +51,9 @@ let
         cluster = "local";
         user = name;
       };
-      current-context = "local";
+      name = "local";
     }];
+    current-context = "local";
   });
 
   caCert = secret "ca";
@@ -58,6 +85,7 @@ let
       description = "${prefix} certificate authority file used to connect to kube-apiserver.";
       type = types.nullOr types.path;
       default = cfg.caFile;
+      defaultText = literalExpression "config.${opt.caFile}";
     };
 
     certFile = mkOption {
@@ -72,14 +100,12 @@ let
       default = null;
     };
   };
-
-  kubeConfigDefaults = {
-    server = mkDefault cfg.kubeconfig.server;
-    caFile = mkDefault cfg.kubeconfig.caFile;
-    certFile = mkDefault cfg.kubeconfig.certFile;
-    keyFile = mkDefault cfg.kubeconfig.keyFile;
-  };
 in {
+
+  imports = [
+    (mkRemovedOptionModule [ "services" "kubernetes" "addons" "dashboard" ] "Removed due to it being an outdated version")
+    (mkRemovedOptionModule [ "services" "kubernetes" "verbose" ] "")
+  ];
 
   ###### interface
 
@@ -96,12 +122,7 @@ in {
       type = types.listOf (types.enum ["master" "node"]);
     };
 
-    package = mkOption {
-      description = "Kubernetes package to use.";
-      type = types.package;
-      default = pkgs.kubernetes;
-      defaultText = "pkgs.kubernetes";
-    };
+    package = mkPackageOption pkgs "kubernetes" { };
 
     kubeconfig = mkKubeConfigOptions "Default kubeconfig";
 
@@ -170,6 +191,9 @@ in {
       description = "Default location for kubernetes secrets. Not a store location.";
       type = types.path;
       default = cfg.dataDir + "/secrets";
+      defaultText = literalExpression ''
+        config.${opt.dataDir} + "/secrets"
+      '';
     };
   };
 
@@ -225,14 +249,9 @@ in {
     })
 
     (mkIf cfg.kubelet.enable {
-      virtualisation.docker = {
+      virtualisation.containerd = {
         enable = mkDefault true;
-
-        # kubernetes needs access to logs
-        logDriver = mkDefault "json-file";
-
-        # iptables must be disabled for kubernetes
-        extraOptions = "--iptables=false --ip-masq=false";
+        settings = mapAttrsRecursive (name: mkDefault) defaultContainerdSettings;
       };
     })
 
@@ -263,43 +282,19 @@ in {
         wantedBy = [ "multi-user.target" ];
       };
 
-      systemd.targets.kube-control-plane-online = {
-        wantedBy = [ "kubernetes.target" ];
-        before = [ "kubernetes.target" ];
-      };
-
-      systemd.services.kube-control-plane-online = rec {
-        description = "Kubernetes control plane is online";
-        wantedBy = [ "kube-control-plane-online.target" ];
-        after = [ "kube-scheduler.service" "kube-controller-manager.service" ];
-        before = [ "kube-control-plane-online.target" ];
-        path = [ pkgs.curl ];
-        preStart = ''
-          until curl -Ssf ${cfg.apiserverAddress}/healthz do
-            echo curl -Ssf ${cfg.apiserverAddress}/healthz: exit status $?
-            sleep 3
-          done
-        '';
-        script = "echo Ok";
-        serviceConfig = {
-          TimeoutSec = "500";
-        };
-      };
-
       systemd.tmpfiles.rules = [
         "d /opt/cni/bin 0755 root root -"
         "d /run/kubernetes 0755 kubernetes kubernetes -"
-        "d /var/lib/kubernetes 0755 kubernetes kubernetes -"
+        "d ${cfg.dataDir} 0755 kubernetes kubernetes -"
       ];
 
-      users.users = singleton {
-        name = "kubernetes";
+      users.users.kubernetes = {
         uid = config.ids.uids.kubernetes;
         description = "Kubernetes user";
-        extraGroups = [ "docker" ];
         group = "kubernetes";
         home = cfg.dataDir;
         createHome = true;
+        homeMode = "755";
       };
       users.groups.kubernetes.gid = config.ids.gids.kubernetes;
 
@@ -309,8 +304,8 @@ in {
       services.kubernetes.apiserverAddress = mkDefault ("https://${if cfg.apiserver.advertiseAddress != null
                           then cfg.apiserver.advertiseAddress
                           else "${cfg.masterAddress}:${toString cfg.apiserver.securePort}"}");
-
-      services.kubernetes.kubeconfig.server = mkDefault cfg.apiserverAddress;
     })
   ];
+
+  meta.buildDocsInSandbox = false;
 }

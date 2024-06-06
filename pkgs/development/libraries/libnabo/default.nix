@@ -1,28 +1,27 @@
-{stdenv, fetchFromGitHub, cmake, eigen, boost}:
+{lib, stdenv, fetchFromGitHub, cmake, eigen, boost}:
 
 stdenv.mkDerivation rec {
-  version = "1.0.7";
-  name = "libnabo-${version}";
+  version = "1.1.2";
+  pname = "libnabo";
 
   src = fetchFromGitHub {
     owner = "ethz-asl";
     repo = "libnabo";
     rev = version;
-    sha256 = "17vxlmszzpm95vvfdxnm98d5p297i10fyblblj6kf0ynq8r2mpsh";
+    sha256 = "sha256-/XXRwiLLaEvp+Q+c6lBiuWBb9by6o0pDf8wFtBNp7o8=";
   };
 
-  buildInputs = [cmake eigen boost];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ eigen boost ];
 
-  enableParallelBuilding = true;
-
-  cmakeFlags = "
-    -DEIGEN_INCLUDE_DIR=${eigen}/include/eigen3
-  ";
+  cmakeFlags = [
+    "-DEIGEN_INCLUDE_DIR=${eigen}/include/eigen3"
+  ];
 
   doCheck = true;
   checkTarget = "test";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "A fast K Nearest Neighbor library for low-dimensional spaces";
     license = licenses.bsd3;

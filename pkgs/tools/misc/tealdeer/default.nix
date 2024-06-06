@@ -1,34 +1,52 @@
-{ stdenv, rustPlatform, fetchFromGitHub, pkgconfig, openssl, cacert, curl }:
+{ lib
+, stdenv
+, rustPlatform
+, fetchFromGitHub
+, installShellFiles
+, Security
+}:
 
 rustPlatform.buildRustPackage rec {
-  name = "tealdeer-${version}";
-  version = "1.1.0";
+  pname = "tealdeer";
+  version = "1.6.1";
 
   src = fetchFromGitHub {
     owner = "dbrgn";
     repo = "tealdeer";
     rev = "v${version}";
-    sha256 = "055pjxgiy31j69spq66w80ig469yi075dk8ad38z6rlvjmf74k71";
+    sha256 = "sha256-zQzYukhruVUVP1v76/5522ag7wjN9QoE9BtfMNYQ7UY=";
   };
 
-  cargoSha256 = "1jxwz2b6p82byvfjx77ba265j6sjr7bjqi2yik8x2i7lrz8v8z1g";
+  cargoSha256 = "sha256-VeJsCWU7sJy88uvGGjpuGRzsAgBRvzOYU1FwpImpiLk=";
 
-  buildInputs = [ openssl cacert curl ];
+  buildInputs = lib.optional stdenv.isDarwin Security;
 
-  nativeBuildInputs = [ pkgconfig ];
-  
-  NIX_SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+  nativeBuildInputs = [ installShellFiles ];
 
-  # disable tests for now since one needs network
-  # what is unavailable in sandbox build
-  # and i can't disable just this one
-  doCheck = false;
+  postInstall = ''
+    installShellCompletion --cmd tldr \
+      --bash completion/bash_tealdeer \
+      --fish completion/fish_tealdeer \
+      --zsh completion/zsh_tealdeer
+  '';
 
-  meta = with stdenv.lib; {
+  # Disable tests that require Internet access:
+  checkFlags = [
+    "--skip test_autoupdate_cache"
+    "--skip test_create_cache_directory_path"
+    "--skip test_pager_flag_enable"
+    "--skip test_quiet_cache"
+    "--skip test_quiet_failures"
+    "--skip test_quiet_old_cache"
+    "--skip test_spaces_find_command"
+    "--skip test_update_cache"
+  ];
+
+  meta = with lib; {
     description = "A very fast implementation of tldr in Rust";
     homepage = "https://github.com/dbrgn/tealdeer";
-    maintainers = with maintainers; [ davidak ];
+    maintainers = with maintainers; [ davidak newam ];
     license = with licenses; [ asl20 mit ];
-    platforms = platforms.all;
+    mainProgram = "tldr";
   };
 }

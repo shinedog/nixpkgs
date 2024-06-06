@@ -1,14 +1,21 @@
-{ stdenv, fetchurl, openssl, readline, which, nettools }:
+{ lib
+, fetchurl
+, nettools
+, openssl
+, readline
+, stdenv
+, which
+, buildPackages
+}:
 
 stdenv.mkDerivation rec {
-  name = "socat-1.7.3.3";
+  pname = "socat";
+  version = "1.8.0.0";
 
   src = fetchurl {
-    url = "http://www.dest-unreach.org/socat/download/${name}.tar.bz2";
-    sha256 = "0jnhjijyq74g3wa4ph0am83z6vq7qna7ac0xqjma8s4197z3zmhd";
+    url = "http://www.dest-unreach.org/socat/download/${pname}-${version}.tar.bz2";
+    hash = "sha256-4d5oPdIu4OOmxrv/Jpq+GKsMnX62UCBPElFVuQBfrKc=";
   };
-
-  patches = stdenv.lib.optional stdenv.isDarwin ./speed-type-fix.patch;
 
   postPatch = ''
     patchShebangs test.sh
@@ -21,15 +28,21 @@ stdenv.mkDerivation rec {
 
   hardeningEnable = [ "pie" ];
 
-  checkInputs = [ which nettools ];
+  enableParallelBuilding = true;
+
+  nativeCheckInputs = [ which nettools ];
   doCheck = false; # fails a bunch, hangs
 
-  meta = {
-    description = "A utility for bidirectional data transfer between two independent data channels";
-    homepage = http://www.dest-unreach.org/socat/;
-    repositories.git = git://repo.or.cz/socat.git;
-    platforms = stdenv.lib.platforms.unix;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+  passthru.tests = lib.optionalAttrs stdenv.buildPlatform.isLinux {
+    musl = buildPackages.pkgsMusl.socat;
+  };
+
+  meta = with lib; {
+    description = "Utility for bidirectional data transfer between two independent data channels";
+    homepage = "http://www.dest-unreach.org/socat/";
+    platforms = platforms.unix;
+    license = with licenses; [ gpl2Only ];
+    maintainers = with maintainers; [ eelco ];
+    mainProgram = "socat";
   };
 }

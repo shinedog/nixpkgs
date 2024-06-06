@@ -1,18 +1,22 @@
-{ stdenv, fetchurl, fontforge }:
+{ lib, stdenv, fetchurl, fontforge }:
 
-stdenv.mkDerivation rec {
-  name = "linux-libertine-5.3.0";
+stdenv.mkDerivation {
+  pname = "linux-libertine";
+  version = "5.3.0";
 
   src = fetchurl {
-    url = mirror://sourceforge/linuxlibertine/5.3.0/LinLibertineSRC_5.3.0_2012_07_02.tgz;
-    sha256 = "0x7cz6hvhpil1rh03rax9zsfzm54bh7r4bbrq8rz673gl9h47v0v";
+    url = "mirror://sourceforge/linuxlibertine/5.3.0/LinLibertineSRC_5.3.0_2012_07_02.tgz";
+    hash = "sha256-G+xDYKJvHPMzwnktkg9cpNTv9E9d5QFgDjReuKH57HQ=";
   };
 
   sourceRoot = ".";
 
   nativeBuildInputs = [ fontforge ];
 
+  dontConfigure = true;
+
   buildPhase = ''
+    runHook preBuild
     for i in *.sfd; do
       fontforge -lang=ff -c \
         'Open($1);
@@ -28,27 +32,23 @@ stdenv.mkDerivation rec {
         Generate($1:r + ".enc");
         ' $i;
     done
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p $out/share/fonts/{opentype,truetype,type1}/public
-    mkdir -p $out/share/texmf/fonts/{enc,map}
-    cp *.otf $out/share/fonts/opentype/public
-    cp *.ttf $out/share/fonts/truetype/public
-    cp *.pfb $out/share/fonts/type1/public
-    cp *.enc $out/share/texmf/fonts/enc
-    cp *.map $out/share/texmf/fonts/map
+    runHook preInstall
+    install -m444 -Dt $out/share/fonts/opentype/public *.otf
+    install -m444 -Dt $out/share/fonts/truetype/public *.ttf
+    install -m444 -Dt $out/share/fonts/type1/public    *.pfb
+    install -m444 -Dt $out/share/texmf/fonts/enc       *.enc
+    install -m444 -Dt $out/share/texmf/fonts/map       *.map
+    runHook postInstall
   '';
 
-  outputHashAlgo = "sha256";
-  outputHashMode = "recursive";
-  outputHash = "1mj0j0hkp8pn7jcs4pvcan6whba60bfd671g3vhx3s9kxwf7xjvr";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Linux Libertine Fonts";
-    homepage = http://linuxlibertine.sf.net;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.volth ];
+    homepage = "http://linuxlibertine.sf.net";
+    maintainers = with maintainers; [ erdnaxe ];
     license = licenses.ofl;
   };
 }

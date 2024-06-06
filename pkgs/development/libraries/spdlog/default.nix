@@ -1,46 +1,59 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, fmt
+, catch2_3
+, staticBuild ? stdenv.hostPlatform.isStatic
 
-let
-  generic = { version, sha256 }:
-    stdenv.mkDerivation {
-      name = "spdlog-${version}";
-      inherit version;
+# tests
+, bear
+, tiledb
+}:
 
-      src = fetchFromGitHub {
-        owner  = "gabime";
-        repo   = "spdlog";
-        rev    = "v${version}";
-        inherit sha256;
-      };
+stdenv.mkDerivation rec {
+  pname = "spdlog";
+  version = "1.13.0";
 
-      nativeBuildInputs = [ cmake ];
-
-      cmakeFlags = [ "-DSPDLOG_BUILD_EXAMPLES=OFF" ];
-
-      outputs = [ "out" "doc" ];
-
-      postInstall = ''
-        mkdir -p $out/share/doc/spdlog
-        cp -rv ../example $out/share/doc/spdlog
-      '';
-
-      meta = with stdenv.lib; {
-        description    = "Very fast, header only, C++ logging library.";
-        homepage       = https://github.com/gabime/spdlog;
-        license        = licenses.mit;
-        maintainers    = with maintainers; [ obadz ];
-        platforms      = platforms.all;
-      };
-    };
-in
-{
-  spdlog_1 = generic {
-    version = "1.2.1";
-    sha256 = "0gdj8arfz4r9419zbcxk9y9nv47qr7kyjjzw9m3ijgmn2pmxk88n";
+  src = fetchFromGitHub {
+    owner = "gabime";
+    repo  = "spdlog";
+    rev   = "v${version}";
+    hash  = "sha256-3n8BnjZ7uMH8quoiT60yTU7poyOtoEmzNMOLa1+r7X0=";
   };
 
-  spdlog_0 = generic {
-    version = "0.17.0";
-    sha256 = "112kfh4fbpm5cvrmgbgz4d8s802db91mhyjpg7cwhlywffnzkwr9";
+  nativeBuildInputs = [ cmake ];
+  # Required to build tests, even if they aren't executed
+  buildInputs = [ catch2_3 ];
+  propagatedBuildInputs = [ fmt ];
+
+  cmakeFlags = [
+    "-DSPDLOG_BUILD_SHARED=${if staticBuild then "OFF" else "ON"}"
+    "-DSPDLOG_BUILD_STATIC=${if staticBuild then "ON" else "OFF"}"
+    "-DSPDLOG_BUILD_EXAMPLE=OFF"
+    "-DSPDLOG_BUILD_BENCH=OFF"
+    "-DSPDLOG_BUILD_TESTS=ON"
+    "-DSPDLOG_FMT_EXTERNAL=ON"
+  ];
+
+  outputs = [ "out" "doc" "dev" ] ;
+
+  postInstall = ''
+    mkdir -p $out/share/doc/spdlog
+    cp -rv ../example $out/share/doc/spdlog
+  '';
+
+  doCheck = true;
+
+  passthru.tests = {
+    inherit bear tiledb;
+  };
+
+  meta = with lib; {
+    description    = "Very fast, header only, C++ logging library";
+    homepage       = "https://github.com/gabime/spdlog";
+    license        = licenses.mit;
+    maintainers    = with maintainers; [ obadz ];
+    platforms      = platforms.all;
   };
 }

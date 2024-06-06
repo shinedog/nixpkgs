@@ -1,36 +1,92 @@
-{ stdenv, buildPythonPackage, fetchPypi, isPy3k
-, Mako, packaging, pysocks, pygments, ROPGadget
-, capstone, paramiko, pip, psutil
-, pyelftools, pyserial, dateutil
-, requests, tox, unicorn, intervaltree, fetchpatch }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  debugger,
+  fetchPypi,
+  mako,
+  packaging,
+  pysocks,
+  pygments,
+  ropgadget,
+  capstone,
+  colored-traceback,
+  paramiko,
+  pip,
+  psutil,
+  pyelftools,
+  pyserial,
+  python-dateutil,
+  requests,
+  rpyc,
+  tox,
+  unicorn,
+  intervaltree,
+  installShellFiles,
+}:
 
+let
+  debuggerName = lib.strings.getName debugger;
+in
 buildPythonPackage rec {
-  version = "3.12.0";
   pname = "pwntools";
+  version = "4.12.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "09a7yhsyqxb4xf2r6mbn3p5zx1wp89lxq7lj34y4zbin6ns5929s";
+    hash = "sha256-MgKFvZJmFS/bo7gd46MeYaJQdmRVB6ONhfNOGxWZjrE=";
   };
 
-  propagatedBuildInputs = [ Mako packaging pysocks pygments ROPGadget capstone paramiko pip psutil pyelftools pyserial dateutil requests tox unicorn intervaltree ];
+  postPatch = ''
+    # Upstream hardcoded the check for the command `gdb-multiarch`;
+    # Forcefully use the provided debugger, as `gdb` (hence `pwndbg`) is built with multiarch in `nixpkgs`.
+    sed -i 's/gdb-multiarch/${debuggerName}/' pwnlib/gdb.py
+  '';
 
-  disabled = isPy3k;
-  doCheck = false; # no setuptools tests for the package
+  nativeBuildInputs = [ installShellFiles ];
 
-  # Can be removed when 3.13.0 is released
-  patches = [
-    (fetchpatch {
-      url = "https://github.com/Gallopsled/pwntools/commit/9859f54a21404174dd17efee02f91521a2dd09c5.patch";
-      sha256 = "0p0h87npn1mwsd8ciab7lg74bk3ahlk5r0mjbvx4jhihl2gjc3z2";
-    })
+  propagatedBuildInputs = [
+    mako
+    packaging
+    pysocks
+    pygments
+    ropgadget
+    capstone
+    colored-traceback
+    paramiko
+    pip
+    psutil
+    pyelftools
+    pyserial
+    python-dateutil
+    requests
+    rpyc
+    tox
+    unicorn
+    intervaltree
   ];
 
+  doCheck = false; # no setuptools tests for the package
 
-  meta = with stdenv.lib; {
-    homepage = "http://pwntools.com";
+  postInstall = ''
+    installShellCompletion --bash extra/bash_completion.d/shellcraft
+  '';
+
+  postFixup = lib.optionalString (!stdenv.isDarwin) ''
+    mkdir -p "$out/bin"
+    makeWrapper "${debugger}/bin/${debuggerName}" "$out/bin/pwntools-gdb"
+  '';
+
+  meta = with lib; {
     description = "CTF framework and exploit development library";
+    homepage = "https://pwntools.com";
+    changelog = "https://github.com/Gallopsled/pwntools/releases/tag/${version}";
     license = licenses.mit;
-    maintainers = with maintainers; [ bennofs kristoff3r ];
+    maintainers = with maintainers; [
+      bennofs
+      kristoff3r
+      pamplemousse
+    ];
   };
 }

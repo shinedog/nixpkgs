@@ -1,13 +1,39 @@
-{ stdenv, fetchFromGitHub, imagemagick }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, imagemagick
+}:
 
-stdenv.mkDerivation {
-  name = "nixos-icons-2017-03-16";
-  srcs = fetchFromGitHub {
+stdenv.mkDerivation (finalAttrs: {
+  pname = "nixos-icons";
+  version = "0-unstable-2024-04-10";
+
+  src = fetchFromGitHub {
     owner = "NixOS";
     repo = "nixos-artwork";
-    rev = "783ca1249fc4cfe523ad4e541f37e2229891bc8b";
-    sha256 = "0wp08b1gh2chs1xri43wziznyjcplx0clpsrb13wzyscv290ay5a";
+    rev = "f84c13adae08e860a7c3f76ab3a9bef916d276cc";
+    hash = "sha256-lO/2dLGK2f9pzLHudRIs4PUcGUliy7kfyt9r4CbhbVg=";
   };
-  makeFlags = [ "DESTDIR=$(out)" "prefix=" ];
-  buildInputs = [ imagemagick ];
-}
+
+  sourceRoot = "${finalAttrs.src.name}/icons";
+
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    imagemagick
+  ];
+
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+  ];
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    description = "Icons of the Nix logo, in Freedesktop Icon Directory Layout";
+    homepage = "https://github.com/NixOS/nixos-artwork";
+    license = licenses.cc-by-40;
+    maintainers = with maintainers; [];
+    platforms = platforms.all;
+  };
+})

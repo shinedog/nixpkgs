@@ -1,58 +1,52 @@
-{ lib, buildPythonPackage, fetchPypi, pythonOlder,
-  # Build inputs
-  dateutil, six, text-unidecode, ipaddress ? null
-  # Test inputs
-  , email_validator
-  , freezegun
-  , mock
-  , more-itertools
-  , pytest
-  , pytestrunner
-  , random2
-  , ukpostcodeparser
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  freezegun,
+  pillow,
+  pytestCheckHook,
+  python-dateutil,
+  setuptools,
+  text-unidecode,
+  ukpostcodeparser,
+  validators,
 }:
 
-assert pythonOlder "3.3" -> ipaddress != null;
-
 buildPythonPackage rec {
-  pname = "Faker";
-  version = "1.0.5";
+  pname = "faker";
+  version = "24.11.0";
+  pyproject = true;
 
   src = fetchPypi {
-    inherit pname version;
-    sha256 = "3f2f4570df28df2eb8f39b00520eb610081d6552975e926c6a2cbc64fd89c4c1";
+    pname = "Faker";
+    inherit version;
+    hash = "sha256-NLlHWBwrztNAw5s1+J2/rE81aTLP/4/ok73oVJA/Dm4=";
   };
 
-  buildInputs = [ pytestrunner ];
-  checkInputs = [
-    email_validator
-    freezegun
-    mock
-    more-itertools
-    pytest
-    random2
-    ukpostcodeparser
-  ];
+  nativeBuildInputs = [ setuptools ];
 
   propagatedBuildInputs = [
-    dateutil
-    six
+    python-dateutil
     text-unidecode
-  ] ++ lib.optional (pythonOlder "3.3") ipaddress;
+  ];
 
-  postPatch = ''
-    substituteInPlace setup.py --replace "pytest>=3.8.0,<3.9" "pytest"
+  nativeCheckInputs = [
+    freezegun
+    pillow
+    pytestCheckHook
+    ukpostcodeparser
+    validators
+  ];
 
-    # see https://github.com/joke2k/faker/pull/911, fine since we pin correct
-    # versions for python2
-    substituteInPlace setup.py --replace "more-itertools<6.0.0" "more-itertools"
-  '';
+  # avoid tests which import random2, an abandoned library
+  pytestFlagsArray = [ "--ignore=tests/providers/test_ssn.py" ];
+  pythonImportsCheck = [ "faker" ];
 
   meta = with lib; {
-    description = "A Python library for generating fake user data";
-    homepage    = http://faker.rtfd.org;
-    license     = licenses.mit;
+    description = "Python library for generating fake user data";
+    mainProgram = "faker";
+    homepage = "http://faker.rtfd.org";
+    license = licenses.mit;
     maintainers = with maintainers; [ lovek323 ];
-    platforms   = platforms.unix;
   };
 }

@@ -1,83 +1,141 @@
-{ stdenv, fetchFromGitHub, fetchpatch, meson, ninja, pkgconfig
-, wayland, libGL, wayland-protocols, libinput, libxkbcommon, pixman
-, xcbutilwm, libX11, libcap, xcbutilimage, xcbutilerrors, mesa_noglu
-, libpng, ffmpeg_4
+{ lib
+, stdenv
+, fetchFromGitLab
+, meson
+, ninja
+, pkg-config
+, wayland-scanner
+, libGL
+, wayland
+, wayland-protocols
+, libinput
+, libxkbcommon
+, pixman
+, libcap
+, mesa
+, xorg
+, libpng
+, ffmpeg_4
+, ffmpeg
+, hwdata
+, seatd
+, vulkan-loader
+, glslang
+, libliftoff
+, libdisplay-info
+, nixosTests
+
+, enableXWayland ? true
+, xwayland ? null
 }:
 
 let
-  pname = "wlroots";
-  version = "0.5.0";
-in stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
+  generic = { version, hash, extraBuildInputs ? [ ], extraNativeBuildInputs ? [ ], patches ? [ ], postPatch ? "" }:
+    stdenv.mkDerivation (finalAttrs: {
+      pname = "wlroots";
+      inherit version;
 
-  src = fetchFromGitHub {
-    owner = "swaywm";
-    repo = "wlroots";
-    rev = version;
-    sha256 = "1phiidyddzgaxy4gbqwmykxn0y8za6y5mp66l9dpd9i6fml153yq";
+      inherit enableXWayland;
+
+      src = fetchFromGitLab {
+        domain = "gitlab.freedesktop.org";
+        owner = "wlroots";
+        repo = "wlroots";
+        rev = finalAttrs.version;
+        inherit hash;
+      };
+
+      inherit patches postPatch;
+
+      # $out for the library and $examples for the example programs (in examples):
+      outputs = [ "out" "examples" ];
+
+      strictDeps = true;
+      depsBuildBuild = [ pkg-config ];
+
+      nativeBuildInputs = [ meson ninja pkg-config wayland-scanner glslang ]
+        ++ extraNativeBuildInputs;
+
+      buildInputs = [
+        libGL
+        libcap
+        libinput
+        libpng
+        libxkbcommon
+        mesa
+        pixman
+        seatd
+        vulkan-loader
+        wayland
+        wayland-protocols
+        xorg.libX11
+        xorg.xcbutilerrors
+        xorg.xcbutilimage
+        xorg.xcbutilrenderutil
+        xorg.xcbutilwm
+      ]
+      ++ lib.optional finalAttrs.enableXWayland xwayland
+      ++ extraBuildInputs;
+
+      mesonFlags =
+        lib.optional (!finalAttrs.enableXWayland) "-Dxwayland=disabled"
+      ;
+
+      postFixup = ''
+        # Install ALL example programs to $examples:
+        # screencopy dmabuf-capture input-inhibitor layer-shell idle-inhibit idle
+        # screenshot output-layout multi-pointer rotation tablet touch pointer
+        # simple
+        mkdir -p $examples/bin
+        cd ./examples
+        for binary in $(find . -executable -type f -printf '%P\n' | grep -vE '\.so'); do
+          cp "$binary" "$examples/bin/wlroots-$binary"
+        done
+      '';
+
+      # Test via TinyWL (the "minimum viable product" Wayland compositor based on wlroots):
+      passthru.tests.tinywl = nixosTests.tinywl;
+
+      meta = {
+        description = "A modular Wayland compositor library";
+        longDescription = ''
+          Pluggable, composable, unopinionated modules for building a Wayland
+          compositor; or about 50,000 lines of code you were going to write anyway.
+        '';
+        inherit (finalAttrs.src.meta) homepage;
+        changelog = "https://gitlab.freedesktop.org/wlroots/wlroots/-/tags/${version}";
+        license = lib.licenses.mit;
+        platforms = lib.platforms.linux;
+        maintainers = with lib.maintainers; [ primeos synthetica rewine ];
+      };
+    });
+
+in
+rec {
+  wlroots_0_16 = generic {
+    version = "0.16.2";
+    hash = "sha256-JeDDYinio14BOl6CbzAPnJDOnrk4vgGNMN++rcy2ItQ=";
+    postPatch = ''
+      substituteInPlace backend/drm/meson.build \
+        --replace /usr/share/hwdata/ ${hwdata}/share/hwdata/
+    '';
+    extraBuildInputs = [
+      ffmpeg_4
+    ];
   };
 
-  # $out for the library, $bin for rootston, and $examples for the example
-  # programs (in examples) AND rootston
-  outputs = [ "out" "bin" "examples" ];
-
-  nativeBuildInputs = [ meson ninja pkgconfig ];
-
-  buildInputs = [
-    wayland libGL wayland-protocols libinput libxkbcommon pixman
-    xcbutilwm libX11 libcap xcbutilimage xcbutilerrors mesa_noglu
-    libpng ffmpeg_4
-  ];
-
-  mesonFlags = [
-    "-Dlibcap=enabled" "-Dlogind=enabled" "-Dxwayland=enabled" "-Dx11-backend=enabled"
-    "-Dxcb-icccm=enabled" "-Dxcb-errors=enabled"
-  ];
-
-  postPatch = ''
-    # It happens from time to time that the version wasn't updated:
-    sed -iE "s/version: '[0-9]\.[0-9]\.[0-9]'/version: '${version}.0'/" meson.build
-  '';
-
-  postInstall = ''
-    # Copy the library to $bin and $examples
-    for output in "$bin" "$examples"; do
-      mkdir -p $output/lib
-      cp -P libwlroots* $output/lib/
-    done
-  '';
-
-  postFixup = ''
-    # Install rootston (the reference compositor) to $bin and $examples (this
-    # has to be done after the fixup phase to prevent broken binaries):
-    for output in "$bin" "$examples"; do
-      mkdir -p $output/bin
-      cp rootston/rootston $output/bin/
-      patchelf \
-        --set-rpath "$(patchelf --print-rpath $output/bin/rootston | sed s,$out,$output,g)" \
-        $output/bin/rootston
-      mkdir $output/etc
-      cp ../rootston/rootston.ini.example $output/etc/rootston.ini
-    done
-    # Install ALL example programs to $examples:
-    # screencopy dmabuf-capture input-inhibitor layer-shell idle-inhibit idle
-    # screenshot output-layout multi-pointer rotation tablet touch pointer
-    # simple
-    mkdir -p $examples/bin
-    cd ./examples
-    for binary in $(find . -executable -type f -printf '%P\n' | grep -vE '\.so'); do
-      cp "$binary" "$examples/bin/wlroots-$binary"
-      patchelf \
-        --set-rpath "$(patchelf --print-rpath $output/bin/rootston | sed s,$out,$examples,g)" \
-        "$examples/bin/wlroots-$binary"
-    done
-  '';
-
-  meta = with stdenv.lib; {
-    description = "A modular Wayland compositor library";
-    inherit (src.meta) homepage;
-    license     = licenses.mit;
-    platforms   = platforms.linux;
-    maintainers = with maintainers; [ primeos ];
+  wlroots_0_17 = generic {
+    version = "0.17.3";
+    hash = "sha256-jth6BKci3sVDC86o+gSHKyDWnibVcNmipm7nn0S6LTg=";
+    extraNativeBuildInputs = [
+      hwdata
+    ];
+    extraBuildInputs = [
+      ffmpeg
+      libliftoff
+      libdisplay-info
+    ];
   };
+
+  wlroots = wlroots_0_17;
 }

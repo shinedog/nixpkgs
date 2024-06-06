@@ -1,30 +1,40 @@
-{ stdenv, fetchFromGitHub, buildGoModule }:
+{ lib, fetchFromGitHub, buildGoModule, fetchpatch }:
 
 buildGoModule rec {
   pname = "shadowfox";
-  version = "1.7.20";
+  version = "2.2.0";
 
   src = fetchFromGitHub {
     owner = "SrKomodo";
     repo = "shadowfox-updater";
     rev = "v${version}";
-    sha256 = "14crips12l4n050b8hrqkfqbxl0l8s3y4y9lm8n0bjpxdpjbpr7q";
+    sha256 = "125mw70jidbp436arhv77201jdp6mpgqa2dzmrpmk55f9bf29sg6";
   };
 
-  goPackagePath = "github.com/SrKomodo/shadowfox-updater";
+  patches = [
+    # get vendoring to work with go1.20
+    # https://github.com/arguablykomodo/shadowfox-updater/pull/70
+    (fetchpatch {
+      url = "https://github.com/arguablykomodo/shadowfox-updater/commit/c16be00829373e0de7de47d6fb4d4c341fc36f75.patch";
+      hash = "sha256-buijhFLI8Sf9qBDntf689Xcpr6me+aVDoRqwSIcKKEw=";
+    })
+  ];
 
-  modSha256 = "143ky1fj7xglhjyzh78qzgh1m4j53kqps25c9vnq9q4vdyzm93sr";
+  vendorHash = "sha256-3pHwyktSGxNM7mt0nPOe6uixS+bBJH9R8xqCyY6tlb0=";
 
-  buildFlags = "--tags release";
+  doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = ''
-      This project aims at creating a universal dark theme for Firefox while
-      adhering to the modern design principles set by Mozilla.
-    '';
+  ldflags = [
+    "-s"
+    "-w"
+    "-X main.tag=v${version}"
+  ];
+
+  meta = with lib; {
+    description = "Universal dark theme for Firefox while adhering to the modern design principles set by Mozilla";
     homepage = "https://overdodactyl.github.io/ShadowFox/";
     license = licenses.mit;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ infinisil ];
+    maintainers = [ ];
+    mainProgram = "shadowfox-updater";
   };
 }

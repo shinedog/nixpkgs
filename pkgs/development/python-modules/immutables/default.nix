@@ -1,19 +1,48 @@
-{ lib, buildPythonPackage, fetchPypi, pythonOlder }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "immutables";
-  version = "0.9";
-  disabled = pythonOlder "3.5";
+  version = "0.20";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1h7i00x6sdbw62rdipp0kaw1mcrvfipxv0054x1n2r4q4j11q7fp";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "MagicStack";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-fEECtP6WQVzwSzBYX+CbhQtzkB/1WC3OYKXk2XY//xA=";
   };
 
-  meta = {
-    description = "An immutable mapping type for Python";
-    homepage = https://github.com/MagicStack/immutables;
-    license = with lib.licenses; [ asl20 ];
-    maintainers = with lib.maintainers; [ catern ];
+  postPatch = ''
+    rm tests/conftest.py
+  '';
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  disabledTests = [
+    # Version mismatch
+    "testMypyImmu"
+  ];
+
+  disabledTestPaths = [
+    # avoid dependency on mypy
+    "tests/test_mypy.py"
+  ];
+
+  pythonImportsCheck = [ "immutables" ];
+
+  meta = with lib; {
+    description = "An immutable mapping type";
+    homepage = "https://github.com/MagicStack/immutables";
+    changelog = "https://github.com/MagicStack/immutables/releases/tag/v${version}";
+    license = with licenses; [ asl20 ];
+    maintainers = with maintainers; [ catern ];
   };
 }

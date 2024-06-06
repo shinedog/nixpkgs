@@ -1,50 +1,112 @@
-{ stdenv, fetchurl, openssl, lzo, zlib, iproute, which, ronn }:
+{ lib
+, stdenv
+, rustPlatform
+, fetchFromGitHub
+, buildPackages
+, cargo
+, lzo
+, openssl
+, pkg-config
+, ronn
+, rustc
+, zlib
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.2.12";
-  name = "zerotierone-${version}";
+let
+  pname = "zerotierone";
+  version = "1.14.0";
 
-  src = fetchurl {
-    url = "https://github.com/zerotier/ZeroTierOne/archive/${version}.tar.gz";
-    sha256 = "1m7ynrgzpg2sp37hcmjkx6w173icfhakzn1c1zrdzrxmmszrj9r1";
+  src = fetchFromGitHub {
+    owner = "zerotier";
+    repo = "ZeroTierOne";
+    rev = version;
+    sha256 = "sha256-YWcqALUB3ZEukL4er2FKcyNdEbuaf//QU5hRbKAfxDA=";
   };
 
+in stdenv.mkDerivation {
+  inherit pname version src;
+
+  cargoDeps = rustPlatform.importCargoLock {
+    lockFile = ./Cargo.lock;
+    outputHashes = {
+      "jwt-0.16.0" = "sha256-P5aJnNlcLe9sBtXZzfqHdRvxNfm6DPBcfcKOVeLZxcM=";
+      "rustfsm-0.1.0" = "sha256-q7J9QgN67iuoNhQC8SDVzUkjCNRXGiNCkE8OsQc5+oI=";
+    };
+  };
+  postPatch = "cp ${./Cargo.lock} Cargo.lock";
+
   preConfigure = ''
-      substituteInPlace ./osdep/ManagedRoute.cpp \
-        --replace '/usr/sbin/ip' '${iproute}/bin/ip'
+    cmp ./Cargo.lock ./rustybits/Cargo.lock || {
+      echo 1>&2 "Please make sure that the derivation's Cargo.lock is identical to ./rustybits/Cargo.lock!"
+      exit 1
+    }
 
-      substituteInPlace ./osdep/ManagedRoute.cpp \
-        --replace '/sbin/ip' '${iproute}/bin/ip'
+    patchShebangs ./doc/build.sh
+    substituteInPlace ./doc/build.sh \
+      --replace '/usr/bin/ronn' '${buildPackages.ronn}/bin/ronn' \
 
-      substituteInPlace ./osdep/LinuxEthernetTap.cpp \
-        --replace 'execlp("ip",' 'execlp("${iproute}/bin/ip",'
-
-      patchShebangs ./doc/build.sh
-      substituteInPlace ./doc/build.sh \
-        --replace '/usr/bin/ronn' '${ronn}/bin/ronn' \
-        --replace 'ronn -r' '${ronn}/bin/ronn -r'
+    substituteInPlace ./make-linux.mk \
+      --replace '-march=armv6zk' "" \
+      --replace '-mcpu=arm1176jzf-s' ""
   '';
 
-  buildInputs = [ openssl lzo zlib iproute which ronn ];
+  nativeBuildInputs = [
+    pkg-config
+    ronn
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
+  ];
+  buildInputs = [
+    lzo
+    openssl
+    zlib
+  ];
 
-  installPhase = ''
-    install -Dt "$out/bin/" zerotier-one
-    ln -s $out/bin/zerotier-one $out/bin/zerotier-idtool
-    ln -s $out/bin/zerotier-one $out/bin/zerotier-cli
+  enableParallelBuilding = true;
 
-    mkdir -p $man/share/man/man8
-    for cmd in zerotier-one.8 zerotier-cli.1 zerotier-idtool.1; do
-      cat doc/$cmd | gzip -9n > $man/share/man/man8/$cmd.gz
-    done
+  # Ensure Rust compiles for the right target
+  env.CARGO_BUILD_TARGET = stdenv.hostPlatform.rust.rustcTarget;
+
+  # Cargo won't compile to target/release but to target/<RUST_TARGET>/release when a target is
+  # explicitly defined. The build-system however expects target/release. Hence we just symlink from
+  # the latter to the former.
+  preBuild = ''
+    mkdir -p rustybits/target/release
+    ln -rs \
+      ./rustybits/target/${stdenv.hostPlatform.rust.rustcTarget}/release/libzeroidc.a \
+      ./rustybits/target/release/
+  '';
+
+  buildFlags = [ "all" "selftest" ];
+
+  doCheck = stdenv.hostPlatform == stdenv.buildPlatform;
+  checkPhase = ''
+    runHook preCheck
+    ./zerotier-selftest
+    runHook postCheck
+  '';
+
+  installFlags = [ "DESTDIR=$$out/upstream" ];
+
+  postInstall = ''
+    mv $out/upstream/usr/sbin $out/bin
+
+    mkdir -p $man/share
+    mv $out/upstream/usr/share/man $man/share/man
+
+    rm -rf $out/upstream
   '';
 
   outputs = [ "out" "man" ];
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = ./update.sh;
+
+  meta = with lib; {
     description = "Create flat virtual Ethernet networks of almost unlimited size";
-    homepage = https://www.zerotier.com;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ sjmackenzie zimbatm ehmry obadz ];
-    platforms = platforms.x86_64 ++ platforms.aarch64;
+    homepage = "https://www.zerotier.com";
+    license = licenses.bsl11;
+    maintainers = with maintainers; [ sjmackenzie zimbatm ehmry obadz danielfullmer ];
+    platforms = platforms.linux;
   };
 }

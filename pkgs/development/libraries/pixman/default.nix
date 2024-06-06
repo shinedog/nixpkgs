@@ -1,28 +1,87 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, libpng, glib /*just passthru*/ }:
+{ lib
+, stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, libpng
+, glib /*just passthru*/
 
-stdenv.mkDerivation rec {
-  name = "pixman-${version}";
-  version = "0.38.0";
+# for passthru.tests
+, cairo
+, qemu
+, scribus
+, tigervnc
+, wlroots
+, xwayland
+
+, gitUpdater
+, testers
+}:
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "pixman";
+  version = "0.43.4";
 
   src = fetchurl {
-    url = "mirror://xorg/individual/lib/${name}.tar.bz2";
-    sha256 = "1a1nnkjv0rqdj26847r0saly0kzckjfp4y3ly30bvpjxi7vy6s5p";
+    urls = with finalAttrs; [
+      "mirror://xorg/individual/lib/${pname}-${version}.tar.gz"
+      "https://cairographics.org/releases/${pname}-${version}.tar.gz"
+    ];
+    hash = "sha256-oGJNuQGAx923n8epFRCT3DfGRtjDjT8jL3Z89kuFoiY=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  # Raise test timeout, 120s can be slightly exceeded on slower hardware
+  postPatch = ''
+    substituteInPlace test/meson.build \
+      --replace-fail 'timeout : 120' 'timeout : 240'
+  '';
+
+  separateDebugInfo = !stdenv.hostPlatform.isStatic;
+
+  nativeBuildInputs = [ meson ninja pkg-config ];
 
   buildInputs = [ libpng ];
 
-  configureFlags = stdenv.lib.optional stdenv.isAarch32 "--disable-arm-iwmmxt";
+  # Default "enabled" value attempts to enable CPU features on all
+  # architectures and requires used to disable them:
+  #   https://gitlab.freedesktop.org/pixman/pixman/-/issues/88
+  mesonAutoFeatures = "auto";
+  mesonFlags = [
+    "-Diwmmxt=disabled"
+  ]
+  # Disable until https://gitlab.freedesktop.org/pixman/pixman/-/issues/46 is resolved
+  ++ lib.optional (stdenv.isAarch64 && !stdenv.cc.isGNU) "-Da64-neon=disabled";
 
-  doCheck = true;
+  preConfigure = ''
+    # https://gitlab.freedesktop.org/pixman/pixman/-/issues/62
+    export OMP_NUM_THREADS=$((NIX_BUILD_CORES > 184 ? 184 : NIX_BUILD_CORES))
+  '';
+
+  enableParallelBuilding = true;
+
+  doCheck = !stdenv.isDarwin;
 
   postInstall = glib.flattenInclude;
 
-  meta = with stdenv.lib; {
-    homepage = http://pixman.org;
+  passthru = {
+    tests = {
+      inherit cairo qemu scribus tigervnc wlroots xwayland;
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+      };
+    };
+    updateScript = gitUpdater {
+      url = "https://gitlab.freedesktop.org/pixman/pixman.git";
+      rev-prefix = "pixman-";
+    };
+  };
+
+  meta = with lib; {
+    homepage = "http://pixman.org";
     description = "A low-level library for pixel manipulation";
     license = licenses.mit;
     platforms = platforms.all;
+    pkgConfigModules = [ "pixman-1" ];
   };
-}
+})

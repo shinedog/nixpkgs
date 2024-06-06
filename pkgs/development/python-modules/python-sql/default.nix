@@ -1,16 +1,32 @@
-{ lib, fetchPypi, buildPythonPackage }:
+{
+  lib,
+  fetchPypi,
+  buildPythonPackage,
+  pytestCheckHook,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "python-sql";
-  version = "1.0.0";
+  version = "1.4.3";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
+
   src = fetchPypi {
     inherit pname version;
-    sha256 = "05ni936y0ia9xmryl7mlhbj9i80nnvq1bi4zxhb96rv7yvpb3fqb";
+    hash = "sha256-YmC+/4NaNdOgrsTx2jUbC+nKoaDZSmy6lAp82Nz2Ymk=";
   };
-  meta = {
-    homepage = http://python-sql.tryton.org/;
-    description = "A library to write SQL queries in a pythonic way";
-    maintainers = with lib.maintainers; [ johbo ];
-    license = lib.licenses.bsd3;
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "sql" ];
+
+  meta = with lib; {
+    description = "Library to write SQL queries in a pythonic way";
+    homepage = "https://foss.heptapod.net/tryton/python-sql";
+    changelog = "https://foss.heptapod.net/tryton/python-sql/-/blob/${version}/CHANGELOG";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ johbo ];
   };
 }

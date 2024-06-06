@@ -1,53 +1,108 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, nose
-, glibcLocales
-, entrypoints
-, bleach
-, mistune
-, jinja2
-, pygments
-, traitlets
-, testpath
-, jupyter_core
-, nbformat
-, ipykernel
-, pandocfilters
-, tornado
-, jupyter_client
-, defusedxml
+{
+  lib,
+  fetchurl,
+  buildPythonPackage,
+  pythonOlder,
+  fetchPypi,
+  hatchling,
+  beautifulsoup4,
+  bleach,
+  defusedxml,
+  jinja2,
+  jupyter-core,
+  jupyterlab-pygments,
+  markupsafe,
+  mistune,
+  nbclient,
+  packaging,
+  pandocfilters,
+  pygments,
+  tinycss2,
+  traitlets,
+  importlib-metadata,
+  flaky,
+  ipykernel,
+  ipywidgets,
+  pytestCheckHook,
 }:
 
+let
+  # see https://github.com/jupyter/nbconvert/issues/1896
+  style-css = fetchurl {
+    url = "https://cdn.jupyter.org/notebook/5.4.0/style/style.min.css";
+    hash = "sha256-WGWmCfRDewRkvBIc1We2GQdOVAoFFaO4LyIvdk61HgE=";
+  };
+in
 buildPythonPackage rec {
   pname = "nbconvert";
-  version = "5.4.1";
+  version = "7.16.4";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "302554a2e219bc0fc84f3edd3e79953f3767b46ab67626fdec16e38ba3f7efe4";
+    hash = "sha256-hsqRuiZrCkSNyW+mxbnZiv+r3ihns2MlhwNTaAf59/Q=";
   };
 
-  checkInputs = [ nose pytest glibcLocales ];
+  # Add $out/share/jupyter to the list of paths that are used to search for
+  # various exporter templates
+  patches = [ ./templates.patch ];
+
+  postPatch = ''
+    substituteAllInPlace ./nbconvert/exporters/templateexporter.py
+
+    mkdir -p share/templates/classic/static
+    cp ${style-css} share/templates/classic/static/style.css
+  '';
+
+  nativeBuildInputs = [ hatchling ];
 
   propagatedBuildInputs = [
-    entrypoints bleach mistune jinja2 pygments traitlets testpath
-    jupyter_core nbformat ipykernel pandocfilters tornado jupyter_client
+    beautifulsoup4
+    bleach
     defusedxml
+    jinja2
+    jupyter-core
+    jupyterlab-pygments
+    markupsafe
+    mistune
+    nbclient
+    packaging
+    pandocfilters
+    pygments
+    tinycss2
+    traitlets
+  ] ++ lib.optionals (pythonOlder "3.10") [ importlib-metadata ];
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
+  '';
+
+  nativeCheckInputs = [
+    flaky
+    ipykernel
+    ipywidgets
+    pytestCheckHook
   ];
 
-  # disable preprocessor tests for ipython 7
-  # see issue https://github.com/jupyter/nbconvert/issues/898
-  checkPhase = ''
-    export LC_ALL=en_US.UTF-8
-    HOME=$(mktemp -d) py.test -v --ignore="nbconvert/preprocessors/tests/test_execute.py"
-  '';
+  disabledTests = [
+    # Attempts network access (Failed to establish a new connection: [Errno -3] Temporary failure in name resolution)
+    "test_export"
+    "test_webpdf_with_chromium"
+    # ModuleNotFoundError: No module named 'nbconvert.tests'
+    "test_convert_full_qualified_name"
+    "test_post_processor"
+  ];
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
 
   meta = {
     description = "Converting Jupyter Notebooks";
-    homepage = https://jupyter.org/;
+    homepage = "https://github.com/jupyter/nbconvert";
+    changelog = "https://github.com/jupyter/nbconvert/blob/v${version}/CHANGELOG.md";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh globin ];
+    maintainers = lib.teams.jupyter.members;
   };
 }

@@ -1,18 +1,26 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "libndp-1.7";
+  pname = "libndp";
+  version = "1.8";
 
   src = fetchurl {
-    url = "http://libndp.org/files/${name}.tar.gz";
-    sha256 = "1dlinhl39va00v55qygjc9ap77yqf7xvn4rwmvdr49xhzzxhlj1c";
+    url = "http://libndp.org/files/libndp-${version}.tar.gz";
+    sha256 = "sha256-iP+2buLrUn8Ub1wC9cy8OLqX0rDVfrRr+6SIghqwwCs=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = http://libndp.org/;
+  nativeBuildInputs = [ autoreconfHook ];
+
+  configureFlags = lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    "ac_cv_func_malloc_0_nonnull=yes"
+  ];
+
+  meta = with lib; {
+    homepage = "http://libndp.org/";
     description = "Library for Neighbor Discovery Protocol";
+    mainProgram = "ndptool";
     platforms = platforms.linux;
-    maintainers = [ maintainers.lethalman ];
+    maintainers = [ ];
     license = licenses.lgpl21;
   };
 

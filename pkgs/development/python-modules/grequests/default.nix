@@ -1,29 +1,33 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, requests
-, gevent
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  requests,
+  gevent,
 }:
 
 buildPythonPackage rec {
   pname = "grequests";
-  version = "0.3.0";
+  version = "0.7.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "0lafzax5igbh8y4x0krizr573wjsxz7bhvwygiah6qwrzv83kv5c";
+    sha256 = "sha256-XDPxQmjfW4+hEH2FN4Fb5v67rW7FYFJNakBLd3jPa6Y=";
   };
 
   # No tests in archive
   doCheck = false;
 
-  propagatedBuildInputs = [ requests gevent ];
+  propagatedBuildInputs = [
+    requests
+    gevent
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Asynchronous HTTP requests";
-    homepage = https://github.com/kennethreitz/grequests;
+    homepage = "https://github.com/kennethreitz/grequests";
     license = with licenses; [ bsd2 ];
     maintainers = with maintainers; [ matejc ];
   };
-
 }

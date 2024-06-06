@@ -1,25 +1,25 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, psq }:
+{ lib, fetchurl, buildDunePackage, ocaml, psq, qcheck-alcotest }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-lru-${version}";
-  version = "0.2.0";
+buildDunePackage rec {
+  pname = "lru";
+  version = "0.3.1";
+
+  duneVersion = "3";
 
   src = fetchurl {
     url = "https://github.com/pqwy/lru/releases/download/v${version}/lru-${version}.tbz";
-    sha256 = "0bd7js9rrma1fjjjjc3fgr9l5fjbhgihx2nsaf96g2b35iiaimd0";
+    hash = "sha256-bL4j0np9WyRPhpwLiBQNR/cPQTpkYu81wACTJdSyNv0=";
   };
-
-  buildInputs = [ ocaml findlib ocamlbuild topkg ];
 
   propagatedBuildInputs = [ psq ];
 
-  inherit (topkg) buildPhase installPhase;
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
+  checkInputs = [ qcheck-alcotest ];
 
   meta = {
     homepage = "https://github.com/pqwy/lru";
     description = "Scalable LRU caches for OCaml";
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
-    license = stdenv.lib.licenses.isc;
-    inherit (ocaml.meta) platforms;
+    maintainers = [ lib.maintainers.vbgl ];
+    license = lib.licenses.isc;
   };
 }

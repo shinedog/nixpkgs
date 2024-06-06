@@ -1,9 +1,19 @@
-{ stdenv, buildGoPackage, fetchFromGitHub, pkgconfig,
-  cairo, gdk_pixbuf, glib, gnome3, wrapGAppsHook, gtk3 }:
+{ lib
+, stdenv
+, buildGoPackage
+, fetchFromGitHub
+, pkg-config
+, cairo
+, gdk-pixbuf
+, glib
+, gnome
+, wrapGAppsHook3
+, gtk3
+}:
 
 buildGoPackage rec {
-  name = "coyim-${version}";
-  version = "0.3.11";
+  pname = "coyim";
+  version = "0.4.1";
 
   goPackagePath = "github.com/coyim/coyim";
 
@@ -11,15 +21,19 @@ buildGoPackage rec {
     owner = "coyim";
     repo = "coyim";
     rev = "v${version}";
-    sha256 = "1g8nf56j17rdhhj7pv3ha1rb2mfc0mdvyzl35pgcki08w7iw08j3";
+    sha256 = "sha256-PmB6POaHKEXzIAaz3lAbUOhtVOzrj5oXRk90giYo6SI=";
   };
 
-  nativeBuildInputs = [ pkgconfig wrapGAppsHook glib cairo gdk_pixbuf gtk3 gnome3.adwaita-icon-theme ];
+  nativeBuildInputs = [ pkg-config wrapGAppsHook3 ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ glib cairo gdk-pixbuf gtk3 gnome.adwaita-icon-theme ];
+
+  meta = with lib; {
     description = "a safe and secure chat client";
-    homepage = https://coy.im/;
+    mainProgram = "coyim";
+    homepage = "https://coy.im/";
     license = licenses.gpl3;
-    platforms = platforms.linux;
+    platforms = [ "x86_64-linux" "x86_64-darwin" ];
+    broken = stdenv.isDarwin;
   };
 }

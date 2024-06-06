@@ -2,21 +2,28 @@
 
 buildGoModule rec {
   pname = "mkcert";
-  version = "1.3.0";
+  version = "1.4.4";
 
   src = fetchFromGitHub {
     owner = "FiloSottile";
     repo = pname;
     rev = "v${version}";
-    sha256 = "1aadnsx5pfmryf8mgxg9g0i083dm1pmrc6v4ln2mm3n89wwqc9b7";
+    sha256 = "sha256-FMAXjRL+kJ/hwGmaWBy8ecON+JCMgRytfpryeLWsSVc=";
   };
 
-  modSha256 = "0snvvwhyfq01nwgjz55dgd5skpg7z0dzix7sdag90cslbrr983i1";
+  vendorHash = "sha256-DdA7s+N5S1ivwUgZ+M2W/HCp/7neeoqRQL0umn3m6Do=";
+
+  doCheck = false;
+
+  ldflags = [
+    "-s" "-w" "-X main.Version=v${version}"
+  ];
 
   meta = with lib; {
-    homepage = https://github.com/FiloSottile/mkcert;
+    homepage = "https://github.com/FiloSottile/mkcert";
     description = "A simple tool for making locally-trusted development certificates";
+    mainProgram = "mkcert";
     license = licenses.bsd3;
-    maintainers = [ maintainers.marsam ];
+    maintainers = [ ];
   };
 }

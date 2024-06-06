@@ -1,5 +1,10 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, execnet }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
+  execnet,
+}:
 
 buildPythonPackage rec {
   pname = "pytest-cache";
@@ -20,9 +25,9 @@ buildPythonPackage rec {
   # Too many failing tests. Are they maintained?
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     license = licenses.mit;
-    homepage = https://pypi.python.org/pypi/pytest-cache/;
+    homepage = "https://pypi.python.org/pypi/pytest-cache/";
     description = "pytest plugin with mechanisms for caching across test runs";
   };
 }

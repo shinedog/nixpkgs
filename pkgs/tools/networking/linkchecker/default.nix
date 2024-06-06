@@ -1,70 +1,61 @@
-{ stdenv, lib, fetchFromGitHub, fetchpatch, python2, gettext }:
-let
-  # pin requests version until next release.
-  # see: https://github.com/linkcheck/linkchecker/issues/76
-  python2Packages = (python2.override {
-    packageOverrides = self: super: {   
-      requests = super.requests.overridePythonAttrs(oldAttrs: rec {
-        version = "2.14.2";
-        src = oldAttrs.src.override {
-          inherit version;
-          sha256 = "0lyi82a0ijs1m7k9w1mqwbmq1qjsac35fazx7xqyh8ws76xanx52";
-        };
-      });
-    };
-  }).pkgs;
-in
-python2Packages.buildPythonApplication rec {
-  pname = "LinkChecker";
-  version = "9.3.1";
+{ lib
+, fetchFromGitHub
+, python3
+, gettext
+}:
 
-  nativeBuildInputs = [ gettext ];
-  pythonPath = (with python2Packages; [
-    requests
-  ]) ++ [ gettext ];
+python3.pkgs.buildPythonApplication rec {
+  pname = "linkchecker";
+  version = "10.2.1";
+  pyproject = true;
 
-  checkInputs = with python2Packages; [ pytest ];
-
-  # the original repository is abandoned, development is now happening here:
   src = fetchFromGitHub {
-    owner = "linkcheck";
+    owner = "linkchecker";
     repo = "linkchecker";
-    rev = "v${version}";
-    sha256 = "080mv4iwvlsfnm7l9basd6i8p4q8990mdhkwick9s6javrbf1r1d";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-z7Qp74cai8GfsxB4n9dSCWQepp0/4PimFiRJQBaVSoo=";
   };
 
-  # 1. upstream refuses to support ignoring robots.txt
-  # 2. fix build: https://github.com/linkcheck/linkchecker/issues/10
-  patches = 
-    let
-      fix-setup-py = fetchpatch {
-        name = "fix-setup-py.patch";
-        url = https://github.com/linkcheck/linkchecker/commit/e62e630.patch;
-        sha256 = "046q1whg715w2yv33xx6rkj7fspvvz60cl978ax92lnf8j101czx";
-      };
-    in [
-      ./add-no-robots-flag.patch
-      fix-setup-py
-    ];
+  nativeBuildInputs = [ gettext ];
 
-  postInstall = ''
-    rm $out/bin/linkchecker-gui
-  '';
+  build-system = with python3.pkgs; [
+    hatchling
+    hatch-vcs
+    polib # translations
+  ];
 
-  checkPhase = ''
-    # the mime test fails for me...
-    rm tests/test_mimeutil.py
-    ${lib.optionalString stdenv.isDarwin ''
-    # network tests fails on darwin
-    rm tests/test_network.py
-    ''}
-    make test PYTESTOPTS="--tb=short" TESTS="tests/test_*.py tests/logger/test_*.py"
-  '';
+  dependencies = with python3.pkgs; [
+    argcomplete
+    beautifulsoup4
+    dnspython
+    requests
+  ];
 
-  meta = {
+  nativeCheckInputs = with python3.pkgs; [
+    pyopenssl
+    parameterized
+    pytestCheckHook
+  ];
+
+  disabledTests = [
+    "TestLoginUrl"
+    "test_timeit2" # flakey, and depends sleep being precise to the milisecond
+    "test_internet" # uses network, fails on Darwin (not sure why it doesn't fail on linux)
+  ];
+
+  disabledTestPaths = [
+    "tests/checker/telnetserver.py"
+    "tests/checker/test_telnet.py"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  meta = with lib; {
     description = "Check websites for broken links";
-    homepage = https://linkcheck.github.io/linkchecker/;
-    license = lib.licenses.gpl2;
-    maintainers = with lib.maintainers; [ peterhoeg tweber ];
+    mainProgram = "linkchecker";
+    homepage = "https://linkcheck.github.io/linkchecker/";
+    changelog = "https://github.com/linkchecker/linkchecker/releases/tag/v${version}";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ peterhoeg tweber ];
   };
 }

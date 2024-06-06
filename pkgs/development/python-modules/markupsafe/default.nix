@@ -1,22 +1,57 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # tests
+  pytestCheckHook,
+
+  # reverse dependencies
+  jinja2,
+  mkdocs,
+  quart,
+  werkzeug,
 }:
 
 buildPythonPackage rec {
-  pname = "MarkupSafe";
-  version = "1.1.1";
+  pname = "markupsafe";
+  version = "2.1.5";
+  pyproject = true;
 
- src = fetchPypi {
-    inherit pname version;
-    sha256 = "29872e92839765e546828bb7754a68c418d927cd064fd4708fab9fe9c8bb116b";
+  disabled = pythonOlder "3.8";
+
+  src = fetchPypi {
+    pname = "MarkupSafe";
+    inherit version;
+    hash = "sha256-0oPTeokLpMGuc/+t+ARkNcdue8Ike7tjwAvRpwnGVEs=";
   };
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ setuptools ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "markupsafe" ];
+
+  passthru.tests = {
+    inherit
+      jinja2
+      mkdocs
+      quart
+      werkzeug
+      ;
+  };
+
+  meta = with lib; {
+    changelog = "https://markupsafe.palletsprojects.com/en/${versions.majorMinor version}.x/changes/#version-${
+      replaceStrings [ "." ] [ "-" ] version
+    }";
     description = "Implements a XML/HTML/XHTML Markup safe string";
-    homepage = http://dev.pocoo.org;
+    homepage = "https://palletsprojects.com/p/markupsafe/";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ domenkozar garbas ];
+    maintainers = with maintainers; [ domenkozar ];
   };
-
 }

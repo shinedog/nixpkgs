@@ -1,21 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
+stdenvNoCC.mkDerivation rec {
+  pname = "zilla-slab";
   version = "1.002";
-  hash = "1b1ys28hyjcl4qwbnsyi6527nj01g3d6id9jl23fv6f8fjm4ph0f";
-in fetchzip {
-  name = "zilla-slab-${version}";
 
-  url = "https://github.com/mozilla/zilla-slab/releases/download/v${version}/Zilla-Slab-Fonts-v${version}.zip";
-  postFetch = ''
-    unzip $downloadedFile
+  src = fetchzip {
+    url = "https://github.com/mozilla/zilla-slab/releases/download/v${version}/Zilla-Slab-Fonts-v${version}.zip";
+    stripRoot = false;
+    hash = "sha256-yOHu+dSWlyI7w1N1teED9R1Fphso2bKAlYDC1KdqBCc=";
+  };
+
+  installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
     cp -v zilla-slab/ttf/*.ttf $out/share/fonts/truetype/
-  '';
-  sha256 = hash;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mozilla/zilla-slab;
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/mozilla/zilla-slab";
     description = "Zilla Slab fonts";
     longDescription = ''
       Zilla Slab is Mozilla's core typeface, used

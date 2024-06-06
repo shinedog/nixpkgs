@@ -1,21 +1,53 @@
-{ lib
-, fetchPypi
-, buildPythonPackage
+{
+  lib,
+  buildPythonPackage,
+  cacert,
+  pythonOlder,
+  fetchFromGitHub,
+  setuptools,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "certifi";
-  version = "2018.11.29";
+  version = "2024.02.02";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1dvccavd2fzq4j37w0sznylp92ps14zi6gvlxzm23in0yhzciya7";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = "python-certifi";
+    rev = version;
+    hash = "sha256-gnWJjZy5E/0lvAeLftXNtcHH6RHL/dUomXOBgumiWX8=";
   };
 
-  meta = {
-    homepage = http://certifi.io/;
+  patches = [
+    # Add support for NIX_SSL_CERT_FILE
+    ./env.patch
+  ];
+
+  postPatch = ''
+    # Use our system-wide ca-bundle instead of the bundled one
+    rm -v "certifi/cacert.pem"
+    ln -snvf "${cacert}/etc/ssl/certs/ca-bundle.crt" "certifi/cacert.pem"
+  '';
+
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedNativeBuildInputs = [
+    # propagate cacerts setup-hook to set up `NIX_SSL_CERT_FILE`
+    cacert
+  ];
+
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "certifi" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/certifi/python-certifi";
     description = "Python package for providing Mozilla's CA Bundle";
-    license = lib.licenses.isc;
-    maintainers = with lib.maintainers; [ koral ];
+    license = licenses.isc;
+    maintainers = with maintainers; [ koral ];
   };
 }

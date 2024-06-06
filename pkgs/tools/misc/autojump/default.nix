@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, python, bash }:
+{ lib, stdenv, fetchFromGitHub, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "autojump-${version}";
+  pname = "autojump";
   version = "22.5.3";
 
   src = fetchFromGitHub {
@@ -11,8 +11,10 @@ stdenv.mkDerivation rec {
     sha256 = "1rgpsh70manr2dydna9da4x7p8ahii7dgdgwir5fka340n1wrcws";
   };
 
-  buildInputs = [ python bash ];
+  buildInputs = [ python3 ];
+  nativeBuildInputs = [ python3 ];
   dontBuild = true;
+  strictDeps = true;
 
   installPhase = ''
     python ./install.py -d "$out" -p "" -z "$out/share/zsh/site-functions/"
@@ -23,8 +25,9 @@ stdenv.mkDerivation rec {
     install -Dt "$out/share/zsh/site-functions/" -m444 "$out/share/autojump/autojump.zsh"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A `cd' command that learns";
+    mainProgram = "autojump";
     longDescription = ''
       One of the most used shell commands is “cd”.  A quick survey
       among my friends revealed that between 10 and 20% of all
@@ -45,7 +48,7 @@ stdenv.mkDerivation rec {
 
       Autojump supports tab-completion.
     '';
-    homepage = https://github.com/wting/autojump;
+    homepage = "https://github.com/wting/autojump";
     license = licenses.gpl3;
     platforms = platforms.all;
     maintainers = with maintainers; [ domenkozar yurrriq ];

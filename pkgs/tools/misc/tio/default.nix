@@ -1,21 +1,29 @@
-{ stdenv, fetchzip, autoreconfHook }:
+{ lib, stdenv, fetchFromGitHub, meson, ninja, pkg-config, inih, lua, bash-completion, darwin }:
 
 stdenv.mkDerivation rec {
-  name = "tio-${version}";
-  version = "1.32";
+  pname = "tio";
+  version = "2.8";
 
-  src = fetchzip {
-    url = "https://github.com/tio/tio/archive/v${version}.tar.gz";
-    sha256 = "0lwqdm73kshi9qs8pks1b4by6yb9jf3bbyw3bv52xmggnr5s1hcv";
+  src = fetchFromGitHub {
+    owner = "tio";
+    repo = "tio";
+    rev = "v${version}";
+    hash = "sha256-BBfLmRhbDeymXXlYp71XTwbAab7h7gJ842fzZJNb6kU=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  strictDeps = true;
 
-  meta = with stdenv.lib; {
+  buildInputs = [ inih lua ]
+    ++ lib.optionals (stdenv.hostPlatform.isDarwin) [ darwin.apple_sdk.frameworks.IOKit ];
+
+  nativeBuildInputs = [ meson ninja pkg-config bash-completion ];
+
+  meta = with lib; {
     description = "Serial console TTY";
-    homepage = https://tio.github.io/;
+    homepage = "https://tio.github.io/";
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ yegortimoshenko ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ yana ];
+    platforms = platforms.unix;
+    mainProgram = "tio";
   };
 }

@@ -1,8 +1,8 @@
-{ stdenv, buildPackages, kernel, pciutils, gettext }:
+{ lib, stdenv, buildPackages, kernel, pciutils, gettext }:
 
 stdenv.mkDerivation {
   pname = "cpupower";
-  inherit (kernel) version src;
+  inherit (kernel) version src patches;
 
   nativeBuildInputs = [ gettext ];
   buildInputs = [ pciutils ];
@@ -14,9 +14,13 @@ stdenv.mkDerivation {
     sed -i 's,/usr/bin/install,${buildPackages.coreutils}/bin/install,' Makefile
   '';
 
-  makeFlags = [ "CROSS=${stdenv.cc.targetPrefix}" ];
+  makeFlags = [
+    "CROSS=${stdenv.cc.targetPrefix}"
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "LD=${stdenv.cc.targetPrefix}cc"
+  ];
 
-  installFlags = stdenv.lib.mapAttrsToList
+  installFlags = lib.mapAttrsToList
     (n: v: "${n}dir=${placeholder "out"}/${v}") {
     bin = "bin";
     sbin = "sbin";
@@ -31,10 +35,11 @@ stdenv.mkDerivation {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Tool to examine and tune power saving features";
-    homepage = https://www.kernel.org/;
+    homepage = "https://www.kernel.org/";
     license = licenses.gpl2;
+    mainProgram = "cpupower";
     platforms = platforms.linux;
   };
 }

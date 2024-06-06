@@ -1,35 +1,59 @@
-{ fetchurl, stdenv }:
+{ fetchurl, lib, stdenv }:
 
 let
-  version = "0.15.2";
+  version = "1.7.0";
+  # nixpkgs-update: no auto update
+
+  suffix = {
+    x86_64-linux = "x86_64";
+    aarch64-linux = "aarch64";
+  }."${stdenv.hostPlatform.system}" or (throw "Unsupported system: ${stdenv.hostPlatform.system}");
+
   baseurl = "https://github.com/firecracker-microvm/firecracker/releases/download";
 
-  fetchbin = name: sha256: fetchurl {
-    url    = "${baseurl}/v${version}/${name}-v${version}";
-    inherit sha256;
+  dlbin = sha256: fetchurl {
+    url = "${baseurl}/v${version}/firecracker-v${version}-${suffix}.tgz";
+    sha256 = sha256."${stdenv.hostPlatform.system}"or (throw "unsupported system ${stdenv.hostPlatform.system}");
   };
 
-  firecracker-bin = fetchbin "firecracker" "11g0iz1krsm6gzhvf0fb4101c6qyk6bl8j3kjidbb52x9i4aqsxk";
-  jailer-bin      = fetchbin "jailer"      "0j1gc1cdsfsi82fkvvxla25791lcvk6vmp46i82f0ms9xm7xhswz";
 in
 stdenv.mkDerivation {
-  name = "firecracker-${version}";
+  pname = "firecracker";
   inherit version;
 
-  srcs = [ firecracker-bin jailer-bin ];
-  phases = [ "installPhase" ];
+  sourceRoot = ".";
+  src = dlbin {
+    x86_64-linux = "sha256-Vb0+bVmf3RCONuUvmu4jGfBsGKkPL6SbZOk/3wb1/1M=";
+    aarch64-linux = "sha256-PLoQA4a6qulxSns/ZRSgn6EtHr46/hstNhP1pAHt9VA=";
+  };
+
+  dontConfigure = true;
+
+  buildPhase = ''
+    mv release-v${version}-${suffix}/firecracker-v${version}-${suffix} firecracker
+    mv release-v${version}-${suffix}/jailer-v${version}-${suffix} jailer
+    chmod +x firecracker jailer
+  '';
+
+  doCheck = true;
+  checkPhase = ''
+    ./firecracker --version
+    ./jailer --version
+  '';
 
   installPhase = ''
     mkdir -p $out/bin
-    install -D ${firecracker-bin} $out/bin/firecracker
-    install -D ${jailer-bin}      $out/bin/jailer
+    install -D firecracker $out/bin/firecracker
+    install -D jailer      $out/bin/jailer
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Secure, fast, minimal micro-container virtualization";
-    homepage    = http://firecracker-microvm.io;
-    license     = licenses.asl20;
-    platforms   = [ "x86_64-linux" ];
-    maintainers = with maintainers; [ thoughtpolice ];
+    homepage = "http://firecracker-microvm.io";
+    changelog = "https://github.com/firecracker-microvm/firecracker/releases/tag/v${version}";
+    mainProgram = "firecracker";
+    license = licenses.asl20;
+    platforms = [ "x86_64-linux" "aarch64-linux" ];
+    maintainers = with maintainers; [ thoughtpolice qjoly ];
   };
 }

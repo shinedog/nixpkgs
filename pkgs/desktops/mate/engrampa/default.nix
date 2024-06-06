@@ -1,36 +1,64 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, libxml2, gnome3, gtk3, mate, hicolor-icon-theme, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, libxml2
+, caja
+, gtk3
+, hicolor-icon-theme
+, json-glib
+, mate-desktop
+, wrapGAppsHook3
+, mateUpdateScript
+# can be defaulted to true once switch to meson
+, withMagic ? stdenv.buildPlatform.canExecute stdenv.hostPlatform, file
+}:
 
 stdenv.mkDerivation rec {
-  name = "engrampa-${version}";
-  version = "1.22.1";
+  pname = "engrampa";
+  version = "1.28.1";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "06z38vfs15f5crrrgvcsqfb557fhpq1mqkj5fd9wb0hvi77hasrk";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "nFxMm8+LCO6qjydVONJLTJVQidWK7AMx6JwCuE2FOGo=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     itstool
-    wrapGAppsHook
+    libxml2  # for xmllint
+    wrapGAppsHook3
   ];
 
   buildInputs = [
-    libxml2
+    caja
     gtk3
-    mate.caja
     hicolor-icon-theme
-    mate.mate-desktop
+    json-glib
+    mate-desktop
+  ] ++ lib.optionals withMagic [
+    file
   ];
 
-  configureFlags = [ "--with-cajadir=$$out/lib/caja/extensions-2.0" ];
+  configureFlags = [
+    "--with-cajadir=$$out/lib/caja/extensions-2.0"
+  ] ++ lib.optionals withMagic [
+    "--enable-magic"
+  ];
 
-  meta = {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Archive Manager for MATE";
-    homepage = https://mate-desktop.org;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
+    mainProgram = "engrampa";
+    homepage = "https://mate-desktop.org";
+    license = with licenses; [ gpl2Plus lgpl2Plus fdl11Plus ];
+    platforms = platforms.unix;
+    maintainers = teams.mate.members;
   };
 }

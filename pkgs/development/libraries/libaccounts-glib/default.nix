@@ -1,23 +1,20 @@
-{ stdenv, fetchFromGitLab, meson, ninja, glib, check, python3, vala, gtk-doc, glibcLocales
-, libxml2, libxslt, pkgconfig, sqlite, docbook_xsl, docbook_xml_dtd_43, gobject-introspection }:
+{ lib, stdenv, fetchFromGitLab, gitUpdater, meson, mesonEmulatorHook, ninja, glib, check, python3, vala, gtk-doc, glibcLocales
+, libxml2, libxslt, pkg-config, sqlite, docbook_xsl, docbook_xml_dtd_43, gobject-introspection }:
 
 stdenv.mkDerivation rec {
-  name = "libaccounts-glib-${version}";
-  version = "1.24";
+  pname = "libaccounts-glib";
+  version = "1.27";
 
   outputs = [ "out" "dev" "devdoc" "py" ];
 
   src = fetchFromGitLab {
     owner = "accounts-sso";
     repo = "libaccounts-glib";
-    rev = version;
-    sha256 = "0y8smg1rd279lrr9ad8b499i8pbkajmwd4xn41rdh9h93hs9apn7";
+    rev = "VERSION_${version}";
+    sha256 = "sha256-mLhcwp8rhCGSB1K6rTWT0tuiINzgwULwXINfCbgPKEg=";
   };
 
-  # See: https://gitlab.com/accounts-sso/libaccounts-glib/merge_requests/22
-  patches = [ ./py-override.patch ];
-
-  nativeBuildInputs = [ 
+  nativeBuildInputs = [
     check
     docbook_xml_dtd_43
     docbook_xsl
@@ -26,8 +23,10 @@ stdenv.mkDerivation rec {
     gtk-doc
     meson
     ninja
-    pkgconfig
+    pkg-config
     vala
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
   ];
 
   buildInputs = [
@@ -38,14 +37,26 @@ stdenv.mkDerivation rec {
     sqlite
   ];
 
+  # TODO: send patch upstream to make running tests optional
+  postPatch = lib.optionalString (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    substituteInPlace meson.build \
+      --replace "subdir('tests')" ""
+  '';
+
   LC_ALL = "en_US.UTF-8";
 
   mesonFlags = [
-    "-Dpy-overrides-dir=${placeholder ''py''}/${python3.sitePackages}/gi/overrides"
+    "-Dinstall-py-overrides=true"
+    "-Dpy-overrides-dir=${placeholder "py"}/${python3.sitePackages}/gi/overrides"
   ];
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "VERSION_";
+  };
+
+  meta = with lib; {
     description = "Library for managing accounts which can be used from GLib applications";
+    homepage = "https://gitlab.com/accounts-sso/libaccounts-glib";
     platforms = platforms.linux;
     license = licenses.lgpl21;
   };

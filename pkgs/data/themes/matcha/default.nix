@@ -1,31 +1,74 @@
-{ stdenv, fetchFromGitHub, gdk_pixbuf, librsvg, gtk-engine-murrine }:
+{ lib
+, stdenvNoCC
+, fetchFromGitHub
+, gdk-pixbuf
+, gtk-engine-murrine
+, jdupes
+, librsvg
+, gitUpdater
+, colorVariants ? [] # default: all
+, themeVariants ? [] # default: blue
+}:
 
-stdenv.mkDerivation rec {
-  name = "matcha-${version}";
-  version = "2019_05_09";
+let
+  pname = "matcha-gtk-theme";
+
+in
+lib.checkListOfEnum "${pname}: color variants" [ "standard" "light" "dark" ] colorVariants
+lib.checkListOfEnum "${pname}: theme variants" [ "aliz" "azul" "sea" "pueril" "all" ] themeVariants
+
+stdenvNoCC.mkDerivation rec {
+  inherit pname;
+  version = "2024-05-01";
 
   src = fetchFromGitHub {
     owner = "vinceliuice";
-    repo = "matcha";
+    repo = pname;
     rev = version;
-    sha256 = "0xnv89appivrnbppyjqaa35pls120mkz253p2lblyxzbvi5kgn73";
+    sha256 = "trQwRZ/JKIS8TcRIg0eL5GmB/yymDwqqNued0ddRuqU=";
   };
 
-  buildInputs = [ gdk_pixbuf librsvg ];
+  nativeBuildInputs = [
+    jdupes
+  ];
 
-  propagatedUserEnvPkgs = [ gtk-engine-murrine ];
+  buildInputs = [
+    gdk-pixbuf
+    librsvg
+  ];
 
-  installPhase = ''
-    patchShebangs .
-    mkdir -p $out/share/themes
-    name= ./Install -d $out/share/themes
-    install -D -t $out/share/gtksourceview-3.0/styles src/extra/gedit/matcha.xml
+  propagatedUserEnvPkgs = [
+    gtk-engine-murrine
+  ];
+
+  postPatch = ''
+    patchShebangs install.sh
   '';
 
-  meta = with stdenv.lib; {
-    description = "A stylish Design theme for GTK based desktop environments";
-    homepage = https://vinceliuice.github.io/theme-matcha;
-    license = licenses.gpl3;
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/share/themes
+
+    name= ./install.sh \
+      ${lib.optionalString (colorVariants != []) "--color " + builtins.toString colorVariants} \
+      ${lib.optionalString (themeVariants != []) "--theme " + builtins.toString themeVariants} \
+      --dest $out/share/themes
+
+    mkdir -p $out/share/doc/${pname}
+    cp -a src/extra/firefox $out/share/doc/${pname}
+
+    jdupes --quiet --link-soft --recurse $out/share
+
+    runHook postInstall
+  '';
+
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
+    description = "A stylish flat Design theme for GTK based desktop environments";
+    homepage = "https://vinceliuice.github.io/theme-matcha";
+    license = licenses.gpl3Only;
     platforms = platforms.unix;
     maintainers = [ maintainers.romildo ];
   };

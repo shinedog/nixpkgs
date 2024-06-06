@@ -1,30 +1,31 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig
-, zlib, bzip2, lzma, lzo, lz4, zstd, xz
-, libgcrypt, e2fsprogs, utillinux, libgpgerror }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
+, zlib, bzip2, lzo, lz4, zstd, xz
+, libgcrypt, e2fsprogs, util-linux, libgpg-error }:
 
 let
-  version = "0.8.5";
+  version = "0.8.7";
 
 in stdenv.mkDerivation {
-  name = "fsarchiver-${version}";
+  pname = "fsarchiver";
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "fdupoux";
     repo = "fsarchiver";
     rev = version;
-    sha256 = "1rvwq5v3rl14bqxjm1ibfapyicf0sa44nw7451v10kx39lp56ylp";
+    sha256 = "sha256-1ZIqFgB05gV1L7P/AIL4qfYT4cNMp75QElEM64BXyO8=";
   };
 
   nativeBuildInputs = [
-    autoreconfHook pkgconfig
+    autoreconfHook pkg-config
   ];
 
   buildInputs = [
-    zlib bzip2 lzma lzo lz4 zstd xz
-    libgcrypt e2fsprogs utillinux libgpgerror
+    zlib bzip2 xz lzo lz4 zstd xz
+    libgcrypt e2fsprogs util-linux libgpg-error
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "File system archiver for linux";
     longDescription = ''
       FSArchiver is a system tool that allows you to save the contents of a
@@ -35,9 +36,10 @@ in stdenv.mkDerivation {
       checksummed in the archive in order to protect the data. If the archive is
       corrupt, you just loose the current file, not the whole archive.
     '';
-    homepage = http://www.fsarchiver.org/;
+    homepage = "https://www.fsarchiver.org/";
     license = licenses.lgpl2;
-    maintainers = [ maintainers.etu ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.linux;
+    mainProgram = "fsarchiver";
   };
 }

@@ -1,25 +1,26 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
-  pname = "XStatic-Bootstrap";
-  version = "3.3.7.1";
+  pname = "xstatic-bootstrap";
+  version = "4.5.3.1";
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "0c949e78e8cd77983fd803a68a98df0124e0c3a872fddb9ac8e6e5b4a487f131";
+    pname = "XStatic-Bootstrap";
+    inherit version;
+    sha256 = "cf67d205437b32508a88b69a7e7c5bbe2ca5a8ae71097391a6a6f510ebfd2820";
   };
 
   # no tests implemented
   doCheck = false;
 
-  meta = with lib;{
-    homepage = http://getbootstrap.com;
+  meta = with lib; {
+    homepage = "https://getbootstrap.com";
     description = "Bootstrap packaged static files for python";
     license = licenses.mit;
     maintainers = with maintainers; [ makefu ];
   };
-
 }

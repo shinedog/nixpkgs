@@ -1,33 +1,61 @@
-{ stdenv, fetchurl, jre }:
+{ lib
+, stdenv
+, fetchurl
+, jre
+, autoPatchelfHook
+, zlib
+, ncurses
+}:
 
-stdenv.mkDerivation rec {
-  name = "sbt-${version}";
-  version = "1.2.8";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "sbt";
+  version = "1.10.0";
 
   src = fetchurl {
-    urls = [
-      "https://dl.bintray.com/sbt/native-packages/sbt/${version}/${name}.tgz"
-      "https://github.com/sbt/sbt/releases/download/v${version}/sbt-${version}.tgz"
-      "https://cocl.us/sbt-${version}.tgz"
-    ];
-    sha256 = "0n7yghnb1q3lyjpv721znvslk5lwib7y84mxwz66yv8p84jj3fcv";
+    url = "https://github.com/sbt/sbt/releases/download/v${finalAttrs.version}/sbt-${finalAttrs.version}.tgz";
+    hash = "sha256-FUt95sGSB8c9CjBPkByMS26tmpw6mamKnXKsGUGdJkA=";
   };
 
-  patchPhase = ''
+  postPatch = ''
     echo -java-home ${jre.home} >>conf/sbtopts
   '';
 
+  nativeBuildInputs = lib.optionals stdenv.isLinux [ autoPatchelfHook ];
+
+  buildInputs = lib.optionals stdenv.isLinux [
+    stdenv.cc.cc # libstdc++.so.6
+    zlib
+  ];
+
+  propagatedBuildInputs = [
+    # for infocmp
+    ncurses
+  ];
+
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/sbt $out/bin
     cp -ra . $out/share/sbt
-    ln -s $out/share/sbt/bin/sbt $out/bin/
+    ln -sT ../share/sbt/bin/sbt $out/bin/sbt
+    ln -sT ../share/sbt/bin/sbtn-${
+      if (stdenv.hostPlatform.isAarch64) then "aarch64" else "x86_64"
+    }-${
+      if (stdenv.isDarwin) then "apple-darwin" else "pc-linux"
+    } $out/bin/sbtn
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://www.scala-sbt.org/;
+  meta = with lib; {
+    homepage = "https://www.scala-sbt.org/";
     license = licenses.bsd3;
+    sourceProvenance = with sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
     description = "A build tool for Scala, Java and more";
-    maintainers = with maintainers; [ nequissimus rickynils ];
+    maintainers = with maintainers; [ nequissimus kashw2 ];
     platforms = platforms.unix;
   };
-}
+})

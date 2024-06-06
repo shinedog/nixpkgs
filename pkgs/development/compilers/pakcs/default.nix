@@ -1,32 +1,30 @@
-{ stdenv, fetchurl, makeWrapper
+{ lib, stdenv, fetchurl, makeWrapper
 , haskellPackages, haskell
 , which, swiProlog, rlwrap, tk
 , curl, git, unzip, gnutar, coreutils, sqlite }:
 
 let
-  name = "pakcs-2.1.1";
+  pname = "pakcs";
+  version = "3.6.0";
 
-  # Don't switch to development release without a reason, because its
-  # source updates without version bump. Prefer current release instead.
+  # Don't switch to "Current release" without a reason, because its
+  # source updates without version bump. Prefer last from "Older releases" instead.
   src = fetchurl {
-    url = "https://www.informatik.uni-kiel.de/~pakcs/download/${name}-src.tar.gz";
-    sha256 = "112v9ynqfbbm4x770mcfrai9v5bh7c3zn7jka80pv6v4y65r778c";
+    url = "https://www.informatik.uni-kiel.de/~pakcs/download/pakcs-${version}-src.tar.gz";
+    hash = "sha256-1r6jEY3eEGESKcAepiziVbxpIvQLtCS6l0trBU3SGGo=";
   };
 
   curry-frontend = (haskellPackages.override {
     overrides = self: super: {
-      curry-base = haskell.lib.overrideCabal (super.callPackage ./curry-base.nix {}) (drv: {
+      curry-frontend = haskell.lib.compose.overrideCabal (drv: {
         inherit src;
-        postUnpack = "sourceRoot+=/frontend/curry-base";
-      });
-      curry-frontend = haskell.lib.overrideCabal (super.callPackage ./curry-frontend.nix {}) (drv: {
-        inherit src;
-        postUnpack = "sourceRoot+=/frontend/curry-frontend";
-      });
+        postUnpack = "sourceRoot+=/frontend";
+      }) (super.callPackage ./curry-frontend.nix { });
     };
   }).curry-frontend;
+
 in stdenv.mkDerivation {
-  inherit name src;
+  inherit pname version src;
 
   buildInputs = [ swiProlog ];
   nativeBuildInputs = [ which makeWrapper ];
@@ -40,23 +38,24 @@ in stdenv.mkDerivation {
   ];
 
   preConfigure = ''
-    # Since we can't expand $out in `makeFlags`
-    #makeFlags="$makeFlags PAKCSINSTALLDIR=$out/pakcs"
+    for file in examples/test.sh             \
+                currytools/optimize/Makefile \
+                testsuite/test.sh            \
+                scripts/cleancurry.sh        \
+                scripts/compile-all-libs.sh; do
+        substituteInPlace $file --replace "/bin/rm" "rm"
+    done
+  '' ;
 
-    substituteInPlace currytools/cpm/src/CPM/Repository.curry \
-      --replace "/bin/rm" "rm"
-  '';
-
-  # cypm new: EXISTENCE ERROR: source_sink
-  # "/tmp/nix-build-pakcs-2.0.2.drv-0/pakcs-2.0.2/currytools/cpm/templates/LICENSE"
-  # does not exist
-  buildPhase = ''
+  preBuild = ''
     mkdir -p $out/pakcs
     cp -r * $out/pakcs
-    (cd $out/pakcs ; make -j$NIX_BUILD_CORES $makeFlags)
+    cd $out/pakcs
   '';
 
   installPhase = ''
+    runHook preInstall
+
     ln -s $out/pakcs/bin $out
 
     mkdir -p $out/share/emacs/site-lisp
@@ -68,11 +67,13 @@ in stdenv.mkDerivation {
 
     # List of dependencies from currytools/cpm/src/CPM/Main.curry
     wrapProgram $out/pakcs/bin/cypm \
-      --prefix PATH ":" "${stdenv.lib.makeBinPath [ curl git unzip gnutar coreutils sqlite ]}"
+      --prefix PATH ":" "${lib.makeBinPath [ curl git unzip gnutar coreutils sqlite ]}"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.informatik.uni-kiel.de/~pakcs/;
+  meta = with lib; {
+    homepage = "http://www.informatik.uni-kiel.de/~pakcs/";
     description = "An implementation of the multi-paradigm declarative language Curry";
     license = licenses.bsd3;
 
@@ -88,7 +89,7 @@ in stdenv.mkDerivation {
       with dynamic web pages, prototyping embedded systems).
     '';
 
-    maintainers = with maintainers; [ kkallio gnidorah ];
+    maintainers = with maintainers; [ t4ccer ];
     platforms = platforms.linux;
   };
 }

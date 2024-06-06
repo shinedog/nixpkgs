@@ -1,55 +1,43 @@
-{ stdenv, newScope, makeWrapper
-, wrapGAppsHook, gnome3, glib
-, electron_3, xdg_utils, makeDesktopItem
-, auth0ClientID ? "0spuNKfIGeLAQ_Iki9t3fGxbfJl3k8SU"
-, auth0Domain ? "nixpkgs.auth0.com" }:
+{ appimageTools, lib, fetchurl, makeDesktopItem }:
 
 let
-  callPackage = newScope self;
-  self = {
-    fetchNodeModules = callPackage ./fetchNodeModules.nix {};
-    rambox-bare = callPackage ./bare.nix {
-      inherit auth0ClientID auth0Domain;
-    };
-    sencha = callPackage ./sencha {};
+  pname = "rambox";
+  version = "2.3.3";
+
+  src = fetchurl {
+    url = "https://github.com/ramboxapp/download/releases/download/v${version}/Rambox-${version}-linux-x64.AppImage";
+    hash = "sha256-Z6ux/liDpE0Fb4h0eAZC7F/Tt3eKlXQPBQVCd7Je9TI=";
   };
-  desktopItem = makeDesktopItem rec {
-    name = "Rambox";
+
+  desktopItem = (makeDesktopItem {
+    desktopName = "Rambox";
+    name = pname;
     exec = "rambox";
-    icon = "${self.rambox-bare}/resources/Icon.png";
-    desktopName = name;
-    genericName = "Rambox messenger";
-    categories = "Network;";
+    icon = pname;
+    categories = [ "Network" ];
+  });
+
+  appimageContents = appimageTools.extract {
+    inherit pname version src;
   };
 in
+appimageTools.wrapType2 {
+  inherit pname version src;
 
-with self;
-
-stdenv.mkDerivation {
-  name = "rambox-${rambox-bare.version}";
-
-  nativeBuildInputs = [ makeWrapper wrapGAppsHook ];
-
-  buildInputs = [ glib gnome3.gsettings_desktop_schemas ];
-  unpackPhase = ":";
-
-  dontWrapGApps = true; # we only want $gappsWrapperArgs here
-
-  installPhase = ''
-    runHook preInstall
-    mkdir -p $out/share/applications
-    ln -s ${desktopItem}/share/applications/* $out/share/applications
-    runHook postInstall
+  extraInstallCommands = ''
+    mkdir -p $out/share/applications $out/share/icons/hicolor/256x256/apps
+    install -Dm644 ${appimageContents}/usr/share/icons/hicolor/256x256/apps/rambox*.png $out/share/icons/hicolor/256x256/apps/${pname}.png
+    install -Dm644 ${desktopItem}/share/applications/* $out/share/applications
   '';
 
-  postFixup = ''
-    makeWrapper ${electron_3}/bin/electron $out/bin/rambox \
-      --add-flags "${rambox-bare} --without-update" \
-      "''${gappsWrapperArgs[@]}" \
-      --prefix PATH : ${xdg_utils}/bin
-  '';
+  extraPkgs = pkgs: [ pkgs.procps ];
 
-  inherit (rambox-bare.meta // {
-    platforms = [ "i686-linux" "x86_64-linux" ];
-  });
+  meta = with lib; {
+    description = "Workspace Simplifier - a cross-platform application organizing web services into Workspaces similar to browser profiles";
+    homepage = "https://rambox.app";
+    license = licenses.unfree;
+    maintainers = with maintainers; [ nazarewk ];
+    platforms = [ "x86_64-linux" ];
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+  };
 }

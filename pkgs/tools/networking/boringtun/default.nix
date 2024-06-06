@@ -1,34 +1,29 @@
-{ stdenv, fetchFromGitHub, rustPlatform }:
+{ lib, stdenv, fetchFromGitHub, rustPlatform, darwin }:
 
 rustPlatform.buildRustPackage rec {
   pname = "boringtun";
-  # "boringtun" is still undergoing review for security concerns.
-  # The GitHub page does not show any release yet,
-  # use 20190407 as version number to indicate that it is an unstable version.
-  version = "20190407";
+  version = "0.5.2";
 
   src = fetchFromGitHub {
     owner = "cloudflare";
     repo = pname;
-    rev = "b040eb4fd1591b1d5ceb07c6cbb0856553f50adc";
-    sha256 = "04i53dvxld2a0xzr0gfl895rcwfvisj1rfs7rl0444gml8s8xyb3";
+    rev = "boringtun-cli-${version}";
+    sha256 = "sha256-PY7yqBNR4CYh8Y/vk4TYxxJnnv0eig8sjXp4dR4CX04=";
   };
 
-  cargoSha256 = "0mqgd5r3rdzaw3vkmz0rswn3cwq9b4im6g4rrq7wr7pgrzq96xwm";
+  cargoSha256 = "sha256-WFKlfuZGVU5KA57ZYjsIrIwE4B5TeaU5IKt9BNEnWyY=";
 
-  # To prevent configuration phase error that is caused by
-  # lacking a new line in file ".cargo/config",
-  # we append a new line to the end of file.
-  preConfigure = "echo '' >> .cargo/config";
+  buildInputs = lib.optional stdenv.isDarwin darwin.apple_sdk.frameworks.Security;
 
   # Testing this project requires sudo, Docker and network access, etc.
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Userspace WireGuard® implementation in Rust";
-    homepage = https://github.com/cloudflare/boringtun;
+    homepage = "https://github.com/cloudflare/boringtun";
     license = licenses.bsd3;
     maintainers = with maintainers; [ xrelkd ];
     platforms = platforms.linux ++ platforms.darwin;
+    mainProgram = "boringtun-cli";
   };
 }

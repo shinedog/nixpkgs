@@ -1,11 +1,16 @@
-{ lib, fetchzip, makeWrapper, makeDesktopItem, stdenv
-, jre, swt, gtk, libXtst, glib
+{ lib
+, fetchzip
+, makeShellWrapper
+, makeDesktopItem
+, stdenv
+, gtk3
+, libXtst
+, glib
+, zlib
+, wrapGAppsHook3
 }:
 
 let
-  version = "1.5.7";
-  arch = "x86_64";
-
   desktopItem = makeDesktopItem rec {
     name = "TLA+Toolbox";
     exec = "tla-toolbox";
@@ -13,38 +18,57 @@ let
     comment = "IDE for TLA+";
     desktopName = name;
     genericName = comment;
-    categories = "Application;Development";
-    extraEntries = ''
-      StartupWMClass=TLA+ Toolbox
-    '';
+    categories = [ "Development" ];
+    startupWMClass = "TLA+ Toolbox";
   };
 
 
-in stdenv.mkDerivation {
-  name = "tla-toolbox-${version}";
+in
+stdenv.mkDerivation rec {
+  pname = "tla-toolbox";
+  version = "1.7.1";
   src = fetchzip {
-    url = "https://tla.msr-inria.inria.fr/tlatoolbox/products/TLAToolbox-${version}-linux.gtk.${arch}.zip";
-    sha256 = "0lg9sizpw5mkcnwwvmgqigkizjyz2lf1wrg48h7mg7wcv3macy4q";
+    url = "https://tla.msr-inria.inria.fr/tlatoolbox/products/TLAToolbox-${version}-linux.gtk.x86_64.zip";
+    sha256 = "02a2y2mkfab5cczw8g604m61h4xr0apir49zbd1aq6mmgcgngw80";
   };
 
-  buildInputs = [ makeWrapper  ];
+  buildInputs = [ gtk3 ];
 
-  phases = [ "installPhase" ];
+  nativeBuildInputs = [
+    makeShellWrapper
+    wrapGAppsHook3
+  ];
+
+  dontWrapGApps = true;
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p "$out/bin"
     cp -r "$src" "$out/toolbox"
-    chmod +w "$out/toolbox" "$out/toolbox/toolbox"
+    chmod -R +w "$out/toolbox"
+
+    fixupPhase
+    gappsWrapperArgsHook
 
     patchelf \
       --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) \
       "$out/toolbox/toolbox"
 
-    makeWrapper $out/toolbox/toolbox $out/bin/tla-toolbox \
-      --run "set -x; cd $out/toolbox" \
+    patchelf \
+      --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) \
+      --set-rpath "${lib.makeLibraryPath [ zlib ]}:$(patchelf --print-rpath $(find "$out/toolbox" -name java))" \
+      "$(find "$out/toolbox" -name java)"
+
+    patchelf \
+      --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) \
+      "$(find "$out/toolbox" -name jspawnhelper)"
+
+    makeShellWrapper $out/toolbox/toolbox $out/bin/tla-toolbox \
+      --chdir "$out/toolbox" \
       --add-flags "-data ~/.tla-toolbox" \
-      --prefix PATH : "${jre}/bin" \
-      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ swt gtk libXtst glib ]}"
+      --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath [ gtk3 libXtst glib zlib ]}"  \
+      "''${gappsWrapperArgs[@]}"
 
     echo -e "\nCreating TLA Toolbox icons..."
     pushd "$src"
@@ -59,11 +83,14 @@ in stdenv.mkDerivation {
 
     echo -e "\nCreating TLA Toolbox desktop entry..."
     cp -r "${desktopItem}/share/applications"* "$out/share/applications"
+
+    runHook postInstall
   '';
 
   meta = {
-    homepage = http://research.microsoft.com/en-us/um/people/lamport/tla/toolbox.html;
+    homepage = "http://research.microsoft.com/en-us/um/people/lamport/tla/toolbox.html";
     description = "IDE for the TLA+ tools";
+    mainProgram = "tla-toolbox";
     longDescription = ''
       Integrated development environment for the TLA+ tools, based on Eclipse. You can use it
       to create and edit your specs, run the PlusCal translator, view the pretty-printed
@@ -71,7 +98,8 @@ in stdenv.mkDerivation {
     '';
     # http://lamport.azurewebsites.net/tla/license.html
     license = with lib.licenses; [ mit ];
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.badi ];
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    platforms = [ "x86_64-linux" ];
+    maintainers = [ ];
   };
 }

@@ -1,47 +1,64 @@
-{ stdenv, fetchurl, udev, intltool, pkgconfig, glib, xmlto, wrapGAppsHook
+{ lib, stdenv, fetchFromGitHub, udev, pkg-config, glib, xmlto, wrapGAppsHook3
 , docbook_xml_dtd_412, docbook_xsl
-, libxml2, desktop-file-utils, libusb1, cups, gdk_pixbuf, pango, atk, libnotify
-, gobject-introspection, libsecret
-, cups-filters
-, pythonPackages
+, libxml2, desktop-file-utils, libusb1, cups, gdk-pixbuf, pango, atk, libnotify
+, gobject-introspection, libsecret, packagekit
+, cups-filters, gettext, libtool, autoconf-archive
+, python3Packages, autoreconfHook, bash, fetchpatch
 }:
 
 stdenv.mkDerivation rec {
-  name = "system-config-printer-${version}";
-  version = "1.5.11";
+  pname = "system-config-printer";
+  version = "1.5.18";
 
-  src = fetchurl {
-    url = "https://github.com/zdohnal/system-config-printer/releases/download/${version}/${name}.tar.xz";
-    sha256 = "1lq0q51bhanirpjjvvh4xiafi8hgpk8r32h0dj6dn3f32z8pib9q";
+  src = fetchFromGitHub {
+    owner = "openPrinting";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-l3HEnYycP56vZWREWkAyHmcFgtu09dy4Ds65u7eqNZk=";
   };
 
-  patches = [ ./detect_serverbindir.patch ];
+  prePatch = ''
+    # for automake
+    touch README ChangeLog
+    # for tests
+    substituteInPlace Makefile.am --replace /bin/bash ${bash}/bin/bash
+  '';
+
+  patches = [
+    ./detect_serverbindir.patch
+    # fix typeerror, remove on next release
+    (fetchpatch {
+      url = "https://github.com/OpenPrinting/system-config-printer/commit/399b3334d6519639cfe7f1c0457e2475b8ee5230.patch";
+      sha256 = "sha256-JCdGmZk2vRn3X1BDxOJaY3Aw8dr0ODVzi0oY20ZWfRs=";
+      excludes = [ "NEWS" ];
+    })
+  ];
 
   buildInputs = [
     glib udev libusb1 cups
-    pythonPackages.python
-    libnotify gobject-introspection gdk_pixbuf pango atk
+    python3Packages.python
+    libnotify gdk-pixbuf pango atk packagekit
     libsecret
   ];
 
   nativeBuildInputs = [
-    intltool pkgconfig
+    pkg-config gettext libtool autoconf-archive
     xmlto libxml2 docbook_xml_dtd_412 docbook_xsl desktop-file-utils
-    pythonPackages.wrapPython
-    wrapGAppsHook
+    python3Packages.wrapPython
+    wrapGAppsHook3 autoreconfHook gobject-introspection
   ];
 
-  pythonPath = with pythonPackages; requiredPythonModules [ pycups pycurl dbus-python pygobject3 requests pycairo pysmbc ];
+  pythonPath = with python3Packages; requiredPythonModules [ pycups pycurl dbus-python pygobject3 pycairo pysmbc ];
 
   configureFlags = [
     "--with-udev-rules"
-    "--with-udevdir=$(out)/etc/udev"
-    "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
+    "--with-udevdir=${placeholder "out"}/etc/udev"
+    "--with-systemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
   ];
 
   stripDebugList = [ "bin" "lib" "etc/udev" ];
 
-  doCheck = false; # generates shebangs in check phase, too lazy to fix
+  doCheck = true;
 
   postInstall =
     ''
@@ -54,18 +71,15 @@ stdenv.mkDerivation rec {
       find $out/share/system-config-printer -name \*.py -type f -perm -0100 -print0 | while read -d "" f; do
         patchPythonScript "$f"
       done
+      patchPythonScript $out/etc/udev/udev-add-printer
 
-      # The below line will be unneeded when the next upstream release arrives.
-      sed -i -e "s|/usr/local/bin|$out/bin|" "$out/share/dbus-1/services/org.fedoraproject.Config.Printing.service"
-
-      # Manually expand literal "$(out)", which have failed to expand
-      sed -e "s|ExecStart=\$(out)|ExecStart=$out|" \
-          -i "$out/etc/systemd/system/configure-printer@.service"
+      substituteInPlace $out/etc/udev/rules.d/70-printers.rules \
+        --replace "udev-configure-printer" "$out/etc/udev/udev-configure-printer"
     '';
 
   meta = {
-    homepage = http://cyberelk.net/tim/software/system-config-printer/;
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.gpl2;
+    homepage = "https://github.com/openprinting/system-config-printer";
+    platforms = lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
   };
 }

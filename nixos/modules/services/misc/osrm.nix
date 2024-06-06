@@ -21,7 +21,7 @@ in
     };
 
     port = mkOption {
-      type = types.int;
+      type = types.port;
       default = 5000;
       description = "Port on which the web server will run.";
     };
@@ -59,6 +59,7 @@ in
       group = config.users.users.osrm.name;
       description = "OSRM user";
       createHome = false;
+      isSystemUser = true;
     };
 
     users.groups.osrm = { };

@@ -1,27 +1,41 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, makeWrapper
+, mercurial
+, git
+, openssh
+, nixosTests
+}:
 
-buildGoPackage rec {
-  name = "hound-unstable-${version}";
-  version = "2018-11-02";
-  rev = "74ec7448a234d8d09e800b92e52c92e378c07742";
-
-  goPackagePath = "github.com/etsy/hound";
+buildGoModule rec {
+  pname = "hound";
+  version = "0.7.1";
 
   src = fetchFromGitHub {
-    inherit rev;
-    owner = "etsy";
+    owner = "hound-search";
     repo = "hound";
-    sha256 = "0g6nvgqjabprcl9z5ci5frhbam1dzq978h1d6aanf8vvzslfgdpq";
+    rev = "v${version}";
+    sha256 = "sha256-Qdk57zLjTXLdDEmB6K+sZAym5s0BekJJa/CpYeOBOcY=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-0psvz4bnhGuwwSAXvQp0ju0GebxoUyY2Rjp/D43KF78=";
 
-  meta = {
-    inherit (src.meta) homepage;
+  nativeBuildInputs = [ makeWrapper ];
 
+  # requires network access
+  doCheck = false;
+
+  postInstall = ''
+    wrapProgram $out/bin/houndd --prefix PATH : ${lib.makeBinPath [ mercurial git openssh ]}
+  '';
+
+  passthru.tests = { inherit (nixosTests) hound; };
+
+  meta = with lib; {
     description = "Lightning fast code searching made easy";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ grahamc ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://github.com/hound-search/hound";
+    license = licenses.mit;
+    maintainers = with maintainers; [ grahamc SuperSandro2000 ];
   };
 }

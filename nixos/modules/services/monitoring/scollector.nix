@@ -40,18 +40,10 @@ in {
         '';
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.scollector;
-        defaultText = "pkgs.scollector";
-        example = literalExample "pkgs.scollector";
-        description = ''
-          scollector binary to use.
-        '';
-      };
+      package = mkPackageOption pkgs "scollector" { };
 
       user = mkOption {
-        type = types.string;
+        type = types.str;
         default = "scollector";
         description = ''
           User account under which scollector runs.
@@ -59,7 +51,7 @@ in {
       };
 
       group = mkOption {
-        type = types.string;
+        type = types.str;
         default = "scollector";
         description = ''
           Group account under which scollector runs.
@@ -67,7 +59,7 @@ in {
       };
 
       bosunHost = mkOption {
-        type = types.string;
+        type = types.str;
         default = "localhost:8070";
         description = ''
           Host and port of the bosun server that will store the collected
@@ -78,7 +70,7 @@ in {
       collectors = mkOption {
         type = with types; attrsOf (listOf path);
         default = {};
-        example = literalExample "{ \"0\" = [ \"\${postgresStats}/bin/collect-stats\" ]; }";
+        example = literalExpression ''{ "0" = [ "''${postgresStats}/bin/collect-stats" ]; }'';
         description = ''
           An attribute set mapping the frequency of collection to a list of
           binaries that should be executed at that frequency. You can use "0"
@@ -113,13 +105,12 @@ in {
       description = "scollector metrics collector (part of Bosun)";
       wantedBy = [ "multi-user.target" ];
 
-      path = [ pkgs.coreutils pkgs.iproute ];
+      path = [ pkgs.coreutils pkgs.iproute2 ];
 
       serviceConfig = {
-        PermissionsStartOnly = true;
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package.bin}/bin/scollector -conf=${conf} ${lib.concatStringsSep " " cfg.extraOpts}";
+        ExecStart = "${cfg.package}/bin/scollector -conf=${conf} ${lib.concatStringsSep " " cfg.extraOpts}";
       };
     };
 

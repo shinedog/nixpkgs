@@ -1,29 +1,43 @@
-{pkgs}:
+{ lib, pkgs }:
 
-with pkgs;
+let
+  inherit (lib) optionalString;
+
+  inherit (pkgs)
+    autoconf
+    automake
+    checkinstall
+    clang-analyzer
+    cov-build
+    enableGCOVInstrumentation
+    lcov
+    libtool
+    makeGCOVReport
+    runCommand
+    stdenv
+    vmTools
+    xz
+    ;
+in
 
 rec {
 
   sourceTarball = args: import ./source-tarball.nix (
-    { inherit stdenv autoconf automake libtool;
+    { inherit lib stdenv autoconf automake libtool;
     } // args);
 
   makeSourceTarball = sourceTarball; # compatibility
 
   binaryTarball = args: import ./binary-tarball.nix (
-    { inherit stdenv;
-    } // args);
-
-  antBuild = args: import ./ant-build.nix (
-    { inherit pkgs;
+    { inherit lib stdenv;
     } // args);
 
   mvnBuild = args: import ./maven-build.nix (
-    { inherit stdenv;
+    { inherit lib stdenv;
     } // args);
 
   nixBuild = args: import ./nix-build.nix (
-    { inherit stdenv;
+    { inherit lib stdenv;
     } // args);
 
   coverageAnalysis = args: nixBuild (
@@ -41,16 +55,12 @@ rec {
       doCoverityAnalysis = true;
     } // args);
 
-  gcovReport = args: import ./gcov-report.nix (
-    { inherit runCommand lcov rsync;
-    } // args);
-
   rpmBuild = args: import ./rpm-build.nix (
-    { inherit vmTools;
+    { inherit lib vmTools;
     } // args);
 
   debBuild = args: import ./debian-build.nix (
-    { inherit stdenv vmTools checkinstall;
+    { inherit lib stdenv vmTools checkinstall;
     } // args);
 
   aggregate =
@@ -77,7 +87,7 @@ rec {
      its contituents. Channel jobs are a special type of jobs that are
      listed in the channel tab of Hydra and that can be suscribed.
      A tarball of the src attribute is distributed via the channel.
-     
+
      - constituents: a list of derivations on which the channel success depends.
      - name: the channel name that will be used in the hydra interface.
      - src: should point to the root folder of the nix-expressions used by the
@@ -88,7 +98,7 @@ rec {
          name = "my-channel";
          src = ./.;
        };
-     
+
   */
   channel =
     { name, src, constituents ? [], meta ? {}, isNixOS ? true, ... }@args:
@@ -96,9 +106,10 @@ rec {
       preferLocalBuild = true;
       _hydraAggregate = true;
 
-      phases = [ "unpackPhase" "patchPhase" "installPhase" ];
+      dontConfigure = true;
+      dontBuild = true;
 
-      patchPhase = stdenv.lib.optionalString isNixOS ''
+      patchPhase = optionalString isNixOS ''
         touch .update-on-nixos-rebuild
       '';
 

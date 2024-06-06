@@ -1,23 +1,37 @@
-{ stdenv, fetchFromGitHub, cmake, flex, bison }:
-let
-  version = "2.2.3";
-in
-stdenv.mkDerivation {
-  name = "minizinc-${version}";
+{ lib, stdenv, fetchFromGitHub, callPackage, jq, cmake, flex, bison, gecode, mpfr, cbc, zlib }:
 
-  buildInputs = [ cmake flex bison ];
+stdenv.mkDerivation (finalAttrs: {
+  pname = "minizinc";
+  version = "2.8.4";
 
   src = fetchFromGitHub {
     owner = "MiniZinc";
     repo = "libminizinc";
-    rev = "3d66971a0cad6edbe796f4dd940229d38e5bfe3d"; # tags on the repo are disappearing: See https://github.com/MiniZinc/libminizinc/issues/257
-    sha256 = "1q31y9131aj2lsm34srm8i1s0271qcaaknzvym3r8awynm14saq5";
+    rev = finalAttrs.version;
+    sha256 = "sha256-RpqjhjdG8u+gqO5SmKep5JpFhXh5GGX65qA15X+MNA4=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://www.minizinc.org/;
-    description = "MiniZinc is a medium-level constraint modelling language.";
+  nativeBuildInputs = [ bison cmake flex jq ];
 
+  buildInputs = [ gecode mpfr cbc zlib ];
+
+  postInstall = ''
+    mkdir -p $out/share/minizinc/solvers/
+    jq \
+      '.version = "${gecode.version}"
+       | .mznlib = "${gecode}/share/gecode/mznlib"
+       | .executable = "${gecode}/bin/fzn-gecode"' \
+       ${./gecode.msc} \
+       >$out/share/minizinc/solvers/gecode.msc
+  '';
+
+  passthru.tests = {
+    simple = callPackage ./simple-test { };
+  };
+
+  meta = with lib; {
+    homepage = "https://www.minizinc.org/";
+    description = "A medium-level constraint modelling language";
     longDescription = ''
       MiniZinc is a medium-level constraint modelling
       language. It is high-level enough to express most
@@ -25,9 +39,8 @@ stdenv.mkDerivation {
       that it can be mapped onto existing solvers easily and consistently.
       It is a subset of the higher-level language Zinc.
     '';
-
     license = licenses.mpl20;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     maintainers = [ maintainers.sheenobu ];
   };
-}
+})

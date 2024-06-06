@@ -1,4 +1,4 @@
-{ stdenv, appleDerivation, fetchzip, bsdmake, perl, flex, yacc
+{ lib, stdenv, buildPackages, appleDerivation, fetchFromGitHub, bsdmake, perl, flex, bison
 }:
 
 # this derivation sucks
@@ -10,13 +10,16 @@
 #
 # the more recent adv_cmds release is used for everything else in this package
 
-let recentAdvCmds = fetchzip {
-  url = "http://opensource.apple.com/tarballs/adv_cmds/adv_cmds-158.tar.gz";
-  sha256 = "0z081kcprzg5jcvqivfnwvvv6wfxzkjg2jc2lagsf8c7j7vgm8nn";
+let recentAdvCmds = fetchFromGitHub {
+  owner = "apple-oss-distributions";
+  repo = "adv_cmds";
+  rev = "adv_cmds-158";
+  hash = "sha256-1qL69pGHIaefooJJ8eT83XGz9+bW7Yg3k+X9fNkMCHw=";
 };
 
 in appleDerivation {
-  nativeBuildInputs = [ bsdmake perl yacc flex ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ bsdmake perl bison flex ];
   buildInputs = [ flex ];
 
   patchPhase = ''
@@ -29,6 +32,9 @@ in appleDerivation {
 
     substituteInPlace Makefile --replace perl true
 
+    substituteInPlace colldef.tproj/scan.l \
+      --replace 'static orderpass = 0;' 'static int orderpass = 0;'
+
     for subproject in colldef mklocale monetdef msgdef numericdef timedef; do
       substituteInPlace usr-share-locale.tproj/$subproject/BSDmakefile \
         --replace /usr/share/locale "" \
@@ -39,6 +45,10 @@ in appleDerivation {
 
   preBuild = ''
     cp -r --no-preserve=all ${recentAdvCmds}/colldef .
+
+    substituteInPlace colldef/scan.l \
+      --replace 'static orderpass = 0;' 'static int orderpass = 0;'
+
     pushd colldef
     mv locale/collate.h .
     flex -t -8 -i scan.l > scan.c
@@ -61,7 +71,7 @@ in appleDerivation {
 
     bsdmake -C usr-share-locale.tproj
 
-    clang ${recentAdvCmds}/ps/*.c -o ps
+    ${stdenv.cc.targetPrefix}clang ${recentAdvCmds}/ps/*.c -o ps
   '';
 
   installPhase = ''
@@ -85,7 +95,7 @@ in appleDerivation {
   setOutputFlags = false;
 
   meta = {
-    platforms = stdenv.lib.platforms.darwin;
-    maintainers = with stdenv.lib.maintainers; [ gridaphobe ];
+    platforms = lib.platforms.darwin;
+    maintainers = with lib.maintainers; [ gridaphobe ];
   };
 }

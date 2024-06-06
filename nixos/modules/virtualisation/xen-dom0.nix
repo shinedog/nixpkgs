@@ -9,6 +9,11 @@ let
 in
 
 {
+  imports = [
+    (mkRemovedOptionModule [ "virtualisation" "xen" "qemu" ] "You don't need this option anymore, it will work without it.")
+    (mkRenamedOptionModule [ "virtualisation" "xen" "qemu-package" ] [ "virtualisation" "xen" "package-qemu" ])
+  ];
+
   ###### interface
 
   options = {
@@ -17,21 +22,20 @@ in
       mkOption {
         default = false;
         type = types.bool;
-        description =
-          ''
+        description = ''
             Setting this option enables the Xen hypervisor, a
             virtualisation technology that allows multiple virtual
-            machines, known as <emphasis>domains</emphasis>, to run
+            machines, known as *domains*, to run
             concurrently on the physical machine.  NixOS runs as the
-            privileged <emphasis>Domain 0</emphasis>.  This option
+            privileged *Domain 0*.  This option
             requires a reboot to take effect.
           '';
       };
 
     virtualisation.xen.package = mkOption {
       type = types.package;
-      defaultText = "pkgs.xen";
-      example = literalExample "pkgs.xen-light";
+      defaultText = literalExpression "pkgs.xen";
+      example = literalExpression "pkgs.xen-light";
       description = ''
         The package used for Xen binary.
       '';
@@ -40,8 +44,8 @@ in
 
     virtualisation.xen.package-qemu = mkOption {
       type = types.package;
-      defaultText = "pkgs.xen";
-      example = literalExample "pkgs.qemu_xen-light";
+      defaultText = literalExpression "pkgs.xen";
+      example = literalExpression "pkgs.qemu_xen-light";
       description = ''
         The package with qemu binaries for dom0 qemu and xendomains.
       '';
@@ -52,7 +56,8 @@ in
 
     virtualisation.xen.bootParams =
       mkOption {
-        default = "";
+        default = [];
+        type = types.listOf types.str;
         description =
           ''
             Parameters passed to the Xen hypervisor at boot time.
@@ -63,6 +68,7 @@ in
       mkOption {
         default = 0;
         example = 512;
+        type = types.addCheck types.int (n: n >= 0);
         description =
           ''
             Amount of memory (in MiB) allocated to Domain 0 on boot.
@@ -73,6 +79,7 @@ in
     virtualisation.xen.bridge = {
         name = mkOption {
           default = "xenbr0";
+          type = types.str;
           description = ''
               Name of bridge the Xen domUs connect to.
             '';
@@ -91,16 +98,17 @@ in
           default = 16;
           description = ''
             Subnet mask of the bridge interface, specified as the number of
-            bits in the prefix (<literal>24</literal>).
+            bits in the prefix (`24`).
             A DHCP server will provide IP addresses for the whole, remaining
             subnet.
           '';
         };
 
         forwardDns = mkOption {
+          type = types.bool;
           default = false;
           description = ''
-            If set to <literal>true</literal>, the DNS queries from the
+            If set to `true`, the DNS queries from the
             hosts connected to the bridge will be forwarded to the DNS
             servers specified in /etc/resolv.conf .
             '';
@@ -119,7 +127,7 @@ in
 
     virtualisation.xen.domains = {
         extraConfig = mkOption {
-          type = types.string;
+          type = types.lines;
           default = "";
           description =
             ''
@@ -130,14 +138,8 @@ in
           };
       };
 
-    virtualisation.xen.trace =
-      mkOption {
-        default = false;
-        description =
-          ''
-            Enable Xen tracing.
-          '';
-      };
+    virtualisation.xen.trace = mkEnableOption "Xen tracing";
+
   };
 
 
@@ -157,9 +159,6 @@ in
     virtualisation.xen.stored = mkDefault "${cfg.package}/bin/oxenstored";
 
     environment.systemPackages = [ cfg.package ];
-
-    # Make sure Domain 0 gets the required configuration
-    #boot.kernelPackages = pkgs.boot.kernelPackages.override { features={xen_dom0=true;}; };
 
     boot.kernelModules =
       [ "xen-evtchn" "xen-gntdev" "xen-gntalloc" "xen-blkback" "xen-netback"
@@ -201,8 +200,8 @@ in
       ''
         if [ -d /proc/xen ]; then
             ${pkgs.kmod}/bin/modprobe xenfs 2> /dev/null
-            ${pkgs.utillinux}/bin/mountpoint -q /proc/xen || \
-                ${pkgs.utillinux}/bin/mount -t xenfs none /proc/xen
+            ${pkgs.util-linux}/bin/mountpoint -q /proc/xen || \
+                ${pkgs.util-linux}/bin/mount -t xenfs none /proc/xen
         fi
       '';
 
@@ -228,31 +227,24 @@ in
 
 
     environment.etc =
-      [ { source = "${cfg.package}/etc/xen/xl.conf";
-          target = "xen/xl.conf";
-        }
-        { source = "${cfg.package}/etc/xen/scripts";
-          target = "xen/scripts";
-        }
-        { text = ''
-            source ${cfg.package}/etc/default/xendomains
+      {
+        "xen/xl.conf".source = "${cfg.package}/etc/xen/xl.conf";
+        "xen/scripts".source = "${cfg.package}/etc/xen/scripts";
+        "default/xendomains".text = ''
+          source ${cfg.package}/etc/default/xendomains
 
-            ${cfg.domains.extraConfig}
-          '';
-          target = "default/xendomains";
-        }
-      ]
-      ++ lib.optionals (builtins.compareVersions cfg.package.version "4.10" >= 0) [
+          ${cfg.domains.extraConfig}
+        '';
+      }
+      // optionalAttrs (builtins.compareVersions cfg.package.version "4.10" >= 0) {
         # in V 4.10 oxenstored requires /etc/xen/oxenstored.conf to start
-        { source = "${cfg.package}/etc/xen/oxenstored.conf";
-          target = "xen/oxenstored.conf";
-        }
-      ];
+        "xen/oxenstored.conf".source = "${cfg.package}/etc/xen/oxenstored.conf";
+      };
 
     # Xen provides udev rules.
     services.udev.packages = [ cfg.package ];
 
-    services.udev.path = [ pkgs.bridge-utils pkgs.iproute ];
+    services.udev.path = [ pkgs.bridge-utils pkgs.iproute2 ];
 
     systemd.services.xen-store = {
       description = "Xen Store Daemon";
@@ -457,5 +449,4 @@ in
     };
 
   };
-
 }

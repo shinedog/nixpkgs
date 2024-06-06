@@ -1,16 +1,19 @@
-{ stdenv, fetchzip, ocaml }:
+{ lib, stdenv, fetchFromGitHub, ocamlPackages }:
 
-let version = "0.1.10"; in
+stdenv.mkDerivation rec {
+  pname = "obuild";
+  version = "0.1.11";
 
-stdenv.mkDerivation {
-  name = "obuild-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/ocaml-obuild/obuild/archive/obuild-v${version}.tar.gz";
-    sha256 = "15arsgbhk1c39vd8qhpa3pag94m44bwvzggdvkibx6hnpkv8z9bn";
+  src = fetchFromGitHub {
+    owner = "ocaml-obuild";
+    repo = "obuild";
+    rev = "obuild-v${version}";
+    hash = "sha256-me9/FVD7S0uPIpFZzcxDfYKVWn9ifq6JryBAGCo681I=";
   };
 
-  buildInputs = [ ocaml ];
+  strictDeps = true;
+
+  nativeBuildInputs = with ocamlPackages; [ ocaml findlib ];
 
   buildPhase = ''
     patchShebangs ./bootstrap
@@ -23,10 +26,10 @@ stdenv.mkDerivation {
   '';
 
   meta = {
-    homepage = https://github.com/ocaml-obuild/obuild;
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/ocaml-obuild/obuild";
+    inherit (ocamlPackages.ocaml.meta) platforms;
     description = "Simple package build system for OCaml";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = with stdenv.lib.maintainers; [ volth ];
+    license = lib.licenses.lgpl21;
+    maintainers = with lib.maintainers; [ ];
   };
 }

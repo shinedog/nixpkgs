@@ -1,21 +1,26 @@
-{ stdenv, fetchFromGitHub, pythonPackages }:
+{ lib, fetchFromGitHub, python3 }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "git-crecord-${version}";
-  version = "20161216.0";
+python3.pkgs.buildPythonApplication rec {
+  pname = "git-crecord";
+  version = "20230226.0";
 
   src = fetchFromGitHub {
     owner = "andrewshadura";
     repo = "git-crecord";
-    rev = version;
-    sha256 = "0v3y90zi43myyi4k7q3892dcrbyi9dn2q6xgk12nw9db9zil269i";
+    rev = "refs/tags/${version}";
+    sha256 = "sha256-zsrMAD9EU+TvkWfWl9x6WbMXuw7YEz50LxQzSFVkKdQ=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ docutils ];
+  propagatedBuildInputs = with python3.pkgs; [ docutils ];
 
-  meta = {
-    homepage = https://github.com/andrewshadura/git-crecord;
+  # has no tests
+  doCheck = false;
+
+  meta = with lib; {
+    homepage = "https://github.com/andrewshadura/git-crecord";
     description = "Git subcommand to interactively select changes to commit or stage";
-    license = stdenv.lib.licenses.gpl2Plus;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ onny ];
+    mainProgram = "git-crecord";
   };
 }

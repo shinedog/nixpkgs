@@ -1,21 +1,27 @@
-{ stdenvNoCC, gitRepo, cacert, copyPathsToStore }:
+{ lib, stdenvNoCC, gitRepo, cacert, copyPathsToStore }:
 
 { name, manifest, rev ? "HEAD", sha256
 # Optional parameters:
-, repoRepoURL ? "", repoRepoRev ? "", referenceDir ? ""
+, repoRepoURL ? "", repoRepoRev ? "", referenceDir ? "", manifestName ? ""
 , localManifests ? [], createMirror ? false, useArchive ? false
 }:
 
 assert repoRepoRev != "" -> repoRepoURL != "";
 assert createMirror -> !useArchive;
 
-with stdenvNoCC.lib;
-
 let
+  inherit (lib)
+    concatMapStringsSep
+    concatStringsSep
+    fetchers
+    optionalString
+    ;
+
   extraRepoInitFlags = [
     (optionalString (repoRepoURL != "") "--repo-url=${repoRepoURL}")
     (optionalString (repoRepoRev != "") "--repo-branch=${repoRepoRev}")
     (optionalString (referenceDir != "") "--reference=${referenceDir}")
+    (optionalString (manifestName != "") "--manifest-name=${manifestName}")
   ];
 
   repoInitFlags = [
@@ -59,7 +65,7 @@ in stdenvNoCC.mkDerivation {
     ${optionalString (local_manifests != []) ''
       mkdir .repo/local_manifests
       for local_manifest in ${concatMapStringsSep " " toString local_manifests}; do
-        cp $local_manifest .repo/local_manifests/$(stripHash $local_manifest; echo $strippedName)
+        cp $local_manifest .repo/local_manifests/$(stripHash $local_manifest)
       done
     ''}
 

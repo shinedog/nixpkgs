@@ -1,11 +1,11 @@
-{ stdenv, fetchurl, bootstrap_cmds, coreutils, glibc, m4, runtimeShell }:
+{ lib, stdenv, fetchurl, bootstrap_cmds, coreutils, glibc, m4, runtimeShell }:
 
 let
   options = rec {
-    /* TODO: there are also FreeBSD and Windows versions */
+    # TODO: there are also FreeBSD and Windows versions
     x86_64-linux = {
       arch = "linuxx86";
-      sha256 = "0hs1f3z7crgzvinpj990kv9gvbsipxvcvwbmk54n51nasvc5025q";
+      sha256 = "0mhmm8zbk42p2b9amy702365m687k5p0xnz010yqrki6mwyxlkx9";
       runtime = "lx86cl64";
       kernel = "linuxx8664";
     };
@@ -17,24 +17,23 @@ let
     };
     armv7l-linux = {
       arch = "linuxarm";
-      sha256 = "0p0l1dzsygb6i1xxgbipjpxkn46xhq3jm41a34ga1qqp4x8lkr62";
+      sha256 = "1a4y07cmmn1r88b4hl4msb0bvr2fxd2vw9lf7h4j9f7a5rpq7124";
       runtime = "armcl";
       kernel = "linuxarm";
     };
     x86_64-darwin = {
       arch = "darwinx86";
-      sha256 = "5adbea3d8b4a2e29af30d141f781c6613844f468c0ccfa11bae908c3e9641939";
+      sha256 = "1xclnik6pqhkmr15cbqa2n1ddzdf0rs452lyiln3c42nmkf9jjb6";
       runtime = "dx86cl64";
       kernel = "darwinx8664";
     };
     armv6l-linux = armv7l-linux;
   };
-  cfg = options."${stdenv.hostPlatform.system}" or (throw "missing source url for platform ${stdenv.hostPlatform.system}");
-in
+  cfg = options.${stdenv.hostPlatform.system} or (throw "missing source url for platform ${stdenv.hostPlatform.system}");
 
-stdenv.mkDerivation rec {
-  name     = "ccl-${version}";
-  version  = "1.11.5";
+in stdenv.mkDerivation rec {
+  pname = "ccl";
+  version = "1.12.2";
 
   src = fetchurl {
     url = "https://github.com/Clozure/ccl/releases/download/v${version}/ccl-${version}-${cfg.arch}.tar.gz";
@@ -83,11 +82,13 @@ stdenv.mkDerivation rec {
 
   hardeningDisable = [ "format" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Clozure Common Lisp";
-    homepage    = https://ccl.clozure.com/;
-    maintainers = with maintainers; [ raskin muflax tohl ];
+    homepage    = "https://ccl.clozure.com/";
+    maintainers = lib.teams.lisp.members;
     platforms   = attrNames options;
-    license     = licenses.lgpl21;
+    # assembler failures during build, x86_64-darwin broken since 2020-10-14
+    broken      = (stdenv.isDarwin && stdenv.isx86_64);
+    license     = licenses.asl20;
   };
 }

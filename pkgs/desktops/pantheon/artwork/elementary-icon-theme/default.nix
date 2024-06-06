@@ -1,55 +1,59 @@
-{ stdenv, fetchFromGitHub, pantheon, meson, python3,ninja, hicolor-icon-theme, gtk3 }:
+{ lib
+, stdenvNoCC
+, fetchFromGitHub
+, nix-update-script
+, meson
+, ninja
+, hicolor-icon-theme
+, gtk3
+, xcursorgen
+, librsvg
+}:
 
-stdenv.mkDerivation rec {
-  pname = "icons";
-  version = "5.0.3";
-
-  name = "elementary-icon-theme-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "elementary-icon-theme";
+  version = "8.0.0";
 
   src = fetchFromGitHub {
     owner = "elementary";
-    repo = pname;
+    repo = "icons";
     rev = version;
-    sha256 = "0wpv7yirf44bfqfmyshzfw9605j1idm7c9jqg68k3nmymmd6iqzf";
-  };
-
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-      attrPath = "elementary-icon-theme";
-    };
+    sha256 = "sha256-EPmQgE33+HBI78SlCBV3WlyLCP6AggvqsQa7gZuOMRM=";
   };
 
   nativeBuildInputs = [
+    gtk3
+    librsvg
     meson
     ninja
-    python3
+    xcursorgen
   ];
 
-  buildInputs = [ gtk3 ];
+  propagatedBuildInputs = [
+    hicolor-icon-theme
+  ];
 
-  propagatedBuildInputs = [ hicolor-icon-theme ];
+  dontDropIconThemeCache = true;
 
   mesonFlags = [
     "-Dvolume_icons=false" # Tries to install some icons to /
     "-Dpalettes=false" # Don't install gimp and inkscape palette files
   ];
 
-  postPatch = ''
-    chmod +x meson/symlink.py
-    patchShebangs meson/symlink.py
-  '';
-
   postFixup = "gtk-update-icon-cache $out/share/icons/elementary";
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "Named, vector icons for elementary OS";
     longDescription = ''
       An original set of vector icons designed specifically for elementary OS and its desktop environment: Pantheon.
     '';
-    homepage = https://github.com/elementary/icons;
-    license = licenses.gpl3;
+    homepage = "https://github.com/elementary/icons";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+    maintainers = teams.pantheon.members;
   };
 }

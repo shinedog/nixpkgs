@@ -1,41 +1,54 @@
-{ stdenv, fetchFromGitHub, cmake, lxqt-build-tools, qtbase, qttools, qtsvg, qtx11extras, kwindowsystem, liblxqt, libqtxdg }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, kwindowsystem
+, liblxqt
+, libqtxdg
+, lxqt-build-tools
+, qtbase
+, qtsvg
+, qttools
+, qtwayland
+, wrapQtAppsHook
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
   pname = "lxqt-openssh-askpass";
-  version = "0.14.1";
+  version = "2.0.1";
 
   src = fetchFromGitHub {
     owner = "lxqt";
     repo = pname;
     rev = version;
-    sha256 = "04jmvhhlhhspwzj4hfq7fnaa3h7h02z3rlq8p55hzlzkvshqqh1q";
+    hash = "sha256-poTOXVvVUdM6m1mHBgQGS+mVHu6O4iBKQRs0JwpU8X0=";
   };
 
   nativeBuildInputs = [
     cmake
     lxqt-build-tools
+    qttools
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    qtbase
-    qttools
-    qtx11extras
-    qtsvg
     kwindowsystem
     liblxqt
     libqtxdg
+    qtbase
+    qtsvg
+    qtwayland
   ];
 
-  postPatch = ''
-    substituteInPlace CMakeLists.txt \
-      --replace "\''${LXQT_TRANSLATIONS_DIR}" "''${out}/share/lxqt/translations"
-  '';
+  passthru.updateScript = gitUpdater { };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://github.com/lxqt/lxqt-openssh-askpass";
     description = "GUI to query passwords on behalf of SSH agents";
-    homepage = https://github.com/lxqt/lxqt-openssh-askpass;
-    license = licenses.lgpl21;
-    platforms = with platforms; unix;
-    maintainers = with maintainers; [ romildo ];
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = teams.lxqt.members;
+    mainProgram = "lxqt-openssh-askpass";
   };
 }

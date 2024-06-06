@@ -1,46 +1,43 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, bokeh
-, holoviews
-, pandas
-, pytest
-, parameterized
-, nbsmoke
-, flake8
-, coveralls
-, xarray
-, networkx
-, streamz
+{
+  lib,
+  bokeh,
+  buildPythonPackage,
+  colorcet,
+  fetchPypi,
+  holoviews,
+  pandas,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "hvplot";
-  version = "0.4.0";
+  version = "0.9.2";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "bce169cf2d1b3ff9ce607d1787f608758e72a498434eaa2bece31eea1f51963a";
+    hash = "sha256-moyekkkTmqo97l8c6g+TzzY3TReemGcF/N3CuSxHB5M=";
   };
 
-  checkInputs = [ pytest parameterized nbsmoke flake8 coveralls xarray networkx streamz ];
   propagatedBuildInputs = [
     bokeh
+    colorcet
     holoviews
     pandas
   ];
 
-  preCheck = ''
-    export HOME=$(mktemp -d)
-  '';
-
-  # many tests require a network connection
+  # Many tests require a network connection
   doCheck = false;
+
+  pythonImportsCheck = [ "hvplot.pandas" ];
 
   meta = with lib; {
     description = "A high-level plotting API for the PyData ecosystem built on HoloViews";
-    homepage = https://hvplot.pyviz.org;
+    homepage = "https://hvplot.pyviz.org";
+    changelog = "https://github.com/holoviz/hvplot/releases/tag/v${version}";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

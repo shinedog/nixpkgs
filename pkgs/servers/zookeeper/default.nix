@@ -1,55 +1,53 @@
-{ stdenv, fetchurl, jre, makeWrapper, bash, coreutils, runtimeShell }:
-
+{ lib, stdenv, fetchurl, jdk11_headless, makeWrapper, nixosTests, bash, coreutils }:
+let
+  # Latest supported LTS JDK for Zookeeper 3.9:
+  # https://zookeeper.apache.org/doc/r3.9.2/zookeeperAdmin.html#sc_requiredSoftware
+  jre = jdk11_headless;
+in
 stdenv.mkDerivation rec {
-  name = "zookeeper-${version}";
-  version = "3.4.13";
+  pname = "zookeeper";
+  version = "3.9.2";
 
   src = fetchurl {
-    url = "mirror://apache/zookeeper/${name}/${name}.tar.gz";
-    sha256 = "0karf13zks3ba2rdmma2lyabvmasc04cjmgxp227f0nj8677kvbw";
+    url = "mirror://apache/zookeeper/${pname}-${version}/apache-${pname}-${version}-bin.tar.gz";
+    hash = "sha512-K1rgLWGKJ8qM1UkkhV1TRCY7fZ3udgGB+dZrr6kjAyTSrTF4aJXwZUyWncONSj0Ad/dMw3a1i1+i+5S+satEXw==";
   };
 
-  buildInputs = [ makeWrapper jre ];
-
-  phases = ["unpackPhase" "installPhase"];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ jre ];
 
   installPhase = ''
+    runHook preInstall
     mkdir -p $out
-    cp -R conf docs lib ${name}.jar $out
+    cp -R conf docs lib $out
     mkdir -p $out/bin
-    cp -R bin/{zkCli,zkCleanup,zkEnv,zkServer}.sh $out/bin
+    cp -R bin/{zkCli,zkCleanup,zkEnv,zkServer,zkSnapShotToolkit,zkTxnLogToolkit}.sh $out/bin
     patchShebangs $out/bin
-    for i in $out/bin/{zkCli,zkCleanup,zkServer}.sh; do
+    substituteInPlace $out/bin/zkServer.sh \
+        --replace-fail /bin/echo ${coreutils}/bin/echo
+    for i in $out/bin/{zkCli,zkCleanup,zkServer,zkSnapShotToolkit,zkTxnLogToolkit}.sh; do
       wrapProgram $i \
         --set JAVA_HOME "${jre}" \
         --prefix PATH : "${bash}/bin"
     done
-    substituteInPlace $out/bin/zkServer.sh \
-        --replace /bin/echo ${coreutils}/bin/echo \
-        --replace "/usr/bin/env bash" ${bash}/bin/bash
     chmod -x $out/bin/zkEnv.sh
-
-    mkdir -p $out/share/zooinspector
-    cp -r contrib/ZooInspector/{${name}-ZooInspector.jar,icons,lib,config} $out/share/zooinspector
-
-    classpath="$out/${name}.jar:$out/share/zooinspector/${name}-ZooInspector.jar"
-    for jar in $out/lib/*.jar $out/share/zooinspector/lib/*.jar; do
-      classpath="$classpath:$jar"
-    done
-
-    cat << EOF > $out/bin/zooInspector.sh
-    #!${runtimeShell}
-    cd $out/share/zooinspector
-    exec ${jre}/bin/java -cp $classpath org.apache.zookeeper.inspector.ZooInspector
-    EOF
-    chmod +x $out/bin/zooInspector.sh
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://zookeeper.apache.org;
+  passthru = {
+    tests = {
+      nixos = nixosTests.zookeeper;
+    };
+    inherit jre;
+  };
+
+  meta = with lib; {
+    homepage = "https://zookeeper.apache.org";
     description = "Apache Zookeeper";
+    changelog = "https://zookeeper.apache.org/doc/r${version}/releasenotes.html";
     license = licenses.asl20;
-    maintainers = with maintainers; [ nathan-gs cstrahan pradeepchhetri ];
+    maintainers = with maintainers; [ nathan-gs pradeepchhetri ztzg ];
     platforms = platforms.unix;
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
   };
 }

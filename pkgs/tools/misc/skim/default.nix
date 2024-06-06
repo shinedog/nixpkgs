@@ -1,29 +1,37 @@
-{ stdenv, fetchFromGitHub, rustPlatform }:
+{ lib
+, stdenv
+, fetchCrate
+, rustPlatform
+, installShellFiles
+}:
 
 rustPlatform.buildRustPackage rec {
   pname = "skim";
-  version = "0.6.4";
+  version = "0.10.4";
 
-  src = fetchFromGitHub {
-    owner = "lotabout";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0ywrqfxxqv7mpm4szw8n3hcvc4jn9a490j9s7qh3vzqgrsx2sxk3";
+  src = fetchCrate {
+    inherit pname version;
+    sha256 = "sha256-C2yK+SO8Tpw3BxXXu1jeDzYJ2548RZa7NFWaE0SdNJ0=";
   };
+
+  nativeBuildInputs = [ installShellFiles ];
 
   outputs = [ "out" "vim" ];
 
-  cargoSha256 = "0vxyi7f5p9blv1isngvad8jrgpwmmv3dkr39qsb2i217jx3mzj2i";
+  cargoHash = "sha256-jBcgoWbmBOgU7M71lr4OXOe2S6NAXl+I8D+ZtT45Vos=";
 
-  patchPhase = ''
+  postPatch = ''
     sed -i -e "s|expand('<sfile>:h:h')|'$out'|" plugin/skim.vim
   '';
 
   postInstall = ''
     install -D -m 555 bin/sk-tmux -t $out/bin
-    install -D -m 644 man/man1/* -t $out/man/man1
-    install -D -m 444 shell/* -t $out/share/skim
+
     install -D -m 444 plugin/skim.vim -t $vim/plugin
+
+    install -D -m 444 shell/* -t $out/share/skim
+
+    installManPage man/man1/*
 
     cat <<SCRIPT > $out/bin/sk-share
     #! ${stdenv.shell}
@@ -34,11 +42,14 @@ rustPlatform.buildRustPackage rec {
     chmod +x $out/bin/sk-share
   '';
 
-  meta = with stdenv.lib; {
+  # https://github.com/lotabout/skim/issues/440
+  doCheck = !stdenv.isAarch64;
+
+  meta = with lib; {
     description = "Command-line fuzzy finder written in Rust";
-    homepage = https://github.com/lotabout/skim;
+    homepage = "https://github.com/lotabout/skim";
     license = licenses.mit;
+    mainProgram = "sk";
     maintainers = with maintainers; [ dywedir ];
-    platforms = platforms.all;
   };
 }

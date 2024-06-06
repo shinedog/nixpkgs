@@ -1,43 +1,72 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, jupyterlab_server
-, notebook
-, pythonOlder
-, fetchpatch
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  hatch-jupyter-builder,
+  hatchling,
+  async-lru,
+  httpx,
+  packaging,
+  tornado,
+  ipykernel,
+  jupyter-core,
+  jupyter-lsp,
+  jupyterlab-server,
+  jupyter-server,
+  notebook-shim,
+  jinja2,
+  tomli,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "jupyterlab";
-  version = "0.35.4";
-  disabled = pythonOlder "3.5";
+  version = "4.2.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "deba0b2803640fcad72c61366bff11d5945173015961586d5e3b2f629ffeb455";
+    hash = "sha256-oQ+3EIWmkAggxi1DMkAFBGQC/8jw/eaWED43I4qDlQc=";
   };
 
-  propagatedBuildInputs = [ jupyterlab_server notebook ];
-
-  makeWrapperArgs = [
-    "--set" "JUPYTERLAB_DIR" "$out/share/jupyter/lab"
+  build-system = [
+    hatch-jupyter-builder
+    hatchling
   ];
 
-  patches = [
-    (fetchpatch {
-      name = "bump-jupyterlab_server-version";
-      url = https://github.com/jupyterlab/jupyterlab/commit/3b8d451e6f9a4c609e60cde5fbb3cc84aae79951.patch;
-      sha256 = "08vv6rp1k5fbmvj4v9x1d9zb6ymm9pv8ml80j7p45r9fay34rndf";
-    })
+  dependencies = [
+    async-lru
+    httpx
+    packaging
+    tornado
+    ipykernel
+    jupyter-core
+    jupyter-lsp
+    jupyterlab-server
+    jupyter-server
+    notebook-shim
+    jinja2
+  ] ++ lib.optionals (pythonOlder "3.11") [ tomli ];
+
+  makeWrapperArgs = [
+    "--set"
+    "JUPYTERLAB_DIR"
+    "$out/share/jupyter/lab"
   ];
 
   # Depends on npm
   doCheck = false;
 
+  pythonImportsCheck = [ "jupyterlab" ];
+
   meta = with lib; {
-    description = "Jupyter lab environment notebook server extension.";
-    license = with licenses; [ bsd3 ];
+    changelog = "https://github.com/jupyterlab/jupyterlab/blob/v${version}/CHANGELOG.md";
+    description = "Jupyter lab environment notebook server extension";
+    license = licenses.bsd3;
     homepage = "https://jupyter.org/";
-    maintainers = with maintainers; [ zimbatm costrouc ];
+    maintainers = lib.teams.jupyter.members;
+    mainProgram = "jupyter-lab";
   };
 }

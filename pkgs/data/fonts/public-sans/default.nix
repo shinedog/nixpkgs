@@ -1,22 +1,28 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let
-  version = "1.003";
-in fetchzip rec {
-  name = "public-sans-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "public-sans";
+  version = "2.001";
 
-  url = "https://github.com/uswds/public-sans/releases/download/v${version}/public-sans-v${version}.zip";
+  src = fetchzip {
+    url = "https://github.com/uswds/public-sans/releases/download/v${version}/public-sans-v${version}.zip";
+    stripRoot = false;
+    hash = "sha256-XFs/UMXI/kdrW+53t8Mj26+Rn5p+LQ6KW2K2/ShoIag=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share
-    unzip $downloadedFile fonts/{otf,variable}/\*.\[ot\]tf -d $out/share/
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 */*/*.otf -t $out/share/fonts/opentype
+    install -Dm644 */*/*.ttf -t $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
-  sha256 = "02ranwr1bw4n9n1ljw234nzhj2a0hgradniib37nh10maark5wg3";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A strong, neutral, principles-driven, open source typeface for text or display";
-    homepage = https://public-sans.digital.gov/;
+    homepage = "https://public-sans.digital.gov/";
+    changelog = "https://github.com/uswds/public-sans/raw/v${version}/FONTLOG.txt";
     license = licenses.ofl;
     maintainers = with maintainers; [ dtzWill ];
     platforms = platforms.all;

@@ -1,61 +1,83 @@
-{ stdenv, fetchFromGitHub, fetchpatch
-, meson, ninja, pkgconfig, gettext, libxslt, docbook_xsl_ns
-, libcap, nettle, libidn2, openssl, systemd
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, gettext
+, libxslt
+, docbook_xsl_ns
+, libcap
+, libidn2
+, iproute2
+, apparmorRulesFromClosure
 }:
 
-with stdenv.lib;
-
-let
-  time = "20190324";
-  # ninfod probably could build on cross, but the Makefile doesn't pass --host
-  # etc to the sub configure...
-  withNinfod = stdenv.hostPlatform == stdenv.buildPlatform;
-  sunAsIsLicense = {
-    fullName = "AS-IS, SUN MICROSYSTEMS license";
-    url = "https://github.com/iputils/iputils/blob/s${time}/rdisc.c";
-  };
-in stdenv.mkDerivation {
-  name = "iputils-${time}";
+stdenv.mkDerivation rec {
+  pname = "iputils";
+  version = "20240117";
 
   src = fetchFromGitHub {
-    owner = "iputils";
-    repo = "iputils";
-    rev = "s${time}";
-    sha256 = "0b755gv3370c0rrphx14mrsqjb396zqnsm9lsws842a4k4zrqmvi";
+    owner = pname;
+    repo = pname;
+    rev = version;
+    hash = "sha256-sERY8ZKuXiY85cXdNWOm4byiNU7mOVIeA55dgQJHdoE=";
   };
 
-  # ninfod cannot be build with nettle yet:
-  patches =
-    [ ./build-ninfod-with-openssl.patch
-      (fetchpatch { # tracepath: fix musl build, again
-        url = "https://github.com/iputils/iputils/commit/c9aca1b53324bcd1b5a2de5c645813f80eccd016.patch";
-        sha256 = "0faqgkqbi57cyx1zgzzy6xgd24xr0iawix7mjs47j92ra9gw90cz";
-      })
-      (fetchpatch { # doc: Use namespace correctly
-        url = "https://github.com/iputils/iputils/commit/c503834519d21973323980850431101f90e663ef.patch";
-        sha256 = "1yp6b6403ddccbhfzsb36cscxd36d4xb8syc1g02a18xkswiwf09";
-      })
-    ];
+  outputs = [ "out" "apparmor" ];
 
-  mesonFlags =
-    [ "-DUSE_CRYPTO=nettle"
-      "-DBUILD_RARPD=true"
-      "-DBUILD_TRACEROUTE6=true"
-      "-Dsystemdunitdir=etc/systemd/system"
-    ]
-    ++ optional (!withNinfod) "-DBUILD_NINFOD=false"
-    # Disable idn usage w/musl (https://github.com/iputils/iputils/pull/111):
-    ++ optional stdenv.hostPlatform.isMusl "-DUSE_IDN=false";
+  # We don't have the required permissions inside the build sandbox:
+  # /build/source/build/ping/ping: socket: Operation not permitted
+  doCheck = false;
 
-  nativeBuildInputs = [ meson ninja pkgconfig gettext libxslt.bin docbook_xsl_ns libcap ];
-  buildInputs = [ libcap nettle systemd ]
-    ++ optional (!stdenv.hostPlatform.isMusl) libidn2
-    ++ optional withNinfod openssl; # TODO: Build with nettle
+  mesonFlags = [
+    "-DNO_SETCAP_OR_SUID=true"
+    "-Dsystemdunitdir=etc/systemd/system"
+    "-DINSTALL_SYSTEMD_UNITS=true"
+    "-DSKIP_TESTS=${lib.boolToString (!doCheck)}"
+  ]
+  # Disable idn usage w/musl (https://github.com/iputils/iputils/pull/111):
+  ++ lib.optional stdenv.hostPlatform.isMusl "-DUSE_IDN=false";
 
-  meta = {
-    homepage = https://github.com/iputils/iputils;
+  nativeBuildInputs = [ meson ninja pkg-config gettext libxslt.bin docbook_xsl_ns ];
+  buildInputs = [ libcap ]
+    ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2;
+  nativeCheckInputs = [ iproute2 ];
+
+  postInstall = ''
+    mkdir $apparmor
+    cat >$apparmor/bin.ping <<EOF
+    include <tunables/global>
+    $out/bin/ping {
+      include <abstractions/base>
+      include <abstractions/consoles>
+      include <abstractions/nameservice>
+      include "${apparmorRulesFromClosure { name = "ping"; }
+       ([libcap] ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2)}"
+      include <local/bin.ping>
+      capability net_raw,
+      network inet raw,
+      network inet6 raw,
+      mr $out/bin/ping,
+      r $out/share/locale/**,
+      r @{PROC}/@{pid}/environ,
+    }
+    EOF
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/iputils/iputils";
+    changelog = "https://github.com/iputils/iputils/releases/tag/${version}";
     description = "A set of small useful utilities for Linux networking";
-    license = with licenses; [ gpl2Plus bsd3 sunAsIsLicense ];
+    longDescription = ''
+      A set of small useful utilities for Linux networking including:
+
+      - arping: send ARP REQUEST to a neighbour host
+      - clockdiff: measure clock difference between hosts
+      - ping: send ICMP ECHO_REQUEST to network hosts
+      - tracepath: traces path to a network host discovering MTU along this path
+    '';
+    license = with licenses; [ gpl2Plus bsd3 ];
     platforms = platforms.linux;
     maintainers = with maintainers; [ primeos lheckemann ];
   };

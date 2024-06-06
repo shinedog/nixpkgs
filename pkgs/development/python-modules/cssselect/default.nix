@@ -1,17 +1,39 @@
-{ stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  pytestCheckHook,
+  lxml,
+}:
 
 buildPythonPackage rec {
   pname = "cssselect";
-  version = "1.0.3";
+  version = "1.2.0";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "066d8bc5229af09617e24b3ca4d52f1f9092d9e061931f4184cd572885c23204";
+    sha256 = "666b19839cfaddb9ce9d36bfe4c969132c647b92fc9088c4e23f786b30f1b3dc";
   };
 
-  # AttributeError: 'module' object has no attribute 'tests'
-  doCheck = false;
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [
+    pytestCheckHook
+    lxml
+  ];
+
+  pythonImportsCheck = [ "cssselect" ];
+
+  meta = with lib; {
+    description = "CSS Selectors for Python";
+    homepage = "https://cssselect.readthedocs.io/";
+    changelog = "https://github.com/scrapy/cssselect/v${version}//CHANGES";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ];
   };
 }

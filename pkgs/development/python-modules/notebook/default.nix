@@ -1,73 +1,74 @@
-{ stdenv
-, lib
-, buildPythonPackage
-, fetchPypi
-, nose
-, nose_warnings_filters
-, glibcLocales
-, isPy3k
-, mock
-, jinja2
-, tornado
-, ipython_genutils
-, traitlets
-, jupyter_core
-, jupyter_client
-, nbformat
-, nbconvert
-, ipykernel
-, terminado
-, requests
-, send2trash
-, pexpect
-, prometheus_client
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchPypi,
+  hatch-jupyter-builder,
+  hatchling,
+  jupyter-server,
+  jupyterlab,
+  jupyterlab-server,
+  notebook-shim,
+  tornado,
+  pytest-jupyter,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "notebook";
-  version = "5.7.8";
+  version = "7.2.0";
+  disabled = pythonOlder "3.8";
+
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "573e0ae650c5d76b18b6e564ba6d21bf321d00847de1d215b418acb64f056eb8";
+    hash = "sha256-NKK6SwitXRnskw23SE+3l0aheEvp4aX4IY+a+GVqFB8=";
   };
 
-  LC_ALL = "en_US.utf8";
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace "timeout = 300" ""
+  '';
 
-  checkInputs = [ nose glibcLocales ]
-    ++ (if isPy3k then [ nose_warnings_filters ] else [ mock ]);
-
-  propagatedBuildInputs = [
-    jinja2 tornado ipython_genutils traitlets jupyter_core send2trash
-    jupyter_client nbformat nbconvert ipykernel terminado requests pexpect
-    prometheus_client
+  nativeBuildInputs = [
+    hatch-jupyter-builder
+    hatchling
+    jupyterlab
   ];
 
-  # disable warning_filters
-  preCheck = lib.optionalString (!isPy3k) ''
-    echo "" > setup.cfg
-  '';
+  propagatedBuildInputs = [
+    jupyter-server
+    jupyterlab
+    jupyterlab-server
+    notebook-shim
+    tornado
+  ];
 
-  postPatch = ''
-    # Remove selenium tests
-    rm -rf notebook/tests/selenium
+  nativeCheckInputs = [
+    pytest-jupyter
+    pytestCheckHook
+  ];
 
-  '';
+  pytestFlagsArray = [
+    "-W"
+    "ignore::DeprecationWarning"
+  ];
 
-  checkPhase = ''
-    runHook preCheck
-    mkdir tmp
-    HOME=tmp nosetests -v ${if (stdenv.isDarwin) then ''
-      --exclude test_delete \
-      --exclude test_checkpoints_follow_file
-    ''
-    else ""}
-  '';
+  env = {
+    JUPYTER_PLATFORM_DIRS = 1;
+  };
+
+  # Some of the tests use localhost networking.
+  __darwinAllowLocalNetworking = true;
 
   meta = {
-    description = "The Jupyter HTML notebook is a web-based notebook environment for interactive computing";
-    homepage = https://jupyter.org/;
+    changelog = "https://github.com/jupyter/notebook/blob/v${version}/CHANGELOG.md";
+    description = "Web-based notebook environment for interactive computing";
+    homepage = "https://github.com/jupyter/notebook";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [ fridh globin ];
+    maintainers = lib.teams.jupyter.members;
+    mainProgram = "jupyter-notebook";
   };
 }

@@ -1,23 +1,35 @@
 {
   stdenv, lib, fetchFromGitHub, which,
-  enableStatic ? false,
+  buildPackages, libxcrypt, libiconv,
+  enableStatic ? stdenv.hostPlatform.isStatic,
   enableMinimal ? false,
   extraConfig ? ""
 }:
 
+let
+  inherit (lib) optionals;
+in
+
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "toybox";
-  version = "0.8.0";
+  version = "0.8.11";
 
   src = fetchFromGitHub {
     owner = "landley";
     repo = pname;
     rev = version;
-    sha256 = "00q6vlc06xbhcjcyqkyp66d1pv7qgwhs00gk4vyixhjqh80giwzl";
+    sha256 = "sha256-7izs2C5/czec0Dt3apL8s7luARAlw4PfUFy9Xsxb0zw=";
   };
 
-  buildInputs = lib.optionals enableStatic [ stdenv.cc.libc stdenv.cc.libc.static ];
+  depsBuildBuild = optionals (stdenv.hostPlatform != stdenv.buildPlatform) [ buildPackages.stdenv.cc ];
+  buildInputs = [
+    libxcrypt
+  ] ++ optionals stdenv.isDarwin [
+    libiconv
+  ] ++ optionals (enableStatic && stdenv.cc.libc ? static) [
+    stdenv.cc.libc
+    stdenv.cc.libc.static
+  ];
 
   postPatch = "patchShebangs .";
 
@@ -43,22 +55,22 @@ stdenv.mkDerivation rec {
     make oldconfig
   '';
 
-  makeFlags = [ "PREFIX=$(out)/bin" ] ++ lib.optional enableStatic "LDFLAGS=--static";
+  makeFlags = [ "PREFIX=$(out)/bin" ] ++ optionals enableStatic [ "LDFLAGS=--static" ];
 
-  installTargets = "install_flat";
+  installTargets = [ "install_flat" ];
 
   # tests currently (as of 0.8.0) get stuck in an infinite loop...
   # ...this is fixed in latest git, so doCheck can likely be enabled for next release
   # see https://github.com/landley/toybox/commit/b928ec480cd73fd83511c0f5ca786d1b9f3167c3
   #doCheck = true;
-  checkInputs = [ which ]; # used for tests with checkFlags = [ "DEBUG=true" ];
+  nativeCheckInputs = [ which ]; # used for tests with checkFlags = [ "DEBUG=true" ];
   checkTarget = "tests";
 
-  NIX_CFLAGS_COMPILE = "-Wno-error";
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Lightweight implementation of some Unix command line utilities";
-    homepage = https://landley.net/toybox/;
+    homepage = "https://landley.net/toybox/";
     license = licenses.bsd0;
     platforms = with platforms; linux ++ darwin ++ freebsd;
     maintainers = with maintainers; [ hhm ];

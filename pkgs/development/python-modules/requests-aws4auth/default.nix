@@ -1,28 +1,47 @@
-{ lib, buildPythonPackage, fetchPypi, fetchzip, isPy3k, requests }:
-with lib;
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  httpx,
+  pytestCheckHook,
+  python,
+  pythonOlder,
+  requests,
+  six,
+}:
+
 buildPythonPackage rec {
   pname = "requests-aws4auth";
-  version = "0.9";
+  version = "1.2.3";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0g52a1pm53aqkc9qb5q1m918c1qy6q47c1qz63p5ilynfbs3m5y9";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "tedder";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-9ySuX7eKrSwgxgFoMdnVTsIfpnm9kVcI9AqSb+AsVaU=";
   };
 
-  postPatch = optionalString isPy3k ''
-    sed "s/path_encoding_style/'path_encoding_style'/" \
-      -i requests_aws4auth/service_parameters.py
-  '';
+  propagatedBuildInputs = [
+    requests
+    six
+  ];
 
-  propagatedBuildInputs = [ requests ];
+  passthru.optional-dependencies = {
+    httpx = [ httpx ];
+  };
 
-  # The test fail on Python >= 3 because of module import errors.
-  doCheck = !isPy3k;
+  nativeCheckInputs = [ pytestCheckHook ] ++ passthru.optional-dependencies.httpx;
 
-  meta = {
-    description = "Amazon Web Services version 4 authentication for the Python Requests library.";
-    homepage = https://github.com/sam-washington/requests-aws4auth;
+  pythonImportsCheck = [ "requests_aws4auth" ];
+
+  meta = with lib; {
+    description = "Amazon Web Services version 4 authentication for the Python Requests library";
+    homepage = "https://github.com/sam-washington/requests-aws4auth";
+    changelog = "https://github.com/tedder/requests-aws4auth/releases/tag/v${version}";
     license = licenses.mit;
-    maintainers = [ maintainers.basvandijk ];
+    maintainers = with maintainers; [ basvandijk ];
   };
 }

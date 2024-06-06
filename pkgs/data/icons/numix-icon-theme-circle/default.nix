@@ -1,35 +1,47 @@
-{ stdenv, fetchFromGitHub, gtk3, numix-icon-theme }:
+{ lib, stdenvNoCC, fetchFromGitHub, gtk3, numix-icon-theme, hicolor-icon-theme, gitUpdater }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "numix-icon-theme-circle";
-  version = "19.02.22";
+  version = "24.04.22";
 
   src = fetchFromGitHub {
     owner = "numixproject";
     repo = pname;
     rev = version;
-    sha256 = "10jh633rllp9yjfkjjyf8455n84q7ppxw1kk9dp1rsg4dq327ks7";
+    sha256 = "sha256-FRE3zb/81IEHFFvX+rIDFPVe5vw/hToLqVLkXssMgoA=";
   };
 
-  nativeBuildInputs = [ gtk3 numix-icon-theme ];
+  nativeBuildInputs = [ gtk3 ];
+
+  propagatedBuildInputs = [ numix-icon-theme hicolor-icon-theme ];
+
+  dontDropIconThemeCache = true;
 
   installPhase = ''
-    install -dm 755 $out/share/icons
-    cp -dr --no-preserve='ownership' Numix-Circle{,-Light} $out/share/icons/
-  '';
+    runHook preInstall
 
-  postFixup = ''
+    mkdir -p $out/share/icons
+    cp -a Numix-Circle{,-Light} $out/share/icons
+
+    for panel in $out/share/icons/*/*/panel; do
+      ln -sf $(realpath ${numix-icon-theme}/share/icons/Numix/16/$(readlink $panel)) $panel
+    done
+
     for theme in $out/share/icons/*; do
       gtk-update-icon-cache $theme
     done
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
     description = "Numix icon theme (circle version)";
-    homepage = https://numixproject.github.io;
-    license = licenses.gpl3;
+    homepage = "https://numixproject.github.io";
+    license = licenses.gpl3Only;
     # darwin cannot deal with file names differing only in case
     platforms = platforms.linux;
-    maintainers = with maintainers; [ ];
+    maintainers = with maintainers; [ romildo ];
   };
 }

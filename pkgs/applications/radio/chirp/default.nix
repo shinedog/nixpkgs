@@ -1,36 +1,53 @@
-{ stdenv, fetchurl, libxml2Python, libxslt, makeWrapper
-, pyserial, pygtk }:
+{ lib
+, fetchFromGitHub
+, writeShellScript
+, glib
+, gsettings-desktop-schemas
+, python3
+, unstableGitUpdater
+, wrapGAppsHook3
+}:
 
-stdenv.mkDerivation rec {
-  pname = "chirp-daily";
-  version = "20190304";
+python3.pkgs.buildPythonApplication rec {
+  pname = "chirp";
+  version = "0.4.0-unstable-2024-05-24";
 
-  src = fetchurl {
-    url = "https://trac.chirp.danplanet.com/chirp_daily/daily-${version}/${pname}-${version}.tar.gz";
-    sha256 = "1m18f7j0bdimp0fvs5ms02amd5pzis581hqn38y8qffny4y9f6ij";
+  src = fetchFromGitHub {
+    owner = "kk7ds";
+    repo = "chirp";
+    rev = "e17c021ba4fc39eea8a2a1de37ef04a0d1253090";
+    hash = "sha256-YvIRo7g9fxnlf8og5CM2JLf8DeADVkcHdvb4ppS1veE=";
   };
-
-  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [
-    pyserial pygtk libxml2Python libxslt pyserial
+    glib
+    gsettings-desktop-schemas
+  ];
+  nativeBuildInputs = [
+    wrapGAppsHook3
+  ];
+  propagatedBuildInputs = with python3.pkgs; [
+    future
+    pyserial
+    requests
+    six
+    wxpython
+    yattag
   ];
 
-  installPhase = ''
-    mkdir -p $out/bin $out/share/chirp
-    cp -r . $out/share/chirp/
-    ln -s $out/share/chirp/chirpw $out/bin/chirpw
+  # "running build_ext" fails with no output
+  doCheck = false;
 
-    for file in "$out"/bin/*; do
-      wrapProgram "$file" \
-        --prefix PYTHONPATH : $PYTHONPATH:$(toPythonPath "$out")
-    done
-  '';
+  passthru.updateScript = unstableGitUpdater {
+    tagConverter = writeShellScript "chirp-tag-converter.sh" ''
+      sed -e 's/^release_//g' -e 's/_/./g'
+    '';
+  };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A free, open-source tool for programming your amateur radio";
-    homepage = https://chirp.danplanet.com/;
-    license = licenses.gpl3;
+    homepage = "https://chirp.danplanet.com/";
+    license = licenses.gpl3Plus;
+    maintainers = [ maintainers.emantor ];
     platforms = platforms.linux;
-    maintainers = [ maintainers.the-kenny ];
   };
 }

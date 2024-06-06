@@ -1,38 +1,85 @@
-{ stdenv, fetchFromGitHub
-, cmake, flex, bison
-, libxml2, python
+{ stdenv
+, fetchFromGitHub
+, cmake
+, flex
+, bison
+, libxml2
+, pythonSupport ? stdenv.hostPlatform.hasSharedLibraries, python
+, libusb1
+, avahiSupport ? true, avahi
+, libaio
+, runtimeShell
+, lib
+, pkg-config
+, CFNetwork
+, CoreServices
 }:
 
 stdenv.mkDerivation rec {
-  name = "libiio-${version}";
-  version = "0.18";
+  pname = "libiio";
+  version = "0.24";
+
+  outputs = [ "out" "lib" "dev" ]
+    ++ lib.optional pythonSupport "python";
 
   src = fetchFromGitHub {
-    owner  = "analogdevicesinc";
-    repo   = "libiio";
-    rev    = "refs/tags/v${version}";
-    sha256 = "1cmg3ipam101iy9yncwz2y48idaqaw4fg7i9i4c8vfjisfcycnkk";
+    owner = "analogdevicesinc";
+    repo = "libiio";
+    rev = "v${version}";
+    sha256 = "sha256-c5HsxCdp1cv5BGTQ/8dc8J893zk9ntbfAudLpqoQ1ow=";
   };
 
-  outputs = [ "out" "lib" "dev" "python" ];
+  # Revert after https://github.com/NixOS/nixpkgs/issues/125008 is
+  # fixed properly
+  patches = [ ./cmake-fix-libxml2-find-package.patch ];
 
-  nativeBuildInputs = [ cmake flex bison ];
-  buildInputs = [ libxml2 ];
+  nativeBuildInputs = [
+    cmake
+    flex
+    bison
+    pkg-config
+  ] ++ lib.optionals pythonSupport ([
+    python
+  ] ++ lib.optional python.isPy3k python.pkgs.setuptools);
 
-  postInstall = ''
-    mkdir -p $python/lib/${python.libPrefix}/site-packages/
-    touch $python/lib/${python.libPrefix}/site-packages/
-    cp ../bindings/python/iio.py $python/lib/${python.libPrefix}/site-packages/
+  buildInputs = [
+    libxml2
+    libusb1
+  ] ++ lib.optional avahiSupport avahi
+    ++ lib.optional stdenv.isLinux libaio
+    ++ lib.optionals stdenv.isDarwin [ CFNetwork CoreServices ];
 
-    substitute ../bindings/python/iio.py $python/lib/${python.libPrefix}/site-packages/iio.py \
-      --replace 'libiio.so.0' $lib/lib/libiio.so.0
+  cmakeFlags = [
+    "-DUDEV_RULES_INSTALL_DIR=${placeholder "out"}/lib/udev/rules.d"
+    # osx framework is disabled,
+    # the linux-like directory structure is used for proper output splitting
+    "-DOSX_PACKAGE=off"
+    "-DOSX_FRAMEWORK=off"
+  ] ++ lib.optionals pythonSupport [
+    "-DPython_EXECUTABLE=${python.pythonOnBuildForHost.interpreter}"
+    "-DPYTHON_BINDINGS=on"
+  ] ++ lib.optionals (!avahiSupport) [
+    "-DHAVE_DNS_SD=OFF"
+  ];
+
+  postPatch = ''
+    substituteInPlace libiio.rules.cmakein \
+      --replace /bin/sh ${runtimeShell}
+  '' + lib.optionalString pythonSupport ''
+    # Hardcode path to the shared library into the bindings.
+    sed "s#@libiio@#$lib/lib/libiio${stdenv.hostPlatform.extensions.sharedLibrary}#g" ${./hardcode-library-path.patch} | patch -p1
   '';
 
-  meta = with stdenv.lib; {
+  postInstall = lib.optionalString pythonSupport ''
+    # Move Python bindings into a separate output.
+    moveToOutput ${python.sitePackages} "$python"
+  '';
+
+  meta = with lib; {
     description = "API for interfacing with the Linux Industrial I/O Subsystem";
-    homepage    = https://github.com/analogdevicesinc/libiio;
-    license     = licenses.lgpl21;
-    platforms   = platforms.linux;
+    homepage = "https://github.com/analogdevicesinc/libiio";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux ++ platforms.darwin;
     maintainers = with maintainers; [ thoughtpolice ];
   };
 }

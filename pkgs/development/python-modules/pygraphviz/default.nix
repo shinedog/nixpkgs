@@ -1,37 +1,65 @@
-{ stdenv, buildPythonPackage, fetchPypi, substituteAll, graphviz
-, pkgconfig, doctest-ignore-unicode, mock, nose }:
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  substituteAll,
+  graphviz,
+  coreutils,
+  pkg-config,
+  setuptools,
+  pytest,
+}:
 
 buildPythonPackage rec {
   pname = "pygraphviz";
-  version = "1.3.1";
+  version = "1.13";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "7c294cbc9d88946be671cc0d8602aac176d8c56695c0a7d871eadea75a958408";
+  disabled = pythonOlder "3.10";
+
+  src = fetchFromGitHub {
+    owner = "pygraphviz";
+    repo = "pygraphviz";
+    rev = "refs/tags/pygraphviz-${version}";
+    hash = "sha256-/H7eHgs3jtbgat8//1Y1S3iV5s0UBKW+J+zK+f8qGqI=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ graphviz ];
-  checkInputs = [ doctest-ignore-unicode mock nose ];
-
   patches = [
-    # pygraphviz depends on graphviz being in PATH. This patch always prepends
-    # graphviz to PATH.
+    # pygraphviz depends on graphviz executables and wc being in PATH
     (substituteAll {
-      src = ./graphviz-path.patch;
-      inherit graphviz;
+      src = ./path.patch;
+      path = lib.makeBinPath [
+        graphviz
+        coreutils
+      ];
     })
   ];
 
-  # The tests are currently failing because of a bug in graphviz 2.40.1.
-  # Upstream does not want to skip the relevant tests:
-  # https://github.com/pygraphviz/pygraphviz/pull/129
-  doCheck = false;
+  nativeBuildInputs = [
+    pkg-config
+    setuptools
+  ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ graphviz ];
+
+  nativeCheckInputs = [ pytest ];
+
+  checkPhase = ''
+    runHook preCheck
+    pytest --pyargs pygraphviz
+    runHook postCheck
+  '';
+
+  pythonImportsCheck = [ "pygraphviz" ];
+
+  meta = with lib; {
     description = "Python interface to Graphviz graph drawing package";
-    homepage = https://github.com/pygraphviz/pygraphviz;
+    homepage = "https://github.com/pygraphviz/pygraphviz";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ matthiasbeyer ];
+    maintainers = with maintainers; [
+      matthiasbeyer
+      dotlambda
+    ];
   };
 }

@@ -1,120 +1,266 @@
-{ buildPythonPackage
-, fetchPypi
-, python
-, stdenv
-, pytest
-, glibcLocales
-, cython
-, dateutil
-, scipy
-, moto
-, numexpr
-, pytz
-, xlrd
-, bottleneck
-, sqlalchemy
-, lxml
-, html5lib
-, beautifulsoup4
-, hypothesis
-, openpyxl
-, tables
-, xlwt
-, runtimeShell
-, libcxx ? null
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonAtLeast,
+  pythonOlder,
+
+  # build-system
+  cython,
+  meson-python,
+  meson,
+  oldest-supported-numpy,
+  pkg-config,
+  versioneer,
+  wheel,
+
+  # propagates
+  numpy,
+  python-dateutil,
+  pytz,
+  tzdata,
+
+  # optionals
+  beautifulsoup4,
+  bottleneck,
+  blosc2,
+  fsspec,
+  gcsfs,
+  html5lib,
+  jinja2,
+  lxml,
+  matplotlib,
+  numba,
+  numexpr,
+  odfpy,
+  openpyxl,
+  psycopg2,
+  pyarrow,
+  pymysql,
+  pyqt5,
+  pyreadstat,
+  qtpy,
+  s3fs,
+  scipy,
+  sqlalchemy,
+  tables,
+  tabulate,
+  xarray,
+  xlrd,
+  xlsxwriter,
+  zstandard,
+
+  # tests
+  adv_cmds,
+  glibc,
+  glibcLocales,
+  hypothesis,
+  pytestCheckHook,
+  pytest-xdist,
+  pytest-asyncio,
+  python,
+  runtimeShell,
 }:
 
 let
-  inherit (stdenv.lib) optional optionals optionalString;
-  inherit (stdenv) isDarwin;
+  pandas = buildPythonPackage rec {
+    pname = "pandas";
+    version = "2.2.1";
+    pyproject = true;
 
-in buildPythonPackage rec {
-  pname = "pandas";
-  version = "0.24.2";
+    disabled = pythonOlder "3.9";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "18imlm8xbhcbwy4wa957a1fkamrcb0z988z006jpfda3ki09z4ag";
+    src = fetchFromGitHub {
+      owner = "pandas-dev";
+      repo = "pandas";
+      rev = "refs/tags/v${version}";
+      hash = "sha256-eyVUIYG0KCAEJbh/qZiEjGpdXq7A+2Lab+5bp+7t4cw=";
+    };
+
+    postPatch = ''
+      substituteInPlace pyproject.toml \
+        --replace-fail "Cython==3.0.5" "Cython>=3.0.5" \
+        --replace-fail "meson-python==0.13.1" "meson-python>=0.13.1" \
+        --replace-fail "meson==1.2.1" "meson>=1.2.1"
+    '';
+
+    nativeBuildInputs =
+      [
+        cython
+        meson-python
+        meson
+        numpy
+        pkg-config
+        versioneer
+        wheel
+      ]
+      ++ versioneer.optional-dependencies.toml
+      ++ lib.optionals (pythonOlder "3.12") [ oldest-supported-numpy ];
+
+    enableParallelBuilding = true;
+
+    propagatedBuildInputs = [
+      numpy
+      python-dateutil
+      pytz
+      tzdata
+    ];
+
+    passthru.optional-dependencies =
+      let
+        extras = {
+          aws = [ s3fs ];
+          clipboard = [
+            pyqt5
+            qtpy
+          ];
+          compression = [ zstandard ];
+          computation = [
+            scipy
+            xarray
+          ];
+          excel = [
+            odfpy
+            openpyxl
+            # TODO: pyxlsb
+            xlrd
+            xlsxwriter
+          ];
+          feather = [ pyarrow ];
+          fss = [ fsspec ];
+          gcp = [
+            gcsfs
+            # TODO: pandas-gqb
+          ];
+          hdf5 = [
+            blosc2
+            tables
+          ];
+          html = [
+            beautifulsoup4
+            html5lib
+            lxml
+          ];
+          mysql = [
+            sqlalchemy
+            pymysql
+          ];
+          output_formatting = [
+            jinja2
+            tabulate
+          ];
+          parquet = [ pyarrow ];
+          performance = [
+            bottleneck
+            numba
+            numexpr
+          ];
+          plot = [ matplotlib ];
+          postgresql = [
+            sqlalchemy
+            psycopg2
+          ];
+          spss = [ pyreadstat ];
+          sql-other = [ sqlalchemy ];
+          xml = [ lxml ];
+        };
+      in
+      extras // { all = lib.concatLists (lib.attrValues extras); };
+
+    doCheck = false; # various infinite recursions
+
+    passthru.tests.pytest = pandas.overridePythonAttrs (_: {
+      doCheck = true;
+    });
+
+    nativeCheckInputs =
+      [
+        glibcLocales
+        hypothesis
+        pytest-asyncio
+        pytest-xdist
+        pytestCheckHook
+      ]
+      ++ lib.flatten (lib.attrValues passthru.optional-dependencies)
+      ++ lib.optionals (stdenv.isLinux) [
+        # for locale executable
+        glibc
+      ]
+      ++ lib.optionals (stdenv.isDarwin) [
+        # for locale executable
+        adv_cmds
+      ];
+
+    # don't max out build cores, it breaks tests
+    dontUsePytestXdist = true;
+
+    __darwinAllowLocalNetworking = true;
+
+    pytestFlagsArray = [
+      # https://github.com/pandas-dev/pandas/blob/main/test_fast.sh
+      "-m"
+      "'not single_cpu and not slow and not network and not db and not slow_arm'"
+      # https://github.com/pandas-dev/pandas/issues/54907
+      "--no-strict-data-files"
+      "--numprocesses"
+      "4"
+    ];
+
+    disabledTests =
+      [
+        # AssertionError: Did not see expected warning of class 'FutureWarning'
+        "test_parsing_tzlocal_deprecated"
+      ]
+      ++ lib.optionals (stdenv.isDarwin && stdenv.isAarch64) [
+        # tests/generic/test_finalize.py::test_binops[and_-args4-right] - AssertionError: assert {} == {'a': 1}
+        "test_binops"
+        # These tests are unreliable on aarch64-darwin. See https://github.com/pandas-dev/pandas/issues/38921.
+        "test_rolling"
+      ]
+      ++ lib.optional stdenv.is32bit [
+        # https://github.com/pandas-dev/pandas/issues/37398
+        "test_rolling_var_numerical_issues"
+      ];
+
+    # Tests have relative paths, and need to reference compiled C extensions
+    # so change directory where `import .test` is able to be resolved
+    preCheck =
+      ''
+        export HOME=$TMPDIR
+        export LC_ALL="en_US.UTF-8"
+        cd $out/${python.sitePackages}/pandas
+      ''
+      # TODO: Get locale and clipboard support working on darwin.
+      #       Until then we disable the tests.
+      + lib.optionalString stdenv.isDarwin ''
+        # Fake the impure dependencies pbpaste and pbcopy
+        echo "#!${runtimeShell}" > pbcopy
+        echo "#!${runtimeShell}" > pbpaste
+        chmod a+x pbcopy pbpaste
+        export PATH=$(pwd):$PATH
+      '';
+
+    pythonImportsCheck = [ "pandas" ];
+
+    meta = with lib; {
+      # pandas devs no longer test i686, it's commonly broken
+      # broken = stdenv.isi686;
+      changelog = "https://pandas.pydata.org/docs/whatsnew/index.html";
+      description = "Powerful data structures for data analysis, time series, and statistics";
+      downloadPage = "https://github.com/pandas-dev/pandas";
+      homepage = "https://pandas.pydata.org";
+      license = licenses.bsd3;
+      longDescription = ''
+        Flexible and powerful data analysis / manipulation library for
+        Python, providing labeled data structures similar to R data.frame
+        objects, statistical functions, and much more.
+      '';
+      maintainers = with maintainers; [
+        raskin
+        knedlsepp
+      ];
+    };
   };
-
-  checkInputs = [ pytest glibcLocales moto hypothesis ];
-
-  nativeBuildInputs = [ cython ];
-  buildInputs = optional isDarwin libcxx;
-  propagatedBuildInputs = [
-    dateutil
-    scipy
-    numexpr
-    pytz
-    xlrd
-    bottleneck
-    sqlalchemy
-    lxml
-    html5lib
-    beautifulsoup4
-    openpyxl
-    tables
-    xlwt
-  ];
-
-  # For OSX, we need to add a dependency on libcxx, which provides
-  # `complex.h` and other libraries that pandas depends on to build.
-  postPatch = optionalString isDarwin ''
-    cpp_sdk="${libcxx}/include/c++/v1";
-    echo "Adding $cpp_sdk to the setup.py common_include variable"
-    substituteInPlace setup.py \
-      --replace "['pandas/src/klib', 'pandas/src']" \
-                "['pandas/src/klib', 'pandas/src', '$cpp_sdk']"
-  '';
-
-
-  disabledTests = stdenv.lib.concatMapStringsSep " and " (s: "not " + s) ([
-    # since dateutil 0.6.0 the following fails: test_fallback_plural, test_ambiguous_flags, test_ambiguous_compat
-    # was supposed to be solved by https://github.com/dateutil/dateutil/issues/321, but is not the case
-    "test_fallback_plural"
-    "test_ambiguous_flags"
-    "test_ambiguous_compat"
-    # Locale-related
-    "test_names"
-    "test_dt_accessor_datetime_name_accessors"
-    "test_datetime_name_accessors"
-    # Can't import from test folder
-    "test_oo_optimizable"
-    # Disable IO related tests because IO data is no longer distributed
-    "io"
-    # KeyError Timestamp
-    "test_to_excel"
-  ] ++ optionals isDarwin [
-    "test_locale"
-    "test_clipboard"
-  ]);
-
-  doCheck = !stdenv.isAarch64; # upstream doesn't test this architecture
-
-  checkPhase = ''
-    runHook preCheck
-  ''
-  # TODO: Get locale and clipboard support working on darwin.
-  #       Until then we disable the tests.
-  + optionalString isDarwin ''
-    # Fake the impure dependencies pbpaste and pbcopy
-    echo "#!${runtimeShell}" > pbcopy
-    echo "#!${runtimeShell}" > pbpaste
-    chmod a+x pbcopy pbpaste
-    export PATH=$(pwd):$PATH
-  '' + ''
-    LC_ALL="en_US.UTF-8" py.test $out/${python.sitePackages}/pandas --skip-slow --skip-network -k "$disabledTests"
-    runHook postCheck
-  '';
-
-  meta = {
-    # https://github.com/pandas-dev/pandas/issues/14866
-    # pandas devs are no longer testing i686 so safer to assume it's broken
-    broken = stdenv.isi686;
-    homepage = http://pandas.pydata.org/;
-    description = "Python Data Analysis Library";
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ raskin fridh knedlsepp ];
-    platforms = stdenv.lib.platforms.unix;
-  };
-}
+in
+pandas

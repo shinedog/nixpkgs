@@ -1,71 +1,108 @@
-{
-stdenv, fetchFromGitHub, cmake, makeWrapper
-,qtbase, qttools, python, libGLU_combined
-,libXt, qtx11extras, qtxmlpatterns
+{ lib, stdenv, fetchFromGitLab, fetchurl
+, boost, cmake, ffmpeg, wrapQtAppsHook, qtbase, qtx11extras
+, qttools, qtxmlpatterns, qtsvg, gdal, gfortran, libXt, makeWrapper
+, ninja, mpi, python3, tbb, libGLU, libGL
+, withDocs ? true
 }:
 
-stdenv.mkDerivation rec {
-  name = "paraview-${version}";
-  version = "5.6.0";
+let
+  version = "5.12.0";
 
-  # fetching from GitHub instead of taking an "official" source
-  # tarball because of missing submodules there
-  src = fetchFromGitHub {
-    owner = "Kitware";
-    repo = "ParaView";
+  docFiles = [
+    (fetchurl {
+      url = "https://www.paraview.org/paraview-downloads/download.php?submit=Download&version=v${lib.versions.majorMinor version}&type=data&os=Sources&downloadFile=ParaViewTutorial-${version}.pdf";
+      name = "Tutorial.pdf";
+      hash = "sha256-ETA799peqP9RAjcqPBwVb8egKfQJAuIXNgso+k8o50Q=";
+    })
+    (fetchurl {
+      url = "https://www.paraview.org/paraview-downloads/download.php?submit=Download&version=v${lib.versions.majorMinor version}&type=data&os=Sources&downloadFile=ParaViewGettingStarted-${version}.pdf";
+      name = "GettingStarted.pdf";
+      hash = "sha256-ptPQA8By8Hj0qI5WRtw3ZhklelXeYeJwVaUdfd6msJM=";
+    })
+    (fetchurl {
+      url = "https://www.paraview.org/paraview-downloads/download.php?submit=Download&version=v${lib.versions.majorMinor version}&type=data&os=Sources&downloadFile=ParaViewCatalystGuide-${version}.pdf";
+      name = "CatalystGuide.pdf";
+      hash = "sha256-imRW70lGQX7Gy0AavIHQMVhnn9E2FPpiCdCKt7Jje4w=";
+    })
+  ];
+
+in stdenv.mkDerivation rec {
+  pname = "paraview";
+  inherit version;
+
+  src = fetchFromGitLab {
+    domain = "gitlab.kitware.com";
+    owner = "paraview";
+    repo = "paraview";
     rev = "v${version}";
-    sha256 = "1j13yfdgcv4yzfr449i4c8r4rs1c9zr6qd3igr4vv3ani8zixkzi";
+    hash = "sha256-PAD48IlOU39TosjfTiDz7IjEeYEP/7F75M+8dYBIUxI=";
     fetchSubmodules = true;
   };
 
-  cmakeFlags = [
-    "-DPARAVIEW_ENABLE_PYTHON=ON"
-    "-DPARAVIEW_INSTALL_DEVELOPMENT_FILES=ON"
-    "-DPARAVIEW_ENABLE_EMBEDDED_DOCUMENTATION=OFF"
-    "-DOpenGL_GL_PREFERENCE=GLVND"
-  ];
-
-  # During build, binaries are called that rely on freshly built
-  # libraries.  These reside in build/lib, and are not found by
-  # default.
-  preBuild = ''
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PWD/lib:$PWD/VTK/ThirdParty/vtkm/vtk-m/lib
+  # Find the Qt platform plugin "minimal"
+  preConfigure = ''
+    export QT_PLUGIN_PATH=${qtbase.bin}/${qtbase.qtPluginPrefix}
   '';
 
-  enableParallelBuilding = true;
+  cmakeFlags = [
+    "-DPARAVIEW_ENABLE_FFMPEG=ON"
+    "-DPARAVIEW_ENABLE_GDAL=ON"
+    "-DPARAVIEW_ENABLE_MOTIONFX=ON"
+    "-DPARAVIEW_ENABLE_VISITBRIDGE=ON"
+    "-DPARAVIEW_ENABLE_XDMF3=ON"
+    "-DPARAVIEW_INSTALL_DEVELOPMENT_FILES=ON"
+    "-DPARAVIEW_USE_MPI=ON"
+    "-DPARAVIEW_USE_PYTHON=ON"
+    "-DVTK_SMP_IMPLEMENTATION_TYPE=TBB"
+    "-DVTKm_ENABLE_MPI=ON"
+    "-DCMAKE_INSTALL_LIBDIR=lib"
+    "-DCMAKE_INSTALL_INCLUDEDIR=include"
+    "-DCMAKE_INSTALL_BINDIR=bin"
+    "-DOpenGL_GL_PREFERENCE=GLVND"
+    "-GNinja"
+  ];
 
   nativeBuildInputs = [
     cmake
     makeWrapper
+    ninja
+    gfortran
+    wrapQtAppsHook
   ];
 
   buildInputs = [
-    python
-    python.pkgs.numpy
-    libGLU_combined
+    libGLU
+    libGL
     libXt
+    mpi
+    tbb
+    boost
+    ffmpeg
+    gdal
     qtbase
     qtx11extras
     qttools
     qtxmlpatterns
+    qtsvg
   ];
 
-  # Paraview links into the Python library, resolving symbolic links on the way,
-  # so we need to put the correct sitePackages (with numpy) back on the path
-  postInstall = ''
-    wrapProgram $out/bin/paraview \
-      --set PYTHONPATH "${python.pkgs.numpy}/${python.sitePackages}"
-    wrapProgram $out/bin/pvbatch \
-      --set PYTHONPATH "${python.pkgs.numpy}/${python.sitePackages}"
-    wrapProgram $out/bin/pvpython \
-      --set PYTHONPATH "${python.pkgs.numpy}/${python.sitePackages}"
-  '';
+  postInstall = let docDir = "$out/share/paraview-${lib.versions.majorMinor version}/doc"; in
+    lib.optionalString withDocs ''
+      mkdir -p ${docDir};
+      for docFile in ${lib.concatStringsSep " " docFiles}; do
+        cp $docFile ${docDir}/$(stripHash $docFile);
+      done;
+    '';
 
-  meta = {
-    homepage = http://www.paraview.org/;
+  propagatedBuildInputs = [
+    (python3.withPackages (ps: with ps; [ numpy matplotlib mpi4py ]))
+  ];
+
+  meta = with lib; {
+    homepage = "https://www.paraview.org/";
     description = "3D Data analysis and visualization application";
-    license = stdenv.lib.licenses.free;
-    maintainers = with stdenv.lib.maintainers; [guibert];
-    platforms = with stdenv.lib.platforms; linux;
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ guibert ];
+    platforms = platforms.linux;
   };
 }

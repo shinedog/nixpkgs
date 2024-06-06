@@ -1,9 +1,8 @@
-{ config, lib, pkgs }:
-
-with lib;
+{ config, lib, pkgs, options, ... }:
 
 let
   cfg = config.services.prometheus.exporters.fritzbox;
+  inherit (lib) mkOption types concatStringsSep;
 in
 {
   port = 9133;
@@ -26,9 +25,8 @@ in
   };
   serviceOpts = {
     serviceConfig = {
-      DynamicUser = true;
       ExecStart = ''
-        ${pkgs.prometheus-fritzbox-exporter}/bin/fritzbox_exporter \
+        ${pkgs.prometheus-fritzbox-exporter}/bin/exporter \
           -listen-address ${cfg.listenAddress}:${toString cfg.port} \
           -gateway-address ${cfg.gatewayAddress} \
           -gateway-port ${toString cfg.gatewayPort} \

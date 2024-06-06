@@ -38,7 +38,7 @@ with lib;
         default = "[127.0.0.1]:443";
         description = ''
           The port and interface of the listen endpoint in the
-+         form [HOST]:PORT[+CERT].
+          form [HOST]:PORT[+CERT].
         '';
         apply = toList;
       };
@@ -102,7 +102,10 @@ with lib;
 
     environment.systemPackages = [ pkgs.hitch ];
 
-    users.users.hitch.group = "hitch";
+    users.users.hitch = {
+      group = "hitch";
+      isSystemUser = true;
+    };
     users.groups.hitch = {};
   };
 }

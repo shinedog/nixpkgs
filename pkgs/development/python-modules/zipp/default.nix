@@ -1,31 +1,50 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, setuptools_scm
-, pytest
-, pytest-flake8
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  func-timeout,
+  jaraco-itertools,
+  pythonOlder,
+  setuptools-scm,
 }:
 
-buildPythonPackage rec {
-  pname = "zipp";
-  version = "0.3.3";
+let
+  zipp = buildPythonPackage rec {
+    pname = "zipp";
+    version = "3.18.1";
+    format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "55ca87266c38af6658b84db8cfb7343cdb0bf275f93c7afaea0d8e7a209c7478";
+    disabled = pythonOlder "3.7";
+
+    src = fetchPypi {
+      inherit pname version;
+      hash = "sha256-KITtIufYlh3hyaBRQutpokfxICkbwCBqAKdkLwm1txU=";
+    };
+
+    nativeBuildInputs = [ setuptools-scm ];
+
+    # Prevent infinite recursion with pytest
+    doCheck = false;
+
+    nativeCheckInputs = [
+      func-timeout
+      jaraco-itertools
+    ];
+
+    pythonImportsCheck = [ "zipp" ];
+
+    passthru.tests = {
+      check = zipp.overridePythonAttrs (_: {
+        doCheck = true;
+      });
+    };
+
+    meta = with lib; {
+      description = "Pathlib-compatible object wrapper for zip files";
+      homepage = "https://github.com/jaraco/zipp";
+      license = licenses.mit;
+      maintainers = with maintainers; [ ];
+    };
   };
-
-  nativeBuildInputs = [ setuptools_scm ];
-
-  checkInputs = [ pytest pytest-flake8 ];
-
-  checkPhase = ''
-    pytest
-  '';
-
-  meta = with lib; {
-    description = "Pathlib-compatible object wrapper for zip files";
-    homepage = https://github.com/jaraco/zipp;
-    license = licenses.mit;
-  };
-}
+in
+zipp

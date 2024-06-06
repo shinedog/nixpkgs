@@ -1,53 +1,58 @@
-{ stdenv
-, buildPythonPackage
-, fetchurl
-, vmprof
-, pyqt4
-, scons
-, isPyPy
-, pkgs
+{
+  lib,
+  buildPythonPackage,
+  ccache,
+  fetchFromGitHub,
+  isPyPy,
+  ordered-set,
+  python3,
+  setuptools,
+  zstandard,
+  wheel,
 }:
 
-let
-  # scons is needed but using it requires Python 2.7
-  # Therefore we create a separate env for it.
-  scons = pkgs.python27.withPackages(ps: [ pkgs.scons ]);
-in buildPythonPackage rec {
-  version = "0.6.3";
-  pname = "Nuitka";
+buildPythonPackage rec {
+  pname = "nuitka";
+  version = "2.2.3";
+  pyproject = true;
 
-  # Latest version is not yet on PyPi
-  src = fetchurl {
-    url = "https://github.com/kayhayen/Nuitka/archive/${version}.tar.gz";
-    sha256 = "0nzk6r724dyai33fi7xmc6jn57pkcwqm553vlv0r11blvc92d7pp";
+  src = fetchFromGitHub {
+    owner = "Nuitka";
+    repo = "Nuitka";
+    rev = version;
+    hash = "sha256-nKdCMgA92v9VsSgfktXDbSh3DyKsGlcTjpn0Y7u4rxU=";
   };
 
-  checkInputs = [ vmprof pyqt4 ];
-  nativeBuildInputs = [ scons ];
+  # default lto off for darwin
+  patches = [ ./darwin-lto.patch ];
 
-  postPatch = ''
-    patchShebangs tests/run-tests
-  '' + stdenv.lib.optionalString stdenv.isLinux ''
-    substituteInPlace nuitka/plugins/standard/ImplicitImports.py --replace 'locateDLL("uuid")' '"${pkgs.utillinux.out}/lib/libuuid.so"'
-  '';
+  build-system = [
+    setuptools
+    wheel
+  ];
+  nativeCheckInputs = [ ccache ];
 
-  # We do not want any wrappers here.
-  postFixup = '''';
+  dependencies = [
+    ordered-set
+    zstandard
+  ];
 
   checkPhase = ''
-    tests/run-tests
+    runHook preCheck
+
+    ${python3.interpreter} tests/basics/run_all.py search
+
+    runHook postCheck
   '';
 
-  # Problem with a subprocess (parts)
-  doCheck = false;
+  pythonImportsCheck = [ "nuitka" ];
 
   # Requires CPython
   disabled = isPyPy;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Python compiler with full language support and CPython compatibility";
     license = licenses.asl20;
-    homepage = http://nuitka.net/;
+    homepage = "https://nuitka.net/";
   };
-
 }

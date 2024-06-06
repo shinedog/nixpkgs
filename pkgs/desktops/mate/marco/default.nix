@@ -1,35 +1,71 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, libxml2, libcanberra-gtk3, libgtop, libstartup_notification, gnome3, gtk3, wrapGAppsHook }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, libxml2
+, libcanberra-gtk3
+, libgtop
+, libXdamage
+, libXpresent
+, libXres
+, libstartup_notification
+, gnome
+, glib
+, gtk3
+, mate-desktop
+, mate-settings-daemon
+, wrapGAppsHook3
+, mateUpdateScript
+}:
 
 stdenv.mkDerivation rec {
-  name = "marco-${version}";
-  version = "1.22.1";
+  pname = "marco";
+  version = "1.28.1";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1j7pvq8ndyl2x8jmh95sj69cnf0q9qsjn7lkr3jz6hk103mga82f";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "JJbl5A7pgM1oSUk6w+D4/Q3si4HGdNqNm6GaV38KwuE=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
-    intltool
+    pkg-config
+    gettext
     itstool
-    wrapGAppsHook
+    wrapGAppsHook3
   ];
 
   buildInputs = [
     libxml2
     libcanberra-gtk3
     libgtop
+    libXdamage
+    libXpresent
+    libXres
     libstartup_notification
     gtk3
-    gnome3.zenity
+    gnome.zenity
+    mate-desktop
+    mate-settings-daemon
   ];
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    substituteInPlace src/core/util.c \
+      --replace-fail 'argvl[i++] = "zenity"' 'argvl[i++] = "${gnome.zenity}/bin/zenity"'
+  '';
+
+  env.NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";
+
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "MATE default window manager";
-    homepage = https://github.com/mate-desktop/marco;
-    license = [ licenses.gpl2 ];
+    homepage = "https://github.com/mate-desktop/marco";
+    license = [ licenses.gpl2Plus ];
     platforms = platforms.unix;
-    maintainers = [ maintainers.romildo ];
+    maintainers = teams.mate.members;
   };
 }

@@ -1,25 +1,24 @@
-{ stdenv, fetchurl, libuuid, autoreconfHook }:
+{ lib, stdenv, fetchurl, libuuid, autoreconfHook, e2fsprogs, acl }:
 
-let version = "3.6.24"; in
 stdenv.mkDerivation rec {
-  name = "reiserfsprogs-${version}";
+  pname = "reiserfsprogs";
+  version = "3.6.27";
 
   src = fetchurl {
-    url = "https://www.kernel.org/pub/linux/kernel/people/jeffm/reiserfsprogs/v${version}/${name}.tar.xz";
-    sha256 = "0q07df9wxxih8714a3mdp61h5n347l7j2a0l351acs3xapzgwi3y";
+    url = "https://www.kernel.org/pub/linux/kernel/people/jeffm/reiserfsprogs/v${version}/${pname}-${version}.tar.xz";
+    hash = "sha256-DpW2f6d0ajwtWRRem5wv60pr5ShT6DtJexgurlCOYuM=";
   };
 
-  patches = [ ./reiserfsprogs-ar-fix.patch ];
   nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ libuuid ];
+  buildInputs = [ libuuid e2fsprogs acl ];
 
-  NIX_CFLAGS_COMPILE = "-std=gnu90";
+  env.NIX_CFLAGS_COMPILE = toString [ "-std=gnu90" "-D_GNU_SOURCE" ];
 
   meta = {
     inherit version;
-    homepage = http://www.namesys.com/;
+    homepage = "http://www.namesys.com/";
     description = "ReiserFS utilities";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Only;
+    platforms = lib.platforms.linux;
   };
 }

@@ -1,11 +1,19 @@
-{ stdenv, fetchurl, gettext, bzip2 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, gettext
+, bzip2
+}:
 
 stdenv.mkDerivation rec {
-  name = "sysstat-12.1.4";
+  pname = "sysstat";
+  version = "12.7.4";
 
-  src = fetchurl {
-    url = "http://perso.orange.fr/sebastien.godard/${name}.tar.xz";
-    sha256 = "0vd1v3kdgsfi82mskh18pyv4bb1rjzzai13vga1ms3nkjvv8lqkg";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-ELmSzWnJ8vGwGPwY/5MFp/2gQhMXMjNG4bHtCplfQSc=";
   };
 
   buildInputs = [ gettext ];
@@ -15,18 +23,19 @@ stdenv.mkDerivation rec {
     export PATH_CHKCONFIG=/no-such-program
     export BZIP=${bzip2.bin}/bin/bzip2
     export SYSTEMCTL=systemctl
+    export COMPRESS_MANPG=n
   '';
 
-  makeFlags = "SYSCONFIG_DIR=$(out)/etc IGNORE_FILE_ATTRIBUTES=y CHOWN=true";
-  installTargets = "install_base install_nls install_man";
+  makeFlags = [ "SYSCONFIG_DIR=$(out)/etc" "IGNORE_FILE_ATTRIBUTES=y" "CHOWN=true" ];
+  installTargets = [ "install_base" "install_nls" "install_man" ];
 
   patches = [ ./install.patch ];
 
   meta = {
-    homepage = http://sebastien.godard.pagesperso-orange.fr/;
+    homepage = "http://sebastien.godard.pagesperso-orange.fr/";
     description = "A collection of performance monitoring tools for Linux (such as sar, iostat and pidstat)";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.eelco ];
   };
 }

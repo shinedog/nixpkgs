@@ -1,33 +1,57 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, scipy, ffmpeg-full }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  fetchpatch,
+  ffmpeg-full,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "pydub";
-  version = "0.23.1";
-  # pypi version doesn't include required data files for tests
+  version = "0.25.1";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "jiaaro";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "1v0bghy4j2nnkgf1r8rbz4s7war872asyy08pc0x1iy1qs275i7s";
+    repo = "pydub";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-FTEMT47wPXK5i4ZGjTVAhI/NjJio3F2dbBZzYzClU3c=";
   };
 
+  patches = [
+    # Fix test assertions, https://github.com/jiaaro/pydub/pull/769
+    (fetchpatch {
+      name = "fix-assertions.patch";
+      url = "https://github.com/jiaaro/pydub/commit/66c1bf7813ae8621a71484fdcdf609734c0d8efd.patch";
+      hash = "sha256-3OIzvTgGK3r4/s5y7izHvouB4uJEmjO6cgKvegtTf7A=";
+    })
+  ];
 
-  # disable a test that fails on aarch64 due to rounding errors
-  postPatch = stdenv.lib.optionalString stdenv.isAarch64 ''
-    substituteInPlace test/test.py \
-      --replace "test_overlay_with_gain_change" "notest_overlay_with_gain_change"
-  '';
+  nativeBuildInputs = [ setuptools ];
 
-  checkInputs = [ scipy ffmpeg-full ];
+  nativeCheckInputs = [
+    ffmpeg-full
+    pytestCheckHook
+  ];
 
-  checkPhase = ''
-    python test/test.py
-  '';
+  pythonImportsCheck = [
+    "pydub"
+    "pydub.audio_segment"
+    "pydub.playback"
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Manipulate audio with a simple and easy high level interface.";
-    homepage    = "http://pydub.com/";
-    license     = licenses.mit;
-    platforms   = platforms.all;
+  pytestFlagsArray = [ "test/test.py" ];
+
+  meta = with lib; {
+    description = "Manipulate audio with a simple and easy high level interface";
+    homepage = "http://pydub.com";
+    changelog = "https://github.com/jiaaro/pydub/blob/v${version}/CHANGELOG.md";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

@@ -5,8 +5,6 @@
 
 { config, lib, pkgs, ... }:
 
-with lib;
-
 let
   cfg = config.programs.command-not-found;
   commandNotFound = pkgs.substituteAll {
@@ -14,10 +12,8 @@ let
     dir = "bin";
     src = ./command-not-found.pl;
     isExecutable = true;
-    inherit (pkgs) perl;
     inherit (cfg) dbPath;
-    perlFlags = concatStrings (map (path: "-I ${path}/${pkgs.perl.libPrefix} ")
-      [ pkgs.perlPackages.DBI pkgs.perlPackages.DBDSQLite pkgs.perlPackages.StringShellQuote ]);
+    perl = pkgs.perl.withPackages (p: [ p.DBDSQLite p.StringShellQuote ]);
   };
 
 in
@@ -25,8 +21,8 @@ in
 {
   options.programs.command-not-found = {
 
-    enable = mkOption {
-      type = types.bool;
+    enable = lib.mkOption {
+      type = lib.types.bool;
       default = true;
       description = ''
         Whether interactive shells should show which Nix package (if
@@ -34,7 +30,7 @@ in
       '';
     };
 
-    dbPath = mkOption {
+    dbPath = lib.mkOption {
       default = "/nix/var/nix/profiles/per-user/root/channels/nixos/programs.sqlite" ;
       description = ''
         Absolute path to programs.sqlite.
@@ -42,19 +38,19 @@ in
         By default this file will be provided by your channel
         (nixexprs.tar.xz).
       '';
-      type = types.path;
+      type = lib.types.path;
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     programs.bash.interactiveShellInit =
       ''
         # This function is called whenever a command is not found.
         command_not_found_handle() {
-          local p=${commandNotFound}/bin/command-not-found
-          if [ -x $p -a -f ${cfg.dbPath} ]; then
+          local p='${commandNotFound}/bin/command-not-found'
+          if [ -x "$p" ] && [ -f '${cfg.dbPath}' ]; then
             # Run the helper program.
-            $p "$@"
+            "$p" "$@"
             # Retry the command if we just installed it.
             if [ $? = 126 ]; then
               "$@"
@@ -72,14 +68,16 @@ in
       ''
         # This function is called whenever a command is not found.
         command_not_found_handler() {
-          local p=${commandNotFound}/bin/command-not-found
-          if [ -x $p -a -f ${cfg.dbPath} ]; then
+          local p='${commandNotFound}/bin/command-not-found'
+          if [ -x "$p" ] && [ -f '${cfg.dbPath}' ]; then
             # Run the helper program.
-            $p "$@"
+            "$p" "$@"
 
             # Retry the command if we just installed it.
             if [ $? = 126 ]; then
               "$@"
+            else
+              return 127
             fi
           else
             # Indicate than there was an error so ZSH falls back to its default handler

@@ -1,31 +1,45 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, staticOnly ? stdenv.hostPlatform.isStatic
+, testers
+}:
 
 # ?TODO: there's also python lib in there
 
-stdenv.mkDerivation rec {
-  name = "brotli-${version}";
-  version = "1.0.7";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "brotli";
+  version = "1.1.0";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "brotli";
-    rev = "v" + version;
-    sha256 = "1811b55wdfg4kbsjcgh1kc938g118jpvif97ilgrmbls25dfpvvw";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-MvceRcle2dSkkucC2PlsCizsIf8iv95d8Xjqew266wc=";
   };
+
+  patches = [
+    # revert runpath change, breaks curl on darwin:
+    #   https://github.com/NixOS/nixpkgs/pull/254532#issuecomment-1722337476
+    (fetchpatch {
+      name = "revert-runpath.patch";
+      url = "https://github.com/google/brotli/commit/f842c1bcf9264431cd3b15429a72b7dafbe80509.patch";
+      hash = "sha256-W3LY3EjoHP74YsKOOcYQrzo+f0HbooOvEbnOibtN6TM=";
+      revert = true;
+    })
+  ];
 
   nativeBuildInputs = [ cmake ];
 
-  cmakeFlags = [];
+  cmakeFlags = lib.optional staticOnly "-DBUILD_SHARED_LIBS=OFF";
 
   outputs = [ "out" "dev" "lib" ];
 
   doCheck = true;
 
   checkTarget = "test";
-
-  # This breaks on Darwin because our cmake hook tries to make a build folder
-  # and the wonderful bazel BUILD file is already there (yay case-insensitivity?)
-  prePatch = "rm BUILD";
 
   # Don't bother with "man" output for now,
   # it currently only makes the manpages hard to use.
@@ -35,11 +49,11 @@ stdenv.mkDerivation rec {
     cp ../docs/*.3 $out/share/man/man3/
   '';
 
-  meta = with stdenv.lib; {
-    inherit (src.meta) homepage;
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
 
+  meta = with lib; {
+    homepage = "https://github.com/google/brotli";
     description = "A generic-purpose lossless compression algorithm and tool";
-
     longDescription =
       ''  Brotli is a generic-purpose lossless compression algorithm that
           compresses data using a combination of a modern variant of the LZ77
@@ -52,9 +66,13 @@ stdenv.mkDerivation rec {
           in the following internet draft:
           http://www.ietf.org/id/draft-alakuijala-brotli
       '';
-
     license = licenses.mit;
-    maintainers = [ maintainers.vcunat ];
+    maintainers = with maintainers; [ freezeboy ];
+    pkgConfigModules = [
+      "libbrotlidec"
+      "libbrotlienc"
+    ];
     platforms = platforms.all;
+    mainProgram = "brotli";
   };
-}
+})

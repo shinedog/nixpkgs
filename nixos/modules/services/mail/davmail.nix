@@ -7,7 +7,7 @@ let
   cfg = config.services.davmail;
 
   configType = with types;
-    either (either (attrsOf configType) str) (either int bool) // {
+    oneOf [ (attrsOf configType) str int bool ] // {
       description = "davmail config type (str, int, bool or attribute set thereof)";
     };
 
@@ -38,11 +38,11 @@ in
         default = {};
         description = ''
           Davmail configuration. Refer to
-          <link xlink:href="http://davmail.sourceforge.net/serversetup.html"/>
-          and <link xlink:href="http://davmail.sourceforge.net/advanced.html"/>
+          <http://davmail.sourceforge.net/serversetup.html>
+          and <http://davmail.sourceforge.net/advanced.html>
           for details on supported values.
         '';
-        example = literalExample ''
+        example = literalExpression ''
           {
             davmail.allowRemote = true;
             davmail.imapPort = 55555;
@@ -91,6 +91,33 @@ in
           Restart = "on-failure";
           DynamicUser = "yes";
           LogsDirectory = "davmail";
+
+          CapabilityBoundingSet = [ "" ];
+          DeviceAllow = [ "" ];
+          LockPersonality = true;
+          NoNewPrivileges = true;
+          PrivateDevices = true;
+          PrivateTmp = true;
+          PrivateUsers = true;
+          ProtectClock = true;
+          ProtectControlGroups = true;
+          ProtectHome = true;
+          ProtectSystem = "strict";
+          ProtectHostname = true;
+          ProtectKernelLogs = true;
+          ProtectKernelModules = true;
+          ProtectKernelTunables = true;
+          ProtectProc = "invisible";
+          RemoveIPC = true;
+          RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+          RestrictNamespaces = true;
+          RestrictRealtime = true;
+          RestrictSUIDSGID = true;
+          SystemCallArchitectures = "native";
+          SystemCallFilter = "@system-service";
+          SystemCallErrorNumber = "EPERM";
+          UMask = "0077";
+
         };
       };
 

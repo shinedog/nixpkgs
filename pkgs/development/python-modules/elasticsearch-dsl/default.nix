@@ -1,38 +1,40 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, isPy3k
-, elasticsearch
-, ipaddress
-, python-dateutil
-, pytz
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  elasticsearch,
+  python-dateutil,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "elasticsearch-dsl";
-  version = "6.3.1";
+  version = "8.13.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1gh8a0shqi105k325hgwb9avrpdjh0mc6mxwfg9ba7g6lssb702z";
+    sha256 = "sha256-FTMFODQZp+5hulOG9P4iueIHMnmv75c01bWfXKtoL3o=";
   };
 
-  propagatedBuildInputs = [ elasticsearch python-dateutil six ]
-                          ++ stdenv.lib.optional (!isPy3k) ipaddress;
+  propagatedBuildInputs = [
+    elasticsearch
+    python-dateutil
+    six
+  ];
 
   # ImportError: No module named test_elasticsearch_dsl
   # Tests require a local instance of elasticsearch
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "High level Python client for Elasticsearch";
     longDescription = ''
       Elasticsearch DSL is a high-level library whose aim is to help with
       writing and running queries against Elasticsearch. It is built on top of
       the official low-level client (elasticsearch-py).
     '';
-    homepage = https://github.com/elasticsearch/elasticsearch-dsl-py;
+    homepage = "https://github.com/elasticsearch/elasticsearch-dsl-py";
     license = licenses.asl20;
     maintainers = with maintainers; [ desiderius ];
   };

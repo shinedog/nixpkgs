@@ -14,12 +14,7 @@ in {
 
       enable = mkEnableOption "the MonetDB database server";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.monetdb;
-        defaultText = "pkgs.monetdb";
-        description = "MonetDB package to use.";
-      };
+      package = mkPackageOption pkgs "monetdb" { };
 
       user = mkOption {
         type = types.str;

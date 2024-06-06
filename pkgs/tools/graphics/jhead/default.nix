@@ -1,41 +1,50 @@
-{ stdenv, fetchurl, libjpeg }:
+{ lib, stdenv, fetchFromGitHub, libjpeg }:
 
 stdenv.mkDerivation rec {
-  name = "jhead-${version}";
-  version = "3.03";
+  pname = "jhead";
+  version = "3.08";
 
-  src = fetchurl {
-    url = "http://www.sentex.net/~mwandel/jhead/${name}.tar.gz";
-    sha256 = "1hn0yqcicq3qa20h1g313l1a671r8mccpb9gz0w1056r500lw6c2";
+  src = fetchFromGitHub {
+    owner = "Matthias-Wandel";
+    repo = "jhead";
+    rev = version;
+    hash = "sha256-d1cuy4kkwY/21UcpNN6judrFxGVyEH+b+0TaZw9hP2E=";
   };
 
   buildInputs = [ libjpeg ];
 
-  patchPhase = ''
-    substituteInPlace makefile \
-      --replace /usr/local/bin $out/bin
+  makeFlags = [ "CPPFLAGS=" "CFLAGS=-O3" "LDFLAGS=" ];
 
-    substituteInPlace jhead.c \
-      --replace "\"   Compiled: \"__DATE__" "" \
-      --replace "jpegtran -trim" "${libjpeg.bin}/bin/jpegtran -trim"
+  doCheck = true;
+  checkPhase = ''
+    runHook preCheck
+
+    (
+      cd tests
+      patchShebangs runtests pretend-editor
+      ./runtests
+    )
+
+    runHook postCheck
   '';
 
   installPhase = ''
     mkdir -p \
       $out/bin \
       $out/man/man1 \
-      $out/share/doc/${name}
+      $out/share/doc/${pname}-${version}
 
     cp -v jhead $out/bin
     cp -v jhead.1 $out/man/man1
-    cp -v *.txt $out/share/doc/${name}
+    cp -v *.txt $out/share/doc/${pname}-${version}
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.sentex.net/~mwandel/jhead/;
+  meta = with lib; {
+    homepage = "https://www.sentex.net/~mwandel/jhead/";
     description = "Exif Jpeg header manipulation tool";
     license = licenses.publicDomain;
     maintainers = with maintainers; [ rycee ];
     platforms = platforms.all;
+    mainProgram = "jhead";
   };
 }

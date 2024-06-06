@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchpatch, buildPackages, fetchurl, gettext
+{ stdenv, lib, buildPackages, fetchurl, gettext
 , genPosixLockObjOnly ? false
 }: let
   genPosixLockObjOnlyAttrs = lib.optionalAttrs genPosixLockObjOnly {
@@ -17,23 +17,21 @@
   };
 in stdenv.mkDerivation (rec {
   pname = "libgpg-error";
-  version = "1.36";
+  version = "1.48";
 
   src = fetchurl {
     url = "mirror://gnupg/${pname}/${pname}-${version}.tar.bz2";
-    sha256 = "0z696dmhfxm2n6pmr8b857wwljq9h633yi99bhbn7h88f91rigds";
+    sha256 = "sha256-ic4a6JPhIpJLhY3oTcT2eq4p/6YQ6/Zo1apTkEVmPW8=";
   };
 
   postPatch = ''
     sed '/BUILD_TIMESTAMP=/s/=.*/=1970-01-01T00:01+0000/' -i ./configure
-  '' + lib.optionalString (stdenv.hostPlatform.isAarch32 && stdenv.buildPlatform != stdenv.hostPlatform) ''
-    ln -s lock-obj-pub.arm-unknown-linux-gnueabi.h src/syscfg/lock-obj-pub.linux-gnueabihf.h
-  '' + lib.optionalString (stdenv.hostPlatform.isx86_64 && stdenv.hostPlatform.isMusl) ''
-    ln -s lock-obj-pub.x86_64-pc-linux-musl.h src/syscfg/lock-obj-pub.linux-musl.h
-  '' + lib.optionalString (stdenv.hostPlatform.isAarch32 && stdenv.hostPlatform.isMusl) ''
-    ln -s src/syscfg/lock-obj-pub.arm-unknown-linux-gnueabi.h src/syscfg/lock-obj-pub.arm-unknown-linux-musleabihf.h
-    ln -s src/syscfg/lock-obj-pub.arm-unknown-linux-gnueabi.h src/syscfg/lock-obj-pub.linux-musleabihf.h
   '';
+
+  configureFlags = [
+    # See https://dev.gnupg.org/T6257#164567
+    "--enable-install-gpg-error-config"
+  ];
 
   outputs = [ "out" "dev" "info" ];
   outputBin = "dev"; # deps want just the lib, most likely
@@ -44,19 +42,29 @@ in stdenv.mkDerivation (rec {
   nativeBuildInputs = [ gettext ];
 
   postConfigure =
-    lib.optionalString stdenv.isSunOS
     # For some reason, /bin/sh on OpenIndiana leads to this at the end of the
     # `config.status' run:
     #   ./config.status[1401]: shift: (null): bad number
-    # (See <http://hydra.nixos.org/build/2931046/nixlog/1/raw>.)
+    # (See <https://hydra.nixos.org/build/2931046/nixlog/1/raw>.)
     # Thus, re-run it with Bash.
-      "${stdenv.shell} config.status";
+    lib.optionalString stdenv.isSunOS ''
+      ${stdenv.shell} config.status
+    ''
+    # ./configure errorneous decides to use weak symbols on pkgsStatic,
+    # which, together with other defines results in locking functions in
+    # src/posix-lock.c to be no-op, causing tests/t-lock.c to fail.
+    + lib.optionalString stdenv.hostPlatform.isStatic ''
+      sed '/USE_POSIX_THREADS_WEAK/ d' config.h
+      echo '#undef USE_POSIX_THREADS_WEAK' >> config.h
+    '';
 
   doCheck = true; # not cross
 
-  meta = with stdenv.lib; {
-    homepage = https://www.gnupg.org/related_software/libgpg-error/index.html;
+  meta = with lib; {
+    homepage = "https://www.gnupg.org/software/libgpg-error/index.html";
+    changelog = "https://git.gnupg.org/cgi-bin/gitweb.cgi?p=libgpg-error.git;a=blob;f=NEWS;hb=refs/tags/libgpg-error-${version}";
     description = "A small library that defines common error values for all GnuPG components";
+    mainProgram = "gen-posix-lock-obj";
 
     longDescription = ''
       Libgpg-error is a small library that defines common error values
@@ -67,6 +75,6 @@ in stdenv.mkDerivation (rec {
 
     license = licenses.lgpl2Plus;
     platforms = platforms.all;
-    maintainers = [ maintainers.fuuzetsu maintainers.vrthra ];
+    maintainers = [ maintainers.vrthra ];
   };
 } // genPosixLockObjOnlyAttrs)

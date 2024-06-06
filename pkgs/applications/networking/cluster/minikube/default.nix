@@ -1,74 +1,74 @@
-{ stdenv, buildGoPackage, fetchFromGitHub, go-bindata, libvirt, qemu
-, gpgme, makeWrapper, vmnet, python
-, docker-machine-kvm, docker-machine-kvm2
-, extraDrivers ? []
+{ lib
+, stdenv
+, buildGoModule
+, fetchFromGitHub
+, installShellFiles
+, pkg-config
+, which
+, libvirt
+, vmnet
+, withQemu ? false
+, qemu
+, makeWrapper
+, OVMF
 }:
 
-let
-  drivers = stdenv.lib.filter (d: d != null) (extraDrivers
-            ++ stdenv.lib.optionals stdenv.isLinux [ docker-machine-kvm docker-machine-kvm2 ]);
+buildGoModule rec {
+  pname = "minikube";
+  version = "1.33.1";
 
-  binPath = drivers
-            ++ stdenv.lib.optionals stdenv.isLinux ([ libvirt qemu ]);
+  vendorHash = "sha256-VHl6CKPWqahX70GHbZE6SVa8XPfiC912DvsOteH2B0w=";
 
-in buildGoPackage rec {
-  pname   = "minikube";
-  name    = "${pname}-${version}";
-  version = "1.0.0";
-
-  kubernetesVersion = "1.14.0";
-
-  goPackagePath = "k8s.io/minikube";
+  doCheck = false;
 
   src = fetchFromGitHub {
-    owner  = "kubernetes";
-    repo   = "minikube";
-    rev    = "v${version}";
-    sha256 = "170iy0h27gkz2hg485rnawdw069gxwgkwsjmfj5yag2kkgl7gxa3";
+    owner = "kubernetes";
+    repo = "minikube";
+    rev = "v${version}";
+    sha256 = "sha256-z0wNngEzddxpeeLyQVA2yRC5SfYvU5G66V95sVmW6bA=";
   };
+  postPatch =
+    (
+      lib.optionalString (withQemu && stdenv.isDarwin) ''
+        substituteInPlace \
+          pkg/minikube/registry/drvs/qemu2/qemu2.go \
+          --replace "/usr/local/opt/qemu/share/qemu" "${qemu}/share/qemu" \
+          --replace "/opt/homebrew/opt/qemu/share/qemu" "${qemu}/share/qemu"
+      ''
+    ) + (
+      lib.optionalString (withQemu && stdenv.isLinux) ''
+        substituteInPlace \
+          pkg/minikube/registry/drvs/qemu2/qemu2.go \
+          --replace "/usr/share/OVMF/OVMF_CODE.fd" "${OVMF.firmware}" \
+          --replace "/usr/share/AAVMF/AAVMF_CODE.fd" "${OVMF.firmware}"
+      ''
+    );
 
-  buildInputs = [ go-bindata makeWrapper gpgme ] ++ stdenv.lib.optional stdenv.hostPlatform.isDarwin vmnet;
-  subPackages = [ "cmd/minikube" ] ++ stdenv.lib.optional stdenv.hostPlatform.isDarwin "cmd/drivers/hyperkit";
+  nativeBuildInputs = [ installShellFiles pkg-config which makeWrapper ];
 
-  preBuild = ''
-    pushd go/src/${goPackagePath} >/dev/null
+  buildInputs = if stdenv.isDarwin then [ vmnet ] else if stdenv.isLinux then [ libvirt ] else null;
 
-    go-bindata -nomemcopy -o pkg/minikube/assets/assets.go -pkg assets deploy/addons/...
-
-    VERSION_MAJOR=$(grep "^VERSION_MAJOR" Makefile | sed "s/^.*\s//")
-    VERSION_MINOR=$(grep "^VERSION_MINOR" Makefile | sed "s/^.*\s//")
-    ISO_VERSION=v$VERSION_MAJOR.$VERSION_MINOR.0
-    ISO_BUCKET=$(grep "^ISO_BUCKET" Makefile | sed "s/^.*\s//")
-    KUBERNETES_VERSION=${kubernetesVersion}
-
-    export buildFlagsArray="-ldflags=\
-      -X k8s.io/minikube/pkg/version.version=v${version} \
-      -X k8s.io/minikube/pkg/version.isoVersion=$ISO_VERSION \
-      -X k8s.io/minikube/pkg/version.isoPath=$ISO_BUCKET \
-      -X k8s.io/minikube/vendor/k8s.io/client-go/pkg/version.gitVersion=$KUBERNETES_VERSION \
-      -X k8s.io/minikube/vendor/k8s.io/kubernetes/pkg/version.gitVersion=$KUBERNETES_VERSION"
-
-    popd >/dev/null
+  buildPhase = ''
+    make COMMIT=${src.rev}
   '';
 
-  postInstall = ''
-    mkdir -p $bin/share/bash-completion/completions/
-    MINIKUBE_WANTUPDATENOTIFICATION=false MINIKUBE_WANTKUBECTLDOWNLOADMSG=false HOME=$PWD $bin/bin/minikube completion bash > $bin/share/bash-completion/completions/minikube
-    mkdir -p $bin/share/zsh/site-functions/
-    MINIKUBE_WANTUPDATENOTIFICATION=false MINIKUBE_WANTKUBECTLDOWNLOADMSG=false HOME=$PWD $bin/bin/minikube completion zsh > $bin/share/zsh/site-functions/_minikube
+  installPhase = ''
+    install out/minikube -Dt $out/bin
+
+    wrapProgram $out/bin/minikube --set MINIKUBE_WANTUPDATENOTIFICATION false
+    export HOME=$PWD
+
+    for shell in bash zsh fish; do
+      $out/bin/minikube completion $shell > minikube.$shell
+      installShellCompletion minikube.$shell
+    done
   '';
 
-  postFixup = ''
-    wrapProgram $bin/bin/${pname} --prefix PATH : $bin/bin:${stdenv.lib.makeBinPath binPath}
-  '' + stdenv.lib.optionalString stdenv.hostPlatform.isDarwin ''
-    mv $bin/bin/hyperkit $bin/bin/docker-machine-driver-hyperkit
-  '';
-
-  meta = with stdenv.lib; {
-    homepage    = https://github.com/kubernetes/minikube;
+  meta = with lib; {
+    homepage = "https://minikube.sigs.k8s.io";
     description = "A tool that makes it easy to run Kubernetes locally";
-    license     = licenses.asl20;
-    maintainers = with maintainers; [ ebzzry copumpkin vdemeester ];
-    platforms   = with platforms; unix;
+    mainProgram = "minikube";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ ebzzry copumpkin vdemeester atkinschang Chili-Man ];
   };
 }

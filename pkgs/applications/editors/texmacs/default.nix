@@ -1,7 +1,18 @@
-{ stdenv, callPackage,
-  fetchurl, guile_1_8, qt4, zlib, xmodmap, which, makeWrapper, freetype,
-  tex ? null,
+{ lib, stdenv, callPackage, fetchurl,
+  guile_1_8, xmodmap, which, freetype,
+  libjpeg,
+  sqlite,
+  texliveSmall ? null,
   aspell ? null,
+  git ? null,
+  python3 ? null,
+  cmake,
+  pkg-config,
+  wrapQtAppsHook,
+  xdg-utils,
+  qtbase,
+  qtsvg,
+  qtmacextras,
   ghostscriptX ? null,
   extraFonts ? false,
   chineseFonts ? false,
@@ -9,33 +20,79 @@
   koreanFonts ? false }:
 
 let
-  pname = "TeXmacs";
-  version = "1.99.2";
+  pname = "texmacs";
+  version = "2.1.2";
   common = callPackage ./common.nix {
-    inherit tex extraFonts chineseFonts japaneseFonts koreanFonts;
+    inherit extraFonts chineseFonts japaneseFonts koreanFonts;
+    tex = texliveSmall;
   };
 in
 stdenv.mkDerivation {
-  name = "${pname}-${version}";
+  inherit pname version;
 
   src = fetchurl {
-    url = "http://www.texmacs.org/Download/ftp/tmftp/source/TeXmacs-${version}-src.tar.gz";
-    sha256 = "0l48g9746igiaxw657shm8g3xxk565vzsviajlrxqyljbh6py0fs";
+    url = "https://www.texmacs.org/Download/ftp/tmftp/source/TeXmacs-${version}-src.tar.gz";
+    hash = "sha256-Ds9gxOwMYSttEWrawgxLHGxHyMBvt8WmyPIwBP2g/CM=";
   };
 
-  buildInputs = [ guile_1_8 qt4 makeWrapper ghostscriptX freetype ];
-  NIX_LDFLAGS = [ "-lz" ];
+  postPatch = common.postPatch + ''
+    substituteInPlace configure \
+      --replace "-mfpmath=sse -msse2" ""
+  '';
 
-  postInstall = "wrapProgram $out/bin/texmacs --suffix PATH : " +
-        (if ghostscriptX == null then "" else "${ghostscriptX}/bin:") +
-        (if aspell == null then "" else "${aspell}/bin:") +
-        (if tex == null then "" else "${tex}/bin:") +
-        "${xmodmap}/bin:${which}/bin";
+  nativeBuildInputs = [
+    guile_1_8
+    pkg-config
+    wrapQtAppsHook
+    xdg-utils
+    cmake
+  ];
 
-  inherit (common) postPatch;
+  buildInputs = [
+    guile_1_8
+    qtbase
+    qtsvg
+    ghostscriptX
+    freetype
+    libjpeg
+    sqlite
+    git
+    python3
+  ] ++ lib.optionals stdenv.isDarwin [
+    qtmacextras
+  ];
+
+  cmakeFlags = lib.optionals stdenv.isDarwin [
+    (lib.cmakeFeature "TEXMACS_GUI" "Qt")
+    (lib.cmakeFeature "CMAKE_INSTALL_PREFIX" "./TeXmacs.app/Contents/Resources")
+  ];
+
+  env.NIX_LDFLAGS = "-lz";
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/{Applications,bin}
+    mv TeXmacs.app $out/Applications/
+    makeWrapper $out/Applications/TeXmacs.app/Contents/MacOS/TeXmacs $out/bin/texmacs
+  '';
+
+  qtWrapperArgs = [
+    "--suffix" "PATH" ":" (lib.makeBinPath [
+      xmodmap
+      which
+      ghostscriptX
+      aspell
+      texliveSmall
+      git
+      python3
+    ])
+  ];
+
+  postFixup = lib.optionalString (!stdenv.isDarwin) ''
+    wrapQtApp $out/bin/texmacs
+  '';
 
   meta = common.meta // {
-    maintainers = [ stdenv.lib.maintainers.roconnor ];
-    platforms = stdenv.lib.platforms.gnu ++ stdenv.lib.platforms.linux;  # arbitrary choice
+    maintainers = [ lib.maintainers.roconnor ];
+    platforms = lib.platforms.all;
   };
 }

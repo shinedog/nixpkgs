@@ -1,11 +1,11 @@
-{ stdenv, makeWrapper, symlinkJoin, gsignond, gsignondPlugins, plugins }:
+{ makeWrapper, symlinkJoin, gsignond, plugins }:
 
 symlinkJoin {
   name = "gsignond-with-plugins-${gsignond.version}";
 
   paths = [ gsignond ] ++ plugins;
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   postBuild = ''
     wrapProgram $out/bin/gsignond \

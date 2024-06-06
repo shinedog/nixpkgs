@@ -1,25 +1,30 @@
-{ stdenv
+{ lib, stdenv
 , fetchurl
 , glib
-, pkgconfig
+, pkg-config
 , perl
 , gettext
 , gobject-introspection
-, gnome3
+, gnome
 , gtk-doc
+, deterministic-uname
 }:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
   pname = "libgtop";
-  version = "2.40.0";
+  version = "2.41.3";
+
+  outputs = [ "out" "dev" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
-    sha256 = "1m6jbqk8maa52gxrf223442fr5bvvxgb7ham6v039i3r1i62gwvq";
+    url = "mirror://gnome/sources/libgtop/${lib.versions.majorMinor finalAttrs.version}/libgtop-${finalAttrs.version}.tar.xz";
+    hash = "sha256-d1Z235WOLqJFL3Vo8osupYEGPTEnc91cC3Ykwbmy2ow=";
   };
 
   nativeBuildInputs = [
-    pkgconfig
+    # uname output embedded in https://gitlab.gnome.org/GNOME/libgtop/-/blob/master/src/daemon/Makefile.am
+    deterministic-uname
+    pkg-config
     gtk-doc
     perl
     gettext
@@ -31,15 +36,16 @@ stdenv.mkDerivation rec {
   ];
 
   passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = pname;
+    updateScript = gnome.updateScript {
+      packageName = "libgtop";
+      versionPolicy = "odd-unstable";
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library that reads information about processes and the running system";
     license = licenses.gpl2Plus;
-    maintainers = gnome3.maintainers;
+    maintainers = teams.gnome.members;
     platforms = platforms.unix;
   };
-}
+})

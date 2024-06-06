@@ -50,11 +50,12 @@ in {
     };
     port = mkOption {
       description = "the port that elasticsearch is listening on";
-      type = types.int;
+      type = types.port;
       default = 9200;
     };
     actionYAML = mkOption {
       description = "curator action.yaml file contents, alternatively use curator-cli which takes a simple action command";
+      type = types.lines;
       example = ''
         ---
         actions:

@@ -1,30 +1,67 @@
-{ lib, buildPythonPackage, isPy3k, fetchFromGitHub, requests
-, requests-mock, pytest
+{
+  lib,
+  aiohttp,
+  aresponses,
+  buildPythonPackage,
+  certifi,
+  fetchFromGitHub,
+  numpy,
+  poetry-core,
+  pygments,
+  pysmb,
+  pytest-aiohttp,
+  pytest-asyncio,
+  pytestCheckHook,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "pyairvisual";
-  version = "1.0.0";
+  version = "2023.12.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.10";
 
   src = fetchFromGitHub {
     owner = "bachya";
-    repo = pname;
-    rev = "v${version}";
-    sha256 = "0ng6k07n91k5l68zk3hl4fywb33admp84wqdm20qmmw9yc9c64fd";
+    repo = "pyairvisual";
+    rev = "refs/tags/${version}";
+    hash = "sha256-uN31LeHYmg4V6Ln3EQp765nOsN5v56TxjYSS/g6TUCY=";
   };
 
-  checkInputs = [ pytest requests-mock ];
-  propagatedBuildInputs = [ requests ];
+  nativeBuildInputs = [ poetry-core ];
 
-  checkPhase = ''
-    py.test tests
-  '';
+  propagatedBuildInputs = [
+    aiohttp
+    certifi
+    numpy
+    pygments
+    pysmb
+  ];
 
-  disabled = !isPy3k;
+  # this lets tests bind to localhost in sandbox mode on macOS
+  __darwinAllowLocalNetworking = true;
+
+  nativeCheckInputs = [
+    aresponses
+    pytest-aiohttp
+    pytest-asyncio
+    pytestCheckHook
+    pytestCheckHook
+  ];
+
+  disabledTestPaths = [
+    # Ignore the examples directory as the files are prefixed with test_.
+    "examples/"
+  ];
+
+  pythonImportsCheck = [ "pyairvisual" ];
 
   meta = with lib; {
-    description = "A thin Python wrapper for the AirVisual API";
-    license = licenses.mit;
-    homepage = https://github.com/bachya/pyairvisual;
+    description = "Python library for interacting with AirVisual";
+    homepage = "https://github.com/bachya/pyairvisual";
+    changelog = "https://github.com/bachya/pyairvisual/releases/tag/${version}";
+    license = with licenses; [ mit ];
+    maintainers = with maintainers; [ fab ];
   };
 }

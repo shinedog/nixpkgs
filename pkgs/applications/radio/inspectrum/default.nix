@@ -1,37 +1,43 @@
-{ stdenv
+{ lib
+, gnuradio3_8Minimal
+, thrift
 , fetchFromGitHub
-, pkgconfig
+, pkg-config
 , cmake
-, boost
 , fftwFloat
 , qt5
-, gnuradio
 , liquid-dsp
 }:
 
-stdenv.mkDerivation rec {
-  name = "inspectrum-unstable-2017-05-31";
+gnuradio3_8Minimal.pkgs.mkDerivation rec {
+  pname = "inspectrum";
+  version = "0.3.1";
 
   src = fetchFromGitHub {
     owner = "miek";
     repo = "inspectrum";
-    rev = "a89d1337efb31673ccb6a6681bb89c21894c76f7";
-    sha256 = "1fvnr8gca25i6s9mg9b2hyqs0zzr4jicw13mimc9dhrgxklrr1yv";
+    rev = "v${version}";
+    sha256 = "sha256-yY2W2hQpj8TIxiQBSbQHq0J16n74OfIwMDxFt3mLZYc=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [
+  nativeBuildInputs = [
     cmake
-    qt5.qtbase
+    qt5.wrapQtAppsHook
+    pkg-config
+  ];
+  buildInputs = [
     fftwFloat
-    boost
-    gnuradio
     liquid-dsp
+    qt5.qtbase
+  ] ++ lib.optionals (gnuradio3_8Minimal.hasFeature "gr-ctrlport") [
+    thrift
+    gnuradio3_8Minimal.unwrapped.python.pkgs.thrift
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Tool for analysing captured signals from sdr receivers";
-    homepage = https://github.com/miek/inspectrum;
+    mainProgram = "inspectrum";
+    homepage = "https://github.com/miek/inspectrum";
     maintainers = with maintainers; [ mog ];
     platforms = platforms.linux;
     license = licenses.gpl3Plus;

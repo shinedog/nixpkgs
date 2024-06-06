@@ -1,16 +1,17 @@
-{ stdenv, lib, fetchFromGitHub, cmake, pkgconfig, doxygen,
-  libX11, libXinerama, libXrandr, libGLU_combined,
-  glib, ilmbase, libxml2, pcre, zlib,
+{ stdenv, lib, fetchFromGitHub, fetchpatch, fetchurl, cmake, pkg-config, doxygen,
+  libX11, libXinerama, libXrandr, libGLU, libGL,
+  glib, libxml2, pcre, zlib,
+  AGL, Accelerate, Carbon, Cocoa, Foundation,
+  boost,
   jpegSupport ? true, libjpeg,
-  jasperSupport ? true, jasper,
-  exrSupport ? false, openexr,
+  exrSupport ? false, openexr_3,
   gifSupport ? true, giflib,
   pngSupport ? true, libpng,
   tiffSupport ? true, libtiff,
   gdalSupport ? false, gdal,
   curlSupport ? true, curl,
   colladaSupport ? false, opencollada,
-  opencascadeSupport ? false, opencascade,
+  opencascadeSupport ? false, opencascade-occt,
   ffmpegSupport ? false, ffmpeg,
   nvttSupport ? false, nvidia-texture-tools,
   freetypeSupport ? true, freetype,
@@ -20,37 +21,37 @@
   lasSupport ? false, libLAS,
   luaSupport ? false, lua,
   sdlSupport ? false, SDL2,
-  restSupport ? false, asio, boost,
+  restSupport ? false, asio,
   withApps ? false,
-  withExamples ? false, fltk, wxGTK,
+  withExamples ? false, fltk,
 }:
 
 stdenv.mkDerivation rec {
-  name = "openscenegraph-${version}";
-  version = "3.6.3";
+  pname = "openscenegraph";
+  version = "3.6.5";
 
   src = fetchFromGitHub {
     owner = "openscenegraph";
     repo = "OpenSceneGraph";
-    rev = "d011ca4e8d83549a3688bf6bb8cd468dd9684822";
-    sha256 = "0h32z15sa8sbq276j0iib0n707m8bs4p5ji9z2ah411446paad9q";
+    rev = "OpenSceneGraph-${version}";
+    sha256 = "00i14h82qg3xzcyd8p02wrarnmby3aiwmz0z43l50byc9f8i05n1";
   };
 
-  nativeBuildInputs = [ pkgconfig cmake doxygen ];
+  nativeBuildInputs = [ pkg-config cmake doxygen ];
 
-  buildInputs = [
-    libX11 libXinerama libXrandr libGLU_combined
-    glib ilmbase libxml2 pcre zlib
+  buildInputs = lib.optionals (!stdenv.isDarwin) [
+    libX11 libXinerama libXrandr libGLU libGL
+  ] ++ [
+    glib libxml2 pcre zlib
   ] ++ lib.optional jpegSupport libjpeg
-    ++ lib.optional jasperSupport jasper
-    ++ lib.optional exrSupport openexr
+    ++ lib.optional exrSupport openexr_3
     ++ lib.optional gifSupport giflib
     ++ lib.optional pngSupport libpng
     ++ lib.optional tiffSupport libtiff
     ++ lib.optional gdalSupport gdal
     ++ lib.optional curlSupport curl
     ++ lib.optional colladaSupport opencollada
-    ++ lib.optional opencascadeSupport opencascade
+    ++ lib.optional opencascadeSupport opencascade-occt
     ++ lib.optional ffmpegSupport ffmpeg
     ++ lib.optional nvttSupport nvidia-texture-tools
     ++ lib.optional freetypeSupport freetype
@@ -60,19 +61,33 @@ stdenv.mkDerivation rec {
     ++ lib.optional lasSupport libLAS
     ++ lib.optional luaSupport lua
     ++ lib.optional sdlSupport SDL2
-    ++ lib.optionals restSupport [ asio boost ]
-    ++ lib.optionals withExamples [ fltk wxGTK ]
-  ;
+    ++ lib.optional restSupport asio
+    ++ lib.optionals withExamples [ fltk ]
+    ++ lib.optionals (!stdenv.isDarwin) [  ]
+    ++ lib.optionals stdenv.isDarwin [ AGL Accelerate Carbon Cocoa Foundation ]
+    ++ lib.optional (restSupport || colladaSupport) boost
+    ;
 
-  enableParallelBuilding = true;
+  patches = [
+    (fetchpatch {
+      name = "opencascade-api-patch";
+      url = "https://github.com/openscenegraph/OpenSceneGraph/commit/bc2daf9b3239c42d7e51ecd7947d31a92a7dc82b.patch";
+      hash = "sha256-VR8YKOV/YihB5eEGZOGaIfJNrig1EPS/PJmpKsK284c=";
+    })
+    # OpenEXR 3 support: https://github.com/openscenegraph/OpenSceneGraph/issues/1075
+    (fetchurl {
+      url = "https://gitweb.gentoo.org/repo/gentoo.git/plain/dev-games/openscenegraph/files/openscenegraph-3.6.5-openexr3.patch?id=0f642d8f09b589166f0e0c0fc84df7673990bf3f";
+      hash = "sha256-fdNbkg6Vp7DeDBTe5Zso8qJ5v9uPSXHpQ5XlGkvputk=";
+    })
+  ];
 
   cmakeFlags = lib.optional (!withApps) "-DBUILD_OSG_APPLICATIONS=OFF" ++ lib.optional withExamples "-DBUILD_OSG_EXAMPLES=ON";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A 3D graphics toolkit";
-    homepage = http://www.openscenegraph.org/;
-    maintainers = [ maintainers.raskin ];
-    platforms = platforms.linux;
+    homepage = "http://www.openscenegraph.org/";
+    maintainers = with maintainers; [ aanderse raskin ];
+    platforms = with platforms; linux ++ darwin;
     license = "OpenSceneGraph Public License - free LGPL-based license";
   };
 }

@@ -1,6 +1,36 @@
+{ fetchFromGitHub
+, stdenv
+, lib
+, pkg-config
+, autoreconfHook
+, ncurses
+, gnutls
+, readline
+, openssl
+, perl
+, sqlite
+, libjpeg
+, speex
+, pcre
+, libuuid
+, ldns
+, libedit
+, yasm
+, which
+, libsndfile
+, libtiff
+, libxcrypt
+, callPackage
+, SystemConfiguration
+, modules ? null
+, nixosTests
+}:
+
 let
 
-# the default list from v1.8.5, except with applications/mod_signalwire also disabled
+availableModules = callPackage ./modules.nix { };
+
+# the default list from v1.8.7, except with applications/mod_signalwire also disabled
 defaultModules = mods: with mods; [
   applications.commands
   applications.conference
@@ -26,6 +56,9 @@ defaultModules = mods: with mods; [
   codecs.g729
   codecs.h26x
   codecs.opus
+
+  databases.mariadb
+  databases.pgsql
 
   dialplans.asterisk
   dialplans.xml
@@ -57,26 +90,9 @@ defaultModules = mods: with mods; [
   xml_int.cdr
   xml_int.rpc
   xml_int.scgi
-];
+] ++ lib.optionals stdenv.isLinux [ endpoints.gsmopen ];
 
-in
-
-{ fetchurl, stdenv, lib, ncurses, curl, pkgconfig, gnutls, readline
-, openssl, perl, sqlite, libjpeg, speex, pcre
-, ldns, libedit, yasm, which, lua, libopus, libsndfile, libtiff
-
-, modules ? defaultModules
-, postgresql
-, enablePostgres ? true
-
-, SystemConfiguration
-}:
-
-let
-
-availableModules = import ./modules.nix { inherit curl lua libopus; };
-
-enabledModules = modules availableModules;
+enabledModules = (if modules != null then modules else defaultModules) availableModules;
 
 modulesConf = let
   lst = builtins.map (mod: mod.path) enabledModules;
@@ -86,48 +102,72 @@ modulesConf = let
 in
 
 stdenv.mkDerivation rec {
-  name = "freeswitch-1.8.5";
-
-  src = fetchurl {
-    url = "https://files.freeswitch.org/freeswitch-releases/${name}.tar.bz2";
-    sha256 = "00xdrx84pw2v5pw1r5gfbb77nmvlfj275pmd48yfrc9g8c91j1sr";
+  pname = "freeswitch";
+  version = "1.10.11";
+  src = fetchFromGitHub {
+    owner = "signalwire";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-LzGqrXzPED3PoCDnrwUmmSQsvlAucYo2gTkwFausM7A=";
   };
+
   postPatch = ''
     patchShebangs     libs/libvpx/build/make/rtcd.pl
     substituteInPlace libs/libvpx/build/make/configure.sh \
       --replace AS=\''${AS} AS=yasm
+
+    # Disable advertisement banners
+    for f in src/include/cc.h libs/esl/src/include/cc.h; do
+      {
+        echo 'const char *cc = "";'
+        echo 'const char *cc_s = "";'
+      } > $f
+    done
   '';
 
-  nativeBuildInputs = [ pkgconfig ];
+  strictDeps = true;
+  nativeBuildInputs = [ pkg-config autoreconfHook perl which yasm ];
   buildInputs = [
-    openssl ncurses gnutls readline perl libjpeg
-    sqlite pcre speex ldns libedit yasm which
+    openssl ncurses gnutls readline libjpeg
+    sqlite pcre speex ldns libedit
     libsndfile libtiff
+    libuuid libxcrypt
   ]
   ++ lib.unique (lib.concatMap (mod: mod.inputs) enabledModules)
-  ++ lib.optionals enablePostgres [ postgresql ]
   ++ lib.optionals stdenv.isDarwin [ SystemConfiguration ];
 
-  NIX_CFLAGS_COMPILE = "-Wno-error";
+  enableParallelBuilding = true;
+
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
+
+  # Using c++14 because of build error
+  # gsm_at.h:94:32: error: ISO C++17 does not allow dynamic exception specifications
+  CXXFLAGS = "-std=c++14";
+
+  CFLAGS = "-D_ANSI_SOURCE";
 
   hardeningDisable = [ "format" ];
 
-  configureFlags = lib.optionals enablePostgres [ "--enable-core-pgsql-support" ];
-
   preConfigure = ''
+    ./bootstrap.sh
     cp "${modulesConf}" modules.conf
   '';
 
   postInstall = ''
     # helper for compiling modules... not generally useful; also pulls in perl dependency
     rm "$out"/bin/fsxs
+    # include configuration templates
+    cp -r conf $out/share/freeswitch/
   '';
+
+  passthru.tests.freeswitch = nixosTests.freeswitch;
 
   meta = {
     description = "Cross-Platform Scalable FREE Multi-Protocol Soft Switch";
-    homepage = https://freeswitch.org/;
-    license = stdenv.lib.licenses.mpl11;
-    maintainers = with stdenv.lib.maintainers; [ ];
-    platforms = with stdenv.lib.platforms; unix;
+    homepage = "https://freeswitch.org/";
+    license = lib.licenses.mpl11;
+    maintainers = with lib.maintainers; [ mikaelfangel ];
+    platforms = with lib.platforms; unix;
+    broken = stdenv.isDarwin;
   };
 }

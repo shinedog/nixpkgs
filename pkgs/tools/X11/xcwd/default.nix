@@ -1,31 +1,32 @@
-{ stdenv, fetchFromGitHub, libX11 }:
+{ lib, stdenv, fetchFromGitHub, libX11 }:
 
-stdenv.mkDerivation rec {
-  version = "2016-09-30";
-  name = "xcwd-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "xcwd";
+  version = "1.0";
 
   src = fetchFromGitHub {
     owner   = "schischi";
     repo    = "xcwd";
-    rev     = "3f0728b932904985b703b33bd5c936ea96cf15a0";
-    sha256  = "0lwfz6qg7fkiq86skp51vpav33yik22ps4dvr48asv3570skhlf9";
+    rev     = "v${finalAttrs.version}";
+    hash    = "sha256-M6/1H6hI50Cvx40RTKzZXoUui0FGZfwe1IwdaxMJIQo=";
   };
 
   buildInputs = [ libX11 ];
 
-  makeFlags = "prefix=$(out)";
+  makeFlags = [ "prefix=$(out)" ];
 
-  installPhase = ''
-    install -D xcwd "$out/bin/xcwd"
+  preInstall = ''
+    mkdir -p $out/bin
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
     description = ''
-      A simple tool which print the current working directory of the currently focused window
+      A simple tool which prints the current working directory of the currently focused window
     '';
-    homepage = https://github.com/schischi/xcwd;
-    maintainers = [ maintainers.grburst ];
-    license = licenses.bsd3;
-    platforms = platforms.linux;
+    homepage = "https://github.com/schischi/xcwd";
+    license = lib.licenses.bsd3;
+    mainProgram = "xcwd";
+    maintainers = [ lib.maintainers.grburst ];
+    platforms = lib.platforms.linux;
   };
-}
+})

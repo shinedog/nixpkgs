@@ -1,11 +1,13 @@
-{ stdenv
-, buildPythonPackage
-, fetchgit
+{
+  lib,
+  buildPythonPackage,
+  fetchgit,
 }:
 
-buildPythonPackage rec {
+buildPythonPackage {
   pname = "pyfantom";
   version = "unstable-2013-12-18";
+  format = "setuptools";
 
   src = fetchgit {
     url = "http://git.ni.fr.eu.org/pyfantom.git";
@@ -15,10 +17,9 @@ buildPythonPackage rec {
   # No tests included
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = http://pyfantom.ni.fr.eu.org/;
+  meta = with lib; {
+    homepage = "https://pyfantom.ni.fr.eu.org/";
     description = "Wrapper for the LEGO Mindstorms Fantom Driver";
     license = licenses.gpl2;
   };
-
 }

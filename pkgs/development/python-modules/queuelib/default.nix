@@ -1,25 +1,26 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pytest,
 }:
 
 buildPythonPackage rec {
   pname = "queuelib";
-  version = "1.5.0";
+  version = "1.7.0";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "42b413295551bdc24ed9376c1a2cd7d0b1b0fa4746b77b27ca2b797a276a1a17";
+    sha256 = "sha256-KFUWIJbPAjBRCJCzVDeeocD/GdEF0xR9NJ0kM7siKwg=";
   };
 
   buildInputs = [ pytest ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A collection of persistent (disk-based) queues for Python";
     homepage = "https://github.com/scrapy/queuelib";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ drewkett ];
+    maintainers = with maintainers; [ ];
   };
-
 }

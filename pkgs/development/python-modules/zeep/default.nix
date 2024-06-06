@@ -1,74 +1,92 @@
-{ fetchPypi
-, lib
-, buildPythonPackage
-, isPy3k
-, appdirs
-, attrs
-, cached-property
-, defusedxml
-, isodate
-, lxml
-, requests
-, requests_toolbelt
-, six
-, pytz
-, tornado
-, aiohttp
-# test dependencies
-, freezegun
-, mock
-, pretend
-, pytest_3
-, pytestcov
-, requests-mock
-, aioresponses
+{
+  lib,
+  aiohttp,
+  aioresponses,
+  attrs,
+  buildPythonPackage,
+  defusedxml,
+  fetchFromGitHub,
+  freezegun,
+  httpx,
+  isodate,
+  lxml,
+  mock,
+  platformdirs,
+  pretend,
+  pytest-asyncio,
+  pytest-httpx,
+  pytestCheckHook,
+  pythonOlder,
+  pytz,
+  requests,
+  requests-toolbelt,
+  requests-file,
+  requests-mock,
+  xmlsec,
 }:
 
 buildPythonPackage rec {
   pname = "zeep";
-  version = "3.3.1";
+  version = "4.2.1";
+  format = "setuptools";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "f58328e36264a2fda2484dd20bb1695f4102a9cc918178d60c4d7cf8339c65d0";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "mvantellingen";
+    repo = "python-zeep";
+    rev = "refs/tags/${version}";
+    hash = "sha256-8f6kS231gbaZ8qyE8BKMcbnZsm8o2+iBoTlQrs5X+jY=";
   };
 
   propagatedBuildInputs = [
-    appdirs
     attrs
-    cached-property
     defusedxml
     isodate
     lxml
-    requests
-    requests_toolbelt
-    six
+    platformdirs
     pytz
+    requests
+    requests-file
+    requests-toolbelt
+  ];
 
-    # optional requirements
-    tornado
-  ] ++ lib.optional isPy3k aiohttp;
+  passthru.optional-dependencies = {
+    async_require = [ httpx ];
+    xmlsec_require = [ xmlsec ];
+  };
 
-  checkInputs = [
+  pythonImportsCheck = [ "zeep" ];
+
+  nativeCheckInputs = [
+    aiohttp
+    aioresponses
     freezegun
     mock
     pretend
-    pytestcov
-    pytest_3
+    pytest-asyncio
+    pytest-httpx
+    pytestCheckHook
     requests-mock
-  ] ++ lib.optional isPy3k aioresponses;
+  ] ++ lib.flatten (builtins.attrValues passthru.optional-dependencies);
 
-  checkPhase = ''
-    runHook preCheck
-    # ignored tests requires xmlsec python module
-    HOME=$(mktemp -d) pytest tests --ignore tests/test_wsse_signature.py
-    runHook postCheck
+  disabledTests = [
+    # Failed: External connections not allowed during tests.
+    "test_has_expired"
+    "test_has_not_expired"
+    "test_memory_cache_timeout"
+    "test_bytes_like_password_digest"
+    "test_password_digest"
+  ];
+
+  preCheck = ''
+    export HOME=$TMPDIR
   '';
 
   meta = with lib; {
-    homepage = http://docs.python-zeep.org;
+    changelog = "https://github.com/mvantellingen/python-zeep/releases/tag/${version}";
+    description = "Python SOAP client";
+    homepage = "http://docs.python-zeep.org";
     license = licenses.mit;
-    description = "A modern/fast Python SOAP client based on lxml / requests";
-    maintainers = with maintainers; [ rvl ];
   };
 }

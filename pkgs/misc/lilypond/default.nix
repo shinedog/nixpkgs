@@ -1,64 +1,69 @@
-{ stdenv, fetchurl, ghostscript, texinfo, imagemagick, texi2html, guile
-, python2, gettext, flex, perl, bison, pkgconfig, autoreconfHook, dblatex
+{ stdenv, lib, fetchurl, ghostscript, gyre-fonts, texinfo, imagemagick, texi2html, guile
+, python3, gettext, flex, perl, bison, pkg-config, autoreconfHook, dblatex
 , fontconfig, freetype, pango, fontforge, help2man, zip, netpbm, groff
-, fetchsvn, makeWrapper, t1utils
-, texlive, tex ? texlive.combine {
-    inherit (texlive) scheme-small lh metafont epsf;
-  }
+, freefont_ttf, makeFontsConf
+, makeWrapper, t1utils, boehmgc, rsync, coreutils
+, texliveSmall, tex ? texliveSmall.withPackages (ps: with ps; [ lh metafont epsf fontinst ])
 }:
 
-stdenv.mkDerivation rec{
-  majorVersion="2.18";
-  minorVersion="2";
-  version="${majorVersion}.${minorVersion}";
-  name = "lilypond-${version}";
-
-  urwfonts = fetchsvn {
-    url = "http://svn.ghostscript.com/ghostscript/tags/urw-fonts-1.0.7pre44";
-    sha256 = "0al5vdsb66db6yzwi0qgs1dnd1i1fb77cigdjxg8zxhhwf6hhwpn";
-  };
+stdenv.mkDerivation rec {
+  pname = "lilypond";
+  version = "2.24.3";
 
   src = fetchurl {
-    url = "http://download.linuxaudio.org/lilypond/sources/v${majorVersion}/lilypond-${version}.tar.gz";
-    sha256 = "01xs9x2wjj7w9appaaqdhk15r1xvvdbz9qwahzhppfmhclvp779j";
+    url = "http://lilypond.org/download/sources/v${lib.versions.majorMinor version}/lilypond-${version}.tar.gz";
+    sha256 = "sha256-3wBfdu969aTNdKEPjnEVJ4t/p58UAYk3tlwQlJjsRL4=";
   };
 
   postInstall = ''
     for f in "$out/bin/"*; do
         # Override default argv[0] setting so LilyPond can find
         # its Scheme libraries.
-        wrapProgram "$f" --set GUILE_AUTO_COMPILE 0 \
-                         --set PATH "${ghostscript}/bin" \
-                         --argv0 "$f"
+        wrapProgram "$f" \
+          --set GUILE_AUTO_COMPILE 0 \
+          --set PATH "${lib.makeBinPath [ ghostscript coreutils (placeholder "out") ]}" \
+          --argv0 "$f"
     done
   '';
 
-  configureFlags = [ "--disable-documentation" "--with-ncsb-dir=${urwfonts}"];
+  configureFlags = [
+    "--disable-documentation"
+     # FIXME: these URW fonts are not OTF, configure reports "URW++ OTF files... no".
+    "--with-urwotf-dir=${ghostscript}/share/ghostscript/fonts"
+    "--with-texgyre-dir=${gyre-fonts}/share/fonts/truetype/"
+  ];
 
   preConfigure = ''
     sed -e "s@mem=mf2pt1@mem=$PWD/mf/mf2pt1@" -i scripts/build/mf2pt1.pl
     export HOME=$TMPDIR/home
   '';
 
-  nativeBuildInputs = [ makeWrapper pkgconfig autoreconfHook ];
-
-  autoreconfPhase = "NOCONFIGURE=1 sh autogen.sh";
+  nativeBuildInputs = [ autoreconfHook bison flex makeWrapper pkg-config ];
 
   buildInputs =
     [ ghostscript texinfo imagemagick texi2html guile dblatex tex zip netpbm
-      python2 gettext flex perl bison fontconfig freetype pango
-      fontforge help2man groff t1utils
+      python3 gettext perl fontconfig freetype pango
+      fontforge help2man groff t1utils boehmgc rsync
     ];
+
+  autoreconfPhase = "NOCONFIGURE=1 sh autogen.sh";
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = {
+    command = [ ./update.sh ];
+    supportedFeatures = [ "commit" ];
+  };
+
+  meta = with lib; {
     description = "Music typesetting system";
-    homepage = http://lilypond.org/;
+    homepage = "http://lilypond.org/";
     license = licenses.gpl3;
-    maintainers = [ maintainers.marcweber ];
+    maintainers = with maintainers; [ marcweber yurrriq ];
     platforms = platforms.all;
   };
 
-  patches = [ ./findlib.patch ];
+  FONTCONFIG_FILE = lib.optional stdenv.isDarwin (makeFontsConf {
+    fontDirectories = [ freefont_ttf ];
+  });
 }

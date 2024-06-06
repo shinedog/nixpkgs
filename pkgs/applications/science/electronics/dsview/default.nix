@@ -1,47 +1,39 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cmake, autoreconfHook,
-glib, libzip, boost, fftw, qtbase,
-libusb, makeWrapper, libsigrok4dsl, libsigrokdecode4dsl
+{ stdenv, lib, fetchFromGitHub, pkg-config, cmake, wrapQtAppsHook
+, libzip, boost, fftw, qtbase, qtwayland, qtsvg, libusb1
+, python3, desktopToDarwinBundle
 }:
 
 stdenv.mkDerivation rec {
-  name = "dsview-${version}";
+  pname = "dsview";
 
-  version = "0.99";
+  version = "1.3.1";
 
   src = fetchFromGitHub {
       owner = "DreamSourceLab";
       repo = "DSView";
-      rev = version;
-      sha256 = "189i3baqgn8k3aypalayss0g489xi0an9hmvyggvxmgg1cvcwka2";
+      rev = "v${version}";
+      sha256 = "sha256-LwrlB+Nwq34YjwGmnbUWS3W//ZHr8Do2Wf2te+2oBeI=";
   };
-
-  postUnpack = ''
-    export sourceRoot=$sourceRoot/DSView
-  '';
 
   patches = [
     # Fix absolute install paths
     ./install.patch
   ];
 
-  nativeBuildInputs = [ cmake pkgconfig makeWrapper ];
+  nativeBuildInputs = [ cmake pkg-config wrapQtAppsHook ]
+    ++ lib.optional stdenv.isDarwin desktopToDarwinBundle;
 
   buildInputs = [
-   boost fftw qtbase libusb libzip libsigrokdecode4dsl libsigrok4dsl
-  ];
+    boost fftw qtbase qtsvg libusb1 libzip
+    python3
+  ] ++ lib.optional stdenv.isLinux qtwayland;
 
-  enableParallelBuilding = true;
-
-  postFixup = ''
-    wrapProgram $out/bin/DSView --suffix QT_PLUGIN_PATH : \
-      ${qtbase.bin}/${qtbase.qtPluginPrefix}
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A GUI program for supporting various instruments from DreamSourceLab, including logic analyzer, oscilloscope, etc";
-    homepage = https://www.dreamsourcelab.com/;
+    mainProgram = "DSView";
+    homepage = "https://www.dreamsourcelab.com/";
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.bachp ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ bachp carlossless ];
   };
 }

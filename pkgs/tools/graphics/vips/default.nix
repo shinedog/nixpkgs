@@ -1,39 +1,139 @@
-{ stdenv, pkgconfig, glib, libxml2, expat,
-  fftw, orc, lcms, imagemagick, openexr, libtiff, libjpeg, libgsf, libexif,
-  ApplicationServices,
-  python27, libpng ? null,
-  fetchFromGitHub,
-  autoreconfHook,
-  gtk-doc,
-  gobject-introspection,
+{ lib
+, stdenv
+, pkg-config
+, glib
+, libxml2
+, expat
+, ApplicationServices
+, Foundation
+, python3
+, fetchFromGitHub
+, meson
+, ninja
+, gtk-doc
+, docbook-xsl-nons
+, gobject-introspection
+  # Optional dependencies
+, libjpeg
+, libexif
+, librsvg
+, poppler
+, libtiff
+, fftw
+, lcms2
+, libspng
+, libimagequant
+, imagemagick
+, pango
+, matio
+, cfitsio
+, libwebp
+, openexr
+, openjpeg
+, libjxl
+, openslide
+, libheif
+, cgif
+, libarchive
+, libhwy
+, testers
+, nix-update-script
 }:
 
-stdenv.mkDerivation rec {
-  name = "vips-${version}";
-  version = "8.7.4";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "vips";
+  version = "8.15.2";
+
+  outputs = [ "bin" "out" "man" "dev" ] ++ lib.optionals (!stdenv.isDarwin) [ "devdoc" ];
 
   src = fetchFromGitHub {
     owner = "libvips";
     repo = "libvips";
-    rev = "v${version}";
-    sha256 = "0mcax1qg5i4iqlvgkz3s0c938d7ymx24pv3q2n3w2pjylnnd489s";
+    rev = "refs/tags/v${finalAttrs.version}";
+    hash = "sha256-jp6RPceFzzWgFBzcfvggniAkhXaAGszT/sy4H6aCtGc=";
+    # Remove unicode file names which leads to different checksums on HFS+
+    # vs. other filesystems because of unicode normalisation.
+    postFetch = ''
+      rm -r $out/test/test-suite/images/
+    '';
   };
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook gtk-doc gobject-introspection ];
-  buildInputs = [ glib libxml2 fftw orc lcms
-    imagemagick openexr libtiff libjpeg
-    libgsf libexif python27 libpng expat ]
-    ++ stdenv.lib.optional stdenv.isDarwin ApplicationServices;
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    docbook-xsl-nons
+    gobject-introspection
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    gtk-doc
+  ];
 
-  autoreconfPhase = ''
-    ./autogen.sh
-  '';
+  buildInputs = [
+    glib
+    libxml2
+    expat
+    (python3.withPackages (p: [ p.pycairo ]))
+    # Optional dependencies
+    libjpeg
+    libexif
+    librsvg
+    poppler
+    libtiff
+    fftw
+    lcms2
+    libspng
+    libimagequant
+    imagemagick
+    pango
+    matio
+    cfitsio
+    libwebp
+    openexr
+    openjpeg
+    libjxl
+    openslide
+    libheif
+    cgif
+    libarchive
+    libhwy
+  ] ++ lib.optionals stdenv.isDarwin [ ApplicationServices Foundation ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.vips.ecs.soton.ac.uk;
+  # Required by .pc file
+  propagatedBuildInputs = [
+    glib
+  ];
+
+  mesonFlags = [
+    "-Dpdfium=disabled"
+    "-Dnifti=disabled"
+  ]
+  ++ lib.optional (!stdenv.isDarwin) "-Dgtk_doc=true"
+  ++ lib.optional (imagemagick == null) "-Dmagick=disabled"
+  ;
+
+  passthru = {
+    tests = {
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+      };
+      version = testers.testVersion {
+        package = finalAttrs.finalPackage;
+        command = "vips --version";
+      };
+    };
+    updateScript = nix-update-script {
+      extraArgs = [ "--version-regex" "v([0-9.]+)" ];
+    };
+  };
+
+  meta = with lib; {
+    changelog = "https://github.com/libvips/libvips/blob/${finalAttrs.src.rev}/ChangeLog";
+    homepage = "https://www.libvips.org/";
     description = "Image processing system for large images";
     license = licenses.lgpl2Plus;
-    maintainers = with maintainers; [ kovirobi ];
+    maintainers = with maintainers; [ kovirobi anthonyroussel ];
+    pkgConfigModules = [ "vips" "vips-cpp" ];
     platforms = platforms.unix;
+    mainProgram = "vips";
   };
-}
+})

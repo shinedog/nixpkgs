@@ -1,37 +1,68 @@
-{ lib, fetchFromGitHub, buildPythonPackage, isPy3k
-, six, pytimeparse, parsedatetime, Babel
-, isodate, python-slugify, leather
-, glibcLocales, nose, lxml, cssselect, unittest2 }:
+{
+  lib,
+  babel,
+  buildPythonPackage,
+  cssselect,
+  fetchFromGitHub,
+  glibcLocales,
+  isodate,
+  leather,
+  lxml,
+  parsedatetime,
+  pyicu,
+  pynose,
+  python-slugify,
+  pythonOlder,
+  pytimeparse,
+  pytz,
+  setuptools,
+}:
 
 buildPythonPackage rec {
   pname = "agate";
-  version = "1.6.1";
+  version = "1.9.1";
+  pyproject = true;
 
-  # PyPI tarball does not include all test files
-  # https://github.com/wireservice/agate/pull/716
+  disabled = pythonOlder "3.7";
+
   src = fetchFromGitHub {
     owner = "wireservice";
-    repo = pname;
-    rev = version;
-    sha256 = "077zj8xad8hsa3nqywvf7ircirmx3krxdipl8wr3dynv3l3khcpl";
+    repo = "agate";
+    rev = "refs/tags/${version}";
+    hash = "sha256-I7jvZA/m06kUuUcfglySaroDbJ5wbgiF2lb84EFPmpw=";
   };
 
-  propagatedBuildInputs = [
-    six pytimeparse parsedatetime Babel
-    isodate python-slugify leather
+  build-system = [ setuptools ];
+
+  dependencies = [
+    babel
+    isodate
+    leather
+    parsedatetime
+    python-slugify
+    pytimeparse
   ];
 
-  checkInputs = [ glibcLocales nose lxml cssselect ]
-    ++ lib.optional (!isPy3k) unittest2;
+  nativeCheckInputs = [
+    cssselect
+    glibcLocales
+    lxml
+    pynose
+    pyicu
+    pytz
+  ];
 
   checkPhase = ''
     LC_ALL="en_US.UTF-8" nosetests tests
   '';
 
+  pythonImportsCheck = [ "agate" ];
+
   meta = with lib; {
-    description = "A Python data analysis library that is optimized for humans instead of machines";
-    homepage    = https://github.com/wireservice/agate;
-    license     = with licenses; [ mit ];
+    description = "Python data analysis library that is optimized for humans instead of machines";
+    homepage = "https://github.com/wireservice/agate";
+    changelog = "https://github.com/wireservice/agate/blob/${version}/CHANGELOG.rst";
+    license = with licenses; [ mit ];
     maintainers = with maintainers; [ vrthra ];
   };
 }

@@ -1,17 +1,19 @@
-{stdenv, fetchurl, pkgconfig, alsaLib, spice-protocol, glib,
- libpciaccess, libxcb, libXrandr, libXinerama, libXfixes, dbus,
+{lib, stdenv, fetchurl, pkg-config, alsa-lib, spice-protocol, glib,
+ libpciaccess, libxcb, libXrandr, libXinerama, libXfixes, dbus, libdrm,
  systemd}:
 stdenv.mkDerivation rec {
-  name = "spice-vdagent-0.18.0";
+  pname = "spice-vdagent";
+  version = "0.22.1";
   src = fetchurl {
-    url = "https://www.spice-space.org/download/releases/${name}.tar.bz2";
-    sha256 = "1bmyvapwj1x0m6y8q0r1df2q37vsnb04qkgnnrfbnzf1qzipxvl0";
+    url = "https://www.spice-space.org/download/releases/${pname}-${version}.tar.bz2";
+    hash = "sha256-k7DRWspHYsx9N5sXmnEBFJ267WK3IRL/+ys+kLEWh6A=";
   };
+
   postPatch = ''
     substituteInPlace data/spice-vdagent.desktop --replace /usr $out
   '';
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ alsaLib spice-protocol glib
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ alsa-lib spice-protocol glib libdrm
                   libpciaccess libxcb libXrandr libXinerama libXfixes
                   dbus systemd ] ;
   meta = {
@@ -24,9 +26,9 @@ stdenv.mkDerivation rec {
          to the client resolution
        * Multiple displays
     '';
-    homepage = https://www.spice-space.org/;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.aboseley ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.spice-space.org/";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [ lib.maintainers.aboseley ];
+    platforms = lib.platforms.linux;
   };
 }

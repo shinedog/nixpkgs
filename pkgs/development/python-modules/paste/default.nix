@@ -1,34 +1,51 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, six
-, pytestrunner
-, pytest
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pytestCheckHook,
+  pythonAtLeast,
+  pythonOlder,
+  setuptools,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "paste";
-  version = "3.0.8";
+  version = "3.10.1";
+  format = "setuptools";
 
-  src = fetchPypi {
-    pname = "Paste";
-    inherit version;
-    sha256 = "05w1sh6ky4d7pmdb8nv82n13w22jcn3qsagg5ih3hjmbws9kkwf4";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "cdent";
+    repo = "paste";
+    rev = "refs/tags/${version}";
+    hash = "sha256-NY/h6hbpluEu1XAv3o4mqoG+l0LXfM1dw7+G0Rm1E4o=";
   };
 
-  propagatedBuildInputs = [ six ];
-
-  checkInputs = [ pytestrunner pytest ];
-
-  # Certain tests require network
-  checkPhase = ''
-    py.test -k "not test_cgiapp and not test_proxy"
+  postPatch = ''
+    patchShebangs tests/cgiapp_data/
   '';
 
-  meta = with stdenv.lib; {
-    description = "Tools for using a Web Server Gateway Interface stack";
-    homepage = http://pythonpaste.org/;
-    license = licenses.mit;
-  };
+  propagatedBuildInputs = [
+    setuptools
+    six
+  ];
 
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  preCheck = ''
+    # needs to be modified after Sat, 1 Jan 2005 12:00:00 GMT
+    touch tests/urlparser_data/secured.txt
+  '';
+
+  pythonNamespaces = [ "paste" ];
+
+  meta = with lib; {
+    description = "Tools for using a Web Server Gateway Interface stack";
+    homepage = "https://pythonpaste.readthedocs.io/";
+    changelog = "https://github.com/cdent/paste/blob/${version}/docs/news.txt";
+    license = licenses.mit;
+    maintainers = with maintainers; [ ];
+  };
 }

@@ -1,6 +1,6 @@
-{ lib, pythonPackages }:
+{ lib, python3Packages, fetchPypi }:
 
-with pythonPackages;
+with python3Packages;
 
 buildPythonApplication rec {
   pname = "nyx";
@@ -18,7 +18,8 @@ buildPythonApplication rec {
 
   meta = with lib; {
     description = "Command-line monitor for Tor";
-    homepage = https://nyx.torproject.org/;
+    mainProgram = "nyx";
+    homepage = "https://nyx.torproject.org/";
     license = licenses.gpl3;
     maintainers = with maintainers; [ offline ];
   };

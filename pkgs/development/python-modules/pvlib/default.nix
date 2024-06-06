@@ -1,34 +1,65 @@
-{ stdenv, buildPythonPackage, fetchFromGitHub, numpy, pandas, pytz, six
-, pytest, mock, pytest-mock }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  h5py,
+  numpy,
+  pandas,
+  pytestCheckHook,
+  pytest-mock,
+  pytest-remotedata,
+  pytest-rerunfailures,
+  pytest-timeout,
+  pythonOlder,
+  pytz,
+  requests,
+  requests-mock,
+  scipy,
+  setuptools,
+  setuptools-scm,
+}:
 
 buildPythonPackage rec {
   pname = "pvlib";
-  version = "0.6.1";
+  version = "0.10.5";
+  pyproject = true;
 
-  # Use GitHub because PyPI release tarball doesn't contain the tests. See:
-  # https://github.com/pvlib/pvlib-python/issues/473
-  src = fetchFromGitHub{
-    owner = "pvlib";
-    repo = "pvlib-python";
-    rev = "v${version}";
-    sha256 = "17h7vz9s829qxnl4byr8458gzgiismrbrn5gl0klhfhwvc5kkdfh";
+  disabled = pythonOlder "3.7";
+
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-I+y59o4L+wLOF+hARLUh+341NYHlOKMfnq0ETs0ZUL0=";
   };
 
-  checkInputs = [ pytest mock pytest-mock ];
-  propagatedBuildInputs = [ numpy pandas pytz six ];
+  build-system = [
+    setuptools
+    setuptools-scm
+  ];
 
-  # Skip a few tests that try to access some URLs
-  checkPhase = ''
-    runHook preCheck
-    pushd pvlib/test
-    pytest . -k "not test_read_srml_dt_index and not test_read_srml_month_from_solardata"
-    popd
-    runHook postCheck
-  '';
+  dependencies = [
+    h5py
+    numpy
+    pandas
+    pytz
+    requests
+    scipy
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://pvlib-python.readthedocs.io;
+  nativeCheckInputs = [
+    pytest-mock
+    pytest-remotedata
+    pytest-rerunfailures
+    pytest-timeout
+    pytestCheckHook
+    requests-mock
+  ];
+
+  pythonImportsCheck = [ "pvlib" ];
+
+  meta = with lib; {
     description = "Simulate the performance of photovoltaic energy systems";
+    homepage = "https://pvlib-python.readthedocs.io";
+    changelog = "https://pvlib-python.readthedocs.io/en/v${version}/whatsnew.html";
     license = licenses.bsd3;
     maintainers = with maintainers; [ jluttine ];
   };

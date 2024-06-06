@@ -5,12 +5,9 @@
 }:
 
 mkDerivation {
-  name = "modemmanager-qt";
-  meta = {
-    maintainers = [ lib.maintainers.ttuegel ];
-    broken = builtins.compareVersions qtbase.version "5.7.0" < 0;
-  };
+  pname = "modemmanager-qt";
   nativeBuildInputs = [ extra-cmake-modules ];
   propagatedBuildInputs = [ modemmanager qtbase ];
   outputs = [ "out" "dev" ];
+  meta.platforms = lib.platforms.linux;
 }

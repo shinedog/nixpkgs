@@ -1,26 +1,35 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "man-pages-${version}";
-  version = "5.01";
+  pname = "man-pages";
+  version = "6.8";
 
   src = fetchurl {
-    url = "mirror://kernel/linux/docs/man-pages/${name}.tar.xz";
-    sha256 = "09xn8d8xxwgms6h1bvjlgn3mxz51vxf3ra0ry9f5dqi29qry3z3x";
+    url = "mirror://kernel/linux/docs/man-pages/${pname}-${version}.tar.xz";
+    hash = "sha256-ucawpCD4ORSL4EsvwTqFaSMTco1U1HxpyKE4N5Zl0iY=";
   };
 
-  makeFlags = [ "MANDIR=$(out)/share/man" ];
-  postInstall = ''
-    # conflict with shadow-utils
-    rm $out/share/man/man5/passwd.5 \
-       $out/share/man/man3/getspnam.3
-  '';
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+  ];
+
+  dontBuild = true;
+
   outputDocdev = "out";
 
-  meta = with stdenv.lib; {
+  enableParallelInstalling = true;
+
+  postInstall = ''
+    # The manpath executable looks up manpages from PATH. And this package won't
+    # appear in PATH unless it has a /bin folder. Without the change
+    # 'nix-shell -p man-pages' does not pull in the search paths.
+    # See 'man 5 manpath' for the lookup order.
+    mkdir -p $out/bin
+  '';
+
+  meta = with lib; {
     description = "Linux development manual pages";
-    homepage = https://www.kernel.org/doc/man-pages/;
-    repositories.git = http://git.kernel.org/pub/scm/docs/man-pages/man-pages;
+    homepage = "https://www.kernel.org/doc/man-pages/";
     license = licenses.gpl2Plus;
     platforms = with platforms; unix;
     priority = 30; # if a package comes with its own man page, prefer it

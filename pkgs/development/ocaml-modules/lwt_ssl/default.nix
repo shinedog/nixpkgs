@@ -1,14 +1,14 @@
-{ stdenv, fetchzip, buildDunePackage, ssl, lwt }:
+{ lib, fetchurl, buildDunePackage, ssl, lwt }:
 
 buildDunePackage rec {
   pname = "lwt_ssl";
-  version = "1.1.2";
+  version = "1.2.0";
 
-  minimumOCamlVersion = "4.02";
+  duneVersion = "3";
 
-  src = fetchzip {
-    url = "https://github.com/aantron/${pname}/archive/${version}.tar.gz";
-    sha256 = "1q0an3djqjxv83v3iswi7m81braqx93kcrcwrxwmf6jzhdm4pn15";
+  src = fetchurl {
+    url = "https://github.com/ocsigen/lwt_ssl/releases/download/${version}/lwt_ssl-${version}.tbz";
+    hash = "sha256-swIK0nrs83fhw/J0Cgizbcu6mR+EMGZRE1dBBUiImnc=";
   };
 
   propagatedBuildInputs = [ ssl lwt ];
@@ -16,7 +16,7 @@ buildDunePackage rec {
   meta = {
     homepage = "https://github.com/aantron/lwt_ssl";
     description = "OpenSSL binding with concurrent I/O";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = [ stdenv.lib.maintainers.vbgl ];
+    license = lib.licenses.lgpl21;
+    maintainers = [ lib.maintainers.vbgl ];
   };
 }

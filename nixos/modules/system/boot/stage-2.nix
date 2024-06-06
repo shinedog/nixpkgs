@@ -4,20 +4,21 @@ with lib;
 
 let
 
+  useHostResolvConf = config.networking.resolvconf.enable && config.networking.useHostResolvConf;
+
   bootStage2 = pkgs.substituteAll {
     src = ./stage-2-init.sh;
     shellDebug = "${pkgs.bashInteractive}/bin/bash";
     shell = "${pkgs.bash}/bin/bash";
+    inherit (config.boot) readOnlyNixStore systemdExecutable extraSystemdUnitPaths;
+    inherit (config.system.nixos) distroName;
     isExecutable = true;
-    inherit (config.nix) readOnlyStore;
-    inherit (config.networking) useHostResolvConf;
+    inherit useHostResolvConf;
     inherit (config.system.build) earlyMountScript;
-    path = lib.makeBinPath [
+    path = lib.makeBinPath ([
       pkgs.coreutils
-      pkgs.utillinux
-      pkgs.openresolv
-    ];
-    fsPackagesPath = lib.makeBinPath config.system.fsPackages;
+      pkgs.util-linux
+    ] ++ lib.optional useHostResolvConf pkgs.openresolv);
     postBootCommands = pkgs.writeText "local-cmds"
       ''
         ${config.boot.postBootCommands}
@@ -41,36 +42,33 @@ in
         '';
       };
 
-      devSize = mkOption {
-        default = "5%";
-        example = "32m";
-        type = types.str;
+      readOnlyNixStore = mkOption {
+        type = types.bool;
+        default = true;
         description = ''
-          Size limit for the /dev tmpfs. Look at mount(8), tmpfs size option,
-          for the accepted syntax.
+          If set, NixOS will enforce the immutability of the Nix store
+          by making {file}`/nix/store` a read-only bind
+          mount.  Nix will automatically make the store writable when
+          needed.
         '';
       };
 
-      devShmSize = mkOption {
-        default = "50%";
-        example = "256m";
+      systemdExecutable = mkOption {
+        default = "/run/current-system/systemd/lib/systemd/systemd";
         type = types.str;
         description = ''
-          Size limit for the /dev/shm tmpfs. Look at mount(8), tmpfs size option,
-          for the accepted syntax.
+          The program to execute to start systemd.
         '';
       };
 
-      runSize = mkOption {
-        default = "25%";
-        example = "256m";
-        type = types.str;
+      extraSystemdUnitPaths = mkOption {
+        default = [];
+        type = types.listOf types.str;
         description = ''
-          Size limit for the /run tmpfs. Look at mount(8), tmpfs size option,
-          for the accepted syntax.
+          Additional paths that get appended to the SYSTEMD_UNIT_PATH environment variable
+          that can contain mutable unit files.
         '';
       };
-
     };
 
   };

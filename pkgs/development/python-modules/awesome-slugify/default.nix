@@ -1,8 +1,16 @@
-{ stdenv, buildPythonPackage, fetchPypi, unidecode, regex, python }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  unidecode,
+  regex,
+  unittestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "awesome-slugify";
   version = "1.6.5";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -18,13 +26,14 @@ buildPythonPackage rec {
     ./slugify_filename_test.patch # fixes broken test by new unidecode
   ];
 
-  propagatedBuildInputs = [ unidecode regex ];
+  propagatedBuildInputs = [
+    unidecode
+    regex
+  ];
 
-  checkPhase = ''
-      ${python.interpreter} -m unittest discover
-  '';
+  nativeCheckInputs = [ unittestCheckHook ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/dimka665/awesome-slugify";
     description = "Python flexible slugify function";
     license = licenses.gpl3;

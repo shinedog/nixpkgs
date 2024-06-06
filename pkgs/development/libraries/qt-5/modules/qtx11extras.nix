@@ -1,6 +1,6 @@
 { qtModule, qtbase }:
 
 qtModule {
-  name = "qtx11extras";
-  qtInputs = [ qtbase ];
+  pname = "qtx11extras";
+  propagatedBuildInputs = [ qtbase ];
 }

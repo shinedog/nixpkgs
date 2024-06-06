@@ -1,83 +1,134 @@
-{ stdenv, fetchurl, pkgconfig, cairo, harfbuzz
-, libintl, gobject-introspection, darwin, fribidi, gnome3
-, gtk-doc, docbook_xsl, docbook_xml_dtd_43, makeFontsConf, freefont_ttf
-, meson, ninja, glib
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, cairo
+, harfbuzz
+, libintl
+, libthai
+, darwin
+, fribidi
+, gnome
+, gi-docgen
+, makeFontsConf
+, freefont_ttf
+, meson
+, ninja
+, glib
+, python3
 , x11Support? !stdenv.isDarwin, libXft
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, buildPackages, gobject-introspection
+, testers
 }:
 
-with stdenv.lib;
-
-let
+stdenv.mkDerivation (finalAttrs: {
   pname = "pango";
-  version = "1.43.0";
-in stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
+  version = "1.52.2";
+
+  outputs = [ "bin" "out" "dev" ] ++ lib.optional withIntrospection "devdoc";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/${pname}/${stdenv.lib.versions.majorMinor version}/${name}.tar.xz";
-    sha256 = "1lnxldmv1a12dq5h0dlq5jyzl4w75k76dp8cn360x2ijlm9w5h6j";
+    url = with finalAttrs; "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-0Adq/gEIKBS4U97smfk0ns5fLOg5CLjlj/c2tB94qWs=";
   };
 
-  # FIXME: docs fail on darwin
-  outputs = [ "bin" "dev" "out" ] ++ optional (!stdenv.isDarwin) "devdoc";
+  depsBuildBuild = [
+    pkg-config
+  ];
 
   nativeBuildInputs = [
     meson ninja
-    pkgconfig gobject-introspection gtk-doc docbook_xsl docbook_xml_dtd_43
+    glib # for glib-mkenum
+    pkg-config
+    python3
+  ] ++ lib.optionals withIntrospection [
+    gi-docgen
+    gobject-introspection
   ];
+
   buildInputs = [
-    harfbuzz fribidi
-  ] ++ optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
+    fribidi
+    libthai
+  ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
     ApplicationServices
     Carbon
     CoreGraphics
     CoreText
   ]);
-  propagatedBuildInputs = [ cairo glib libintl ] ++
-    optional x11Support libXft;
 
-  patches = [
-    (fetchurl {
-      # Add gobject-2 to .pc file
-      url = "https://gitlab.gnome.org/GNOME/pango/commit/546f4c242d6f4fe312de3b7c918a848e5172e18d.patch";
-      sha256 = "034na38cq98vk8gggn3yfr65jmv3jgig8d25zg89wydrandp14yr";
-    })
+  propagatedBuildInputs = [
+    cairo
+    glib
+    libintl
+    harfbuzz
+  ] ++ lib.optionals x11Support [
+    libXft
   ];
 
   mesonFlags = [
-    "-Denable_docs=${if stdenv.isDarwin then "false" else "true"}"
+    (lib.mesonBool "gtk_doc" withIntrospection)
+    (lib.mesonEnable "introspection" withIntrospection)
+    (lib.mesonEnable "xft" x11Support)
   ];
-
-  enableParallelBuilding = true;
 
   # Fontconfig error: Cannot load default config file
   FONTCONFIG_FILE = makeFontsConf {
     fontDirectories = [ freefont_ttf ];
   };
 
-  doCheck = false; # /layout/valid-1.markup: FAIL
+  # Run-time dependency gi-docgen found: NO (tried pkgconfig and cmake)
+  # it should be a build-time dep for build
+  # TODO: send upstream
+  postPatch = ''
+    substituteInPlace docs/meson.build \
+      --replace "'gi-docgen', req" "'gi-docgen', native:true, req"
+  '';
+
+  doCheck = false; # test-font: FAIL
+
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    moveToOutput "share/doc" "$devdoc"
+  '';
 
   passthru = {
-    updateScript = gnome3.updateScript {
-      packageName = pname;
+    updateScript = gnome.updateScript {
+      packageName = finalAttrs.pname;
+      # 1.90 is alpha for API 2.
+      freeze = "1.90.0";
+    };
+    tests = {
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+      };
     };
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library for laying out and rendering of text, with an emphasis on internationalization";
 
     longDescription = ''
       Pango is a library for laying out and rendering of text, with an
       emphasis on internationalization.  Pango can be used anywhere
       that text layout is needed, though most of the work on Pango so
-      far has been done in the context of the GTK+ widget toolkit.
-      Pango forms the core of text and font handling for GTK+-2.x.
+      far has been done in the context of the GTK widget toolkit.
+      Pango forms the core of text and font handling for GTK.
     '';
 
-    homepage = https://www.pango.org/;
+    homepage = "https://www.pango.org/";
     license = licenses.lgpl2Plus;
 
-    maintainers = with maintainers; [ raskin ];
-    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ raskin ] ++ teams.gnome.members;
+    platforms = platforms.unix;
+
+    pkgConfigModules = [
+      "pango"
+      "pangocairo"
+      "pangofc"
+      "pangoft2"
+      "pangoot"
+      "pangoxft"
+    ];
   };
-}
+})

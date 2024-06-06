@@ -1,30 +1,27 @@
-import ./make-test.nix ({ pkgs, ...} : {
+import ./make-test-python.nix ({ lib, pkgs, ... }: {
   name = "tomcat";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ eelco ];
-  };
+  meta.maintainers = [ lib.maintainers.anthonyroussel ];
 
-  nodes = {
-    server =
-      { ... }:
-
-      { services.tomcat.enable = true;
-        services.httpd.enable = true;
-        services.httpd.adminAddr = "foo@bar.com";
-        services.httpd.extraSubservices =
-          [ { serviceType = "tomcat-connector"; } ];
-        networking.firewall.allowedTCPPorts = [ 80 ];
-      };
-
-    client = { };
+  nodes.machine = { pkgs, ... }: {
+    services.tomcat = {
+      enable = true;
+      axis2.enable = true;
+    };
   };
 
   testScript = ''
-    startAll;
+    machine.wait_for_unit("tomcat.service")
+    machine.wait_for_open_port(8080)
+    machine.wait_for_file("/var/tomcat/webapps/examples");
 
-    $server->waitForUnit("tomcat");
-    $client->waitForUnit("network.target");
-    $client->waitUntilSucceeds("curl --fail http://server/examples/servlets/servlet/HelloWorldExample");
-    $client->waitUntilSucceeds("curl --fail http://server/examples/jsp/jsp2/simpletag/hello.jsp");
+    machine.succeed(
+        "curl -sS --fail http://localhost:8080/examples/servlets/servlet/HelloWorldExample | grep 'Hello World!'"
+    )
+    machine.succeed(
+        "curl -sS --fail http://localhost:8080/examples/jsp/jsp2/simpletag/hello.jsp | grep 'Hello, world!'"
+    )
+    machine.succeed(
+        "curl -sS --fail http://localhost:8080/axis2/axis2-web/HappyAxis.jsp | grep 'Found Axis2'"
+    )
   '';
 })

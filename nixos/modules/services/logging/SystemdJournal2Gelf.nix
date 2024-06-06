@@ -16,7 +16,7 @@ in
       };
 
       graylogServer = mkOption {
-        type = types.string;
+        type = types.str;
         example = "graylog2.example.com:11201";
         description = ''
           Host and port of your graylog2 input. This should be a GELF
@@ -25,21 +25,15 @@ in
       };
 
       extraOptions = mkOption {
-        type = types.string;
+        type = types.separatedString " ";
         default = "";
         description = ''
           Any extra flags to pass to SystemdJournal2Gelf. Note that
-          these are basically <literal>journalctl</literal> flags.
+          these are basically `journalctl` flags.
         '';
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.systemd-journal2gelf;
-        description = ''
-          SystemdJournal2Gelf package to use.
-        '';
-      };
+      package = mkPackageOption pkgs "systemd-journal2gelf" { };
 
     };
   };

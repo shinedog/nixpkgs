@@ -1,34 +1,35 @@
-{ stdenv, stdenvGcc6, lib
+{ stdenv, lib, fetchpatch
 , fetchFromGitHub, cmake, libmicrohttpd, openssl
-, opencl-headers, ocl-icd, hwloc, cudatoolkit
+, opencl-headers, ocl-icd, hwloc
 , devDonationLevel ? "0.0"
-, cudaSupport ? false
 , openclSupport ? true
 }:
 
-let
-  stdenv' = if cudaSupport then stdenvGcc6 else stdenv;
-in
-
-stdenv'.mkDerivation rec {
-  name = "xmr-stak-${version}";
-  version = "2.10.4";
+stdenv.mkDerivation rec {
+  pname = "xmr-stak";
+  version = "2.10.8";
 
   src = fetchFromGitHub {
     owner = "fireice-uk";
     repo = "xmr-stak";
-    rev = "${version}";
-    sha256 = "0f3cs0jw0yn8lbcm43m34dnvvgr4qpb8wa176vh4whk7bbjkw7lz";
+    rev = version;
+    sha256 = "0ilx5mhh91ks7dwvykfyynh53l6vkkignjpwkkss8ss6b2k8gdbj";
   };
 
-  NIX_CFLAGS_COMPILE = "-O3";
+  env.NIX_CFLAGS_COMPILE = "-O3";
 
-  cmakeFlags = lib.optional (!cudaSupport) "-DCUDA_ENABLE=OFF"
+  patches = [ (fetchpatch {
+    name = "fix-libmicrohttpd-0-9-71.patch";
+    url = "https://github.com/fireice-uk/xmr-stak/compare/06e08780eab54dbc025ce3f38c948e4eef2726a0...8adb208987f5881946992ab9cd9a45e4e2a4b870.patch";
+    excludes = [ "CMakeLists.txt.user" ];
+    hash = "sha256-Yv0U5EO1P5eikn1fKvUXEwemoUIjjeTjpP9p5J8pbC0=";
+  }) ];
+
+  cmakeFlags = [ "-DCUDA_ENABLE=OFF" ]
     ++ lib.optional (!openclSupport) "-DOpenCL_ENABLE=OFF";
 
   nativeBuildInputs = [ cmake ];
   buildInputs = [ libmicrohttpd openssl hwloc ]
-    ++ lib.optional cudaSupport cudatoolkit
     ++ lib.optionals openclSupport [ opencl-headers ocl-icd ];
 
   postPatch = ''
@@ -37,9 +38,13 @@ stdenv'.mkDerivation rec {
   '';
 
   meta = with lib; {
+    # Does not build against gcc-13. No development activity upstream
+    # for past few years.
+    broken = true;
     description = "Unified All-in-one Monero miner";
     homepage = "https://github.com/fireice-uk/xmr-stak";
     license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ fpletz bfortz ];
+    platforms = [ "x86_64-linux" ];
+    maintainers = with maintainers; [ bfortz ];
   };
 }

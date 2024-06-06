@@ -1,28 +1,25 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg
-, bos, cmdliner, ocamlgraph
+{ lib, buildDunePackage, cmdliner
+, functoria-runtime
+, rresult, astring, fmt, logs, bos, fpath, emile, uri
+, alcotest
 }:
 
-if !stdenv.lib.versionAtLeast ocaml.version "4.03"
-then throw "functoria is not available for OCaml ${ocaml.version}" else
+buildDunePackage {
+  pname   = "functoria";
+  inherit (functoria-runtime) version src;
 
-stdenv.mkDerivation rec {
-	name = "ocaml${ocaml.version}-functoria-${version}";
-	version = "2.0.2";
-	src = fetchurl {
-		url = "https://github.com/mirage/functoria/releases/download/${version}/functoria-${version}.tbz";
-		sha256 = "019rl4rir4lwgjyqj2wq3ylw4daih1kxxgbc6ld6kzcq66mwr747";
-	};
+  minimalOCamlVersion = "4.08";
 
-	buildInputs = [ ocaml findlib ocamlbuild topkg ];
-	propagatedBuildInputs = [ bos cmdliner ocamlgraph ];
+  propagatedBuildInputs = [ cmdliner rresult astring fmt logs bos fpath emile uri ];
 
-	inherit (topkg) buildPhase installPhase;
+  # Tests are not compatible with cmdliner 1.3
+  doCheck = false;
+  checkInputs = [ alcotest functoria-runtime ];
 
-	meta = {
-		description = "A DSL to organize functor applications";
-		homepage = https://github.com/mirage/functoria;
-		license = stdenv.lib.licenses.isc;
-		maintainers = [ stdenv.lib.maintainers.vbgl ];
-		inherit (ocaml.meta) platforms;
-	};
+  meta = with lib; {
+    description = "A DSL to organize functor applications";
+    homepage    = "https://github.com/mirage/functoria";
+    license     = licenses.isc;
+    maintainers = [ maintainers.vbgl ];
+  };
 }

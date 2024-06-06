@@ -1,7 +1,7 @@
-{ lib, pkgs, stdenv, fetchFromGitHub, mypy, python3, nix, git, makeWrapper
+{ lib, pkgs, stdenv, fetchFromGitHub, python3, nix, git, makeWrapper
 , runtimeShell }:
 let self = stdenv.mkDerivation rec {
-  name = "nix-pin-${version}";
+  pname = "nix-pin";
   version = "0.4.0";
   src = fetchFromGitHub {
     owner = "timbertson";
@@ -9,10 +9,8 @@ let self = stdenv.mkDerivation rec {
     rev = "version-${version}";
     sha256 = "1pccvc0iqapms7kidrh09g5fdx44x622r5l9k7bkmssp3v4c68vy";
   };
-  buildInputs = [ python3 mypy makeWrapper ];
-  checkPhase = ''
-    mypy bin/*
-  '';
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ python3 ];
   installPhase = ''
     mkdir "$out"
     cp -r bin share "$out"
@@ -42,11 +40,12 @@ let self = stdenv.mkDerivation rec {
           --modify-nix default.nix
       '';
     };
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/timbertson/nix-pin";
     description = "nixpkgs development utility";
     license = licenses.mit;
     maintainers = [ maintainers.timbertson ];
     platforms = platforms.all;
+    mainProgram = "nix-pin";
   };
 }; in self

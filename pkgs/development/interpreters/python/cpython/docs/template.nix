@@ -2,10 +2,12 @@
 
 { stdenv, fetchurl, lib }:
 
-stdenv.mkDerivation rec {
-  name = "pythonMAJORMINOR-docs-TYPE-VERSION";
+stdenv.mkDerivation {
+  pname = "pythonMAJORMINOR-docs-TYPE";
+  version = "VERSION";
+
   src = fetchurl {
-    url = URL;
+    url = "URL";
     sha256 = "SHA";
   };
   installPhase = ''

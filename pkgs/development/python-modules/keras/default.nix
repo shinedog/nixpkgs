@@ -1,37 +1,64 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, pytestcov, pytestpep8, pytest_xdist
-, six, numpy, scipy, pyyaml, h5py
-, keras-applications, keras-preprocessing
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  setuptools,
+  absl-py,
+  dm-tree,
+  h5py,
+  markdown-it-py,
+  ml-dtypes,
+  namex,
+  numpy,
+  optree,
+  rich,
+  tensorflow,
 }:
 
 buildPythonPackage rec {
-  pname = "Keras";
-  version = "2.2.4";
+  pname = "keras";
+  version = "3.3.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "90b610a3dbbf6d257b20a079eba3fdf2eed2158f64066a7c6f7227023fd60bc9";
+  disabled = pythonOlder "3.9";
+
+  src = fetchFromGitHub {
+    owner = "keras-team";
+    repo = "keras";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-hhY28Ocv4zacZiwFflJtufKpeKfH1MD1PZJ+NTJfpH0=";
   };
 
-  checkInputs = [
-    pytest
-    pytestcov
-    pytestpep8
-    pytest_xdist
+  build-system = [
+    setuptools
   ];
 
-  propagatedBuildInputs = [
-    six pyyaml numpy scipy h5py
-    keras-applications keras-preprocessing
+  dependencies = [
+    absl-py
+    dm-tree
+    h5py
+    markdown-it-py
+    ml-dtypes
+    namex
+    numpy
+    optree
+    rich
+    tensorflow
+  ];
+
+  pythonImportsCheck = [
+    "keras"
+    "keras._tf_keras"
   ];
 
   # Couldn't get tests working
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "Deep Learning library for Theano and TensorFlow";
-    homepage = https://keras.io;
-    license = licenses.mit;
-    maintainers = with maintainers; [ NikolaMandic ];
+  meta = {
+    description = "Multi-backend implementation of the Keras API, with support for TensorFlow, JAX, and PyTorch";
+    homepage = "https://keras.io";
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ NikolaMandic ];
   };
 }

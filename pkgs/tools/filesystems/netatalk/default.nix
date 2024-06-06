@@ -1,24 +1,52 @@
-{ fetchurl, stdenv, autoreconfHook, pkgconfig, perl, python
-, db, libgcrypt, avahi, libiconv, pam, openssl, acl
-, ed, glibc
+{ lib
+, stdenv
+, fetchurl
+, acl
+, autoreconfHook
+, avahi
+, db
+, libevent
+, libgcrypt
+, libiconv
+, openssl
+, pam
+, perl
+, pkg-config
+, python3
 }:
 
-stdenv.mkDerivation rec{
-  name = "netatalk-3.1.12";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "netatalk";
+  version = "3.1.18";
 
   src = fetchurl {
-    url = "mirror://sourceforge/netatalk/netatalk/${name}.tar.bz2";
-    sha256 = "1ld5mnz88ixic21m6f0xcgf8v6qm08j6xabh1dzfj6x47lxghq0m";
+    url = "mirror://sourceforge/netatalk/netatalk/netatalk-${finalAttrs.version}.tar.bz2";
+    hash = "sha256-htIJ3Hd2pLoXhFFk0uN2pGnO43aiexiuMYmOP0ukFlU=";
   };
 
   patches = [
-    ./no-suid.patch
-    ./omitLocalstatedirCreation.patch
+    ./000-no-suid.patch
+    ./001-omit-localstatedir-creation.patch
   ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig perl python python.pkgs.wrapPython ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+    perl
+    python3
+    python3.pkgs.wrapPython
+  ];
 
-  buildInputs = [ db libgcrypt avahi libiconv pam openssl acl ];
+  buildInputs = [
+    acl
+    avahi
+    db
+    libevent
+    libgcrypt
+    libiconv
+    openssl
+    pam
+  ];
 
   configureFlags = [
     "--with-bdb=${db.dev}"
@@ -27,34 +55,19 @@ stdenv.mkDerivation rec{
     "--localstatedir=/var/lib"
   ];
 
-  # Expose librpcsvc to the linker for afpd
-  # Fixes errors that showed up when closure-size was merged:
-  # afpd-nfsquota.o: In function `callaurpc':
-  # netatalk-3.1.7/etc/afpd/nfsquota.c:78: undefined reference to `xdr_getquota_args'
-  # netatalk-3.1.7/etc/afpd/nfsquota.c:78: undefined reference to `xdr_getquota_rslt'
-  postConfigure = ''
-    ${ed}/bin/ed -v etc/afpd/Makefile << EOF
-    /^afpd_LDADD
-    /am__append_2
-    a
-      ${glibc.static}/lib/librpcsvc.a \\
-    .
-    w
-    EOF
-  '';
-
   postInstall = ''
-    buildPythonPath ${python.pkgs.dbus-python}
+    sed -i -e "s%/usr/bin/env python%${python3}/bin/python3%" $out/bin/afpstats
+    buildPythonPath ${python3.pkgs.dbus-python}
     patchPythonScript $out/bin/afpstats
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with lib; {
     description = "Apple Filing Protocol Server";
-    homepage = http://netatalk.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ jcumming ];
+    homepage = "http://netatalk.sourceforge.net/";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ jcumming ];
   };
-}
+})

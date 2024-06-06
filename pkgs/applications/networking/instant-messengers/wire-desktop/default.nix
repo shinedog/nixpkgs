@@ -1,103 +1,189 @@
-{ stdenv, fetchurl, dpkg, makeDesktopItem, libuuid, gtk3, atk, cairo, pango
-, gdk_pixbuf, glib, freetype, fontconfig, dbus, libnotify, libX11, xorg, libXi
-, libXcursor, libXdamage, libXrandr, libXcomposite, libXext, libXfixes
-, libXrender, libXtst, libXScrnSaver, nss, nspr, alsaLib, cups, expat, udev
-, xdg_utils, hunspell, pulseaudio, pciutils, at-spi2-atk
+{ autoPatchelfHook
+, dpkg
+, fetchurl
+, makeDesktopItem
+, makeWrapper
+, stdenv
+, lib
+, udev
+, wrapGAppsHook3
+, cpio
+, xar
+, libdbusmenu
+, alsa-lib
+, mesa
+, nss
+, nspr
+, systemd
 }:
 
 let
 
-  rpath = stdenv.lib.makeLibraryPath [
-    alsaLib
-    atk
-    cairo
-    cups
-    dbus
-    expat
-    fontconfig
-    freetype
-    gdk_pixbuf
-    glib
-    gtk3
-    at-spi2-atk
-    hunspell
-    libuuid
-    libnotify
-    libX11
-    libXcomposite
-    libXcursor
-    libXdamage
-    libXext
-    libXfixes
-    libXi
-    libXrandr
-    libXrender
-    libXScrnSaver
-    libXtst
-    nspr
-    nss
-    pango
-    pciutils
-    pulseaudio
-    stdenv.cc.cc
-    udev
-    xdg_utils
-    xorg.libxcb
-  ];
+  inherit (stdenv.hostPlatform) system;
+
+  throwSystem = throw "Unsupported system: ${system}";
+
+  pname = "wire-desktop";
+
+  version = let
+    x86_64-darwin = "3.35.4861";
+  in {
+    inherit x86_64-darwin;
+    aarch64-darwin = x86_64-darwin;
+    x86_64-linux = "3.35.3348";
+  }.${system} or throwSystem;
+
+  hash = let
+    x86_64-darwin = "sha256-QPxslMEz1jOH2LceFOdCyVDtpya1SfJ8GWMIAIhie4U=";
+  in {
+    inherit x86_64-darwin;
+    aarch64-darwin = x86_64-darwin;
+    x86_64-linux = "sha256-KtDUuAzD53mFJ0+yywp0Q2/hx9MGsOhFjRLWsZAd+h0=";
+  }.${system} or throwSystem;
+
+  meta = with lib; {
+    description = "A modern, secure messenger for everyone";
+    longDescription = ''
+      Wire Personal is a secure, privacy-friendly messenger. It combines useful
+      and fun features, audited security, and a beautiful, distinct user
+      interface.  It does not require a phone number to register and chat.
+
+        * End-to-end encrypted chats, calls, and files
+        * Crystal clear voice and video calling
+        * File and screen sharing
+        * Timed messages and chats
+        * Synced across your phone, desktop and tablet
+    '';
+    homepage = "https://wire.com/";
+    downloadPage = "https://wire.com/download/";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [
+      arianvp
+      kiwi
+      toonn
+    ];
+    platforms = platforms.darwin ++ [
+      "x86_64-linux"
+    ];
+    hydraPlatforms = [];
+  };
+
+  linux = stdenv.mkDerivation rec {
+    inherit pname version meta;
+
+    src = fetchurl {
+      url = "https://wire-app.wire.com/linux/debian/pool/main/Wire-${version}_amd64.deb";
+      inherit hash;
+    };
+
+    desktopItem = makeDesktopItem {
+      categories = [ "Network" "InstantMessaging" "Chat" "VideoConference" ];
+      comment = "Secure messenger for everyone";
+      desktopName = "Wire";
+      exec = "wire-desktop %U";
+      genericName = "Secure messenger";
+      icon = "wire-desktop";
+      name = "wire-desktop";
+      startupWMClass = "Wire";
+    };
+
+    dontBuild = true;
+    dontConfigure = true;
+    dontPatchELF = true;
+    dontWrapGApps = true;
+
+    # TODO: migrate off autoPatchelfHook and use nixpkgs' electron
+    nativeBuildInputs = [
+      autoPatchelfHook
+      dpkg
+      makeWrapper
+      wrapGAppsHook3
+    ];
+
+    buildInputs = [
+      alsa-lib
+      mesa
+      nss
+      nspr
+      systemd
+    ];
+
+    unpackPhase = ''
+      runHook preUnpack
+
+      dpkg-deb -x $src .
+
+      runHook postUnpack
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p "$out/bin"
+      cp -R "opt" "$out"
+      cp -R "usr/share" "$out/share"
+      chmod -R g-w "$out"
+
+      # Desktop file
+      mkdir -p "$out/share/applications"
+      cp "${desktopItem}/share/applications/"* "$out/share/applications"
+
+      runHook postInstall
+    '';
+
+    runtimeDependencies = [
+      (lib.getLib udev)
+      libdbusmenu
+    ];
+
+    postFixup = ''
+      makeWrapper $out/opt/Wire/wire-desktop $out/bin/wire-desktop \
+        "''${gappsWrapperArgs[@]}"
+    '';
+  };
+
+  darwin = stdenv.mkDerivation {
+    inherit pname version meta;
+
+    src = fetchurl {
+      url = "https://github.com/wireapp/wire-desktop/releases/download/macos%2F${version}/Wire.pkg";
+      inherit hash;
+    };
+
+    buildInputs = [
+      cpio
+      xar
+    ];
+
+    unpackPhase = ''
+      runHook preUnpack
+
+      xar -xf $src
+      cd com.wearezeta.zclient.mac.pkg
+
+      runHook postUnpack
+    '';
+
+    buildPhase = ''
+      runHook preBuild
+
+      cat Payload | gunzip -dc | cpio -i
+
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/Applications
+      cp -r Wire.app $out/Applications
+
+      runHook postInstall
+    '';
+  };
 
 in
-
-stdenv.mkDerivation rec {
-  pname = "wire-desktop";
-  version = "3.9.2895";
-
-  src = fetchurl {
-    url = "https://wire-app.wire.com/linux/debian/pool/main/Wire-${version}_amd64.deb";
-    sha256 = "0wrn95m64j4b7ym44h9zawq13kg4m12aixlyyzp56bfyczmjq4a5";
-  };
-
-  desktopItem = makeDesktopItem {
-    name = "wire-desktop";
-    exec = "wire-desktop %U";
-    icon = "wire-desktop";
-    comment = "Secure messenger for everyone";
-    desktopName = "Wire Desktop";
-    genericName = "Secure messenger";
-    categories = "Network;InstantMessaging;Chat;VideoConference";
-  };
-
-  dontBuild = true;
-  dontPatchELF = true;
-  dontConfigure = true;
-
-  nativeBuildInputs = [ dpkg ];
-  unpackPhase = "dpkg-deb -x $src .";
-  installPhase = ''
-    mkdir -p "$out"
-    cp -R "opt" "$out"
-    cp -R "usr/share" "$out/share"
-
-    chmod -R g-w "$out"
-
-    # Patch wire-desktop
-    patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      --set-rpath "${rpath}:$out/opt/Wire" \
-      "$out/opt/Wire/wire-desktop"
-
-    # Symlink to bin
-    mkdir -p "$out/bin"
-    ln -s "$out/opt/Wire/wire-desktop" "$out/bin/wire-desktop"
-
-    # Desktop file
-    mkdir -p "$out/share/applications"
-    cp "${desktopItem}/share/applications/"* "$out/share/applications"
-  '';
-
-  meta = with stdenv.lib; {
-    description = "A modern, secure messenger";
-    homepage = https://wire.com/;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ worldofpeace ];
-    platforms = [ "x86_64-linux" ];
-  };
-}
+if stdenv.isDarwin
+then darwin
+else linux

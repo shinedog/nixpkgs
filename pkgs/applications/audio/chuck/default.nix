@@ -1,43 +1,34 @@
-{ stdenv, lib, fetchurl, alsaLib, bison, flex, libsndfile, which
-, AppKit, Carbon, CoreAudio, CoreMIDI, CoreServices, Kernel
-, xcbuild
+{ stdenv, lib, fetchurl, alsa-lib, bison, flex, libsndfile, which, DarwinTools, xcbuild
+, AppKit, Carbon, CoreAudio, CoreMIDI, CoreServices, Kernel, MultitouchSupport
 }:
 
 stdenv.mkDerivation rec {
-  version = "1.3.5.2";
-  name = "chuck-${version}";
+  version = "1.4.2.0";
+  pname = "chuck";
 
   src = fetchurl {
     url = "http://chuck.cs.princeton.edu/release/files/chuck-${version}.tgz";
-    sha256 = "02z7sglax3j09grj5s1skmw8z6wz7b21hjrm95nrrdpwbxabh079";
+    sha256 = "sha256-hIwsC9rYgXWSTFqUufKGqoT0Gnsf4nR4KQ0iSVbj8xg=";
   };
 
-  nativeBuildInputs = [ flex bison which ];
+  nativeBuildInputs = [ flex bison which ]
+    ++ lib.optionals stdenv.isDarwin [ DarwinTools xcbuild ];
 
   buildInputs = [ libsndfile ]
-    ++ lib.optional (!stdenv.isDarwin) alsaLib
-    ++ lib.optional stdenv.isDarwin [ AppKit Carbon CoreAudio CoreMIDI CoreServices Kernel ];
+    ++ lib.optional (!stdenv.isDarwin) alsa-lib
+    ++ lib.optionals stdenv.isDarwin [ AppKit Carbon CoreAudio CoreMIDI CoreServices Kernel MultitouchSupport ];
 
-  patches = [ ./clang.patch ./darwin-limits.patch ];
-
-  NIX_CFLAGS_COMPILE = lib.optional stdenv.isDarwin "-Wno-missing-sysroot";
-  NIX_LDFLAGS = lib.optional stdenv.isDarwin "-framework MultitouchSupport";
-
-  postPatch = ''
-    substituteInPlace src/makefile --replace "/usr/bin" "$out/bin"
-    substituteInPlace src/makefile.osx \
-      --replace "weak_framework" "framework" \
-      --replace "MACOSX_DEPLOYMENT_TARGET=10.5" "MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
-  '';
+  patches = [ ./darwin-limits.patch ];
 
   makeFlags = [ "-C src" "DESTDIR=$(out)/bin" ];
-  buildFlags = [ (if stdenv.isDarwin then "osx" else "linux-alsa") ];
+  buildFlags = [ (if stdenv.isDarwin then "mac" else "linux-alsa") ];
 
   meta = with lib; {
     description = "Programming language for real-time sound synthesis and music creation";
-    homepage = http://chuck.cs.princeton.edu;
+    homepage = "http://chuck.cs.princeton.edu";
     license = licenses.gpl2;
-    platforms = with platforms; linux ++ darwin;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ ftrvxmtrx ];
+    mainProgram = "chuck";
   };
 }

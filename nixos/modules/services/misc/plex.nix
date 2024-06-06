@@ -6,6 +6,10 @@ let
   cfg = config.services.plex;
 in
 {
+  imports = [
+    (mkRemovedOptionModule [ "services" "plex" "managePlugins" ] "Please omit or define the option: `services.plex.extraPlugins' instead.")
+  ];
+
   options = {
     services.plex = {
       enable = mkEnableOption "Plex Media Server";
@@ -42,16 +46,6 @@ in
         '';
       };
 
-      managePlugins = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          If set to true, this option will cause all of the symlinks in Plex's
-          plugin directory to be removed and symlinks for paths specified in
-          <option>extraPlugins</option> to be added.
-        '';
-      };
-
       extraPlugins = mkOption {
         type = types.listOf types.path;
         default = [];
@@ -59,19 +53,61 @@ in
           A list of paths to extra plugin bundles to install in Plex's plugin
           directory. Every time the systemd unit for Plex starts up, all of the
           symlinks in Plex's plugin directory will be cleared and this module
-          will symlink all of the paths specified here to that directory. If
-          this behavior is undesired, set <option>managePlugins</option> to
-          false.
+          will symlink all of the paths specified here to that directory.
+        '';
+        example = literalExpression ''
+          [
+            (builtins.path {
+              name = "Audnexus.bundle";
+              path = pkgs.fetchFromGitHub {
+                owner = "djdembeck";
+                repo = "Audnexus.bundle";
+                rev = "v0.2.8";
+                sha256 = "sha256-IWOSz3vYL7zhdHan468xNc6C/eQ2C2BukQlaJNLXh7E=";
+              };
+            })
+          ]
         '';
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.plex;
-        defaultText = "pkgs.plex";
+      extraScanners = mkOption {
+        type = types.listOf types.path;
+        default = [];
         description = ''
-          The Plex package to use. Plex subscribers may wish to use their own
-          package here, pointing to subscriber-only server versions.
+          A list of paths to extra scanners to install in Plex's scanners
+          directory.
+
+          Every time the systemd unit for Plex starts up, all of the symlinks
+          in Plex's scanners directory will be cleared and this module will
+          symlink all of the paths specified here to that directory.
+        '';
+        example = literalExpression ''
+          [
+            (fetchFromGitHub {
+              owner = "ZeroQI";
+              repo = "Absolute-Series-Scanner";
+              rev = "773a39f502a1204b0b0255903cee4ed02c46fde0";
+              sha256 = "4l+vpiDdC8L/EeJowUgYyB3JPNTZ1sauN8liFAcK+PY=";
+            })
+          ]
+        '';
+      };
+
+      accelerationDevices = mkOption {
+        type = types.listOf types.str;
+        default = ["*"];
+        example = [ "/dev/dri/renderD128" ];
+        description = ''
+          A list of device paths to hardware acceleration devices that Plex should
+          have access to. This is useful when transcoding media files.
+          The special value `"*"` will allow all devices.
+        '';
+      };
+
+      package = mkPackageOption pkgs "plex" {
+        extraDescription = ''
+          Plex subscribers may wish to use their own package here,
+          pointing to subscriber-only server versions.
         '';
       };
     };
@@ -106,13 +142,33 @@ in
 
         ExecStart = "${cfg.package}/bin/plexmediaserver";
         KillSignal = "SIGQUIT";
+        PIDFile = "${cfg.dataDir}/Plex Media Server/plexmediaserver.pid";
         Restart = "on-failure";
+
+        # Hardening
+        NoNewPrivileges = true;
+        PrivateTmp = true;
+        PrivateDevices = cfg.accelerationDevices == [];
+        DeviceAllow = mkIf (cfg.accelerationDevices != [] && !lib.elem "*" cfg.accelerationDevices) cfg.accelerationDevices;
+        ProtectSystem = true;
+        ProtectHome = true;
+        ProtectControlGroups = true;
+        ProtectKernelModules = true;
+        ProtectKernelTunables = true;
+        RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6" "AF_NETLINK"];
+        # This could be made to work if the namespaces needed were known
+        # RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        MemoryDenyWriteExecute = true;
+        LockPersonality = true;
       };
 
       environment = {
         # Configuration for our FHS userenv script
         PLEX_DATADIR=cfg.dataDir;
         PLEX_PLUGINS=concatMapStringsSep ":" builtins.toString cfg.extraPlugins;
+        PLEX_SCANNERS=concatMapStringsSep ":" builtins.toString cfg.extraScanners;
 
         # The following variables should be set by the FHS userenv script:
         #   PLEX_MEDIA_SERVER_APPLICATION_SUPPORT_DIR

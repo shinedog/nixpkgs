@@ -1,23 +1,57 @@
-{ stdenv, buildPythonPackage, fetchPypi, unittest2, six }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  importlib-metadata,
+  mypy-extensions,
+  pytestCheckHook,
+  pythonAtLeast,
+  pythonOlder,
+  pytz,
+  setuptools,
+  typing-extensions,
+}:
 
 buildPythonPackage rec {
   pname = "logilab-common";
-  version = "1.4.2";
+  version = "2.0.0";
+  pyproject = true;
+
+  disabled = pythonOlder "3.6";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "cdda9ed0deca7c68f87f7a404ad742e47aaa1ca5956d12988236a5ec3bda13a0";
+    hash = "sha256-ojvR2k3Wpj5Ej0OS57I4aFX/cGFVeL/PmT7riCTelws=";
   };
 
-  propagatedBuildInputs = [ unittest2 six ];
+  postPatch = lib.optionals (pythonAtLeast "3.12") ''
+    substituteInPlace logilab/common/testlib.py \
+      --replace-fail "_TextTestResult" "TextTestResult"
+  '';
 
-  # package supports 3.x but tests require egenix-mx-base which is python 2.x only
-  # and is not currently in nixos
-  doCheck = false;
+  build-system = [ setuptools ];
 
-  meta = with stdenv.lib; {
-    description = "Python packages and modules used by Logilab ";
-    homepage = https://www.logilab.org/project/logilab-common;
-    license = licenses.lgpl21;
+  dependencies = [
+    setuptools
+    mypy-extensions
+    typing-extensions
+  ] ++ lib.optionals (pythonOlder "3.8") [ importlib-metadata ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytz
+  ];
+
+  preCheck = ''
+    export COLLECT_DEPRECATION_WARNINGS_PACKAGE_NAME=true
+  '';
+
+  meta = with lib; {
+    description = "Python packages and modules used by Logilab";
+    homepage = "https://logilab-common.readthedocs.io/";
+    changelog = "https://forge.extranet.logilab.fr/open-source/logilab-common/-/blob/branch/default/CHANGELOG.md";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ ];
+    mainProgram = "logilab-pytest";
   };
 }

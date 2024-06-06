@@ -1,26 +1,44 @@
-{ stdenv
-, buildPythonPackage
-, fetchgit
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  poetry-core,
+  pytestCheckHook,
+  pytest-mock,
+  typing-extensions,
 }:
 
 buildPythonPackage rec {
   pname = "pykka";
-  version = "1.2.0";
+  version = "4.0.2";
+  format = "pyproject";
 
-  src = fetchgit {
-    url = "https://github.com/jodal/pykka.git";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "jodal";
+    repo = pname;
     rev = "refs/tags/v${version}";
-    sha256 = "0qlfw1054ap0cha1m6dbnq51kjxqxaf338g7jwnwy33b3gr8x0hg";
+    hash = "sha256-2baFwZPNuVU39Kt5B8QvGKu7jMbg+GZ3ROoTxzPOXac=";
   };
 
-  # There are no tests
-  doCheck = false;
+  nativeBuildInputs = [ poetry-core ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.pykka.org;
+  propagatedBuildInputs = lib.optionals (pythonOlder "3.10") [ typing-extensions ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+    pytest-mock
+  ];
+
+  pythonImportsCheck = [ "pykka" ];
+
+  meta = with lib; {
+    homepage = "https://www.pykka.org/";
     description = "A Python implementation of the actor model";
+    changelog = "https://github.com/jodal/pykka/releases/tag/v${version}";
+    maintainers = with maintainers; [ ];
     license = licenses.asl20;
-    maintainers = with maintainers; [ rickynils ];
   };
-
 }

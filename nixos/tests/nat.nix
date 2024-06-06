@@ -3,28 +3,26 @@
 # client on the inside network, a server on the outside network, and a
 # router connected to both that performs Network Address Translation
 # for the client.
-import ./make-test.nix ({ pkgs, lib, withFirewall, withConntrackHelpers ? false, ... }:
+import ./make-test-python.nix ({ pkgs, lib, withFirewall, nftables ? false, ... }:
   let
-    unit = if withFirewall then "firewall" else "nat";
+    unit = if nftables then "nftables" else (if withFirewall then "firewall" else "nat");
 
     routerBase =
       lib.mkMerge [
         { virtualisation.vlans = [ 2 1 ];
           networking.firewall.enable = withFirewall;
+          networking.firewall.filterForward = nftables;
+          networking.nftables.enable = nftables;
           networking.nat.internalIPs = [ "192.168.1.0/24" ];
           networking.nat.externalInterface = "eth1";
         }
-        (lib.optionalAttrs withConntrackHelpers {
-          networking.firewall.connectionTrackingModules = [ "ftp" ];
-          networking.firewall.autoLoadConntrackHelpers = true;
-        })
       ];
   in
   {
-    name = "nat" + (if withFirewall then "WithFirewall" else "Standalone")
-                 + (lib.optionalString withConntrackHelpers "withConntrackHelpers");
-    meta = with pkgs.stdenv.lib.maintainers; {
-      maintainers = [ eelco rob ];
+    name = "nat" + (lib.optionalString nftables "Nftables")
+                 + (if withFirewall then "WithFirewall" else "Standalone");
+    meta = with pkgs.lib.maintainers; {
+      maintainers = [ rob ];
     };
 
     nodes =
@@ -34,11 +32,8 @@ import ./make-test.nix ({ pkgs, lib, withFirewall, withConntrackHelpers ? false,
             { virtualisation.vlans = [ 1 ];
               networking.defaultGateway =
                 (pkgs.lib.head nodes.router.config.networking.interfaces.eth2.ipv4.addresses).address;
+              networking.nftables.enable = nftables;
             }
-            (lib.optionalAttrs withConntrackHelpers {
-              networking.firewall.connectionTrackingModules = [ "ftp" ];
-              networking.firewall.autoLoadConntrackHelpers = true;
-            })
           ];
 
         router =
@@ -69,49 +64,52 @@ import ./make-test.nix ({ pkgs, lib, withFirewall, withConntrackHelpers ? false,
         routerDummyNoNatClosure = nodes.routerDummyNoNat.config.system.build.toplevel;
         routerClosure = nodes.router.config.system.build.toplevel;
       in ''
-        $client->start;
-        $router->start;
-        $server->start;
+        client.start()
+        router.start()
+        server.start()
 
         # The router should have access to the server.
-        $server->waitForUnit("network.target");
-        $server->waitForUnit("httpd");
-        $router->waitForUnit("network.target");
-        $router->succeed("curl --fail http://server/ >&2");
+        server.wait_for_unit("network.target")
+        server.wait_for_unit("httpd")
+        router.wait_for_unit("network.target")
+        router.succeed("curl --fail http://server/ >&2")
 
         # The client should be also able to connect via the NAT router.
-        $router->waitForUnit("${unit}");
-        $client->waitForUnit("network.target");
-        $client->succeed("curl --fail http://server/ >&2");
-        $client->succeed("ping -c 1 server >&2");
+        router.wait_for_unit("${unit}")
+        client.wait_for_unit("network.target")
+        client.succeed("curl --fail http://server/ >&2")
+        client.succeed("ping -c 1 server >&2")
 
         # Test whether passive FTP works.
-        $server->waitForUnit("vsftpd");
-        $server->succeed("echo Hello World > /home/ftp/foo.txt");
-        $client->succeed("curl -v ftp://server/foo.txt >&2");
+        server.wait_for_unit("vsftpd")
+        server.succeed("echo Hello World > /home/ftp/foo.txt")
+        client.succeed("curl -v ftp://server/foo.txt >&2")
 
         # Test whether active FTP works.
-        $client->${if withConntrackHelpers then "succeed" else "fail"}(
-          "curl -v -P - ftp://server/foo.txt >&2");
+        client.fail("curl -v -P - ftp://server/foo.txt >&2")
 
         # Test ICMP.
-        $client->succeed("ping -c 1 router >&2");
-        $router->succeed("ping -c 1 client >&2");
+        client.succeed("ping -c 1 router >&2")
+        router.succeed("ping -c 1 client >&2")
 
         # If we turn off NAT, the client shouldn't be able to reach the server.
-        $router->succeed("${routerDummyNoNatClosure}/bin/switch-to-configuration test 2>&1");
-        $client->fail("curl --fail --connect-timeout 5 http://server/ >&2");
-        $client->fail("ping -c 1 server >&2");
+        router.succeed(
+            "${routerDummyNoNatClosure}/bin/switch-to-configuration test 2>&1"
+        )
+        client.fail("curl --fail --connect-timeout 5 http://server/ >&2")
+        client.fail("ping -c 1 server >&2")
 
         # And make sure that reloading the NAT job works.
-        $router->succeed("${routerClosure}/bin/switch-to-configuration test 2>&1");
+        router.succeed(
+            "${routerClosure}/bin/switch-to-configuration test 2>&1"
+        )
         # FIXME: this should not be necessary, but nat.service is not started because
         #        network.target is not triggered
         #        (https://github.com/NixOS/nixpkgs/issues/16230#issuecomment-226408359)
-        ${lib.optionalString (!withFirewall) ''
-          $router->succeed("systemctl start nat.service");
+        ${lib.optionalString (!withFirewall && !nftables) ''
+          router.succeed("systemctl start nat.service")
         ''}
-        $client->succeed("curl --fail http://server/ >&2");
-        $client->succeed("ping -c 1 server >&2");
+        client.succeed("curl --fail http://server/ >&2")
+        client.succeed("ping -c 1 server >&2")
       '';
   })

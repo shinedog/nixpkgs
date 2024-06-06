@@ -1,26 +1,54 @@
-{ pkgs
-, buildPythonPackage
-, fetchPypi
-, python
-, adal
-, msrest
+{
+  lib,
+  adal,
+  buildPythonPackage,
+  fetchFromGitHub,
+  httpretty,
+  mock,
+  msrest,
+  pytest-asyncio,
+  pytestCheckHook,
+  pythonOlder,
+  setuptools,
 }:
 
 buildPythonPackage rec {
-  version = "0.6.0";
   pname = "msrestazure";
+  version = "0.6.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "06s04f6nng4na2663kc12a3skiaqb631nscjfwpsrx4lzkf8bccr";
+  disabled = pythonOlder "3.7";
+
+  src = fetchFromGitHub {
+    owner = "Azure";
+    repo = "msrestazure-for-python";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-ZZVZi0v1ucD2g5FpLaNhfNBf6Ab10fUEcEdkY4ELaEY=";
   };
 
-  propagatedBuildInputs = [ adal msrest ];
+  nativeBuildInputs = [ setuptools ];
 
-  meta = with pkgs.lib; {
-    description = "The runtime library 'msrestazure' for AutoRest generated Python clients.";
+  propagatedBuildInputs = [
+    adal
+    msrest
+  ];
+
+  nativeCheckInputs = [
+    httpretty
+    mock
+    pytest-asyncio
+    pytestCheckHook
+  ];
+
+  pythonImportsCheck = [ "msrest" ];
+
+  meta = with lib; {
+    description = "The runtime library 'msrestazure' for AutoRest generated Python clients";
     homepage = "https://azure.microsoft.com/en-us/develop/python/";
     license = licenses.mit;
-    maintainers = with maintainers; [ bendlas ];
+    maintainers = with maintainers; [
+      bendlas
+      jonringer
+    ];
   };
 }

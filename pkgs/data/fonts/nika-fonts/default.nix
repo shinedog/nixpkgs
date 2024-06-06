@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "nika-fonts";
   version = "1.0.0";
 
@@ -8,19 +8,22 @@ stdenv.mkDerivation rec {
     owner = "font-store";
     repo = "NikaFont";
     rev = "v${version}";
-    sha256 = "16dhk87vmjnywl5wqsl9dzp12ddpfk57w08f7811m3ijqadscdwc";
+    hash = "sha256-jDemm8IyjhoCOg4Bfsp0tzUR7m+JaswL5d7Kug+asJk=";
   };
 
   installPhase = ''
-    mkdir -p $out/share/fonts/nika-fonts
-    cp -v $( find . -name '*.ttf') $out/share/fonts/nika-fonts
+    runHook preInstall
+
+    find . -name '*.ttf' -exec install -m444 -Dt $out/share/fonts/nika-fonts {} \;
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/font-store/NikaFont/;
+  meta = with lib; {
+    homepage = "https://github.com/font-store/NikaFont/";
     description = "Persian/Arabic Open Source Font";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [ maintainers.linarcx ];
+    maintainers = [ ];
   };
 }

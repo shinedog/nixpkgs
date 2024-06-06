@@ -1,28 +1,38 @@
-{ stdenv, fetchFromGitHub, cmake, openssl }:
+{ lib, stdenv, fetchFromGitHub, cmake, openssl, postgresql, zstd, fetchpatch }:
 
 stdenv.mkDerivation rec {
   pname = "odyssey";
-  version = "unstable-2019-03-12";
+  version = "1.3";
 
   src = fetchFromGitHub {
     owner = "yandex";
     repo = pname;
-    rev = "af015839b03f30260c75d8f565521910c0694ed6";
-    sha256 = "1cnnypvk78wp1qmqfriky40ls0grkp4v46mypyaq5kl8ppknvnvs";
+    rev = version;
+    sha256 = "sha256-1ALTKRjpKmmFcAuhmgpcbJBkNuUlTyau8xWDRHh7gf0=";
   };
 
+  patches = [
+    # Fix compression build. Remove with the next release. https://github.com/yandex/odyssey/pull/441
+    (fetchpatch {
+      url = "https://github.com/yandex/odyssey/commit/01ca5b345c4483add7425785c9c33dfa2c135d63.patch";
+      sha256 = "sha256-8UPkZkiI08ZZL6GShhug/5/kOVrmdqYlsD1bcqfxg/w=";
+    })
+  ];
+
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ openssl ];
+  buildInputs = [ openssl postgresql zstd ];
+  cmakeFlags = [ "-DPQ_LIBRARY=${postgresql.lib}/lib" "-DBUILD_COMPRESSION=ON" ];
 
   installPhase = ''
     install -Dm755 -t $out/bin sources/odyssey
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Scalable PostgreSQL connection pooler";
-    homepage = https://github.com/yandex/odyssey;
+    homepage = "https://github.com/yandex/odyssey";
     license = licenses.bsd3;
-    maintainers = [ maintainers.marsam ];
+    maintainers = [ ];
     platforms = [ "x86_64-linux" ];
+    mainProgram = "odyssey";
   };
 }

@@ -1,33 +1,45 @@
-{ stdenv, fetchFromGitHub, pkgconfig, which, docutils, freetype, pango }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, docutils
+, pkg-config
+, freetype
+, pango
+, testers
+}:
 
-stdenv.mkDerivation rec {
-  name = "abcm2ps-${version}";
-  version = "8.14.4";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "abcm2ps";
+  version = "8.14.15";
 
   src = fetchFromGitHub {
     owner = "leesavide";
     repo = "abcm2ps";
-    rev = "v${version}";
-    sha256 = "0k53yf8plkkwsgg2vk468fkhvvwxnz5jk77n1159l0g362k36p0n";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-0ZSMKARX16/33sIWR8LOVOFblI/Q+iZgnfVq/xqRMnI=";
   };
 
   configureFlags = [
     "--INSTALL=install"
   ];
 
-  buildFlags = [
-    "CC=${stdenv.cc}/bin/cc"
-  ];
-
-  nativeBuildInputs = [ which pkgconfig docutils ];
+  nativeBuildInputs = [ docutils pkg-config ];
 
   buildInputs = [ freetype pango ];
 
-  meta = with stdenv.lib; {
-    homepage = http://moinejf.free.fr/;
-    license = licenses.gpl3;
+  passthru.tests = {
+    version = testers.testVersion {
+      package = finalAttrs.finalPackage;
+      command = "abcm2ps -V";
+    };
+  };
+
+  meta = with lib; {
+    homepage = "http://moinejf.free.fr/";
+    license = licenses.lgpl3Plus;
     description = "A command line program which converts ABC to music sheet in PostScript or SVG format";
     platforms = platforms.unix;
     maintainers = [ maintainers.dotlambda ];
+    mainProgram = "abcm2ps";
   };
-}
+})

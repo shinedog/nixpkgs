@@ -1,25 +1,30 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  version = "3.08";
-  name = "epstool-${version}";
+  version = "3.09";
+  pname = "epstool";
 
   src = fetchurl {
-    url = "http://ftp.de.debian.org/debian/pool/main/e/epstool/epstool_${version}+repack.orig.tar.gz";
-    sha256 = "1pfgqbipwk36clhma2k365jkpvyy75ahswn8jczzys382jalpwgk";
+    url = "http://ftp.de.debian.org/debian/pool/main/e/epstool/epstool_${version}.orig.tar.xz";
+    hash = "sha256-HoUknRpE+UGLH5Wjrr2LB4TauOSd62QXrJuZbKCPYBE=";
   };
+
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "CLINK=${stdenv.cc.targetPrefix}cc"
+    "LINK=${stdenv.cc.targetPrefix}cc"
+  ];
 
   installPhase = ''
     make EPSTOOL_ROOT=$out install
   '';
 
-  patches = [ ./gcc43.patch ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A utility to create or extract preview images in EPS files, fix bounding boxes and convert to bitmaps";
-    homepage = http://pages.cs.wisc.edu/~ghost/gsview/epstool.htm;
-    license = licenses.gpl2;
+    homepage = "http://pages.cs.wisc.edu/~ghost/gsview/epstool.htm";
+    license = licenses.gpl2Only;
     maintainers = [ maintainers.asppsa ];
-    platforms = platforms.linux;
+    platforms = platforms.all;
+    mainProgram = "epstool";
   };
 }

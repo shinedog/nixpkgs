@@ -7,13 +7,10 @@ let
   generationsDirBuilder = pkgs.substituteAll {
     src = ./generations-dir-builder.sh;
     isExecutable = true;
-    inherit (pkgs.buildPackages) bash;
-    path = with pkgs.buildPackages; [coreutils gnused gnugrep];
+    inherit (pkgs) bash;
+    path = [pkgs.coreutils pkgs.gnused pkgs.gnugrep];
     inherit (config.boot.loader.generationsDir) copyKernels;
   };
-
-  # Temporary check, for nixos to cope both with nixpkgs stdenv-updates and trunk
-  inherit (pkgs.stdenv.hostPlatform) platform;
 
 in
 
@@ -27,9 +24,9 @@ in
         type = types.bool;
         description = ''
           Whether to create symlinks to the system generations under
-          <literal>/boot</literal>.  When enabled,
-          <literal>/boot/default/kernel</literal>,
-          <literal>/boot/default/initrd</literal>, etc., are updated to
+          `/boot`.  When enabled,
+          `/boot/default/kernel`,
+          `/boot/default/initrd`, etc., are updated to
           point to the current generation's kernel image, initial RAM
           disk, and other bootstrap files.
 
@@ -59,7 +56,7 @@ in
 
     system.build.installBootLoader = generationsDirBuilder;
     system.boot.loader.id = "generationsDir";
-    system.boot.loader.kernelFile = platform.kernelTarget;
+    system.boot.loader.kernelFile = pkgs.stdenv.hostPlatform.linux-kernel.target;
 
   };
 }

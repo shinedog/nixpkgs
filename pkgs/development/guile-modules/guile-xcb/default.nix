@@ -1,31 +1,46 @@
-{ stdenv, fetchurl, pkgconfig, guile, texinfo }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, guile
+, pkg-config
+, texinfo
+}:
 
-let
-  name = "guile-xcb-${version}";
-  version = "1.3";
-in stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "guile-xcb";
+  version = "unstable-2017-05-29";
 
-  src = fetchurl {
-    url = "http://www.markwitmer.com/dist/${name}.tar.gz";
-    sha256 = "04dvbqdrrs67490gn4gkq9zk8mqy3mkls2818ha4p0ckhh0pm149";
+  src = fetchFromGitHub {
+    owner = "mwitmer";
+    repo = pname;
+    rev = "db7d5a393cc37a56f66541b3f33938b40c6f35b3";
+    hash = "sha256-zbIsEIPwNJ1YXMZTDw2DfzufC+IZWfcWgZHbuv7bhJs=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ guile texinfo ];
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+  buildInputs = [
+    guile
+    texinfo
+  ];
 
-  preConfigure = ''
-    configureFlags="
-      --with-guile-site-dir=$out/share/guile/site
-      --with-guile-site-ccache-dir=$out/share/guile/site
-    ";
-  '';
+  configureFlags = [
+    "--with-guile-site-dir=$(out)/${guile.siteDir}"
+    "--with-guile-site-ccache-dir=$(out)/${guile.siteCcacheDir}"
+  ];
 
-  meta = with stdenv.lib; {
+  makeFlags = [
+    "GUILE_AUTO_COMPILE=0"
+  ];
+
+  meta = with lib; {
+    homepage = "https://github.com/mwitmer/guile-xcb";
     description = "XCB bindings for Guile";
-    homepage = "http://www.markwitmer.com/guile-xcb/guile-xcb.html";
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ vyp ];
-    platforms = platforms.linux;
+    platforms = guile.meta.platforms;
   };
 }

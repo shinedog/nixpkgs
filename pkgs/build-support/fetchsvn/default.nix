@@ -1,10 +1,16 @@
-{stdenvNoCC, subversion, glibcLocales, sshSupport ? true, openssh ? null}:
-{url, rev ? "HEAD", md5 ? "", sha256 ? ""
+{ lib, stdenvNoCC, buildPackages
+, subversion, glibcLocales, sshSupport ? true, openssh ? null
+}:
+
+{ url, rev ? "HEAD", sha256 ? "", hash ? ""
 , ignoreExternals ? false, ignoreKeywords ? false, name ? null
-, preferLocalBuild ? true }:
+, preferLocalBuild ? true
+}:
+
+assert sshSupport -> openssh != null;
 
 let
-  repoName = with stdenvNoCC.lib;
+  repoName = with lib;
     let
       fst = head;
       snd = l: head (tail l);
@@ -26,20 +32,28 @@ let
   name_ = if name == null then "${repoName}-r${toString rev}" else name;
 in
 
-if md5 != "" then
-  throw "fetchsvn does not support md5 anymore, please use sha256"
+if hash != "" && sha256 != "" then
+  throw "Only one of sha256 or hash can be set"
 else
 stdenvNoCC.mkDerivation {
   name = name_;
   builder = ./builder.sh;
-  nativeBuildInputs = [ subversion glibcLocales ];
+  nativeBuildInputs = [ subversion glibcLocales ]
+    ++ lib.optional sshSupport openssh;
 
-  outputHashAlgo = "sha256";
+  SVN_SSH = if sshSupport then "${buildPackages.openssh}/bin/ssh" else null;
+
+  outputHashAlgo = if hash != "" then null else "sha256";
   outputHashMode = "recursive";
-  outputHash = sha256;
+  outputHash = if hash != "" then
+    hash
+  else if sha256 != "" then
+    sha256
+  else
+    lib.fakeSha256;
 
-  inherit url rev sshSupport openssh ignoreExternals ignoreKeywords;
+  inherit url rev ignoreExternals ignoreKeywords;
 
-  impureEnvVars = stdenvNoCC.lib.fetchers.proxyImpureEnvVars;
+  impureEnvVars = lib.fetchers.proxyImpureEnvVars;
   inherit preferLocalBuild;
 }

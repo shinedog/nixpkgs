@@ -1,47 +1,89 @@
-{ stdenv, pkgs, python3 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, glibcLocales
+, installShellFiles
+, python3
+}:
 
-with python3.pkgs; buildPythonApplication rec {
+python3.pkgs.buildPythonApplication rec {
   pname = "khal";
-  version = "0.10.1";
+  version = "0.11.3";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1r8bkgjwkh7i8ygvsv51h1cnax50sb183vafg66x5snxf3dgjl6l";
+  src = fetchFromGitHub {
+    owner = "pimutils";
+    repo = "khal";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-YP2kQ/qXPDwvFvlHf+A2Ymvk49dmt5tAnTaOhrOV92M=";
   };
 
-  propagatedBuildInputs = [
+  nativeBuildInputs = [
+    glibcLocales
+    installShellFiles
+  ] ++ (with python3.pkgs; [
+    setuptools-scm
+    sphinx
+    sphinxcontrib-newsfeed
+  ]);
+
+  propagatedBuildInputs = with python3.pkgs;[
     atomicwrites
     click
     click-log
     configobj
-    dateutil
+    freezegun
     icalendar
     lxml
-    pkgs.vdirsyncer
+    pkginfo
+    vdirsyncer
+    python-dateutil
     pytz
     pyxdg
-    requests_toolbelt
+    requests-toolbelt
     tzlocal
     urwid
-    pkginfo
-    freezegun
   ];
-  nativeBuildInputs = [ setuptools_scm ];
-  checkInputs = [ pytest ];
+
+  nativeCheckInputs = with python3.pkgs;[
+    freezegun
+    hypothesis
+    packaging
+    pytestCheckHook
+    vdirsyncer
+  ];
 
   postInstall = ''
-    install -D misc/__khal $out/share/zsh/site-functions/__khal
+    # shell completions
+    installShellCompletion --cmd khal \
+      --bash <(_KHAL_COMPLETE=bash_source $out/bin/khal) \
+      --zsh <(_KHAL_COMPLETE=zsh_source $out/bin/khal) \
+      --fish <(_KHAL_COMPLETE=fish_source $out/bin/khal)
+
+    # man page
+    PATH="${python3.withPackages (ps: with ps; [ sphinx sphinxcontrib-newsfeed ])}/bin:$PATH" \
+    make -C doc man
+    installManPage doc/build/man/khal.1
+
+    # .desktop file
+    install -Dm755 misc/khal.desktop -t $out/share/applications
   '';
 
   doCheck = !stdenv.isAarch64;
 
-  checkPhase = ''
-    py.test
-  '';
+  LC_ALL = "en_US.UTF-8";
 
-  meta = with stdenv.lib; {
-    homepage = http://lostpackets.de/khal/;
+  disabledTests = [
+    # timing based
+    "test_etag"
+    "test_bogota"
+    "test_event_no_dst"
+  ];
+
+  meta = with lib; {
     description = "CLI calendar application";
+    homepage = "http://lostpackets.de/khal/";
+    changelog = "https://github.com/pimutils/khal/releases/tag/v${version}";
     license = licenses.mit;
     maintainers = with maintainers; [ gebner ];
   };

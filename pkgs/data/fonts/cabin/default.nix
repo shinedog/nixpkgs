@@ -1,19 +1,26 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-fetchzip rec {
-  name = "cabin-1.005";
+stdenvNoCC.mkDerivation rec {
+  pname = "cabin";
+  version = "1.005";
 
-  url = https://github.com/impallari/Cabin/archive/982839c790e9dc57c343972aa34c51ed3b3677fd.zip;
+  src = fetchFromGitHub {
+    owner = "impallari";
+    repo = "Cabin";
+    rev = "982839c790e9dc57c343972aa34c51ed3b3677fd";
+    hash = "sha256-9l4QcwCot340Bq41ER68HSZGQ9h0opyzgG3DG/fVZ5s=";
+  };
 
-  postFetch = ''
-    mkdir -p $out/share/{doc,fonts}
-    unzip -j $downloadedFile \*.otf                    -d $out/share/fonts/opentype
-    unzip -j $downloadedFile \*README.md \*FONTLOG.txt -d "$out/share/doc/${name}"
+  installPhase = ''
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/opentype fonts/OTF/*.otf
+    install -m444 -Dt $out/share/doc/${pname}-${version} README.md FONTLOG.txt
+
+    runHook postInstall
   '';
 
-  sha256 = "1ax5c2iab48qsk9zn3gjvqaib2lnlm25f1wr0aysf5ngw0y0jkrd";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A humanist sans with 4 weights and true italics";
     longDescription = ''
       The Cabin font family is a humanist sans with 4 weights and true italics,
@@ -27,7 +34,7 @@ fetchzip rec {
       adjusted. The curved stem endings have a 10 degree angle. E and F have
       shorter center arms. M is splashed.
     '';
-    homepage = http://www.impallari.com/cabin;
+    homepage = "http://www.impallari.com/cabin";
     license = licenses.ofl;
     maintainers = with maintainers; [ cmfwyp ];
     platforms = platforms.all;

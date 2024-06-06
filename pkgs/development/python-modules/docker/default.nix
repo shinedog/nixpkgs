@@ -1,33 +1,75 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, six, requests, websocket_client
-, ipaddress, backports_ssl_match_hostname, docker_pycreds
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+  setuptools-scm,
+
+  # dependencies
+  packaging,
+  requests,
+  urllib3,
+
+  # optional-dependenices
+  paramiko,
+  websocket-client,
+
+  # tests
+  pytestCheckHook,
 }:
+
 buildPythonPackage rec {
-  version = "3.7.2";
   pname = "docker";
+  version = "7.0.0";
+  format = "pyproject";
+
+  disabled = pythonOlder "3.8";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "c456ded5420af5860441219ff8e51cdec531d65f4a9e948ccd4133e063b72f50";
+    hash = "sha256-Mjc2+5LNlBj8XnEzvJU+EanaBPRIP4KLUn21U/Hn5aM=";
   };
 
-  propagatedBuildInputs = [
-    six
-    requests
-    websocket_client
-    ipaddress
-    backports_ssl_match_hostname
-    docker_pycreds
+  nativeBuildInputs = [
+    setuptools
+    setuptools-scm
   ];
 
-  # Flake8 version conflict
-  doCheck = false;
+  propagatedBuildInputs = [
+    packaging
+    requests
+    urllib3
+  ];
 
-  meta = with stdenv.lib; {
+  passthru.optional-dependencies = {
+    ssh = [ paramiko ];
+    websockets = [ websocket-client ];
+  };
+
+  pythonImportsCheck = [ "docker" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  pytestFlagsArray = [ "tests/unit" ];
+
+  # Deselect socket tests on Darwin because it hits the path length limit for a Unix domain socket
+  disabledTests = lib.optionals stdenv.isDarwin [
+    "api_test"
+    "stream_response"
+    "socket_file"
+  ];
+
+  meta = with lib; {
+    changelog = "https://github.com/docker/docker-py/releases/tag/${version}";
     description = "An API client for docker written in Python";
-    homepage = https://github.com/docker/docker-py;
+    homepage = "https://github.com/docker/docker-py";
     license = licenses.asl20;
-    maintainers = with maintainers; [
-    ];
+    maintainers = with maintainers; [ jonringer ];
   };
 }

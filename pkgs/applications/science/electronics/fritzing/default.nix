@@ -1,46 +1,119 @@
-{ stdenv, fetchpatch, fetchFromGitHub, qmake, pkgconfig
-, qtbase, qtsvg, qtserialport, boost, libgit2
+{ stdenv
+, lib
+, fetchFromGitHub
+, wrapQtAppsHook
+, qmake
+, pkg-config
+, qtbase
+, qtsvg
+, qttools
+, qtserialport
+, qtwayland
+, qt5compat
+, boost
+, libngspice
+, libgit2
+, quazip
+, clipper
 }:
 
-stdenv.mkDerivation rec {
-  name = "fritzing-${version}";
-  version = "0.9.3b";
-
-  src = fetchFromGitHub {
-    owner = "fritzing";
-    repo = "fritzing-app";
-    rev = version;
-    sha256 = "0hpyc550xfhr6gmnc85nq60w00rm0ljm0y744dp0z88ikl04f4s3";
-  };
+let
+  # SHA256 of the fritzing-parts HEAD on the master branch,
+  # which contains the latest stable parts definitions
+  partsSha = "015626e6cafb1fc7831c2e536d97ca2275a83d32";
 
   parts = fetchFromGitHub {
     owner = "fritzing";
     repo = "fritzing-parts";
-    rev = version;
-    sha256 = "1d2v8k7p176j0lczx4vx9n9gbg3vw09n2c4b6w0wj5wqmifywhc1";
+    rev = partsSha;
+    hash = "sha256-5jw56cqxpT/8bf1q551WG53J6Lw5pH0HEtRUoNNMc+A=";
   };
 
-  patches = [(fetchpatch {
-    name = "0001-Squashed-commit-of-the-following.patch";
-    url = "https://aur.archlinux.org/cgit/aur.git/plain/0001-Squashed-commit-of-the-following.patch?h=fritzing";
-    sha256 = "1cv6myidxhy28i8m8v13ghzkvx5978p9dcd8v7885y0l1h3108mf";
-  })];
+  # Header-only library
+  svgpp = fetchFromGitHub {
+    owner = "svgpp";
+    repo = "svgpp";
+    rev = "v1.3.0";
+    hash = "sha256-kJEVnMYnDF7bThDB60bGXalYgpn9c5/JCZkRSK5GoE4=";
+  };
+in
 
-  buildInputs = [ qtbase qtsvg qtserialport boost libgit2 ];
+stdenv.mkDerivation {
+  pname = "fritzing";
+  version = "1.0.2";
 
-  nativeBuildInputs = [ qmake pkgconfig ];
+  src = fetchFromGitHub {
+    owner = "fritzing";
+    repo = "fritzing-app";
+    rev = "dbdbe34c843677df721c7b3fc3e32c0f737e7e95";
+    hash = "sha256-Xi5sPU2RGkqh7T+EOvwxJJKKYDhJfccyEZ8LBBTb2s4=";
+  };
 
-  qmakeFlags = [ "phoenix.pro" ];
+  nativeBuildInputs = [ qmake pkg-config qttools wrapQtAppsHook ];
+  buildInputs = [
+    qtbase
+    qtsvg
+    qtserialport
+    qt5compat
+    boost
+    libgit2
+    quazip
+    libngspice
+    clipper
+  ] ++ lib.optionals stdenv.isLinux [
+    qtwayland
+  ];
 
-  preConfigure = ''
-    ln -s "$parts" parts
+  postPatch = ''
+    # Use packaged quazip, libgit and ngspice
+    sed -i "/pri\/quazipdetect.pri/d" phoenix.pro
+    sed -i "/pri\/spicedetect.pri/d" phoenix.pro
+    substituteInPlace pri/libgit2detect.pri \
+      --replace-fail 'LIBGIT_STATIC = true' 'LIBGIT_STATIC = false'
+
+    #TODO: Do not hardcode SHA.
+    substituteInPlace src/fapplication.cpp \
+      --replace-fail 'PartsChecker::getSha(dir.absolutePath());' '"${partsSha}";'
+
+    substituteInPlace phoenix.pro \
+      --replace-fail "6.5.10" "${qtbase.version}"
+
+    mkdir parts
+    cp -a ${parts}/* parts/
   '';
 
-  meta = {
+  env.NIX_CFLAGS_COMPILE = lib.concatStringsSep " " [
+    "-I${lib.getDev quazip}/include/QuaZip-Qt${lib.versions.major qtbase.version}-${quazip.version}"
+    "-I${svgpp}/include"
+    "-I${clipper}/include/polyclipping"
+  ];
+  env.NIX_LDFLAGS = "-lquazip1-qt${lib.versions.major qtbase.version}";
+
+  qmakeFlags = [
+    "phoenix.pro"
+  ];
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    mkdir $out/Applications
+    mv $out/bin/Fritzing.app $out/Applications/Fritzing.app
+    cp FritzingInfo.plist $out/Applications/Fritzing.app/Contents/Info.plist
+    makeWrapper $out/Applications/Fritzing.app/Contents/MacOS/Fritzing $out/bin/Fritzing
+  '';
+
+  postFixup = ''
+    # generate the parts.db file
+    QT_QPA_PLATFORM=offscreen "$out/bin/Fritzing" \
+      -db "$out/share/fritzing/parts/parts.db" \
+      -pp "$out/share/fritzing/parts" \
+      -folder "$out/share/fritzing"
+  '';
+
+  meta = with lib; {
     description = "An open source prototyping tool for Arduino-based projects";
-    homepage = http://fritzing.org/;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.robberer ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://fritzing.org/";
+    license = with licenses; [ gpl3 cc-by-sa-30 ];
+    maintainers = with maintainers; [ robberer muscaln ];
+    platforms = platforms.unix;
+    mainProgram = "Fritzing";
   };
 }

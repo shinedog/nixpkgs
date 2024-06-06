@@ -1,25 +1,67 @@
-{ stdenv, buildPythonPackage, fetchPypi
-, pytest, mock, pytestcov, coverage }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  pythonOlder,
+
+  # build-system
+  setuptools,
+
+  # dependencies
+  packaging,
+
+  # optional-dependencies
+  eventlet,
+  gevent,
+  tornado,
+  setproctitle,
+
+  pytestCheckHook,
+}:
 
 buildPythonPackage rec {
   pname = "gunicorn";
-  version = "19.9.0";
+  version = "21.2.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "fa2662097c66f920f53f70621c6c58ca4a3c4d3434205e608e121b5b3b71f4f3";
+  disabled = pythonOlder "3.5";
+
+  src = fetchFromGitHub {
+    owner = "benoitc";
+    repo = "gunicorn";
+    rev = version;
+    hash = "sha256-xP7NNKtz3KNrhcAc00ovLZRx2h6ZqHbwiFOpCiuwf98=";
   };
 
-  checkInputs = [ pytest mock pytestcov coverage ];
-
-  prePatch = ''
-    substituteInPlace requirements_test.txt --replace "==" ">=" \
-      --replace "coverage>=4.0,<4.4" "coverage"
+  postPatch = ''
+    substituteInPlace setup.cfg \
+      --replace "--cov=gunicorn --cov-report=xml" ""
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://pypi.python.org/pypi/gunicorn;
-    description = "WSGI HTTP Server for UNIX";
+  nativeBuildInputs = [ setuptools ];
+
+  propagatedBuildInputs = [ packaging ];
+
+  passthru.optional-dependencies = {
+    gevent = [ gevent ];
+    eventlet = [ eventlet ];
+    tornado = [ tornado ];
+    gthread = [ ];
+    setproctitle = [ setproctitle ];
+  };
+
+  pythonImportsCheck = [ "gunicorn" ];
+
+  nativeCheckInputs = [
+    pytestCheckHook
+  ] ++ lib.flatten (lib.attrValues passthru.optional-dependencies);
+
+  meta = with lib; {
+    changelog = "https://github.com/benoitc/gunicorn/releases/tag/${version}";
+    homepage = "https://github.com/benoitc/gunicorn";
+    description = "gunicorn 'Green Unicorn' is a WSGI HTTP Server for UNIX, fast clients and sleepy applications";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
+    mainProgram = "gunicorn";
   };
 }

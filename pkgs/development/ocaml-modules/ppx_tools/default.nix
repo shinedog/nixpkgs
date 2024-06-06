@@ -1,6 +1,17 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib }:
+{ lib, stdenv, fetchFromGitHub, buildDunePackage, ocaml, findlib, cppo }:
 
-let param = {
+if lib.versionAtLeast ocaml.version "5.2"
+then throw "ppx_tools is not available for OCaml ${ocaml.version}"
+else
+
+let param =
+  let v6_6 = {
+    version = "6.6";
+    sha256 = "sha256-QhuaQ9346a3neoRM4GrOVzjR8fg9ysMZR1VzNgyIQtc=";
+    nativeBuildInputs = [cppo];
+    buildInputs = [cppo];
+  }; in
+{
   "4.02" = {
     version = "5.0+4.02.0";
     sha256 = "16drjk0qafjls8blng69qiv35a84wlafpk16grrg2i3x19p8dlj8"; };
@@ -20,28 +31,51 @@ let param = {
   "4.07" = {
     version = "5.1+4.06.0";
     sha256 = "1ww4cspdpgjjsgiv71s0im5yjkr3544x96wsq1vpdacq7dr7zwiw"; };
-}."${ocaml.meta.branch}";
+  "4.08" = v6_6;
+  "4.09" = v6_6;
+  "4.10" = v6_6;
+  "4.11" = v6_6;
+  "4.12" = v6_6;
+  "4.13" = v6_6;
+  "4.14" = v6_6;
+  "5.0" = v6_6;
+  "5.1" = v6_6;
+}.${ocaml.meta.branch};
 in
-  stdenv.mkDerivation {
-    name = "ocaml${ocaml.version}-ppx_tools-${param.version}";
-    src = fetchFromGitHub {
+
+let src = fetchFromGitHub {
       owner = "alainfrisch";
-      repo = "ppx_tools";
-      rev = if param ? rev then param.rev else param.version;
+      repo = pname;
+      rev = param.rev or param.version;
       inherit (param) sha256;
     };
+    pname = "ppx_tools";
+    meta = with lib; {
+      description = "Tools for authors of ppx rewriters";
+      homepage = "https://www.lexifi.com/ppx_tools";
+      license = licenses.mit;
+      maintainers = with maintainers; [ vbgl ];
+    };
+in
+if lib.versionAtLeast param.version "6.0"
+then
+  buildDunePackage {
+    inherit pname src meta;
+    inherit (param) version buildInputs nativeBuildInputs;
+  }
+else
+  stdenv.mkDerivation {
+    name = "ocaml${ocaml.version}-${pname}-${param.version}";
 
-    buildInputs = [ ocaml findlib ];
+    inherit src;
+
+    nativeBuildInputs = [ ocaml findlib ];
+
+    strictDeps = true;
 
     createFindlibDestdir = true;
 
     dontStrip = true;
 
-    meta = with stdenv.lib; {
-      description = "Tools for authors of ppx rewriters";
-      homepage = http://www.lexifi.com/ppx_tools;
-      license = licenses.mit;
-      platforms = ocaml.meta.platforms or [];
-      maintainers = with maintainers; [ vbgl ];
-    };
+    meta = meta // { inherit (ocaml.meta) platforms; };
   }

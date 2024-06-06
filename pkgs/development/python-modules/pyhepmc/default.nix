@@ -1,60 +1,64 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, fetchFromBitbucket
-, isPy3k
-, fetchurl
-, pkgs
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  cmake,
+  setuptools,
+  setuptools-scm,
+  numpy,
+  pybind11,
+  wheel,
+  pytestCheckHook,
+  pythonOlder,
+  graphviz,
 }:
 
 buildPythonPackage rec {
   pname = "pyhepmc";
-  version = "1.0.1";
-  disabled = isPy3k;
+  version = "2.13.2";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "1210fd7e20d4abc1d9166147a9f7645a2a58b655fe030ad54ab3ea0d0c6e0834";
+  disabled = pythonOlder "3.8";
+
+  src = fetchFromGitHub {
+    owner = "scikit-hep";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    hash = "sha256-M18Bq6WrAINpgPx5+uh8dufPBxIklRHpbBWUYMC8v10=";
+    fetchSubmodules = true;
   };
 
-  srcMissing = fetchFromBitbucket {
-    owner = "andybuckley";
-    repo = "pyhepmc";
-    rev = "pyhepmc-1.0.0";
-    sha256 = "0vxad143pz45q94w5p0dycpk24insdsv1m5k867y56xy24bi0d4w";
-  };
-
-  prePatch = ''
-    cp -r $srcMissing/hepmc .
-    chmod +w hepmc
-  '';
-
-  patches = [
-    # merge PR https://bitbucket.org/andybuckley/pyhepmc/pull-requests/1/add-incoming-outgoing-generators-for/diff
-    ./pyhepmc_export_edges.patch
-    # add bindings to Flow class
-    ./pyhepmc_export_flow.patch
+  nativeBuildInputs = [
+    cmake
+    setuptools
+    setuptools-scm
+    wheel
   ];
 
-  # regenerate python wrapper
-  preConfigure = ''
-    swig -c++ -I${pkgs.hepmc}/include -python hepmc/hepmcwrap.i
+  buildInputs = [ pybind11 ];
+
+  propagatedBuildInputs = [ numpy ];
+
+  dontUseCmakeConfigure = true;
+
+  CMAKE_ARGS = [ "-DEXTERNAL_PYBIND11=ON" ];
+
+  preBuild = ''
+    export CMAKE_BUILD_PARALLEL_LEVEL="$NIX_BUILD_CORES"
   '';
 
-  nativeBuildInputs = [ pkgs.swig ];
-  buildInputs = [ pkgs.hepmc ];
+  nativeCheckInputs = [
+    graphviz
+    pytestCheckHook
+  ];
 
-  HEPMCPATH = pkgs.hepmc;
+  pythonImportsCheck = [ "pyhepmc" ];
 
-  checkPhase = ''
-    ${python.interpreter} test/test1.py
-  '';
-
-  meta = with stdenv.lib; {
-    description = "A simple wrapper on the main classes of the HepMC event simulation representation, making it possible to create, read and manipulate HepMC events from Python code";
-    license     = licenses.gpl2;
+  meta = with lib; {
+    description = "Easy-to-use Python bindings for HepMC3";
+    homepage = "https://github.com/scikit-hep/pyhepmc";
+    changelog = "https://github.com/scikit-hep/pyhepmc/releases/tag/v${version}";
+    license = licenses.bsd3;
     maintainers = with maintainers; [ veprbl ];
   };
-
 }

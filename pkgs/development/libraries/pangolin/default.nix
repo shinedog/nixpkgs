@@ -1,36 +1,32 @@
-{ stdenv, lib, fetchFromGitHub, cmake, pkgconfig, doxygen, libGL, glew
-, xorg , ffmpeg, python3 , libjpeg, libpng, libtiff, eigen
-, Carbon ? null, Cocoa ? null
+{ stdenv, lib, fetchFromGitHub, cmake, pkg-config, doxygen, libGL, glew
+, xorg, ffmpeg_4, libjpeg, libpng, libtiff, eigen
+, Carbon, Cocoa
 }:
 
 stdenv.mkDerivation rec {
-  name = "pangolin-${version}";
-
-  version = "2017-08-02";
+  pname = "pangolin";
+  version = "0.9.1";
 
   src = fetchFromGitHub {
     owner = "stevenlovegrove";
     repo = "Pangolin";
-    rev = "f05a8cdc4f0e32cc1664a430f1f85e60e233c407";
-    sha256 = "0pfbaarlsw7f7cmsppm7m13nz0k530wwwyczy2l9k448p3v7x9j0";
+    rev = "v${version}";
+    sha256 = "sha256-B5YuNcJZHjR3dlVs66rySi68j29O3iMtlQvCjTUZBeY=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig doxygen ]; 
+  nativeBuildInputs = [ cmake pkg-config doxygen ];
 
-  buildInputs = [ 
-    libGL 
-    glew 
-    xorg.libX11 
-    ffmpeg 
-    python3 
-    libjpeg 
-    libpng 
-    libtiff 
-    eigen 
+  buildInputs = [
+    libGL
+    glew
+    xorg.libX11
+    ffmpeg_4
+    libjpeg
+    libpng
+    libtiff
+    eigen
   ]
   ++ lib.optionals stdenv.isDarwin [ Carbon Cocoa ];
-
-  enableParallelBuilding = true;
 
   # The tests use cmake's findPackage to find the installed version of
   # pangolin, which isn't what we want (or available).
@@ -49,9 +45,9 @@ stdenv.mkDerivation rec {
       integration, and has a flexible real-time plotter for visualising
       graphical data.
     '';
-    homepage = https://github.com/stevenlovegrove/Pangolin;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.expipiplus1 ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://github.com/stevenlovegrove/Pangolin";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.expipiplus1 ];
+    platforms = lib.platforms.all;
   };
 }

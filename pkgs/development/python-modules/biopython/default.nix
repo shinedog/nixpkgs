@@ -1,21 +1,46 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, numpy
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  setuptools,
+  numpy,
 }:
 
 buildPythonPackage rec {
   pname = "biopython";
-  version = "1.73";
+  version = "1.83";
+  pyproject = true;
+
+  disabled = pythonOlder "3.9";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "1q55jhf76z3k6is3psis0ckbki7df26x7dikpcc3vhk1vhkwribh";
+    hash = "sha256-eOa/t43mMDQDev01/nfLbgqeW2Jwa+z3in2SKxbtg/c=";
   };
 
-  propagatedBuildInputs = [ numpy ];
-  # Checks try to write to $HOME, which does not work with nix
-  doCheck = false;
+  patches = [
+    # cherry-picked from https://github.com/biopython/biopython/commit/3f9bda7ef44f533dadbaa0de29ac21929bc0b2f1
+    # fixes SeqXMLIO parser to process all data. remove on next update
+    ./close_parser_on_time.patch
+  ];
+
+  build-system = [ setuptools ];
+
+  dependencies = [ numpy ];
+
+  pythonImportsCheck = [ "Bio" ];
+
+  checkPhase = ''
+    runHook preCheck
+
+    export HOME=$(mktemp -d)
+    cd Tests
+    python run_tests.py --offline
+
+    runHook postCheck
+  '';
+
   meta = {
     description = "Python library for bioinformatics";
     longDescription = ''
@@ -25,7 +50,7 @@ buildPythonPackage rec {
       applications which address the needs of current and future work in
       bioinformatics.
     '';
-    homepage = https://biopython.org/wiki/Documentation;
+    homepage = "https://biopython.org/wiki/Documentation";
     maintainers = with lib.maintainers; [ luispedro ];
     license = lib.licenses.bsd3;
   };

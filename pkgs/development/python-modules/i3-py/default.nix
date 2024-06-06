@@ -1,10 +1,12 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
 }:
 
 buildPythonPackage rec {
   version = "0.6.4";
+  format = "setuptools";
   pname = "i3-py";
 
   src = fetchPypi {
@@ -15,11 +17,10 @@ buildPythonPackage rec {
   # no tests in tarball
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Tools for i3 users and developers";
-    homepage =  "https://github.com/ziberna/i3-py";
+    homepage = "https://github.com/ziberna/i3-py";
     license = licenses.gpl3;
     platforms = platforms.unix;
   };
-
 }

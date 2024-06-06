@@ -1,37 +1,43 @@
-{ stdenv, fetchurl, curl, hdf5, netcdf
-, enable_cdi_lib ? false    # build, install and link to a CDI library [default=no]
-, enable_all_static ? false # build a completely statically linked CDO binary  [default=no]
-, enable_cxx ? false        # Use CXX as default compiler [default=no]
+{ lib, stdenv, fetchurl, curl, hdf5, netcdf, eccodes, python3
+, # build, install and link to a CDI library [default=no]
+  enable_cdi_lib ? false
+, # build a completely statically linked CDO binary
+  enable_all_static ? stdenv.hostPlatform.isStatic
+, # Use CXX as default compiler [default=no]
+  enable_cxx ? false
 }:
 
 stdenv.mkDerivation rec {
-  version = "1.9.0";
-  name = "cdo-${version}";
+  pname = "cdo";
+  version = "2.2.2";
 
   # Dependencies
-  buildInputs = [ curl netcdf hdf5 ];
+  buildInputs = [ curl netcdf hdf5 python3 ];
 
   src = fetchurl {
-    url = "https://code.mpimet.mpg.de/attachments/download/15187/${name}.tar.gz";
-    sha256 = "024hsr6qfg2dicwvm0vvkg3fr998bchf0qgwpj2v0jmz7a67ydnz";
+    url = "https://code.mpimet.mpg.de/attachments/download/28882/${pname}-${version}.tar.gz";
+    sha256 = "sha256-QZx3MVJEAZr0GilsBQZvR0zMv5Tev6rp4hBtpRvHyTc=";
   };
 
- # Configure phase
  configureFlags = [
-   "--with-netcdf=${netcdf}" "--with-hdf5=${hdf5}"]
-   ++ stdenv.lib.optional (enable_cdi_lib) "--enable-cdi-lib"
-   ++ stdenv.lib.optional (enable_all_static) "--enable-all-static"
-   ++ stdenv.lib.optional (enable_cxx) "--enable-cxx";
+    "--with-netcdf=${netcdf}"
+    "--with-hdf5=${hdf5}"
+    "--with-eccodes=${eccodes}"
+  ]
+   ++ lib.optional enable_cdi_lib "--enable-cdi-lib"
+   ++ lib.optional enable_all_static "--enable-all-static"
+   ++ lib.optional enable_cxx "--enable-cxx";
 
-  meta = {
+  meta = with lib; {
     description = "Collection of command line Operators to manipulate and analyse Climate and NWP model Data";
+    mainProgram = "cdo";
     longDescription = ''
       Supported data formats are GRIB 1/2, netCDF 3/4, SERVICE, EXTRA and IEG.
       There are more than 600 operators available.
     '';
-    homepage = https://code.mpimet.mpg.de/projects/cdo/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.ltavard ];
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
+    homepage = "https://code.mpimet.mpg.de/projects/cdo/";
+    license = licenses.bsd3;
+    maintainers = [ maintainers.ltavard ];
+    platforms = with platforms; linux ++ darwin;
   };
 }

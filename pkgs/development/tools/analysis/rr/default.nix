@@ -1,50 +1,66 @@
-{ stdenv, fetchFromGitHub, cmake, libpfm, zlib, pkgconfig, python2Packages, which, procps, gdb, capnproto }:
+{ lib, stdenv, fetchFromGitHub
+, cmake, pkg-config, which, makeWrapper
+, libpfm, zlib, python3Packages, procps, gdb, capnproto
+}:
 
 stdenv.mkDerivation rec {
-  version = "5.2.0";
-  name = "rr-${version}";
+  version = "5.8.0";
+  pname = "rr";
 
   src = fetchFromGitHub {
     owner = "mozilla";
     repo = "rr";
     rev = version;
-    sha256 = "19jsnm8n2smalx2z60x9d8f6g4kdm7zghwyjfvwcxnslk1vn9dkc";
+    hash = "sha256-FudAAkWIe6gv4NYFoe9E0hlgTM70lymBE5Fw/vbehps=";
   };
+
+  patches = [ ];
 
   postPatch = ''
     substituteInPlace src/Command.cc --replace '_BSD_SOURCE' '_DEFAULT_SOURCE'
     sed '7i#include <math.h>' -i src/Scheduler.cc
+    sed '1i#include <ctime>' -i src/test-monitor/test-monitor.cc
     patchShebangs .
   '';
 
-  # TODO: remove this preConfigure hook after 5.2.0 since it is fixed upstream
-  # see https://github.com/mozilla/rr/issues/2269
-  preConfigure = ''substituteInPlace CMakeLists.txt --replace "std=c++11" "std=c++14"'';
+  # With LTO enabled, linking fails with the following message:
+  #
+  # src/AddressSpace.cc:1666: undefined reference to `rr_syscall_addr'
+  # ld.bfd: bin/rr: hidden symbol `rr_syscall_addr' isn't defined
+  # ld.bfd: final link failed: bad value
+  # collect2: error: ld returned 1 exit status
+  #
+  # See also https://github.com/NixOS/nixpkgs/pull/110846
+  preConfigure = ''substituteInPlace CMakeLists.txt --replace "-flto" ""'';
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config which makeWrapper ];
   buildInputs = [
-    cmake libpfm zlib python2Packages.python python2Packages.pexpect which procps gdb capnproto
+    libpfm zlib python3Packages.python python3Packages.pexpect procps gdb capnproto
   ];
   cmakeFlags = [
-    "-DCMAKE_C_FLAGS_RELEASE:STRING="
-    "-DCMAKE_CXX_FLAGS_RELEASE:STRING="
     "-Ddisable32bit=ON"
   ];
 
   # we turn on additional warnings due to hardening
-  NIX_CFLAGS_COMPILE = "-Wno-error";
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
   hardeningDisable = [ "fortify" ];
 
-  enableParallelBuilding = true;
-
   # FIXME
-  #doCheck = true;
+  doCheck = false;
 
   preCheck = "export HOME=$TMPDIR";
 
+  # needs GDB to replay programs at runtime
+  preFixup = ''
+    wrapProgram "$out/bin/rr" \
+      --prefix PATH ":" "${lib.makeBinPath [
+        gdb
+      ]}";
+  '';
+
   meta = {
-    homepage = https://rr-project.org/;
+    homepage = "https://rr-project.org/";
     description = "Records nondeterministic executions and debugs them deterministically";
     longDescription = ''
       rr aspires to be your primary debugging tool, replacing -- well,
@@ -53,8 +69,8 @@ stdenv.mkDerivation rec {
       time the same execution is replayed.
     '';
 
-    license = with stdenv.lib.licenses; [ mit bsd2 ];
-    maintainers = with stdenv.lib.maintainers; [ pierron thoughtpolice ];
-    platforms = stdenv.lib.platforms.x86;
+    license = with lib.licenses; [ mit bsd2 ];
+    maintainers = with lib.maintainers; [ pierron thoughtpolice ];
+    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
   };
 }

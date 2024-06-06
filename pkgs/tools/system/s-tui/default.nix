@@ -1,24 +1,37 @@
-{ stdenv, pythonPackages }:
+{ lib
+, stdenv
+, python3Packages
+, fetchPypi
+, nix-update-script
+, s-tui
+, testers
+}:
 
-pythonPackages.buildPythonPackage rec {
-  name = "${pname}-${version}";
+python3Packages.buildPythonPackage rec {
   pname = "s-tui";
-  version = "0.8.3";
+  version = "1.1.6";
 
-  src = pythonPackages.fetchPypi {
+  src = fetchPypi {
     inherit pname version;
-    sha256 = "00lsh2v4i8rwfyjyxx5lijd6rnk9smcfffhzg5sv94ijpcnh216m";
+    sha256 = "sha256-nSdpnM8ubodlPwmvdmNFTn9TsS8i7lWBZ2CifMHDe1c=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
+  propagatedBuildInputs = with python3Packages; [
     urwid
     psutil
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://amanusk.github.io/s-tui/;
+  passthru = {
+    updateScript = nix-update-script { };
+    tests = testers.testVersion { package = s-tui; };
+  };
+
+  meta = with lib; {
+    homepage = "https://amanusk.github.io/s-tui/";
     description = "Stress-Terminal UI monitoring tool";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ infinisil ];
+    license = licenses.gpl2Plus;
+    maintainers = [ ];
+    broken = stdenv.isDarwin; # https://github.com/amanusk/s-tui/issues/49
+    mainProgram = "s-tui";
   };
 }

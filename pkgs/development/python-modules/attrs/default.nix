@@ -1,30 +1,60 @@
-{ lib, stdenv, buildPythonPackage, fetchPypi, pytest, hypothesis, zope_interface
-, pympler, coverage, six, clang }:
+{
+  lib,
+  callPackage,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  hatchling,
+}:
 
 buildPythonPackage rec {
   pname = "attrs";
-  version = "18.2.0";
+  version = "23.2.0";
+  disabled = pythonOlder "3.7";
+  format = "pyproject";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "10cbf6e27dbce8c30807caf056c8eb50917e0eaafe86347671b57254006c3e69";
+    hash = "sha256-k13DtSnCYvbPduUId9NaS9PB3hlP1B9HoreujxmXHzA=";
   };
 
-  # macOS needs clang for testing
-  checkInputs = [
-    pytest hypothesis zope_interface pympler coverage six
-  ] ++ lib.optionals (stdenv.isDarwin) [ clang ];
+  patches = [
+    # hatch-vcs and hatch-fancy-pypi-readme depend on pytest, which depends on attrs
+    ./remove-hatch-plugins.patch
+  ];
 
-  checkPhase = ''
-    py.test
+  postPatch = ''
+    substituteAllInPlace pyproject.toml
   '';
 
-  # To prevent infinite recursion with pytest
+  nativeBuildInputs = [ hatchling ];
+
+  outputs = [
+    "out"
+    "testout"
+  ];
+
+  postInstall = ''
+    # Install tests as the tests output.
+    mkdir $testout
+    cp -R conftest.py tests $testout
+  '';
+
+  pythonImportsCheck = [ "attr" ];
+
+  # pytest depends on attrs, so we can't do this out-of-the-box.
+  # Instead, we do this as a passthru.tests test.
   doCheck = false;
+
+  passthru.tests = {
+    pytest = callPackage ./tests.nix { };
+  };
 
   meta = with lib; {
     description = "Python attributes without boilerplate";
-    homepage = https://github.com/hynek/attrs;
+    homepage = "https://github.com/python-attrs/attrs";
+    changelog = "https://github.com/python-attrs/attrs/releases/tag/${version}";
     license = licenses.mit;
+    maintainers = with maintainers; [ ];
   };
 }

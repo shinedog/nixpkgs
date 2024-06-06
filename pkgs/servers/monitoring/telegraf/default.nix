@@ -1,33 +1,49 @@
-{ lib, buildGoPackage, fetchFromGitHub }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, nixosTests
+, stdenv
+, testers
+, telegraf
+}:
 
-buildGoPackage rec {
-  name = "telegraf-${version}";
-  version = "1.10.2";
-
-  goPackagePath = "github.com/influxdata/telegraf";
-
-  excludedPackages = "test";
+buildGoModule rec {
+  pname = "telegraf";
+  version = "1.30.3";
 
   subPackages = [ "cmd/telegraf" ];
 
   src = fetchFromGitHub {
     owner = "influxdata";
     repo = "telegraf";
-    rev = "${version}";
-    sha256 = "0g27yczb49xf8nbhkzx7lv8378613afq9qx1gr5yhlpfrl4sgb69";
+    rev = "v${version}";
+    hash = "sha256-B3Eeh3eOYg58NnMpV6f04HFzOtOn/enBqzCJRst6u2U=";
   };
 
-  buildFlagsArray = [ ''-ldflags=
-    -X main.version=${version}
-  '' ];
+  vendorHash = "sha256-Cudnc5ZyCQUqgao58ww69gfF6tPW6/oGP9zXbuPSTAE=";
+  proxyVendor = true;
 
-  goDeps = ./. + "/deps-${version}.nix";
+  ldflags = [
+    "-s"
+    "-w"
+    "-X=github.com/influxdata/telegraf/internal.Commit=${src.rev}"
+    "-X=github.com/influxdata/telegraf/internal.Version=${version}"
+  ];
+
+  passthru.tests = {
+    version = testers.testVersion {
+      package = telegraf;
+    };
+  } // lib.optionalAttrs stdenv.isLinux {
+    inherit (nixosTests) telegraf;
+  };
 
   meta = with lib; {
-    description = "The plugin-driven server agent for collecting & reporting metrics.";
+    description = "The plugin-driven server agent for collecting & reporting metrics";
+    mainProgram = "telegraf";
+    homepage = "https://www.influxdata.com/time-series-platform/telegraf/";
+    changelog = "https://github.com/influxdata/telegraf/blob/${src.rev}/CHANGELOG.md";
     license = licenses.mit;
-    homepage = https://www.influxdata.com/time-series-platform/telegraf/;
-    maintainers = with maintainers; [ mic92 roblabla ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [ mic92 roblabla timstott zowoq ];
   };
 }

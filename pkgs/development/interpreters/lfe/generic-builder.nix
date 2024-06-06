@@ -1,46 +1,50 @@
-{ stdenv, fetchFromGitHub, erlang, makeWrapper, coreutils, bash, buildRebar3, buildHex }:
+{ lib, fetchFromGitHub, erlang, makeWrapper, coreutils, bash, buildRebar3, buildHex }:
 
 { baseName ? "lfe"
 , version
 , maximumOTPVersion
-, sha256 ? null
+, sha256 ? ""
+, hash ? ""
 , rev ? version
-, src ? fetchFromGitHub { inherit rev sha256; owner = "rvirding"; repo = "lfe"; }
+, src ? fetchFromGitHub { inherit hash rev sha256; owner = "lfe"; repo = "lfe"; }
+, patches ? []
 }:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast splitString head;
+  inherit (lib)
+    assertMsg makeBinPath optionalString
+    getVersion versionAtLeast versionOlder versions;
 
-  mainVersion = head (splitString "." (getVersion erlang));
+  mainVersion = versions.major (getVersion erlang);
 
   proper = buildHex {
     name = "proper";
-    version = "1.1.1-beta";
+    version = "1.4.0";
 
-    sha256  = "0hnkhs761yjynw9382w8wm4j3x0r7lllzavaq2kh9n7qy3zc1rdx";
-
-    configurePhase = ''
-      ${erlang}/bin/escript write_compile_flags include/compile_flags.hrl
-    '';
+    sha256  = "sha256-GChYQhhb0z772pfRNKXLWgiEOE2zYRn+4OPPpIhWjLs=";
   };
 
 in
-assert versionAtLeast maximumOTPVersion mainVersion;
+assert (assertMsg (versionAtLeast maximumOTPVersion mainVersion)) ''
+  LFE ${version} is supported on OTP <=${maximumOTPVersion}, not ${mainVersion}.
+'';
 
 buildRebar3 {
   name = baseName;
 
   inherit src version;
 
-  buildInputs = [ erlang makeWrapper ];
+  nativeBuildInputs = [ makeWrapper erlang ];
   beamDeps    = [ proper ];
-  patches     = [ ./no-test-deps.patch ];
+  patches     = [ ./fix-rebar-config.patch ./dedup-ebins.patch ] ++ patches;
   doCheck     = true;
   checkTarget = "travis";
 
+  makeFlags = [ "-e" "MANDB=''" "PREFIX=$$out"];
+
   # These installPhase tricks are based on Elixir's Makefile.
   # TODO: Make, upload, and apply a patch.
-  installPhase = ''
+  installPhase = optionalString (versionOlder version "1.3") ''
     local libdir=$out/lib/lfe
     local ebindir=$libdir/ebin
     local bindir=$libdir/bin
@@ -63,12 +67,12 @@ buildRebar3 {
     # Add some stuff to PATH so the scripts can run without problems.
     for f in $out/bin/*; do
       wrapProgram $f \
-        --prefix PATH ":" "${stdenv.lib.makeBinPath [ erlang coreutils bash ]}:$out/bin"
+        --prefix PATH ":" "${makeBinPath [ erlang coreutils bash ]}:$out/bin"
       substituteInPlace $f --replace "/usr/bin/env" "${coreutils}/bin/env"
     done
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description     = "The best of Erlang and of Lisp; at the same time!";
     longDescription = ''
       LFE, Lisp Flavoured Erlang, is a lisp syntax front-end to the Erlang
@@ -76,11 +80,11 @@ buildRebar3 {
       code. An LFE evaluator and shell is also included.
     '';
 
-    homepage     = "http://lfe.io";
+    homepage     = "https://lfe.io";
     downloadPage = "https://github.com/rvirding/lfe/releases";
 
     license      = licenses.asl20;
-    maintainers  = with maintainers; [ yurrriq ankhers ];
+    maintainers  = teams.beam.members;
     platforms    = platforms.unix;
   };
 }

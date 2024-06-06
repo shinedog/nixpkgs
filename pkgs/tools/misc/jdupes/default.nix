@@ -1,40 +1,52 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitea, libjodycode }:
 
 stdenv.mkDerivation rec {
-  name = "jdupes-${version}";
-  version = "1.12";
+  pname = "jdupes";
+  version = "1.27.3";
 
-  src = fetchFromGitHub {
+  src = fetchFromGitea {
+    domain = "codeberg.org";
     owner = "jbruchon";
     repo  = "jdupes";
     rev   = "v${version}";
-    sha256 = "1m5506scjbf2820p7mbsdsb2acg9jm74sb1604m9iz8v3dcn9dm6";
+    hash = "sha256-hR5nl8G7TYVm4ol/jgo7iOb4dLr2MovgjKSXCD2UwMg=";
     # Unicode file names lead to different checksums on HFS+ vs. other
     # filesystems because of unicode normalisation. The testdir
     # directories have such files and will be removed.
-    extraPostFetch = "rm -r $out/testdir";
+    postFetch = "rm -r $out/testdir";
   };
 
-  makeFlags = [ "PREFIX=$(out)" ] ++ stdenv.lib.optional stdenv.isLinux "ENABLE_BTRFS=1";
+  buildInputs = [ libjodycode ];
+
+  dontConfigure = true;
+
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+  ] ++ lib.optionals stdenv.isLinux [
+    "ENABLE_DEDUPE=1"
+    "STATIC_DEDUPE_H=1"
+  ] ++ lib.optionals stdenv.cc.isGNU [
+    "HARDEN=1"
+  ];
 
   enableParallelBuilding = true;
 
   doCheck = false; # broken Makefile, the above also removes tests
 
   postInstall = ''
-    install -Dm644 -t $out/share/doc/jdupes CHANGES LICENSE README
+    install -Dm444 -t $out/share/doc/jdupes CHANGES.txt LICENSE.txt README.md
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A powerful duplicate file finder and an enhanced fork of 'fdupes'";
     longDescription = ''
       jdupes is a program for identifying and taking actions upon
       duplicate files. This fork known as 'jdupes' is heavily modified
       from and improved over the original.
     '';
-    homepage = https://github.com/jbruchon/jdupes;
+    homepage = "https://github.com/jbruchon/jdupes";
     license = licenses.mit;
-    maintainers = with maintainers; [ romildo ];
-    platforms = platforms.all;
+    maintainers = with maintainers; [ ];
+    mainProgram = "jdupes";
   };
 }

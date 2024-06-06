@@ -1,9 +1,14 @@
-{ stdenv, buildPythonPackage
-, fetchPypi, urllib3 }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  urllib3,
+}:
 
 buildPythonPackage rec {
   pname = "unifi";
   version = "1.2.5";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
@@ -15,10 +20,10 @@ buildPythonPackage rec {
   # upstream has no tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An API towards the Ubiquity Networks UniFi controller";
-    homepage    = https://pypi.python.org/pypi/unifi/;
-    license     = licenses.mit;
+    homepage = "https://pypi.python.org/pypi/unifi/";
+    license = licenses.mit;
     maintainers = with maintainers; [ peterhoeg ];
   };
 }

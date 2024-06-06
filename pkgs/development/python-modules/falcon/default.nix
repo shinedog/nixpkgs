@@ -1,37 +1,98 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, coverage
-, ddt
-, nose
-, pyyaml
-, requests
-, testtools
-, six
-, python_mimeparse
+{
+  lib,
+  buildPythonPackage,
+  pythonAtLeast,
+  pythonOlder,
+  isPyPy,
+  fetchFromGitHub,
+
+  # build
+  cython,
+  setuptools,
+
+  # tests
+  aiofiles,
+  cbor2,
+  httpx,
+  msgpack,
+  mujson,
+  orjson,
+  pytest-asyncio,
+  pytest7CheckHook,
+  pyyaml,
+  rapidjson,
+  requests,
+  testtools,
+  ujson,
+  uvicorn,
+  websockets,
 }:
 
 buildPythonPackage rec {
   pname = "falcon";
-  version = "1.4.1";
+  version = "3.1.3";
+  format = "pyproject";
+  disabled = pythonOlder "3.5";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "3981f609c0358a9fcdb25b0e7fab3d9e23019356fb429c635ce4133135ae1bc4";
+  src = fetchFromGitHub {
+    owner = "falconry";
+    repo = pname;
+    rev = "refs/tags/${version}";
+    hash = "sha256-7719gOM8WQVjODwOSo7HpH3HMFFeCGQQYBKktBAevig=";
   };
 
-  checkInputs = [coverage ddt nose pyyaml requests testtools];
-  propagatedBuildInputs = [ six python_mimeparse ];
+  nativeBuildInputs = [ setuptools ] ++ lib.optionals (!isPyPy) [ cython ];
 
-  # The travis build fails since the migration from multiprocessing to threading for hosting the API under test.
-  # OSError: [Errno 98] Address already in use
-  doCheck = false;
+  __darwinAllowLocalNetworking = true;
 
-  meta = with stdenv.lib; {
+  preCheck = ''
+    export HOME=$TMPDIR
+    cp -R tests examples $TMPDIR
+    pushd $TMPDIR
+  '';
+
+  postCheck = ''
+    popd
+  '';
+
+  nativeCheckInputs = [
+    # https://github.com/falconry/falcon/blob/master/requirements/tests
+    pytest7CheckHook
+    pyyaml
+    requests
+    rapidjson
+    orjson
+
+    # ASGI specific
+    pytest-asyncio
+    aiofiles
+    httpx
+    uvicorn
+    websockets
+
+    # handler specific
+    cbor2
+    msgpack
+    mujson
+    ujson
+  ] ++ lib.optionals (pythonOlder "3.10") [ testtools ];
+
+  pytestFlagsArray = [ "tests" ];
+
+  disabledTestPaths =
+    [
+      # needs a running server
+      "tests/asgi/test_asgi_servers.py"
+    ]
+    ++ lib.optionals (pythonAtLeast "3.12") [
+      # ModuleNotFoundError: No module named 'distutils'
+      "tests/asgi/test_cythonized_asgi.py"
+    ];
+
+  meta = with lib; {
     description = "An unladen web framework for building APIs and app backends";
-    homepage = http://falconframework.org;
+    homepage = "https://falconframework.org/";
     license = licenses.asl20;
     maintainers = with maintainers; [ desiderius ];
   };
-
 }

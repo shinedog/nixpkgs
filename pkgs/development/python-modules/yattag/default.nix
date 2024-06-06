@@ -1,17 +1,28 @@
-{ lib, stdenv, buildPythonPackage, fetchPypi }:
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+}:
 
 buildPythonPackage rec {
   pname = "yattag";
-  version = "1.11.1";
+  version = "1.15.2";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "94210945c868f696a31812a510c01724d61c9a4d279eb4adf340c0d2a4c0bfd7";
+    hash = "sha256-qtn1QL0i3FA+W1UGzEeFb6zwgapx/TX3JzcbY+HkAr8=";
   };
 
+  pythonImportsCheck = [ "yattag" ];
+
   meta = with lib; {
-    description = "Generate HTML or XML in a pythonic way. Pure python alternative to web template engines. Can fill HTML forms with default values and error messages.";
-    license = [ licenses.lgpl21 ];
-    homepage = http://www.yattag.org/;
+    description = "Library to generate HTML or XML";
+    homepage = "https://www.yattag.org/";
+    license = licenses.lgpl21Only;
+    maintainers = with maintainers; [ ];
   };
 }

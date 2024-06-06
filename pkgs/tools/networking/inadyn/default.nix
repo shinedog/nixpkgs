@@ -1,28 +1,34 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
 , gnutls, libite, libconfuse }:
 
 stdenv.mkDerivation rec {
-  name = "inadyn-${version}";
-  version = "2.5";
+  pname = "inadyn";
+  version = "2.12.0";
 
   src = fetchFromGitHub {
     owner = "troglobit";
     repo = "inadyn";
     rev = "v${version}";
-    sha256 = "0izhynqfj4xafsrc653wym8arwps0qim203w8l0g5z9vzfxfnvqw";
+    sha256 = "sha256-aQHJtnMDaHF1XY9lwQVR6f78Zk2UI7OC3Oxt1r1KMak=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
 
   buildInputs = [ gnutls libite libconfuse ];
 
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
+
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://troglobit.com/project/inadyn/;
+  meta = with lib; {
+    homepage = "https://troglobit.com/projects/inadyn/";
     description = "Free dynamic DNS client";
     license = licenses.gpl2Plus;
     maintainers = with maintainers; [ ];
     platforms = platforms.linux;
+    mainProgram = "inadyn";
   };
 }

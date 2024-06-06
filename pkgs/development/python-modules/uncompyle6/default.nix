@@ -1,36 +1,52 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, spark_parser
-, xdis
-, nose
-, pytest
-, hypothesis
-, six
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pythonOlder,
+  spark-parser,
+  xdis,
+  nose,
+  pytest,
+  hypothesis,
+  six,
 }:
 
 buildPythonPackage rec {
   pname = "uncompyle6";
-  version = "3.2.6";
+  version = "3.9.1";
+  format = "setuptools";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "3a40f4f4b8b02a8687bd98c598980bed38a4770e3de253847eafed4b7167d07f";
+    hash = "sha256-xFHDjrPFzINOuLip5uCwzzIm5NlNCP0nbdA/6RWO2yc=";
   };
 
-  checkInputs = [ nose pytest hypothesis six ];
-  propagatedBuildInputs = [ spark_parser xdis ];
+  propagatedBuildInputs = [
+    spark-parser
+    xdis
+  ];
 
+  nativeCheckInputs = [
+    nose
+    pytest
+    hypothesis
+    six
+  ];
+
+  # Tests attempt to decompile bytecode of the python version
+  # that is running the tests - this does not work for versions
+  # above 3.8, but they decompile older bytecode fine
+  doCheck = pythonOlder "3.9";
   # six import errors (yet it is supplied...)
   checkPhase = ''
-    pytest ./pytest --ignore=pytest/test_build_const_key_map.py \
-                    --ignore=pytest/test_grammar.py
+    runHook preCheck
+    pytest ./pytest --ignore=pytest/test_function_call.py
+    runHook postCheck
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Python cross-version byte-code deparser";
-    homepage = https://github.com/rocky/python-uncompyle6/;
+    homepage = "https://github.com/rocky/python-uncompyle6/";
     license = licenses.gpl3;
   };
-
 }

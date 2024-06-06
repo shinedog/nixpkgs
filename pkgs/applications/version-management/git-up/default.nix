@@ -1,36 +1,57 @@
-{ stdenv, fetchurl, python2Packages, git }:
+{ lib
+, pythonPackages
+, fetchPypi
+, git
+}:
 
-python2Packages.buildPythonApplication rec {
-  version = "1.4.2";
-  name = "git-up-${version}";
+pythonPackages.buildPythonApplication rec {
+  pname = "git-up";
+  version = "2.2.0";
+  format = "pyproject";
 
-  src = fetchurl {
-    url = "mirror://pypi/g/git-up/${name}.zip";
-    sha256 = "121ia5gyjy7js6fbsx9z98j2qpq7rzwpsj8gnfvsbz2d69g0vl7q";
+  src = fetchPypi {
+    pname = "git_up";
+    inherit version;
+    hash = "sha256-GTX2IWLQ48yWfPnmtEa9HJ5umQLttqgTlgZQlaWgeE4=";
   };
 
-  buildInputs = [ git ] ++ (with python2Packages; [ nose ]);
-  propagatedBuildInputs = with python2Packages; [ click colorama docopt GitPython six termcolor ];
+  nativeBuildInputs = with pythonPackages; [
+    poetry-core
+  ];
+
+  # git should be on path for tool to work correctly
+  propagatedBuildInputs = [
+    git
+  ] ++ (with pythonPackages; [
+    colorama
+    gitpython
+    termcolor
+  ]);
+
+  nativeCheckInputs = [
+    git
+    pythonPackages.pytest7CheckHook
+  ];
 
   # 1. git fails to run as it cannot detect the email address, so we set it
   # 2. $HOME is by default not a valid dir, so we have to set that too
   # https://github.com/NixOS/nixpkgs/issues/12591
   preCheck = ''
-      export HOME=$TMPDIR
-      git config --global user.email "nobody@example.com"
-      git config --global user.name "Nobody"
-    '';
-
-  postInstall = ''
-    rm -r $out/${python2Packages.python.sitePackages}/PyGitUp/tests
+    export HOME=$TMPDIR
+    git config --global user.email "nobody@example.com"
+    git config --global user.name "Nobody"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/msiemens/PyGitUp;
-    description = "A git pull replacement that rebases all local branches when pulling.";
+  postInstall = ''
+    rm -r $out/${pythonPackages.python.sitePackages}/PyGitUp/tests
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/msiemens/PyGitUp";
+    description = "A git pull replacement that rebases all local branches when pulling";
     license = licenses.mit;
     maintainers = with maintainers; [ peterhoeg ];
     platforms = platforms.all;
-    broken = true; # Incompatible with Git 2.15 object store.
+    mainProgram = "git-up";
   };
 }

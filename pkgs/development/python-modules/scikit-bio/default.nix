@@ -1,55 +1,64 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, cython
-, lockfile
-, cachecontrol
-, decorator
-, ipython
-, matplotlib
-, natsort
-, numpy
-, pandas
-, scipy
-, hdmedians
-, scikitlearn
-, pytest
-, coverage
-, python
-, isPy3k
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  setuptools,
+  cython,
+  oldest-supported-numpy,
+  requests,
+  decorator,
+  natsort,
+  numpy,
+  pandas,
+  scipy,
+  h5py,
+  hdmedians,
+  biom-format,
+  python,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  version = "0.5.5";
   pname = "scikit-bio";
-  disabled = !isPy3k;
+  version = "0.6.0";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "9fa813be66e88a994f7b7a68b8ba2216e205c525caa8585386ebdeebed6428df";
+  src = fetchFromGitHub {
+    owner = "scikit-bio";
+    repo = "scikit-bio";
+    rev = "refs/tags/${version}";
+    hash = "sha256-v8/r52pJpMi34SekPQBf7CqRbs+ZEyPR3WO5RBB7uKg=";
   };
 
-  buildInputs = [ cython ];
-  checkInputs = [ coverage ];
-  propagatedBuildInputs = [ lockfile cachecontrol decorator ipython matplotlib natsort numpy pandas scipy hdmedians scikitlearn ];
+  build-system = [
+    setuptools
+    cython
+    oldest-supported-numpy
+  ];
 
-  # remove on when version > 0.5.4
-  postPatch = ''
-    sed -i "s/numpy >= 1.9.2, < 1.14.0/numpy/" setup.py
-    sed -i "s/pandas >= 0.19.2, < 0.23.0/pandas/" setup.py
-  '';
+  dependencies = [
+    requests
+    decorator
+    natsort
+    numpy
+    pandas
+    scipy
+    h5py
+    hdmedians
+    biom-format
+  ];
 
-  # cython package not included for tests
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    ${python.interpreter} -m skbio.test
-  '';
+  # only the $out dir contains the built cython extensions, so we run the tests inside there
+  pytestFlagsArray = [ "${placeholder "out"}/${python.sitePackages}/skbio" ];
 
-  meta = with stdenv.lib; {
-    homepage = http://scikit-bio.org/;
+  pythonImportsCheck = [ "skbio" ];
+
+  meta = {
+    homepage = "http://scikit-bio.org/";
     description = "Data structures, algorithms and educational resources for bioinformatics";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ tomasajt ];
   };
 }

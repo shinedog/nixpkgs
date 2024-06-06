@@ -1,28 +1,39 @@
-{ lib, fetchPypi, buildPythonPackage, isPy3k
-, pytest, requests }:
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  poetry-core,
+  pytestCheckHook,
+  pythonOlder,
+  requests,
+}:
 
 buildPythonPackage rec {
   pname = "zm-py";
-  version = "0.3.3";
+  version = "0.5.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "7cac73bd4f5e729fd8b3cff6f456652c3fd76b1a11f5d539bc7e14ffc7a87e9a";
+  disabled = pythonOlder "3.11";
+
+  src = fetchFromGitHub {
+    owner = "rohankapoorcom";
+    repo = "zm-py";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-n9FRX2Pnn96H0HVT4SHLJgONc0XzQ005itMNpvl9IYg=";
   };
 
-  disabled = !isPy3k;
+  nativeBuildInputs = [ poetry-core ];
 
   propagatedBuildInputs = [ requests ];
 
-  checkInputs = [ pytest ];
+  nativeCheckInputs = [ pytestCheckHook ];
 
-  checkPhase = ''
-    PYTHONPATH="./zoneminder:$PYTHONPATH" pytest
-  '';
+  pythonImportsCheck = [ "zoneminder" ];
 
   meta = with lib; {
     description = "A loose python wrapper around the ZoneMinder REST API";
-    homepage = https://github.com/rohankapoorcom/zm-py;
+    homepage = "https://github.com/rohankapoorcom/zm-py";
+    changelog = "https://github.com/rohankapoorcom/zm-py/releases/tag/v${version}";
     license = licenses.asl20;
     maintainers = with maintainers; [ peterhoeg ];
   };

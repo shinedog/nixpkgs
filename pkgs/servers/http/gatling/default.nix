@@ -1,17 +1,18 @@
-{ stdenv, fetchurl, libowfat, zlib, openssl }:
+{ lib, stdenv, fetchurl, libowfat, libcap, zlib, openssl, libxcrypt }:
 
 let
-  version = "0.15";
+  version = "0.16";
 in
 stdenv.mkDerivation rec {
-  name = "gatling-${version}";
+  pname = "gatling";
+  inherit version;
 
   src = fetchurl {
-    url = "https://www.fefe.de/gatling/${name}.tar.xz";
-    sha256 = "194srqyja3pczpbl6l169zlvx179v7ln0m6yipmhvj6hrv82k8vg";
+    url = "https://www.fefe.de/gatling/${pname}-${version}.tar.xz";
+    sha256 = "0nrnws5qrl4frqcsfa9z973vv5mifgr9z170qbvg3mq1wa7475jz";
   };
 
-  buildInputs = [  libowfat zlib openssl.dev ];
+  buildInputs = [ libowfat libcap zlib openssl libxcrypt ];
 
   configurePhase = ''
     substituteInPlace Makefile --replace "/usr/local" "$out"
@@ -22,11 +23,10 @@ stdenv.mkDerivation rec {
     make gatling
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A high performance web server";
-    homepage = http://www.fefe.de/gatling/;
-    license = stdenv.lib.licenses.gpl2;
+    homepage = "http://www.fefe.de/gatling/";
+    license = lib.licenses.gpl2Only;
     platforms = platforms.linux;
-    maintainers = [ maintainers.the-kenny ];
   };
 }

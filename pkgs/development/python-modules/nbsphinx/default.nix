@@ -1,25 +1,32 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, docutils
-, jinja2
-, nbconvert
-, nbformat
-, sphinx
-, traitlets
-, python
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  setuptools,
+  docutils,
+  jinja2,
+  nbconvert,
+  nbformat,
+  sphinx,
+  traitlets,
+  pythonOlder,
 }:
 
 buildPythonPackage rec {
   pname = "nbsphinx";
-  version = "0.4.2";
+  version = "0.9.4";
+  pyproject = true;
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "b794219e465b3aab500b800884ff40fd152bb19d8b6f87580de1f3a07170aef8";
+    hash = "sha256-BCpggG/CPVGbxb71nZVXBxORP+RC/adZ1T46r2IQR5Q=";
   };
 
-  propagatedBuildInputs = [
+  build-system = [ setuptools ];
+
+  dependencies = [
     docutils
     jinja2
     nbconvert
@@ -28,14 +35,18 @@ buildPythonPackage rec {
     traitlets
   ];
 
-  checkPhase = ''
-    ${python.interpreter} -m nbsphinx
-  '';
+  # The package has not tests
+  doCheck = false;
+
+  JUPYTER_PATH = "${nbconvert}/share/jupyter";
+
+  pythonImportsCheck = [ "nbsphinx" ];
 
   meta = with lib; {
     description = "Jupyter Notebook Tools for Sphinx";
-    homepage = https://nbsphinx.readthedocs.io/;
+    homepage = "https://nbsphinx.readthedocs.io/";
+    changelog = "https://github.com/spatialaudio/nbsphinx/blob/${version}/NEWS.rst";
     license = licenses.mit;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

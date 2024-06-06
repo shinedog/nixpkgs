@@ -1,14 +1,14 @@
-{ stdenv, fetchFromGitHub, eigen }:
+{ lib, stdenv, fetchFromGitHub, eigen }:
 
 stdenv.mkDerivation rec {
-  name = "vcg-${version}";
-  version = "1.0.1";
+  pname = "vcg";
+  version = "2023.12";
 
   src = fetchFromGitHub {
     owner = "cnr-isti-vclab";
     repo = "vcglib";
-    rev = "v${version}";
-    sha256 = "0jh8jc8rn7rci8qr3q03q574fk2hsc3rllysck41j8xkr3rmxz2f";
+    rev = version;
+    sha256 = "sha256-U3pu1k2pCH+G4CtacaDQ9SgkFX5A9/O/qrdpgWvB1+U=";
   };
 
   propagatedBuildInputs = [ eigen ];
@@ -19,11 +19,11 @@ stdenv.mkDerivation rec {
     find $out -name \*.h -exec sed -i 's,<eigenlib/,<eigen3/,g' {} \;
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://vcg.isti.cnr.it/vcglib/install.html;
+  meta = with lib; {
+    homepage = "https://vcg.isti.cnr.it/vcglib/install.html";
     description = "C++ library for manipulation, processing and displaying with OpenGL of triangle and tetrahedral meshes";
     license = licenses.gpl3;
-    platforms = platforms.linux;
+    platforms = platforms.all;
     maintainers = with maintainers; [ abbradar ];
   };
 }

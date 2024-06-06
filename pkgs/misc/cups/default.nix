@@ -1,26 +1,33 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, removeReferencesTo
-, zlib, libjpeg, libpng, libtiff, pam, dbus, systemd, acl, gmp, darwin
-, libusb ? null, gnutls ? null, avahi ? null, libpaper ? null
+{ lib, stdenv
+, fetchurl
+, pkg-config
+, removeReferencesTo
+, zlib
+, libjpeg
+, libpng
+, libtiff
+, pam
+, dbus
+, enableSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
+, systemd
+, acl
+, gmp
+, darwin
+, libusb1 ? null
+, gnutls ? null
+, avahi ? null
+, libpaper ? null
 , coreutils
+, nixosTests
 }:
 
-### IMPORTANT: before updating cups, make sure the nixos/tests/printing.nix test
-### works at least for your platform.
-
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "cups-${version}";
-
-  # After 2.2.6, CUPS requires headers only available in macOS 10.12+
-  version = if stdenv.isDarwin then "2.2.6" else "2.2.11";
-
-  passthru = { inherit version; };
+  pname = "cups";
+  version = "2.4.7";
 
   src = fetchurl {
-    url = "https://github.com/apple/cups/releases/download/v${version}/cups-${version}-source.tar.gz";
-    sha256 = if version == "2.2.6"
-             then "16qn41b84xz6khrr2pa2wdwlqxr29rrrkjfi618gbgdkq9w5ff20"
-             else "0v5p10lyv8wv48s8ghkhjmdrxg6iwj8hn36v1ilkz46n7y0i107m";
+    url = "https://github.com/OpenPrinting/cups/releases/download/v${version}/cups-${version}-source.tar.gz";
+    sha256 = "sha256-3VQijdkDUmQozn43lhr67SMK0xB4gUHadc66oINiz2w=";
   };
 
   outputs = [ "out" "lib" "dev" "man" ];
@@ -28,35 +35,45 @@ stdenv.mkDerivation rec {
   postPatch = ''
     substituteInPlace cups/testfile.c \
       --replace 'cupsFileFind("cat", "/bin' 'cupsFileFind("cat", "${coreutils}/bin'
+
+      # The cups.socket unit shouldn't be part of cups.service: stopping the
+      # service would stop the socket and break subsequent socket activations.
+      # See https://github.com/apple/cups/issues/6005
+      sed -i '/PartOf=cups.service/d' scheduler/cups.socket.in
+  '' + lib.optionalString (stdenv.hostPlatform.isDarwin && lib.versionOlder stdenv.hostPlatform.darwinSdkVersion "12") ''
+    substituteInPlace backend/usb-darwin.c \
+      --replace "kIOMainPortDefault" "kIOMasterPortDefault"
   '';
 
-  nativeBuildInputs = [ pkgconfig removeReferencesTo ];
+  nativeBuildInputs = [ pkg-config removeReferencesTo ];
 
-  buildInputs = [ zlib libjpeg libpng libtiff libusb gnutls libpaper ]
-    ++ optionals stdenv.isLinux [ avahi pam dbus systemd acl ]
-    ++ optionals stdenv.isDarwin (with darwin; [
+  buildInputs = [ zlib libjpeg libpng libtiff libusb1 gnutls libpaper ]
+    ++ lib.optionals stdenv.isLinux [ avahi pam dbus acl ]
+    ++ lib.optional enableSystemd systemd
+    ++ lib.optionals stdenv.isDarwin (with darwin; [
       configd apple_sdk.frameworks.ApplicationServices
     ]);
 
   propagatedBuildInputs = [ gmp ];
 
+  configurePlatforms = lib.optionals stdenv.isLinux [ "build" "host" ];
   configureFlags = [
     "--localstatedir=/var"
     "--sysconfdir=/etc"
     "--enable-raw-printing"
     "--enable-threads"
-  ] ++ optionals stdenv.isLinux [
+  ] ++ lib.optionals stdenv.isLinux [
     "--enable-dbus"
     "--enable-pam"
-  ] ++ optional (libusb != null) "--enable-libusb"
-    ++ optional (gnutls != null) "--enable-ssl"
-    ++ optional (avahi != null) "--enable-avahi"
-    ++ optional (libpaper != null) "--enable-libpaper"
-    ++ optional stdenv.isDarwin "--disable-launchd";
+    "--with-dbusdir=${placeholder "out"}/share/dbus-1"
+  ] ++ lib.optional (libusb1 != null) "--enable-libusb"
+    ++ lib.optional (gnutls != null) "--enable-ssl"
+    ++ lib.optional (avahi != null) "--enable-avahi"
+    ++ lib.optional (libpaper != null) "--enable-libpaper";
 
   # AR has to be an absolute path
   preConfigure = ''
-    export AR="${getBin stdenv.cc.bintools.bintools}/bin/${stdenv.cc.targetPrefix}ar"
+    export AR="${lib.getBin stdenv.cc.bintools.bintools}/bin/${stdenv.cc.targetPrefix}ar"
     configureFlagsArray+=(
       # Put just lib/* and locale into $lib; this didn't work directly.
       # lib/cups is moved back to $out in postInstall.
@@ -67,7 +84,7 @@ stdenv.mkDerivation rec {
 
       "--with-systemd=$out/lib/systemd/system"
 
-      ${optionalString stdenv.isDarwin ''
+      ${lib.optionalString stdenv.isDarwin ''
         "--with-bundledir=$out"
       ''}
     )
@@ -76,12 +93,12 @@ stdenv.mkDerivation rec {
   installFlags =
     [ # Don't try to write in /var at build time.
       "CACHEDIR=$(TMPDIR)/dummy"
+      "LAUNCHD_DIR=$(TMPDIR)/dummy"
       "LOGDIR=$(TMPDIR)/dummy"
       "REQUESTS=$(TMPDIR)/dummy"
       "STATEDIR=$(TMPDIR)/dummy"
       # Idem for /etc.
       "PAMDIR=$(out)/etc/pam.d"
-      "DBUSDIR=$(out)/etc/dbus-1"
       "XINETD=$(out)/etc/xinetd.d"
       "SERVERROOT=$(out)/etc/cups"
       # Idem for /usr.
@@ -110,30 +127,27 @@ stdenv.mkDerivation rec {
       sed -e "/^cups_serverbin=/s|$lib|$out|" \
           -i "$dev/bin/cups-config"
 
-      # Rename systemd files provided by CUPS
       for f in "$out"/lib/systemd/system/*; do
-        substituteInPlace "$f" \
-          --replace "$lib/$libexec" "$out/$libexec" \
-          --replace "org.cups.cupsd" "cups" \
-          --replace "org.cups." ""
-
-        if [[ "$f" =~ .*cupsd\..* ]]; then
-          mv "$f" "''${f/org\.cups\.cupsd/cups}"
-        else
-          mv "$f" "''${f/org\.cups\./}"
-        fi
+        substituteInPlace "$f" --replace "$lib/$libexec" "$out/$libexec"
       done
-    '' + optionalString stdenv.isLinux ''
+    '' + lib.optionalString stdenv.isLinux ''
       # Use xdg-open when on Linux
       substituteInPlace "$out"/share/applications/cups.desktop \
         --replace "Exec=htmlview" "Exec=xdg-open"
     '';
 
-  meta = {
-    homepage = https://cups.org/;
+  passthru.tests = {
+    inherit (nixosTests)
+      printing-service
+      printing-socket
+    ;
+  };
+
+  meta = with lib; {
+    homepage = "https://openprinting.github.io/cups/";
     description = "A standards-based printing system for UNIX";
-    license = licenses.gpl2; # actually LGPL for the library and GPL for the rest
-    maintainers = with maintainers; [ ];
+    license = licenses.asl20;
+    maintainers = with maintainers; [ matthewbauer ];
     platforms = platforms.unix;
   };
 }

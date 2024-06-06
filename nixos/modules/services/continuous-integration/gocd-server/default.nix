@@ -1,9 +1,10 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
 let
   cfg = config.services.gocd-server;
+  opt = options.services.gocd-server;
 in {
   options = {
     services.gocd-server = {
@@ -27,6 +28,7 @@ in {
 
       extraGroups = mkOption {
         default = [ ];
+        type = types.listOf types.str;
         example = [ "wheel" "docker" ];
         description = ''
           List of extra groups that the "gocd-server" user should be a part of.
@@ -44,7 +46,7 @@ in {
 
       port = mkOption {
         default = 8153;
-        type = types.int;
+        type = types.port;
         description = ''
           Specifies port number on which the Go.CD server HTTP interface listens.
         '';
@@ -68,7 +70,7 @@ in {
 
       packages = mkOption {
         default = [ pkgs.stdenv pkgs.jre pkgs.git config.programs.ssh.package pkgs.nix ];
-        defaultText = "[ pkgs.stdenv pkgs.jre pkgs.git config.programs.ssh.package pkgs.nix ]";
+        defaultText = literalExpression "[ pkgs.stdenv pkgs.jre pkgs.git config.programs.ssh.package pkgs.nix ]";
         type = types.listOf types.package;
         description = ''
           Packages to add to PATH for the Go.CD server's process.
@@ -92,6 +94,7 @@ in {
       };
 
       startupOptions = mkOption {
+        type = types.listOf types.str;
         default = [
           "-Xms${cfg.initialJavaHeapSize}"
           "-Xmx${cfg.maxJavaHeapMemory}"
@@ -103,7 +106,25 @@ in {
           "-Dcruise.config.file=${cfg.workDir}/conf/cruise-config.xml"
           "-Dcruise.server.port=${toString cfg.port}"
           "-Dcruise.server.ssl.port=${toString cfg.sslPort}"
+          "--add-opens=java.base/java.lang=ALL-UNNAMED"
+          "--add-opens=java.base/java.util=ALL-UNNAMED"
         ];
+        defaultText = literalExpression ''
+          [
+            "-Xms''${config.${opt.initialJavaHeapSize}}"
+            "-Xmx''${config.${opt.maxJavaHeapMemory}}"
+            "-Dcruise.listen.host=''${config.${opt.listenAddress}}"
+            "-Duser.language=en"
+            "-Djruby.rack.request.size.threshold.bytes=30000000"
+            "-Duser.country=US"
+            "-Dcruise.config.dir=''${config.${opt.workDir}}/conf"
+            "-Dcruise.config.file=''${config.${opt.workDir}}/conf/cruise-config.xml"
+            "-Dcruise.server.port=''${toString config.${opt.port}}"
+            "-Dcruise.server.ssl.port=''${toString config.${opt.sslPort}}"
+            "--add-opens=java.base/java.lang=ALL-UNNAMED"
+            "--add-opens=java.base/java.util=ALL-UNNAMED"
+          ]
+        '';
 
         description = ''
           Specifies startup command line arguments to pass to Go.CD server
@@ -113,6 +134,7 @@ in {
 
       extraOptions = mkOption {
         default = [ ];
+        type = types.listOf types.str;
         example = [
           "-X debug"
           "-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005"
@@ -135,7 +157,7 @@ in {
         description = ''
           Additional environment variables to be passed to the gocd-server process.
           As a base environment, gocd-server receives NIX_PATH from
-          <option>environment.sessionVariables</option>, NIX_REMOTE is set to
+          {option}`environment.sessionVariables`, NIX_REMOTE is set to
           "daemon".
         '';
       };
@@ -143,20 +165,20 @@ in {
   };
 
   config = mkIf cfg.enable {
-    users.groups = optional (cfg.group == "gocd-server") {
-      name = "gocd-server";
-      gid = config.ids.gids.gocd-server;
+    users.groups = optionalAttrs (cfg.group == "gocd-server") {
+      gocd-server.gid = config.ids.gids.gocd-server;
     };
 
-    users.users = optional (cfg.user == "gocd-server") {
-      name = "gocd-server";
-      description = "gocd-server user";
-      createHome = true;
-      home = cfg.workDir;
-      group = cfg.group;
-      extraGroups = cfg.extraGroups;
-      useDefaultShell = true;
-      uid = config.ids.uids.gocd-server;
+    users.users = optionalAttrs (cfg.user == "gocd-server") {
+      gocd-server = {
+        description = "gocd-server user";
+        createHome = true;
+        home = cfg.workDir;
+        group = cfg.group;
+        extraGroups = cfg.extraGroups;
+        useDefaultShell = true;
+        uid = config.ids.uids.gocd-server;
+      };
     };
 
     systemd.services.gocd-server = {
@@ -181,7 +203,7 @@ in {
         ${pkgs.git}/bin/git config --global --add http.sslCAinfo /etc/ssl/certs/ca-certificates.crt
         ${pkgs.jre}/bin/java -server ${concatStringsSep " " cfg.startupOptions} \
                                ${concatStringsSep " " cfg.extraOptions}  \
-                              -jar ${pkgs.gocd-server}/go-server/go.jar
+                              -jar ${pkgs.gocd-server}/go-server/lib/go.jar
       '';
 
       serviceConfig = {

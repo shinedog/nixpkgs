@@ -20,7 +20,7 @@ in
 {
   options = {
     services.salt.master = {
-      enable = mkEnableOption "Salt master service";
+      enable = mkEnableOption "Salt configuration management system master service";
       configuration = mkOption {
         type = types.attrs;
         default = {};
@@ -45,7 +45,7 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
       path = with pkgs; [
-        utillinux  # for dmesg
+        util-linux  # for dmesg
       ];
       serviceConfig = {
         ExecStart = "${pkgs.salt}/bin/salt-master";
@@ -59,5 +59,5 @@ in
     };
   };
 
-  meta.maintainers = with lib.maintainers; [ aneeshusa ];
+  meta.maintainers = with lib.maintainers; [ Flakebi ];
 }

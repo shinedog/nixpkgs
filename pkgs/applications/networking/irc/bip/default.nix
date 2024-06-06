@@ -1,37 +1,42 @@
-{ stdenv, fetchurl, fetchpatch, bison, flex, autoconf, automake, openssl }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, pkg-config
+, bison
+, flex
+, openssl
+}:
 
-stdenv.mkDerivation rec {
-  name = "bip-${version}";
-  version = "0.8.9";
+stdenv.mkDerivation {
+  pname = "bip";
+  version = "0.9.3";
 
-  # fetch sources from debian, because the creator's website provides
-  # the files only via https but with an untrusted certificate.
   src = fetchurl {
-    url = "mirror://debian/pool/main/b/bip/bip_${version}.orig.tar.gz";
-    sha256 = "0q942g9lyd8pjvqimv547n6vik5759r9npw3ws3bdj4ixxqhz59w";
+    # Note that the number behind download is not predictable
+    url = "https://projects.duckcorp.org/attachments/download/146/bip-0.9.3.tar.gz";
+    hash = "sha256-K+6AC8mg0aLQsCgiDoFBM5w2XrR+V2tfWnI8ByeRmOI=";
   };
 
-  buildInputs = [ bison flex autoconf automake openssl ];
+  outputs = [ "out" "man" "doc" ];
 
-  # includes an important security patch
-  patches = [
-    (fetchpatch {
-      url = "mirror://gentoo/../gentoo-portage/net-irc/bip/files/bip-freenode.patch";
-      sha256 = "05qy7a62p16f5knrsdv2lkhc07al18qq32ciq3k4r0lq1wbahj2y";
-    })
-    (fetchpatch {
-      url = "https://projects.duckcorp.org/projects/bip/repository/revisions/39414f8ff9df63c8bc2e4eee34f09f829a5bf8f5/diff/src/connection.c?format=diff";
-      sha256 = "1hvg58vci6invh0z19wf04jjvnm8w6f6v4c4nk1j5hc3ymxdp1rb";
-    })
-  ];
+  postPatch = ''
+    # Drop blanket -Werror to avoid build failure on fresh toolchains
+    # and libraries. Without the cnage build fails on gcc-13 and on
+    # openssl-3.
+    substituteInPlace src/Makefile.am --replace-fail ' -Werror ' ' '
+  '';
 
-  NIX_CFLAGS_COMPILE = [ "-Wno-error=unused-result" "-Wno-error=duplicate-decl-specifier" ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ bison flex openssl ];
+
+  enableParallelBuilding = true;
 
   meta = {
     description = "An IRC proxy (bouncer)";
-    homepage = http://bip.milkypond.org/;
-    license = stdenv.lib.licenses.gpl2;
+    homepage = "http://bip.milkypond.org/";
+    license = lib.licenses.gpl2;
     downloadPage = "https://projects.duckcorp.org/projects/bip/files";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = lib.platforms.linux;
   };
 }

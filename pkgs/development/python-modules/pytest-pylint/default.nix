@@ -1,36 +1,46 @@
-{ lib
-, buildPythonPackage
-, fetchPypi
-, pytest
-, pylint
-, six
-, pytestrunner
+{
+  lib,
+  buildPythonPackage,
+  fetchPypi,
+  pylint,
+  pytest,
+  pytestCheckHook,
+  pythonOlder,
+  toml,
 }:
 
 buildPythonPackage rec {
   pname = "pytest-pylint";
-  version = "0.14.0";
+  version = "0.21.0";
+  format = "setuptools";
+
+  disabled = pythonOlder "3.7";
 
   src = fetchPypi {
     inherit pname version;
-    sha256 = "7bfbb66fc6dc160193a9e813a7c55e5ae32028f18660deeb90e1cb7e980cbbac";
+    hash = "sha256-iHZLjh1c+hiAkkjgzML8BQNfCMNfCwIi3c/qHDxOVT4=";
   };
 
-  buildInputs = [ pytestrunner ];
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "pytest-runner" ""
+  '';
+
+  buildInputs = [ pytest ];
 
   propagatedBuildInputs = [
-    pytest
     pylint
-    six
+    toml
   ];
 
-  # tests not included with release
-  doCheck = false;
+  nativeCheckInputs = [ pytestCheckHook ];
+
+  pythonImportsCheck = [ "pytest_pylint" ];
 
   meta = with lib; {
-    description = "pytest plugin to check source code with pylint";
-    homepage = https://github.com/carsongee/pytest-pylint;
+    description = "Pytest plugin to check source code with pylint";
+    homepage = "https://github.com/carsongee/pytest-pylint";
     license = licenses.mit;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ ];
   };
 }

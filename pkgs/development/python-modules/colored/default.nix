@@ -1,24 +1,36 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
+{
+  lib,
+  buildPythonPackage,
+  fetchFromGitLab,
+  flit-core,
+  unittestCheckHook,
 }:
 
 buildPythonPackage rec {
   pname = "colored";
-  version = "1.3.93";
+  version = "2.2.3";
+  format = "pyproject";
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "0xbhq9nd9xz3b6w0c4q33jfgnv8jid023v2fyhi7hsrz1scym5l2";
+  src = fetchFromGitLab {
+    owner = "dslackw";
+    repo = "colored";
+    rev = "refs/tags/${version}";
+    hash = "sha256-4APFAIN+cmPPd6qbqVC9iU4YntNEjoPbJXZywG1hsBY=";
   };
 
-  # No proper test suite
-  doCheck = false;
+  nativeBuildInputs = [ flit-core ];
 
-  meta = with stdenv.lib; {
-    homepage = https://gitlab.com/dslackw/colored;
+  nativeCheckInputs = [ unittestCheckHook ];
+
+  unittestFlagsArray = [ "unittests" ];
+
+  pythonImportsCheck = [ "colored" ];
+
+  meta = with lib; {
     description = "Simple library for color and formatting to terminal";
+    homepage = "https://gitlab.com/dslackw/colored";
+    changelog = "https://gitlab.com/dslackw/colored/-/raw/${version}/CHANGES.md";
+    maintainers = with maintainers; [ ];
     license = licenses.mit;
   };
-
 }

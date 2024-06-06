@@ -1,28 +1,48 @@
-{ stdenv, fetchgit }:
+{ lib, stdenv, fetchFromSavannah, python3 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "gnulib";
-  version = "20190326";
+  version = "20231109";
 
-  src = fetchgit {
-    url = https://git.savannah.gnu.org/r/gnulib.git;
-    rev = "a18f7ce3c0aa760c33d46bbeb8e5b3a14cf24984";
-    sha256 = "04py5n3j17wyqv9wfsslcrxzapni9vmw6p5g0adzy2md3ygjw4x4";
+  src = fetchFromSavannah {
+    repo = "gnulib";
+    rev = "2dd1a7984c6b3e6056cef7e3f9933e0039c21634";
+    hash = "sha256-QtWf3mljEnr0TTogkoKN63Y5HTm14A2e/sIXX3xe2SE=";
   };
 
-  dontFixup = true;
-  # no "make install", gnulib is a collection of source code
+  postPatch = ''
+    patchShebangs gnulib-tool.py
+  '';
+
+  buildInputs = [ python3 ];
+
   installPhase = ''
-    mkdir -p $out; mv * $out/
-    ln -s $out/lib $out/include
     mkdir -p $out/bin
+    cp -r * $out/
+    ln -s $out/lib $out/include
     ln -s $out/gnulib-tool $out/bin/
   '';
 
-  meta = {
-    homepage = https://www.gnu.org/software/gnulib/;
+  # do not change headers to not update all vendored build files
+  dontFixup = true;
+
+  passthru = {
+    # This patch is used by multiple other packages (currently:
+    # gnused, gettext) which contain vendored copies of gnulib.
+    # Without it, compilation will fail with error messages about
+    # "__LDBL_REDIR1_DECL" or similar on platforms with longdouble
+    # redirects (currently powerpc64).  Once all of those other
+    # packages make a release with a newer gnulib we can drop this
+    # patch.
+    longdouble-redirect-patch = ./gnulib-longdouble-redirect.patch;
+  };
+
+  meta = with lib; {
     description = "Central location for code to be shared among GNU packages";
-    license = stdenv.lib.licenses.gpl3Plus;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://www.gnu.org/software/gnulib/";
+    changelog = "https://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=blob;f=ChangeLog";
+    license = licenses.gpl3Plus;
+    mainProgram = "gnulib-tool";
+    platforms = platforms.unix;
   };
 }

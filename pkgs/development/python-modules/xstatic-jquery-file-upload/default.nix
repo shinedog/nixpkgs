@@ -1,16 +1,18 @@
-{ buildPythonPackage
-, lib
-, fetchPypi
-, xstatic-jquery
+{
+  buildPythonPackage,
+  lib,
+  fetchPypi,
+  xstatic-jquery,
 }:
 
 buildPythonPackage rec {
-  pname = "XStatic-jQuery-File-Upload";
-  version = "9.23.0.1";
+  pname = "xstatic-jquery-file-upload";
+  version = "10.31.0.1";
 
   src = fetchPypi {
-    inherit version pname;
-    sha256 = "649a500870b5f5d9cc71d1c1dc4c4d2242f459b02d811a771336217e4e91bfda";
+    pname = "XStatic-jQuery-File-Upload";
+    inherit version;
+    sha256 = "7d716f26aca14732c35c54f0ba6d38187600ab472fc98a91d972d12c5a70db27";
   };
 
   # no tests implemented
@@ -18,11 +20,10 @@ buildPythonPackage rec {
 
   propagatedBuildInputs = [ xstatic-jquery ];
 
-  meta = with lib;{
-    homepage =  http://plugins.jquery.com/project/jQuery-File-Upload;
+  meta = with lib; {
+    homepage = "https://plugins.jquery.com/project/jQuery-File-Upload";
     description = "jquery-file-upload packaged static files for python";
     license = licenses.mit;
     maintainers = with maintainers; [ makefu ];
   };
-
 }

@@ -1,55 +1,88 @@
 { sage-src
-, perl
+, env-locations
+, python
 , buildPythonPackage
-, arb
-, openblasCompat
+, m4
+, perl
+, pkg-config
+, sage-setup
+, pythonRelaxDepsHook
+, gd
+, iml
+, libpng
+, readline
+, blas
+, boost
 , brial
 , cliquer
-, cypari2
-, cysignals
-, cython
-, ecl
 , eclib
 , ecm
-, flint
-, gd
+, fflas-ffpack
+, flint3
+, gap
+, giac
 , givaro
 , glpk
 , gsl
-, iml
-, jinja2
+, lapack
 , lcalc
-, lrcalc
-, gap
+, libbraiding
+, libhomfly
+, libmpc
 , linbox
+, lisp-compiler
+, lrcalc
 , m4ri
 , m4rie
-, libmpc
 , mpfi
+, mpfr
 , ntl
-, numpy
 , pari
-, pkgconfig
-, pkg-config
 , planarity
 , ppl
-, pynac
-, python
-, ratpoints
-, readline
 , rankwidth
-, symmetrica
-, zn_poly
-, fflas-ffpack
-, boost
+, ratpoints
 , singular
-, pip
-, jupyter_core
-, libhomfly
-, libbraiding
+, sqlite
+, symmetrica
+, conway-polynomials
+, cvxopt
+, cypari2
+, cysignals
+, cython
+, fpylll
 , gmpy2
+, importlib-metadata
+, importlib-resources
+, ipykernel
+, ipython
+, ipywidgets
+, jinja2
+, jupyter-client
+, jupyter-core
+, lrcalc-python
+, matplotlib
+, memory-allocator
+, mpmath
+, networkx
+, numpy
+, pexpect
+, pillow
+, pip
+, pkgconfig
 , pplpy
+, primecountpy
+, ptyprocess
+, requests
+, rpy2
+, scipy
+, sphinx
+, sympy
+, typing-extensions
+, nbclassic
 }:
+
+assert (!blas.isILP64) && (!lapack.isILP64);
 
 # This is the core sage python package. Everything else is just wrappers gluing
 # stuff together. It is not very useful on its own though, since it will not
@@ -57,76 +90,118 @@
 # `sage-tests` and will not have html docs without `sagedoc`.
 
 buildPythonPackage rec {
-  format = "other";
   version = src.version;
-  name = "sagelib-${version}";
+  pname = "sagelib";
   src = sage-src;
+  pyproject = true;
 
   nativeBuildInputs = [
     iml
+    lisp-compiler
+    m4
     perl
-    jupyter_core
-    pkg-config
     pip # needed to query installed packages
+    pkg-config
+    sage-setup
+    pythonRelaxDepsHook
+  ];
+
+  pythonRelaxDeps = [
+    "networkx"
   ];
 
   buildInputs = [
     gd
-    readline
     iml
+    libpng
+    readline
   ];
 
   propagatedBuildInputs = [
-    cypari2
-    jinja2
-    numpy
-    pkgconfig
+    # native dependencies (TODO: determine which ones need to be propagated)
+    blas
     boost
-    arb
     brial
     cliquer
-    ecl
     eclib
     ecm
     fflas-ffpack
-    flint
+    flint3
+    gap
+    giac
     givaro
     glpk
     gsl
+    lapack
     lcalc
-    gap
+    libbraiding
+    libhomfly
     libmpc
     linbox
+    lisp-compiler
     lrcalc
     m4ri
     m4rie
     mpfi
+    mpfr
     ntl
-    openblasCompat
     pari
     planarity
     ppl
-    pynac
     rankwidth
     ratpoints
     singular
+    sqlite
     symmetrica
-    zn_poly
-    pip
-    cython
+
+    # from src/sage/setup.cfg and requirements.txt
+    conway-polynomials
+    cvxopt
+    cypari2
     cysignals
-    libhomfly
-    libbraiding
+    cython
+    fpylll
     gmpy2
+    importlib-metadata
+    importlib-resources
+    ipykernel
+    ipython
+    ipywidgets
+    jinja2
+    jupyter-client
+    jupyter-core
+    lrcalc-python
+    matplotlib
+    memory-allocator
+    mpmath
+    networkx
+    numpy
+    pexpect
+    pillow
+    pip
+    pkgconfig
     pplpy
+    primecountpy
+    ptyprocess
+    requests
+    rpy2
+    scipy
+    sphinx
+    sympy
+    typing-extensions
+
+    nbclassic
   ];
 
-  buildPhase = ''
+  preBuild = ''
     export SAGE_ROOT="$PWD"
     export SAGE_LOCAL="$SAGE_ROOT"
     export SAGE_SHARE="$SAGE_LOCAL/share"
-    export JUPYTER_PATH="$SAGE_LOCAL/jupyter"
 
+    # set locations of dependencies (needed for nbextensions like threejs)
+    . ${env-locations}/sage-env-locations
+
+    export JUPYTER_PATH="$SAGE_LOCAL/jupyter"
     export PATH="$SAGE_ROOT/build/bin:$SAGE_ROOT/src/bin:$PATH"
 
     export SAGE_NUM_THREADS="$NIX_BUILD_CORES"
@@ -134,15 +209,14 @@ buildPythonPackage rec {
     mkdir -p "$SAGE_SHARE/sage/ext/notebook-ipython"
     mkdir -p "var/lib/sage/installed"
 
-    cd src
-    source bin/sage-dist-helpers
+    sed -i "/sage-conf/d" src/{setup.cfg,pyproject.toml,requirements.txt}
 
-    ${python.interpreter} -u setup.py --no-user-cfg build
+    cd build/pkgs/sagelib/src
   '';
 
-  installPhase = ''
-    ${python.interpreter} -u setup.py --no-user-cfg install --prefix=$out
-
+  postInstall = ''
     rm -r "$out/${python.sitePackages}/sage/cython_debug"
   '';
+
+  doCheck = false; # we will run tests in sage-tests.nix
 }

@@ -1,56 +1,55 @@
-{ stdenv, fetchFromGitHub, pantheon, meson, ninja, pkgconfig, vala
-, libgee, granite, gtk3, libaccounts-glib, libsignon-glib, json-glib
-, librest, webkitgtk, libsoup, switchboard, gobject-introspection }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, nix-update-script
+, meson
+, ninja
+, pkg-config
+, vala
+, evolution-data-server
+, glib
+, granite
+, gtk3
+, libhandy
+, switchboard
+}:
 
 stdenv.mkDerivation rec {
   pname = "switchboard-plug-onlineaccounts";
-  version = "2.0.1";
+  version = "6.5.3";
 
   src = fetchFromGitHub {
     owner = "elementary";
     repo = pname;
     rev = version;
-    sha256 = "03h8ii8zz59fpp4fwlvyx3m3550096fn7a6w612b1rbj3dqhlmh9";
-  };
-
-  passthru = {
-    updateScript = pantheon.updateScript {
-      repoName = pname;
-    };
+    sha256 = "sha256-qERXF7aymI2xbyqrD6rwUBiFNRnIiVllavSPgW0F8yk=";
   };
 
   nativeBuildInputs = [
-    gobject-introspection
     meson
     ninja
-    pkgconfig
+    pkg-config
     vala
   ];
 
   buildInputs = [
+    evolution-data-server
+    glib
     granite
     gtk3
-    json-glib
-    libaccounts-glib
-    libgee
-    libsignon-glib
-    libsoup
-    librest
+    libhandy
     switchboard
-    webkitgtk
   ];
 
-  PKG_CONFIG_LIBACCOUNTS_GLIB_PROVIDERFILESDIR = "${placeholder "out"}/share/accounts/providers";
-  PKG_CONFIG_LIBACCOUNTS_GLIB_SERVICEFILESDIR = "${placeholder "out"}/share/accounts/services";
-  PKG_CONFIG_SWITCHBOARD_2_0_PLUGSDIR = "${placeholder "out"}/lib/switchboard";
-
-
-  meta = with stdenv.lib; {
-    description = "Switchboard Online Accounts Plug";
-    homepage = https://github.com/elementary/switchboard-plug-onlineaccounts;
-    license = licenses.lgpl2Plus;
-    platforms = platforms.linux;
-    maintainers = pantheon.maintainers;
+  passthru = {
+    updateScript = nix-update-script { };
   };
 
+  meta = with lib; {
+    description = "Switchboard Online Accounts Plug";
+    homepage = "https://github.com/elementary/switchboard-plug-onlineaccounts";
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux;
+    maintainers = teams.pantheon.members;
+  };
 }

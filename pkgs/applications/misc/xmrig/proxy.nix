@@ -1,36 +1,59 @@
-{ stdenv, lib, fetchFromGitHub, cmake, libuv, libmicrohttpd, libuuid, openssl
-, donateLevel ? 0
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+, libuv
+, libmicrohttpd
+, openssl
+, darwin
 }:
 
+let
+  inherit (darwin.apple_sdk_11_0.frameworks) CoreServices IOKit;
+in
 stdenv.mkDerivation rec {
-  name = "xmrig-proxy-${version}";
-  version = "2.14.1";
+  pname = "xmrig-proxy";
+  version = "6.21.1";
 
   src = fetchFromGitHub {
     owner = "xmrig";
     repo = "xmrig-proxy";
     rev = "v${version}";
-    sha256 = "1sw00qz4yg8cwmm3s64bqr3lki6bxmlsi4ankyy2l4dx1vs9kf6r";
+    hash = "sha256-70SYdO3uyPINanAoARd2lDwyiuc2f/gg4QuoDgoXjjs=";
   };
 
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ libuv libmicrohttpd libuuid openssl ];
-
   postPatch = ''
-    # Set default donation level to 0%. Can be increased at runtime via --donate-level option.
-    substituteInPlace src/donate.h \
-      --replace "kDefaultDonateLevel = 2;" "kDefaultDonateLevel = ${toString donateLevel};"
-
-    # Link dynamically against libuuid instead of statically
-    substituteInPlace CMakeLists.txt --replace uuid.a uuid
+    # Link dynamically against libraries instead of statically
+    substituteInPlace CMakeLists.txt \
+      --replace uuid.a uuid
+    substituteInPlace cmake/OpenSSL.cmake \
+      --replace "set(OPENSSL_USE_STATIC_LIBS TRUE)" "set(OPENSSL_USE_STATIC_LIBS FALSE)"
   '';
 
+  nativeBuildInputs = [
+    cmake
+  ];
+
+  buildInputs = [
+    libuv
+    libmicrohttpd
+    openssl
+  ] ++ lib.optionals stdenv.isDarwin [
+    CoreServices
+    IOKit
+  ];
+
   installPhase = ''
+    runHook preInstall
+
     install -vD xmrig-proxy $out/bin/xmrig-proxy
+
+    runHook postInstall
   '';
 
   meta = with lib; {
     description = "Monero (XMR) Stratum protocol proxy";
+    mainProgram = "xmrig-proxy";
     homepage = "https://github.com/xmrig/xmrig-proxy";
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ aij ];

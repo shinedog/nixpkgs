@@ -1,22 +1,61 @@
-{ buildPythonPackage
-, pkgs
-, testtools
-, testscenarios
+{
+  buildPythonPackage,
+  # pkgs dependencies
+  check,
+  cppunit,
+  pkg-config,
+  subunit,
+  pythonOlder,
+
+  # python dependencies
+  extras,
+  fixtures,
+  hypothesis,
+  pytestCheckHook,
+  setuptools,
+  testscenarios,
+  testtools,
 }:
 
-buildPythonPackage rec {
-  name = pkgs.subunit.name;
-  src = pkgs.subunit.src;
+buildPythonPackage {
+  inherit (subunit) name src meta;
+  format = "pyproject";
 
-  propagatedBuildInputs = [ testtools ];
-  checkInputs = [ testscenarios ];
-  nativeBuildInputs = [ pkgs.pkgconfig ];
-  buildInputs = [ pkgs.check pkgs.cppunit ];
+  disabled = pythonOlder "3.6";
 
-  patchPhase = ''
-    sed -i 's/version=VERSION/version="${pkgs.subunit.version}"/' setup.py
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace "version=VERSION" 'version="${subunit.version}"'
   '';
 
-  meta = pkgs.subunit.meta;
+  nativeBuildInputs = [
+    pkg-config
+    setuptools
+  ];
 
+  buildInputs = [
+    check
+    cppunit
+  ];
+
+  propagatedBuildInputs = [
+    extras
+    testtools
+  ];
+
+  nativeCheckInputs = [
+    testscenarios
+    hypothesis
+    fixtures
+    pytestCheckHook
+  ];
+
+  pytestFlagsArray = [ "python/subunit" ];
+
+  disabledTestPaths = [
+    # these tests require testtools and don't work with pytest
+    "python/subunit/tests/test_output_filter.py"
+    "python/subunit/tests/test_test_protocol.py"
+    "python/subunit/tests/test_test_protocol2.py"
+  ];
 }

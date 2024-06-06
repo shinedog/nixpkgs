@@ -1,16 +1,21 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, gawk, gnused, libgcrypt, zlib, bzip2 }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, libgcrypt, zlib, bzip2 }:
 
 stdenv.mkDerivation rec {
-  name = "munge-0.5.13";
+  pname = "munge";
+  version = "0.5.16";
 
   src = fetchFromGitHub {
     owner = "dun";
     repo = "munge";
-    rev = "${name}";
-    sha256 = "1c4ff3d8ad3inbliszr4slym3b4cn19bn6mxm13mzy20jyi2rm70";
+    rev = "${pname}-${version}";
+    sha256 = "sha256-fv42RMUAP8Os33/iHXr70i5Pt2JWZK71DN5vFI3q7Ak=";
   };
 
-  nativeBuildInputs = [ autoreconfHook gawk gnused ];
+  strictDeps = true;
+  nativeBuildInputs = [
+    autoreconfHook
+    libgcrypt # provides libgcrypt.m4
+  ];
   buildInputs = [ libgcrypt zlib bzip2 ];
 
   preAutoreconf = ''
@@ -20,9 +25,13 @@ stdenv.mkDerivation rec {
 
   configureFlags = [
     "--localstatedir=/var"
+    "--with-libgcrypt-prefix=${libgcrypt.dev}"
+    # workaround for cross compilation: https://github.com/dun/munge/issues/103
+    "ac_cv_file__dev_spx=no"
+    "x_ac_cv_check_fifo_recvfd=no"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = ''
       An authentication service for creating and validating credentials
     '';

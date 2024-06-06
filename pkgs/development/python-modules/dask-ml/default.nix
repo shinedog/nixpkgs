@@ -1,43 +1,77 @@
-{ stdenv
-, buildPythonPackage
-, fetchPypi
-, dask
-, numpy, toolz # dask[array]
-, numba
-, pandas
-, scikitlearn
-, scipy
-, dask-glm
-, six
-, multipledispatch
-, packaging
-, pytest
-, xgboost
-, tensorflow
-, joblib
-, distributed
+{
+  lib,
+  buildPythonPackage,
+  pythonOlder,
+  fetchFromGitHub,
+  hatch-vcs,
+  hatchling,
+  setuptools-scm,
+  dask,
+  dask-expr,
+  dask-glm,
+  distributed,
+  multipledispatch,
+  numba,
+  numpy,
+  packaging,
+  pandas,
+  scikit-learn,
+  scipy,
+  pytest-mock,
+  pytestCheckHook,
 }:
 
 buildPythonPackage rec {
-  version = "0.11.0";
   pname = "dask-ml";
+  version = "2024.4.4";
+  pyproject = true;
 
-  src = fetchPypi {
-    inherit pname version;
-    sha256 = "a9e8e69494560dc23534adb236e88b3b21dc30a156648453c9c6e4b27ff2df96";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = "dask";
+    repo = "dask-ml";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-ZiBpCk3b4Tk0Hwb4uapJLEx+Nb/qHFROCnkBTNGDzoU=";
   };
 
-  checkInputs = [ pytest xgboost tensorflow joblib distributed ];
-  propagatedBuildInputs = [ dask numpy toolz numba pandas scikitlearn scipy dask-glm six multipledispatch packaging ];
+  build-system = [
+    hatch-vcs
+    hatchling
+    setuptools-scm
+  ];
 
-  # dask-ml has some heavy test requirements
-  # and requires some very new packages
-  doCheck = false;
+  dependencies = [
+    dask-expr
+    dask-glm
+    distributed
+    multipledispatch
+    numba
+    numpy
+    packaging
+    pandas
+    scikit-learn
+    scipy
+  ] ++ dask.optional-dependencies.array ++ dask.optional-dependencies.dataframe;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/dask/dask-ml;
+  pythonImportsCheck = [
+    "dask_ml"
+    "dask_ml.naive_bayes"
+    "dask_ml.wrappers"
+    "dask_ml.utils"
+  ];
+
+  nativeCheckInputs = [
+    pytest-mock
+    pytestCheckHook
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  meta = with lib; {
     description = "Scalable Machine Learn with Dask";
+    homepage = "https://github.com/dask/dask-ml";
     license = licenses.bsd3;
-    maintainers = [ maintainers.costrouc ];
+    maintainers = with maintainers; [ GaetanLepage ];
   };
 }

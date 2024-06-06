@@ -1,30 +1,35 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, testers, kube-router }:
 
-buildGoPackage rec {
-  name = "kube-router-${version}";
-  version = "0.2.5";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/cloudnativelabs/kube-router";
+buildGoModule rec {
+  pname = "kube-router";
+  version = "2.1.3";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "cloudnativelabs";
-    repo = "kube-router";
-    sha256 = "1j6q6kg4qj75v2mdy9ivvwq8mx9fpdf0w08959l8imrp5byd56wv";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-H+jPHf7sMrMlqLWa3L34U8nbBgqeX+MqChiuSsVdx6A=";
   };
 
-  buildFlagsArray = ''
-    -ldflags=
-    -X
-    ${goPackagePath}/pkg/cmd.version=${version}
-    -X
-    ${goPackagePath}/pkg/cmd.buildDate=Nix
-  '';
+  vendorHash = "sha256-BrpjG9DhDQSsbeJ+1MRAwXyKVULK3KHjvLydduTb024=";
 
-  meta = with stdenv.lib; {
+  CGO_ENABLED = 0;
+
+  ldflags = [
+    "-s"
+    "-w"
+    "-X github.com/cloudnativelabs/kube-router/v2/pkg/version.Version=${version}"
+    "-X github.com/cloudnativelabs/kube-router/v2/pkg/version.BuildDate=Nix"
+  ];
+
+  passthru.tests.version = testers.testVersion {
+    package = kube-router;
+  };
+
+  meta = with lib; {
     homepage = "https://www.kube-router.io/";
     description = "All-in-one router, firewall and service proxy for Kubernetes";
+    mainProgram = "kube-router";
     license = licenses.asl20;
     maintainers = with maintainers; [ colemickens johanot ];
     platforms = platforms.linux;

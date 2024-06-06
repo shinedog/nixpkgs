@@ -1,26 +1,30 @@
-{ stdenv, fetchurl, apacheHttpd, python2 }:
+{ lib, stdenv, fetchFromGitHub, apacheHttpd, python3, ncurses }:
 
 stdenv.mkDerivation rec {
-  name = "mod_wsgi-${version}";
-  version = "4.6.5";
+  pname = "mod_wsgi";
+  version = "5.0.0";
 
-  src = fetchurl {
-    url = "https://github.com/GrahamDumpleton/mod_wsgi/archive/${version}.tar.gz";
-    sha256 = "1q75ifadjd5frr5i2b9swbjiwfv4fr4ny8npsm09w6mjp7w0bgjw";
+  src = fetchFromGitHub {
+    owner = "GrahamDumpleton";
+    repo = "mod_wsgi";
+    rev = version;
+    hash = "sha256-/4swm4AYCN3xyz2+OH7XqH/dFC53wqGPZgEAdxZQvbs=";
   };
 
-  buildInputs = [ apacheHttpd python2 ];
+  buildInputs = [ apacheHttpd python3 ncurses ];
 
-  patchPhase = ''
-    sed -r -i -e "s|^LIBEXECDIR=.*$|LIBEXECDIR=$out/modules|" \
-      ${if stdenv.isDarwin then "-e 's|/usr/bin/lipo|lipo|'" else ""} \
-      configure
+  postPatch = ''
+    substituteInPlace configure --replace '/usr/bin/lipo' 'lipo'
   '';
 
+  makeFlags = [
+    "LIBEXECDIR=$(out)/modules"
+  ];
+
   meta = {
-    homepage = https://github.com/GrahamDumpleton/mod_wsgi;
+    homepage = "https://github.com/GrahamDumpleton/mod_wsgi";
     description = "Host Python applications in Apache through the WSGI interface";
-    license = stdenv.lib.licenses.asl20;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.asl20;
+    platforms = lib.platforms.unix;
   };
 }

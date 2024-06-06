@@ -1,26 +1,61 @@
-{ stdenv, fetchurl, openssl, libpcap
+{ lib
+, stdenv
+, clang
+, fetchFromGitHub
+, fetchpatch
+, installShellFiles
+, openssl
+, libpcap
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "cowpatty-${version}";
-  version = "4.6";
+  pname = "cowpatty";
+  version = "4.8";
 
-  buildInputs = [ openssl libpcap ];
-
-  src = fetchurl {
-    url = "http://www.willhackforsushi.com/code/cowpatty/${version}/${name}.tgz";
-    sha256 = "1hivh3bq2maxvqzwfw06fr7h8bbpvxzah6mpibh3wb85wl9w2gyd";
+  src = fetchFromGitHub {
+    owner = "joswr1ght";
+    repo = pname;
+    rev = version;
+    sha256 = "0fvwwghhd7wsx0lw2dj9rdsjnirawnq3c6silzvhi0yfnzn5fs0s";
   };
 
-  installPhase = "make DESTDIR=$out BINDIR=/bin install";
+  patches = [
+    # Pull upstream fix for parallel builds:
+    #   https://github.com/joswr1ght/cowpatty/pull/5
+    (fetchpatch {
+      name = "fix-parallel.patch";
+      url = "https://github.com/joswr1ght/cowpatty/commit/9c8cc09c4fa90aebee44afcd0ad6a35539178478.patch";
+      hash = "sha256-k0Qht80HcjvPoxVPF6wAXwxN3d2mxBrEyeFGuU7w9eA=";
+    })
+  ];
 
-  meta = {
+  nativeBuildInputs = [
+    clang
+    installShellFiles
+  ];
+
+  buildInputs = [
+    openssl
+    libpcap
+  ];
+
+  enableParallelBuilding = true;
+
+  makeFlags = [
+    "DESTDIR=$(out)"
+    "BINDIR=/bin"
+  ];
+
+  postInstall = ''
+    installManPage cowpatty.1
+    installManPage genpmk.1
+  '';
+
+  meta = with lib; {
     description = "Offline dictionary attack against WPA/WPA2 networks";
-    license = licenses.gpl2;
-    homepage = http://www.willhackforsushi.com/?page_id=50;
-    maintainers = with maintainers; [ nico202 ];
+    homepage = "https://github.com/joswr1ght/cowpatty";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ nico202 fab ];
     platforms = platforms.linux;
   };
 }

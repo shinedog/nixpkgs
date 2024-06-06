@@ -1,37 +1,49 @@
-{ stdenv, fetchurl, rustPlatform, darwin, openssl, libsodium, pkgconfig }:
+{ lib, stdenv
+, fetchCrate
+, rustPlatform
+, installShellFiles
+, pkg-config
+, libsodium
+, openssl
+, xxHash
+, darwin
+, gitImportSupport ? true
+, libgit2 ? null
+}:
 
-with rustPlatform;
+rustPlatform.buildRustPackage rec {
+  pname = "pijul";
+  version = "1.0.0-beta.9";
 
-buildRustPackage rec {
-  name = "pijul-${version}";
-  version = "0.11.0";
-
-  src = fetchurl {
-    url = "https://pijul.org/releases/${name}.tar.gz";
-    sha256 = "e60793ab124e9054c1d5509698acbae507ebb2fab5364d964067bc9ae8b6b5e5";
+  src = fetchCrate {
+    inherit version pname;
+    hash = "sha256-jy0mzgLw9iWuoWe2ictMTL3cHnjJ5kzs6TAK+pdm28g=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-
-  postInstall = ''
-    mkdir -p $out/share/{bash-completion/completions,zsh/site-functions,fish/vendor_completions.d}
-    $out/bin/pijul generate-completions --bash > $out/share/bash-completion/completions/pijul
-    $out/bin/pijul generate-completions --zsh > $out/share/zsh/site-functions/_pijul
-    $out/bin/pijul generate-completions --fish > $out/share/fish/vendor_completions.d/pijul.fish
-  '';
-
-  buildInputs = [ openssl libsodium ] ++ stdenv.lib.optionals stdenv.isDarwin
-    (with darwin.apple_sdk.frameworks; [ Security ]);
+  cargoHash = "sha256-iXGvb4qmZK7Sjbf/Jkyzj+nhpZFV3ngjtJfz6x/8z2s=";
 
   doCheck = false;
+  nativeBuildInputs = [ installShellFiles pkg-config ];
+  buildInputs = [ openssl libsodium xxHash ]
+    ++ (lib.optionals gitImportSupport [ libgit2 ])
+    ++ (lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
+      CoreServices Security SystemConfiguration
+    ]));
 
-  cargoSha256 = "1r76azmka1d76ff0ddfhzr24b0ry496qrp13945i3vs0fgzk2sdz";
+  buildFeatures = lib.optional gitImportSupport "git";
 
-  meta = with stdenv.lib; {
+  postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    installShellCompletion --cmd pijul \
+      --bash <($out/bin/pijul completion bash) \
+      --fish <($out/bin/pijul completion fish) \
+      --zsh <($out/bin/pijul completion zsh)
+  '';
+
+  meta = with lib; {
     description = "A distributed version control system";
-    homepage = https://pijul.org;
+    homepage = "https://pijul.org";
     license = with licenses; [ gpl2Plus ];
-    maintainers = [ maintainers.gal_bolle ];
-    platforms = platforms.all;
+    maintainers = with maintainers; [ gal_bolle dywedir fabianhjr ];
+    mainProgram = "pijul";
   };
 }

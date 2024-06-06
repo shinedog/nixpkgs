@@ -1,28 +1,67 @@
-{ stdenv, buildGoPackage, fetchFromGitHub }:
-
-buildGoPackage  rec {
-  name = "micro-${version}";
-  version = "1.4.1";
-
-  goPackagePath = "github.com/zyedidia/micro";
+{ lib
+, stdenv
+, buildGoModule
+, fetchFromGitHub
+, installShellFiles
+, callPackage
+, wl-clipboard
+, xclip
+, makeWrapper
+, withXclip ? true
+, withWlclip ? true
+}:
+let
+  clipboardPkgs = if stdenv.isLinux then
+    lib.optional withXclip xclip ++
+    lib.optional withWlclip wl-clipboard
+    else [ ];
+in
+buildGoModule rec {
+  pname = "micro";
+  version = "2.0.13";
 
   src = fetchFromGitHub {
     owner = "zyedidia";
-    repo = "micro";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "0m9p6smb5grdazsgr3m1x4rry9ihhlgl9ildhvfp53czrifbx0m5";
-    fetchSubmodules = true;
+    hash = "sha256-fe+7RkUwCveBk14bYzg5uLGOqTVVJsrqixBQhCS79hY=";
   };
+
+  vendorHash = "sha256-ePhObvm3m/nT+7IyT0W6K+y+9UNkfd2kYjle2ffAd9Y=";
+
+  nativeBuildInputs = [ installShellFiles makeWrapper ];
 
   subPackages = [ "cmd/micro" ];
 
-  buildFlagsArray = [ "-ldflags=" "-X main.Version=${version}" ];
+  ldflags = let t = "github.com/zyedidia/micro/v2/internal"; in [
+    "-s"
+    "-w"
+    "-X ${t}/util.Version=${version}"
+    "-X ${t}/util.CommitHash=${src.rev}"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://micro-editor.github.io;
+  preBuild = ''
+    GOOS= GOARCH= go generate ./runtime
+  '';
+
+  postInstall = ''
+    installManPage assets/packaging/micro.1
+    install -Dm444 -t $out/share/applications assets/packaging/micro.desktop
+    install -Dm644 assets/micro-logo-mark.svg $out/share/icons/hicolor/scalable/apps/micro.svg
+  '';
+
+  postFixup = ''
+    wrapProgram "$out/bin/micro" \
+      --prefix PATH : "${lib.makeBinPath clipboardPkgs}"
+  '';
+
+  passthru.tests.expect = callPackage ./test-with-expect.nix { };
+
+  meta = with lib; {
+    homepage = "https://micro-editor.github.io";
     description = "Modern and intuitive terminal-based text editor";
     license = licenses.mit;
     maintainers = with maintainers; [ dtzWill ];
+    mainProgram = "micro";
   };
 }
-

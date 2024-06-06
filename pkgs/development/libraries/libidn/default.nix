@@ -1,26 +1,26 @@
-{ fetchurl, stdenv, libiconv }:
+{ fetchurl, lib, stdenv, libiconv
+, testers
+}:
 
-stdenv.mkDerivation rec {
-  name = "libidn-1.35";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libidn";
+  version = "1.42";
 
   src = fetchurl {
-    url = "mirror://gnu/libidn/${name}.tar.gz";
-    sha256 = "07pyy0afqikfq51z5kbzbj9ldbd12mri0zvx0mfv3ds6bc0g26pi";
+    url = "mirror://gnu/libidn/${finalAttrs.pname}-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-1sGZ3NgG5P4nk2DLSwg0mg05Vg7VSP/RzK3ajN7LRyM=";
   };
 
   outputs = [ "bin" "dev" "out" "info" "devdoc" ];
 
-  # broken with gcc-7
-  #doCheck = !stdenv.isDarwin && !stdenv.hostPlatform.isMusl;
-
   hardeningDisable = [ "format" ];
 
-  buildInputs = stdenv.lib.optional stdenv.isDarwin libiconv;
+  buildInputs = lib.optional stdenv.isDarwin libiconv;
 
-  doCheck = false; # fails
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
 
   meta = {
-    homepage = https://www.gnu.org/software/libidn/;
+    homepage = "https://www.gnu.org/software/libidn/";
     description = "Library for internationalized domain names";
 
     longDescription = ''
@@ -39,9 +39,10 @@ stdenv.mkDerivation rec {
       included.
     '';
 
-    repositories.git = git://git.savannah.gnu.org/libidn.git;
-    license = stdenv.lib.licenses.lgpl2Plus;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ ];
+    mainProgram = "idn";
+    license = lib.licenses.lgpl2Plus;
+    pkgConfigModules = [ "libidn" ];
+    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [ lsix ];
   };
-}
+})

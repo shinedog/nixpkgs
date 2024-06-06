@@ -1,23 +1,23 @@
-{ lib, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "up-${version}";
-  version = "0.3.1";
+buildGoModule rec {
+  pname = "up";
+  version = "0.4";
 
   src = fetchFromGitHub {
     owner = "akavel";
     repo = "up";
     rev = "v${version}";
-    sha256 = "171bwbk2c7jbi51xdawzv7qy71492mfs9z5j0a5j52qmnr4vjjgs";
+    hash = "sha256-d6FCJ9G9ytHhWQ5lXEtlmzclt3odS9e+Y1ry6EiIDsk=";
   };
 
-  goPackagePath = "github.com/akavel/up";
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-PbOMUrKigCUuu5Hv3h0ZYSYezS+64DIZSubnQZ12HOE=";
 
   meta = with lib; {
     description = "Ultimate Plumber is a tool for writing Linux pipes with instant live preview";
-    homepage = https://github.com/akavel/up;
+    homepage = "https://github.com/akavel/up";
     maintainers = with maintainers; [ ma27 ];
     license = licenses.asl20;
+    mainProgram = "up";
   };
 }

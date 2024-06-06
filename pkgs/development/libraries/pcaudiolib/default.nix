@@ -1,30 +1,56 @@
-{ config, stdenv, lib, fetchFromGitHub
-, autoconf, automake, which, libtool, pkgconfig
-, portaudio, alsaLib
-, pulseaudioSupport ? config.pulseaudio or stdenv.isLinux, libpulseaudio }:
+{ config
+, lib
+, stdenv
+, fetchFromGitHub
+, alsa-lib
+, autoconf
+, automake
+, libpulseaudio
+, libtool
+, pkg-config
+, portaudio
+, which
+, pulseaudioSupport ? config.pulseaudio or stdenv.isLinux
+}:
 
-stdenv.mkDerivation rec {
-  name = "pcaudiolib-${version}";
-  version = "2016-07-19";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "pcaudiolib";
+  version = "1.2";
 
   src = fetchFromGitHub {
-    owner = "rhdunn";
-    repo = "pcaudiolib";
-    rev = "4f836ea909bdaa8a6e0e89c587efc745b546b459";
-    sha256 = "0z99nh4ibb9md2cd21762n1dmv6jk988785s1cxd8lsy4hp4pwfa";
+    owner = "espeak-ng";
+    repo = finalAttrs.pname;
+    rev = finalAttrs.version;
+    hash = "sha256-ZG/HBk5DHaZP/H3M01vDr3M2nP9awwsPuKpwtalz3EE=";
   };
 
-  nativeBuildInputs = [ autoconf automake which libtool pkgconfig ];
+  nativeBuildInputs = [
+    autoconf
+    automake
+    libtool
+    pkg-config
+    which
+  ];
 
-  buildInputs = [ portaudio alsaLib ] ++ lib.optional pulseaudioSupport libpulseaudio;
+  buildInputs = [
+    portaudio
+  ]
+  ++ lib.optional stdenv.isLinux alsa-lib
+  ++ lib.optional pulseaudioSupport libpulseaudio;
 
-  preConfigure = "./autogen.sh";
+  # touch ChangeLog to avoid below error on darwin:
+  # Makefile.am: error: required file './ChangeLog.md' not found
+  preConfigure = lib.optionalString stdenv.isDarwin ''
+    touch ChangeLog
+  '' + ''
+    ./autogen.sh
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    homepage = "https://github.com/espeak-ng/pcaudiolib";
     description = "Provides a C API to different audio devices";
-    homepage = https://github.com/rhdunn/pcaudiolib;
-    license = licenses.gpl3;
+    license = licenses.gpl3Plus;
     maintainers = with maintainers; [ aske ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
-}
+})

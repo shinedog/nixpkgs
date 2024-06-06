@@ -38,6 +38,34 @@ let
         '';
       };
 
+      keySize = mkOption {
+        default = null;
+        example = "512";
+        type = types.nullOr types.int;
+        description = ''
+          Set the encryption key size for the plain device.
+
+          If not specified, the amount of data to read from `source` will be
+          determined by cryptsetup.
+
+          See `cryptsetup-open(8)` for details.
+        '';
+      };
+
+      sectorSize = mkOption {
+        default = null;
+        example = "4096";
+        type = types.nullOr types.int;
+        description = ''
+          Set the sector size for the plain encrypted device type.
+
+          If not specified, the default sector size is determined from the
+          underlying block device.
+
+          See `cryptsetup-open(8)` for details.
+        '';
+      };
+
       source = mkOption {
         default = "/dev/urandom";
         example = "/dev/random";
@@ -47,6 +75,15 @@ let
         '';
       };
 
+      allowDiscards = mkOption {
+        default = false;
+        type = types.bool;
+        description = ''
+          Whether to allow TRIM requests to the underlying device. This option
+          has security implications; please read the LUKS documentation before
+          activating it.
+        '';
+      };
     };
 
   };
@@ -57,15 +94,15 @@ let
 
       device = mkOption {
         example = "/dev/sda3";
-        type = types.str;
-        description = "Path of the device.";
+        type = types.nonEmptyStr;
+        description = "Path of the device or swap file.";
       };
 
       label = mkOption {
         example = "swap";
         type = types.str;
         description = ''
-          Label of the device.  Can be used instead of <varname>device</varname>.
+          Label of the device.  Can be used instead of {var}`device`.
         '';
       };
 
@@ -114,6 +151,28 @@ let
         '';
       };
 
+      discardPolicy = mkOption {
+        default = null;
+        example = "once";
+        type = types.nullOr (types.enum ["once" "pages" "both" ]);
+        description = ''
+          Specify the discard policy for the swap device. If "once", then the
+          whole swap space is discarded at swapon invocation. If "pages",
+          asynchronous discard on freed pages is performed, before returning to
+          the available pages pool. With "both", both policies are activated.
+          See swapon(8) for more information.
+        '';
+      };
+
+      options = mkOption {
+        default = [ "defaults" ];
+        example = [ "nofail" ];
+        type = types.listOf types.nonEmptyStr;
+        description = ''
+          Options used to mount the swap.
+        '';
+      };
+
       deviceName = mkOption {
         type = types.str;
         internal = true;
@@ -126,11 +185,11 @@ let
 
     };
 
-    config = rec {
+    config = {
       device = mkIf options.label.isDefined
         "/dev/disk/by-label/${config.label}";
-      deviceName = lib.replaceChars ["\\"] [""] (escapeSystemdPath config.device);
-      realDevice = if config.randomEncryption.enable then "/dev/mapper/${deviceName}" else config.device;
+      deviceName = lib.replaceStrings ["\\"] [""] (escapeSystemdPath config.device);
+      realDevice = if config.randomEncryption.enable then "/dev/mapper/${config.deviceName}" else config.device;
     };
 
   };
@@ -152,11 +211,11 @@ in
       ];
       description = ''
         The swap devices and swap files.  These must have been
-        initialised using <command>mkswap</command>.  Each element
+        initialised using {command}`mkswap`.  Each element
         should be an attribute set specifying either the path of the
-        swap device or file (<literal>device</literal>) or the label
-        of the swap device (<literal>label</literal>, see
-        <command>mkswap -L</command>).  Using a label is
+        swap device or file (`device`) or the label
+        of the swap device (`label`, see
+        {command}`mkswap -L`).  Using a label is
         recommended.
       '';
 
@@ -166,43 +225,67 @@ in
   };
 
   config = mkIf ((length config.swapDevices) != 0) {
+    assertions = map (sw: {
+      assertion = sw.randomEncryption.enable -> builtins.match "/dev/disk/by-(uuid|label)/.*" sw.device == null;
+      message = ''
+        You cannot use swap device "${sw.device}" with randomEncryption enabled.
+        The UUIDs and labels will get erased on every boot when the partition is encrypted.
+        Use /dev/disk/by-partuuid/… instead.
+      '';
+    }) config.swapDevices;
+
+    warnings =
+      concatMap (sw:
+        if sw.size != null && hasPrefix "/dev/" sw.device
+        then [ "Setting the swap size of block device ${sw.device} has no effect" ]
+        else [ ])
+      config.swapDevices;
 
     system.requiredKernelConfig = with config.lib.kernelConfig; [
       (isYes "SWAP")
     ];
 
     # Create missing swapfiles.
-    # FIXME: support changing the size of existing swapfiles.
     systemd.services =
       let
-
         createSwapDevice = sw:
-          assert sw.device != "";
-          assert !(sw.randomEncryption.enable && lib.hasPrefix "/dev/disk/by-uuid"  sw.device);
-          assert !(sw.randomEncryption.enable && lib.hasPrefix "/dev/disk/by-label" sw.device);
           let realDevice' = escapeSystemdPath sw.realDevice;
           in nameValuePair "mkswap-${sw.deviceName}"
           { description = "Initialisation of swap device ${sw.device}";
+            # The mkswap service fails for file-backed swap devices if the
+            # loop module has not been loaded before the service runs.
+            # We add an ordering constraint to run after systemd-modules-load to
+            # avoid this race condition.
+            after = [ "systemd-modules-load.service" ];
             wantedBy = [ "${realDevice'}.swap" ];
-            before = [ "${realDevice'}.swap" ];
-            path = [ pkgs.utillinux ] ++ optional sw.randomEncryption.enable pkgs.cryptsetup;
+            before = [ "${realDevice'}.swap" "shutdown.target"];
+            conflicts = [ "shutdown.target" ];
+            path = [ pkgs.util-linux pkgs.e2fsprogs ]
+              ++ optional sw.randomEncryption.enable pkgs.cryptsetup;
+
+            environment.DEVICE = sw.device;
 
             script =
               ''
                 ${optionalString (sw.size != null) ''
-                  currentSize=$(( $(stat -c "%s" "${sw.device}" 2>/dev/null || echo 0) / 1024 / 1024 ))
-                  if [ "${toString sw.size}" != "$currentSize" ]; then
-                    fallocate -l ${toString sw.size}M "${sw.device}" ||
-                      dd if=/dev/zero of="${sw.device}" bs=1M count=${toString sw.size}
-                    if [ "${toString sw.size}" -lt "$currentSize" ]; then
-                      truncate --size "${toString sw.size}M" "${sw.device}"
-                    fi
+                  currentSize=$(( $(stat -c "%s" "$DEVICE" 2>/dev/null || echo 0) / 1024 / 1024 ))
+                  if [[ ! -b "$DEVICE" && "${toString sw.size}" != "$currentSize" ]]; then
+                    # Disable CoW for CoW based filesystems like BTRFS.
+                    truncate --size 0 "$DEVICE"
+                    chattr +C "$DEVICE" 2>/dev/null || true
+
+                    dd if=/dev/zero of="$DEVICE" bs=1M count=${toString sw.size}
                     chmod 0600 ${sw.device}
                     ${optionalString (!sw.randomEncryption.enable) "mkswap ${sw.realDevice}"}
                   fi
                 ''}
                 ${optionalString sw.randomEncryption.enable ''
-                  cryptsetup plainOpen -c ${sw.randomEncryption.cipher} -d ${sw.randomEncryption.source} ${sw.device} ${sw.deviceName}
+                  cryptsetup plainOpen -c ${sw.randomEncryption.cipher} -d ${sw.randomEncryption.source} \
+                  ${concatStringsSep " \\\n" (flatten [
+                    (optional (sw.randomEncryption.sectorSize != null) "--sector-size=${toString sw.randomEncryption.sectorSize}")
+                    (optional (sw.randomEncryption.keySize != null) "--key-size=${toString sw.randomEncryption.keySize}")
+                    (optional sw.randomEncryption.allowDiscards "--allow-discards")
+                  ])} ${sw.device} ${sw.deviceName}
                   mkswap ${sw.realDevice}
                 ''}
               '';

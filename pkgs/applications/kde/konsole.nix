@@ -1,29 +1,29 @@
 {
-  mkDerivation, lib, makeWrapper,
+  mkDerivation, lib, nixosTests,
   extra-cmake-modules, kdoctools,
   kbookmarks, kcompletion, kconfig, kconfigwidgets, kcoreaddons, kguiaddons,
-  ki18n, kiconthemes, kinit, kdelibs4support, kio, knotifications,
+  ki18n, kiconthemes, kinit, kio, knotifications,
   knotifyconfig, kparts, kpty, kservice, ktextwidgets, kwidgetsaddons,
-  kwindowsystem, kxmlgui, qtscript, knewstuff
+  kwindowsystem, kxmlgui, qtscript, knewstuff, qtmultimedia
 }:
 
 mkDerivation {
-  name = "konsole";
+  pname = "konsole";
   meta = {
-    license = with lib.licenses; [ gpl2 lgpl21 fdl12 ];
-    maintainers = [ lib.maintainers.ttuegel ];
+    homepage = "https://apps.kde.org/konsole/";
+    description = "KDE terminal emulator";
+    license = with lib.licenses; [ gpl2Plus lgpl21Plus fdl12Plus ];
+    maintainers = with lib.maintainers; [ ttuegel ];
+    mainProgram = "konsole";
   };
   nativeBuildInputs = [ extra-cmake-modules kdoctools ];
   buildInputs = [
-    kbookmarks kcompletion kconfig kconfigwidgets kcoreaddons kdelibs4support
+    kbookmarks kcompletion kconfig kconfigwidgets kcoreaddons
     kguiaddons ki18n kiconthemes kinit kio knotifications knotifyconfig kparts kpty
-    kservice ktextwidgets kwidgetsaddons kwindowsystem kxmlgui qtscript knewstuff
-    makeWrapper
+    kservice ktextwidgets kwidgetsaddons kwindowsystem kxmlgui qtscript knewstuff qtmultimedia
   ];
 
-  postInstall = ''
-    wrapProgram $out/bin/konsole --prefix XDG_DATA_DIRS ":" $out/share
-  '';
+  passthru.tests.test = nixosTests.terminal-emulators.konsole;
 
   propagatedUserEnvPkgs = [ (lib.getBin kinit) ];
 }

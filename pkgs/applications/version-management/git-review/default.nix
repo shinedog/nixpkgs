@@ -1,28 +1,53 @@
-{ stdenv, fetchFromGitHub, pythonPackages} :
+{ lib
+, fetchFromGitea
+, buildPythonApplication
+, pbr
+, requests
+, setuptools
+, gitUpdater
+}:
 
-pythonPackages.buildPythonApplication rec {
+buildPythonApplication rec {
   pname = "git-review";
-  version = "1.28.0";
+  version = "2.4.0";
 
   # Manually set version because prb wants to get it from the git
   # upstream repository (and we are installing from tarball instead)
-  PBR_VERSION = "${version}";
+  PBR_VERSION = version;
 
-  src = fetchFromGitHub rec {
-    owner = "openstack-infra";
-    repo = pname;
+  src = fetchFromGitea {
+    domain = "opendev.org";
+    owner = "opendev";
+    repo = "git-review";
     rev = version;
-    sha256 = "1hgw1dkl94m3idv4izc7wf2j7al2c7nnsqywy7g53nzkv9pfv47s";
+    hash = "sha256-UfYc662NqnQt0+CKc+18jXnNTOcZv8urCNBsWd6x0VQ=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ pbr requests setuptools ];
+  outputs = [ "out" "man" ];
 
-  # Don't do tests because they require gerrit which is not packaged
+  nativeBuildInputs = [
+    pbr
+  ];
+
+  propagatedBuildInputs = [
+    requests
+    setuptools # implicit dependency, used to get package version through pkg_resources
+  ];
+
+  # Don't run tests because they pull in external dependencies
+  # (a specific build of gerrit + maven plugins), and I haven't figured
+  # out how to work around this yet.
   doCheck = false;
 
-  meta = {
-    homepage = https://github.com/openstack-infra/git-review;
+  pythonImportsCheck = [ "git_review" ];
+
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
     description = "Tool to submit code to Gerrit";
-    license = stdenv.lib.licenses.asl20;
+    homepage = "https://opendev.org/opendev/git-review";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ kira-bruneau ];
+    mainProgram = "git-review";
   };
 }

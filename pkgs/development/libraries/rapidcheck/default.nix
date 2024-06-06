@@ -1,27 +1,50 @@
-{ stdenv, cmake, fetchFromGitHub }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, unstableGitUpdater
+, testers
+}:
 
-stdenv.mkDerivation rec{
-  name = "rapidcheck-${version}";
-  version = "unstable-2018-09-27";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "rapidcheck";
+  version = "0-unstable-2023-12-14";
 
   src = fetchFromGitHub {
     owner = "emil-e";
     repo  = "rapidcheck";
-    rev   = "de54478fa35c0d9cea14ec0c5c9dfae906da524c";
-    sha256 = "0n8l0mlq9xqmpkgcj5xicicd1my2cfwxg25zdy8347dqkl1ppgbs";
+    rev   = "ff6af6fc683159deb51c543b065eba14dfcf329b";
+    hash = "sha256-Ixz5RpY0n8Un/Pv4XoTfbs40+70iyMbkQUjDqoLaWOg=";
   };
+
+  outputs = [ "out" "dev" ];
 
   nativeBuildInputs = [ cmake ];
 
-  postInstall = ''
-    cp ../extras/boost_test/include/rapidcheck/boost_test.h $out/include/rapidcheck
-  '';
+  cmakeFlags = [
+    (lib.cmakeBool "BUILD_SHARED_LIBS" (!stdenv.hostPlatform.isStatic))
+    (lib.cmakeBool "RC_INSTALL_ALL_EXTRAS" true)
+  ];
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = unstableGitUpdater { };
+    tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+  };
+
+  meta = with lib; {
     description = "A C++ framework for property based testing inspired by QuickCheck";
-    inherit (src.meta) homepage;
-    maintainers = with maintainers; [ jb55 ];
+    inherit (finalAttrs.src.meta) homepage;
+    maintainers = with maintainers; [ ];
     license = licenses.bsd2;
+    pkgConfigModules = [
+      "rapidcheck"
+      # Extras
+      "rapidcheck_boost"
+      "rapidcheck_boost_test"
+      "rapidcheck_catch"
+      "rapidcheck_doctest"
+      "rapidcheck_gtest"
+    ];
     platforms = platforms.all;
   };
-}
+})

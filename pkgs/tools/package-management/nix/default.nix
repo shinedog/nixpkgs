@@ -1,196 +1,222 @@
-{ lib, fetchurl, fetchFromGitHub, callPackage
+{ lib
+, config
+, aws-sdk-cpp
+, boehmgc
+, callPackage
+, fetchFromGitHub
+, fetchpatch
+, fetchpatch2
+, runCommand
+, Security
+
 , storeDir ? "/nix/store"
 , stateDir ? "/nix/var"
 , confDir ? "/etc"
-, boehmgc
-, stdenv, llvmPackages_6
 }:
-
 let
+  boehmgc-nix_2_3 = boehmgc.override { enableLargeConfig = true; };
 
-common =
-  { lib, stdenv, fetchurl, fetchpatch, perl, curl, bzip2, sqlite, openssl ? null, xz
-  , pkgconfig, boehmgc, perlPackages, libsodium, brotli, boost, editline
-  , autoreconfHook, autoconf-archive, bison, flex, libxml2, libxslt, docbook5, docbook_xsl_ns
-  , busybox-sandbox-shell
-  , storeDir
-  , stateDir
-  , confDir
-  , withLibseccomp ? lib.any (lib.meta.platformMatch stdenv.hostPlatform) libseccomp.meta.platforms, libseccomp
-  , withAWS ? stdenv.isLinux || stdenv.isDarwin, aws-sdk-cpp
-
-  , name, suffix ? "", src, includesPerl ? false, fromGit ? false
-
-  }:
-  let
-     sh = busybox-sandbox-shell;
-     nix = stdenv.mkDerivation rec {
-      inherit name src;
-      version = lib.getVersion name;
-
-      is20 = lib.versionAtLeast version "2.0pre";
-
-      VERSION_SUFFIX = lib.optionalString fromGit suffix;
-
-      outputs = [ "out" "dev" "man" "doc" ];
-
-      nativeBuildInputs =
-        [ pkgconfig ]
-        ++ lib.optionals (!is20) [ curl perl ]
-        ++ lib.optionals fromGit [ autoreconfHook autoconf-archive bison flex libxml2 libxslt docbook5 docbook_xsl_ns ];
-
-      buildInputs = [ curl openssl sqlite xz bzip2 ]
-        ++ lib.optional (stdenv.isLinux || stdenv.isDarwin) libsodium
-        ++ lib.optionals is20 [ brotli boost editline ]
-        ++ lib.optional withLibseccomp libseccomp
-        ++ lib.optional (withAWS && is20)
-            ((aws-sdk-cpp.override {
-              apis = ["s3" "transfer"];
-              customMemoryManagement = false;
-            }).overrideDerivation (args: {
-              patches = args.patches or [] ++ [(fetchpatch {
-                url = https://github.com/edolstra/aws-sdk-cpp/commit/7d58e303159b2fb343af9a1ec4512238efa147c7.patch;
-                sha256 = "103phn6kyvs1yc7fibyin3lgxz699qakhw671kl207484im55id1";
-              })];
-            }));
-
-      propagatedBuildInputs = [ boehmgc ];
-
-      # Seems to be required when using std::atomic with 64-bit types
-      NIX_LDFLAGS = lib.optionalString (stdenv.hostPlatform.system == "armv6l-linux") "-latomic";
-
-      preConfigure =
-        # Copy libboost_context so we don't get all of Boost in our closure.
-        # https://github.com/NixOS/nixpkgs/issues/45462
-        if is20 then ''
-          mkdir -p $out/lib
-          cp ${boost}/lib/libboost_context* $out/lib
-        '' else ''
-          configureFlagsArray+=(BDW_GC_LIBS="-lgc -lgccpp")
-        '';
-
-      configureFlags =
-        [ "--with-store-dir=${storeDir}"
-          "--localstatedir=${stateDir}"
-          "--sysconfdir=${confDir}"
-          "--disable-init-state"
-          "--enable-gc"
-        ]
-        ++ lib.optionals (!is20) [
-          "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
-          "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
-          "--with-www-curl=${perlPackages.WWWCurl}/${perl.libPrefix}"
-        ] ++ lib.optionals (is20 && stdenv.isLinux) [
-          "--with-sandbox-shell=${sh}/bin/busybox"
-        ]
-        ++ lib.optional (
-            stdenv.hostPlatform != stdenv.buildPlatform && stdenv.hostPlatform ? nix && stdenv.hostPlatform.nix ? system
-        ) ''--with-system=${stdenv.hostPlatform.nix.system}''
-           # RISC-V support in progress https://github.com/seccomp/libseccomp/pull/50
-        ++ lib.optional (!withLibseccomp) "--disable-seccomp-sandboxing";
-
-      makeFlags = "profiledir=$(out)/etc/profile.d";
-
-      installFlags = "sysconfdir=$(out)/etc";
-
-      doInstallCheck = true; # not cross
-
-      # socket path becomes too long otherwise
-      preInstallCheck = lib.optional stdenv.isDarwin ''
-        export TMPDIR=$NIX_BUILD_TOP
-      '';
-
-      separateDebugInfo = stdenv.isLinux;
-
-      enableParallelBuilding = true;
-
-      meta = {
-        description = "Powerful package manager that makes package management reliable and reproducible";
-        longDescription = ''
-          Nix is a powerful package manager for Linux and other Unix systems that
-          makes package management reliable and reproducible. It provides atomic
-          upgrades and rollbacks, side-by-side installation of multiple versions of
-          a package, multi-user package management and easy setup of build
-          environments.
-        '';
-        homepage = https://nixos.org/;
-        license = stdenv.lib.licenses.lgpl2Plus;
-        maintainers = [ stdenv.lib.maintainers.eelco ];
-        platforms = stdenv.lib.platforms.all;
-        outputsToInstall = [ "out" "man" ];
-      };
-
-      passthru = {
-        inherit fromGit;
-
-        perl-bindings = if includesPerl then nix else stdenv.mkDerivation {
-          name = "nix-perl-${version}";
-
-          inherit src;
-
-          postUnpack = "sourceRoot=$sourceRoot/perl";
-
-          # This is not cross-compile safe, don't have time to fix right now
-          # but noting for future travellers.
-          nativeBuildInputs =
-            [ perl pkgconfig curl nix libsodium ]
-            ++ lib.optionals fromGit [ autoreconfHook autoconf-archive ]
-            ++ lib.optional is20 boost;
-
-          configureFlags =
-            [ "--with-dbi=${perlPackages.DBI}/${perl.libPrefix}"
-              "--with-dbd-sqlite=${perlPackages.DBDSQLite}/${perl.libPrefix}"
-            ];
-
-          preConfigure = "export NIX_STATE_DIR=$TMPDIR";
-
-          preBuild = "unset NIX_INDENT_MAKE";
-        };
-      };
-    };
-  in nix;
-
-in rec {
-
-  nix = nixStable;
-
-  nix1 = callPackage common rec {
-    name = "nix-1.11.16";
-    src = fetchurl {
-      url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "0ca5782fc37d62238d13a620a7b4bff6a200bab1bd63003709249a776162357c";
-    };
-
-    # Nix1 has the perl bindings by default, so no need to build the manually.
-    includesPerl = true;
-
-    inherit storeDir stateDir confDir boehmgc;
-  };
-
-  nixStable = callPackage common (rec {
-    name = "nix-2.2.2";
-    src = fetchurl {
-      url = "http://nixos.org/releases/nix/${name}/${name}.tar.xz";
-      sha256 = "f80a1b4f9837a8d33209f0b7769d5038335459ff4303eccf3e9217a9eca8594c";
-    };
-
-    inherit storeDir stateDir confDir boehmgc;
-  } // stdenv.lib.optionalAttrs stdenv.cc.isClang {
-    stdenv = llvmPackages_6.stdenv;
+  boehmgc-nix = boehmgc-nix_2_3.overrideAttrs (drv: {
+    patches = (drv.patches or [ ]) ++ [
+      # Part of the GC solution in https://github.com/NixOS/nix/pull/4944
+      ./patches/boehmgc-coroutine-sp-fallback.patch
+    ];
   });
 
-  nixUnstable = lib.lowPrio (callPackage common rec {
-    name = "nix-2.3${suffix}";
-    suffix = "pre6631_e58a7144";
+  # old nix fails to build with newer aws-sdk-cpp and the patch doesn't apply
+  aws-sdk-cpp-old-nix = (aws-sdk-cpp.override {
+    apis = [ "s3" "transfer" ];
+    customMemoryManagement = false;
+  }).overrideAttrs (args: rec {
+    # intentionally overriding postPatch
+    version = "1.9.294";
+
+    src = fetchFromGitHub {
+      owner = "aws";
+      repo = "aws-sdk-cpp";
+      rev = version;
+      hash = "sha256-Z1eRKW+8nVD53GkNyYlZjCcT74MqFqqRMeMc33eIQ9g=";
+    };
+    postPatch = ''
+      # Avoid blanket -Werror to evade build failures on less
+      # tested compilers.
+      substituteInPlace cmake/compiler_settings.cmake \
+        --replace '"-Werror"' ' '
+
+      # Missing includes for GCC11
+      sed '5i#include <thread>' -i \
+        aws-cpp-sdk-cloudfront-integration-tests/CloudfrontOperationTest.cpp \
+        aws-cpp-sdk-cognitoidentity-integration-tests/IdentityPoolOperationTest.cpp \
+        aws-cpp-sdk-dynamodb-integration-tests/TableOperationTest.cpp \
+        aws-cpp-sdk-elasticfilesystem-integration-tests/ElasticFileSystemTest.cpp \
+        aws-cpp-sdk-lambda-integration-tests/FunctionTest.cpp \
+        aws-cpp-sdk-mediastore-data-integration-tests/MediaStoreDataTest.cpp \
+        aws-cpp-sdk-queues/source/sqs/SQSQueue.cpp \
+        aws-cpp-sdk-redshift-integration-tests/RedshiftClientTest.cpp \
+        aws-cpp-sdk-s3-crt-integration-tests/BucketAndObjectOperationTest.cpp \
+        aws-cpp-sdk-s3-integration-tests/BucketAndObjectOperationTest.cpp \
+        aws-cpp-sdk-s3control-integration-tests/S3ControlTest.cpp \
+        aws-cpp-sdk-sqs-integration-tests/QueueOperationTest.cpp \
+        aws-cpp-sdk-transfer-tests/TransferTests.cpp
+      # Flaky on Hydra
+      rm aws-cpp-sdk-core-tests/aws/auth/AWSCredentialsProviderTest.cpp
+      # Includes aws-c-auth private headers, so only works with submodule build
+      rm aws-cpp-sdk-core-tests/aws/auth/AWSAuthSignerTest.cpp
+      # TestRandomURLMultiThreaded fails
+      rm aws-cpp-sdk-core-tests/http/HttpClientTest.cpp
+    '' + lib.optionalString aws-sdk-cpp.stdenv.isi686 ''
+      # EPSILON is exceeded
+      rm aws-cpp-sdk-core-tests/aws/client/AdaptiveRetryStrategyTest.cpp
+    '';
+
+    patches = (args.patches or [ ]) ++ [ ./patches/aws-sdk-cpp-TransferManager-ContentEncoding.patch ];
+
+    # only a stripped down version is build which takes a lot less resources to build
+    requiredSystemFeatures = [ ];
+  });
+
+  aws-sdk-cpp-nix = (aws-sdk-cpp.override {
+    apis = [ "s3" "transfer" ];
+    customMemoryManagement = false;
+  }).overrideAttrs {
+    # only a stripped down version is build which takes a lot less resources to build
+    requiredSystemFeatures = [ ];
+  };
+
+
+  common = args:
+    callPackage
+      (import ./common.nix ({ inherit lib fetchFromGitHub; } // args))
+      {
+        inherit Security storeDir stateDir confDir;
+        boehmgc = boehmgc-nix;
+        aws-sdk-cpp = if lib.versionAtLeast args.version "2.12pre" then aws-sdk-cpp-nix else aws-sdk-cpp-old-nix;
+      };
+
+  # https://github.com/NixOS/nix/pull/7585
+  patch-monitorfdhup = fetchpatch2 {
+    name = "nix-7585-monitor-fd-hup.patch";
+    url = "https://github.com/NixOS/nix/commit/1df3d62c769dc68c279e89f68fdd3723ed3bcb5a.patch";
+    hash = "sha256-f+F0fUO+bqyPXjt+IXJtISVr589hdc3y+Cdrxznb+Nk=";
+  };
+
+  # Intentionally does not support overrideAttrs etc
+  # Use only for tests that are about the package relation to `pkgs` and/or NixOS.
+  addTestsShallowly = tests: pkg: pkg // {
+    tests = pkg.tests // tests;
+    # In case someone reads the wrong attribute
+    passthru.tests = pkg.tests // tests;
+  };
+
+  addFallbackPathsCheck = pkg: addTestsShallowly
+    { nix-fallback-paths =
+        runCommand "test-nix-fallback-paths-version-equals-nix-stable" {
+          paths = lib.concatStringsSep "\n" (builtins.attrValues (import ../../../../nixos/modules/installer/tools/nix-fallback-paths.nix));
+        } ''
+          if [[ "" != $(grep -v 'nix-${pkg.version}$' <<< "$paths") ]]; then
+            echo "nix-fallback-paths not up to date with nixVersions.stable (nix-${pkg.version})"
+            echo "The following paths are not up to date:"
+            grep -v 'nix-${pkg.version}$' <<< "$paths"
+            echo
+            echo "Fix it by running in nixpkgs:"
+            echo
+            echo "curl https://releases.nixos.org/nix/nix-${pkg.version}/fallback-paths.nix >nixos/modules/installer/tools/nix-fallback-paths.nix"
+            echo
+            exit 1
+          else
+            echo "nix-fallback-paths versions up to date"
+            touch $out
+          fi
+        '';
+    }
+    pkg;
+
+in lib.makeExtensible (self: ({
+  nix_2_3 = ((common {
+    version = "2.3.18";
+    hash = "sha256-jBz2Ub65eFYG+aWgSI3AJYvLSghio77fWQiIW1svA9U=";
+    patches = [
+      patch-monitorfdhup
+    ];
+    self_attribute_name = "nix_2_3";
+    maintainers = with lib.maintainers; [ flokli raitobezarius ];
+  }).override { boehmgc = boehmgc-nix_2_3; }).overrideAttrs {
+    # https://github.com/NixOS/nix/issues/10222
+    # spurious test/add.sh failures
+    enableParallelChecking = false;
+  };
+
+  nix_2_18 = common {
+    version = "2.18.2";
+    hash = "sha256-8gNJlBlv2bnffRg0CejiBXc6U/S6YeCLAdHrYvTPyoY=";
+    self_attribute_name = "nix_2_18";
+  };
+
+  nix_2_19 = common {
+    version = "2.19.4";
+    hash = "sha256-qXjyVmDm1SFWk1az3GWIsJ0fVG0nWet2FdldFOnUydI=";
+    self_attribute_name = "nix_2_19";
+  };
+
+  nix_2_20 = common {
+    version = "2.20.6";
+    hash = "sha256-BSl8Jijq1A4n1ToQy0t0jDJCXhJK+w1prL8QMHS5t54=";
+    self_attribute_name = "nix_2_20";
+  };
+
+  nix_2_21 = common {
+    version = "2.21.2";
+    hash = "sha256-ObaVDDPtnOeIE0t7m4OVk5G+OS6d9qYh+ktK67Fe/zE=";
+    self_attribute_name = "nix_2_21";
+  };
+
+  nix_2_22 = common {
+    version = "2.22.1";
+    hash = "sha256-5Q1WkpTWH7fkVfYhHDc5r0A+Vc+K5xB1UhzrLzBCrB8=";
+    self_attribute_name = "nix_2_22";
+  };
+
+  git = common rec {
+    version = "2.23.0";
+    suffix = "pre20240526_${lib.substring 0 8 src.rev}";
     src = fetchFromGitHub {
       owner = "NixOS";
       repo = "nix";
-      rev = "e58a71442ad4a538b48fc7a9938c3690628c4741";
-      sha256 = "1hbjhnvjbh8bi8cjjgyrj4z1gw03ws12m2wi5azzj3rmhnh4c802";
+      rev = "7de033d63fbcf97aad164e131ae3a85e5dcebce7";
+      hash = "sha256-LtsyUsVpr9sM0n1L7MeTw8/6wGtGeXFvKAbPR5lqN8Q=";
     };
-    fromGit = true;
+    self_attribute_name = "git";
+  };
 
-    inherit storeDir stateDir confDir boehmgc;
-  });
+  latest = self.nix_2_22;
 
-}
+  # The minimum Nix version supported by Nixpkgs
+  # Note that some functionality *might* have been backported into this Nix version,
+  # making this package an inaccurate representation of what features are available
+  # in the actual lowest minver.nix *patch* version.
+  minimum =
+    let
+      minver = import ../../../../lib/minver.nix;
+      major = lib.versions.major minver;
+      minor = lib.versions.minor minver;
+      attribute = "nix_${major}_${minor}";
+      nix = self.${attribute};
+    in
+    if ! self ? ${attribute} then
+      throw "The minimum supported Nix version is ${minver} (declared in lib/minver.nix), but pkgs.nixVersions.${attribute} does not exist."
+    else
+      nix;
+
+  stable = addFallbackPathsCheck self.nix_2_18;
+} // lib.optionalAttrs config.allowAliases (
+  lib.listToAttrs (map (
+    minor:
+    let
+      attr = "nix_2_${toString minor}";
+    in
+    lib.nameValuePair attr (throw "${attr} has been removed")
+  ) (lib.range 4 17))
+  // {
+    unstable = throw "nixVersions.unstable has been removed. For bleeding edge (Nix master, roughly weekly updated) use nixVersions.git, otherwise use nixVersions.latest.";
+  }
+)))
