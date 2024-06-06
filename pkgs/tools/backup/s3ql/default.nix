@@ -1,22 +1,62 @@
-{ stdenv, fetchurl, python3Packages, sqlite  }:
+{
+  lib,
+  fetchFromGitHub,
+  python3,
+  sqlite,
+  which,
+}:
 
-python3Packages.buildPythonApplication rec {
-  name = "${pname}-${version}";
+python3.pkgs.buildPythonApplication rec {
   pname = "s3ql";
-  version = "2.17.1";
+  version = "5.1.3";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "https://bitbucket.org/nikratio/${pname}/downloads/${name}.tar.bz2";
-    sha256 = "049vpvvkyia7v4v97rg2l01n43shrdxc1ik38bmjb2q4fvsh1pgx";
+  src = fetchFromGitHub {
+    owner = "s3ql";
+    repo = "s3ql";
+    rev = "refs/tags/s3ql-${version}";
+    hash = "sha256-8vGW0Kl6hDTY+9mTnm2S659PZ/9gl90d2tXxKIIFimo=";
   };
 
-  propagatedBuildInputs = with python3Packages;
-    [ sqlite apsw pycrypto requests2 defusedxml dugong llfuse ];
+  build-system = with python3.pkgs; [ setuptools ];
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ which ] ++ (with python3.pkgs; [ cython ]);
+
+  propagatedBuildInputs = with python3.pkgs; [
+    apsw
+    cryptography
+    defusedxml
+    dugong
+    google-auth
+    google-auth-oauthlib
+    pyfuse3
+    requests
+    sqlite
+    trio
+  ];
+
+  nativeCheckInputs = with python3.pkgs; [
+    pytest-trio
+    pytestCheckHook
+  ];
+
+  preBuild = ''
+    ${python3.pkgs.python.pythonOnBuildForHost.interpreter} ./setup.py build_cython build_ext --inplace
+  '';
+
+  preCheck = ''
+    export HOME=$(mktemp -d)
+  '';
+
+  pythonImportsCheck = [ "s3ql" ];
+
+  pytestFlagsArray = [ "tests/" ];
+
+  meta = with lib; {
     description = "A full-featured file system for online data storage";
-    homepage = "https://bitbucket.org/nikratio/s3ql";
-    license = licenses.gpl3;
+    homepage = "https://github.com/s3ql/s3ql/";
+    changelog = "https://github.com/s3ql/s3ql/releases/tag/s3ql-${version}";
+    license = licenses.gpl3Only;
     maintainers = with maintainers; [ rushmorem ];
     platforms = platforms.linux;
   };

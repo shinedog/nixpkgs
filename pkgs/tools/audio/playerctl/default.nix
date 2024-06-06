@@ -1,29 +1,53 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool, which, gnome2, glib,
-  pkgconfig, gobjectIntrospection }:
+{ lib
+, stdenv
+, buildPackages
+, docbook_xsl
+, fetchFromGitHub
+, glib
+, gobject-introspection
+, gtk-doc
+, meson
+, mesonEmulatorHook
+, ninja
+, pkg-config
+, withDocs ? stdenv.hostPlatform.emulatorAvailable buildPackages
+}:
 
 stdenv.mkDerivation rec {
-  name = "playerctl-${version}";
-  version = "0.5.0";
+  pname = "playerctl";
+  version = "2.4.1";
 
   src = fetchFromGitHub {
     owner = "acrisci";
     repo = "playerctl";
     rev = "v${version}";
-    sha256 = "0b4pg5pwblgbf6kvvynzh9dshfikxy5c2ks7733n7wza5wkpgmng";
+    sha256 = "sha256-OiGKUnsKX0ihDRceZoNkcZcEAnz17h2j2QUOSVcxQEY=";
   };
 
-  buildInputs = [
-    which autoconf automake libtool gnome2.gtkdoc glib pkgconfig
-    gobjectIntrospection
+  nativeBuildInputs = [
+    docbook_xsl
+    gobject-introspection
+    gtk-doc
+    meson
+    ninja
+    pkg-config
+  ] ++ lib.optionals (withDocs && !stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
+  buildInputs = [ glib ];
+
+  mesonFlags = [
+    "-Dbash-completions=true"
+    (lib.mesonBool "gtk-doc" withDocs)
   ];
 
-  preConfigure = "./autogen.sh";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Command-line utility and library for controlling media players that implement MPRIS";
-    homepage = https://github.com/acrisci/playerctl;
+    homepage = "https://github.com/acrisci/playerctl";
     license = licenses.lgpl3;
     platforms = platforms.unix;
     maintainers = with maintainers; [ puffnfresh ];
+    broken = stdenv.hostPlatform.isDarwin;
+    mainProgram = "playerctl";
   };
 }

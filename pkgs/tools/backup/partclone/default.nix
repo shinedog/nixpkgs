@@ -1,27 +1,40 @@
-{ stdenv, fetchFromGitHub, autoreconfHook
-, pkgconfig, libuuid, e2fsprogs
+{ lib, stdenv, fetchFromGitHub, autoreconfHook
+, pkg-config, libuuid, e2fsprogs, nilfs-utils, ntfs3g, openssl
 }:
 
 stdenv.mkDerivation rec {
-  name = "partclone-${version}";
-  version = "0.2.89";
+  pname = "partclone";
+  version = "0.3.27";
 
   src = fetchFromGitHub {
     owner = "Thomas-Tsai";
     repo = "partclone";
     rev = version;
-    sha256 = "0gw47pchqshhm00yf34qgxh6bh2jfryv0sm7ghwn77bv5gzwr481";
+    sha256 = "sha256-atQ355w9BRUJKkvuyJupcNexVEnVcYsWRvnNmpBw8OA=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
   buildInputs = [
-    e2fsprogs libuuid stdenv.cc.libc
-    (stdenv.lib.getOutput "static" stdenv.cc.libc)
+    e2fsprogs libuuid stdenv.cc.libc nilfs-utils ntfs3g openssl
+    (lib.getOutput "static" stdenv.cc.libc)
+  ];
+
+  configureFlags = [
+    "--enable-xfs"
+    "--enable-extfs"
+    "--enable-hfsp"
+    "--enable-fat"
+    "--enable-exfat"
+    "--enable-ntfs"
+    "--enable-btrfs"
+    "--enable-minix"
+    "--enable-f2fs"
+    "--enable-nilfs2"
   ];
 
   enableParallelBuilding = true;
 
-  meta = {
+  meta = with lib; {
     description = "Utilities to save and restore used blocks on a partition";
     longDescription = ''
       Partclone provides utilities to save and restore used blocks on a
@@ -29,9 +42,9 @@ stdenv.mkDerivation rec {
       using existing libraries, e.g. e2fslibs is used to read and write the
       ext2 partition.
     '';
-    homepage = http://partclone.org;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [stdenv.lib.maintainers.marcweber];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://partclone.org";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ marcweber ];
+    platforms = platforms.linux;
   };
 }

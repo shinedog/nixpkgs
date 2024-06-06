@@ -1,56 +1,63 @@
-{ stdenv, fetchurl, gettext, libuuid, readline }:
+{ lib, stdenv, buildPackages, fetchurl, gettext, pkg-config
+, icu, libuuid, readline, inih, liburcu
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "xfsprogs-4.5.0";
+  pname = "xfsprogs";
+  version = "6.8.0";
 
   src = fetchurl {
-    urls = map (dir: "ftp://oss.sgi.com/projects/xfs/${dir}/${name}.tar.gz")
-      [ "cmd_tars" "previous" ];
-    sha256 = "1y49rwvbbvqdq2a1x7p5i05bcfyv6xhmrfwafl6vvvw494qyp6z4";
+    url = "mirror://kernel/linux/utils/fs/xfs/xfsprogs/${pname}-${version}.tar.xz";
+    hash = "sha256-eLard27r5atS4IhKcPobNjPmSigrHs+ukfXdHZ7F8H0=";
   };
 
-  prePatch = ''
-    sed -i "s,/bin/bash,$(type -P bash),g" install-sh
-    sed -i "s,ldconfig,$(type -P ldconfig),g" configure m4/libtool.m4
+  outputs = [ "bin" "dev" "out" "doc" ];
 
-    # Fixes from gentoo 3.2.1 ebuild
-    sed -i "/^PKG_DOC_DIR/s:@pkg_name@:${name}:" include/builddefs.in
-    sed -i "/LLDFLAGS.*libtool-libs/d" $(find -name Makefile)
-    sed -i '/LIB_SUBDIRS/s:libdisk::' Makefile
-  '';
-
-  patches = [
-    # This patch fixes shared libs installation, still not fixed in 4.2.0
-    ./4.3.0-sharedlibs.patch
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [
+    gettext pkg-config
+    libuuid # codegen tool uses libuuid
+    liburcu # required by crc32selftest
   ];
+  buildInputs = [ readline icu inih liburcu ];
+  propagatedBuildInputs = [ libuuid ]; # Dev headers include <uuid/uuid.h>
 
-  propagatedBuildInputs = [ libuuid ];
-  buildInputs = [ gettext readline ];
+  enableParallelBuilding = true;
+  # Install fails as:
+  #   make[1]: *** No rule to make target '\', needed by 'kmem.lo'.  Stop.
+  enableParallelInstalling = false;
 
-  outputs = [ "bin" "dev" "out" ]; # TODO: review xfs
-
+  # @sbindir@ is replaced with /run/current-system/sw/bin to fix dependency cycles
   preConfigure = ''
-    NIX_LDFLAGS="$(echo $NIX_LDFLAGS | sed "s,$out,$lib,g")"
+    for file in scrub/{xfs_scrub_all.cron.in,xfs_scrub@.service.in,xfs_scrub_all.service.in}; do
+      substituteInPlace "$file" \
+        --replace '@sbindir@' '/run/current-system/sw/bin'
+    done
+    patchShebangs ./install-sh
   '';
 
   configureFlags = [
-    "MAKE=make"
-    "MSGFMT=msgfmt"
-    "MSGMERGE=msgmerge"
-    "XGETTEXT=xgettext"
     "--disable-lib64"
-    "--enable-readline"
+    "--with-systemd-unit-dir=${placeholder "out"}/lib/systemd/system"
   ];
 
   installFlags = [ "install-dev" ];
 
-  enableParallelBuilding = true;
+  # FIXME: forbidden rpath
+  postInstall = ''
+    find . -type d -name .libs | xargs rm -rf
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = http://xfs.org/;
+  passthru.tests = {
+    inherit (nixosTests.installer) lvm;
+  };
+
+  meta = with lib; {
+    homepage = "https://xfs.org/";
     description = "SGI XFS utilities";
-    license = licenses.lgpl21;
+    license = with licenses; [ gpl2Only lgpl21 gpl3Plus ];  # see https://git.kernel.org/pub/scm/fs/xfs/xfsprogs-dev.git/tree/debian/copyright
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ dezgeg ajs124 ] ++ teams.helsinki-systems.members;
   };
 }

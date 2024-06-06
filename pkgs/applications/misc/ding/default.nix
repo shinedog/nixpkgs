@@ -1,4 +1,4 @@
-{ aspell, aspellDicts_de, aspellDicts_en, buildEnv, fetchurl, fortune, gnugrep, makeWrapper, stdenv, tk, tre }:
+{ aspell, aspellDicts_de, aspellDicts_en, buildEnv, fetchurl, fortune, gnugrep, makeWrapper, lib, stdenv, tk, tre }:
 let
   aspellEnv = buildEnv {
     name = "env-ding-aspell";
@@ -10,14 +10,16 @@ let
   };
 in
 stdenv.mkDerivation rec {
-  name = "ding-1.8";
+  pname = "ding";
+  version = "1.9";
 
   src = fetchurl {
-    url = "http://ftp.tu-chemnitz.de/pub/Local/urz/ding/${name}.tar.gz";
-    sha256 = "00z97ndwmzsgig9q6y98y8nbxy76pyi9qyj5qfpbbck24gakpz5l";
+    url = "http://ftp.tu-chemnitz.de/pub/Local/urz/ding/ding-${version}.tar.gz";
+    sha256 = "sha256-aabIH894WihsBTo1LzIBzIZxxyhRYVxLcHpDQwmwmOU=";
   };
 
-  buildInputs = [ aspellEnv fortune gnugrep makeWrapper tk tre ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ aspellEnv fortune gnugrep tk tre ];
 
   patches = [ ./dict.patch ];
 
@@ -36,18 +38,19 @@ stdenv.mkDerivation rec {
 
     sed -i "s@/usr/bin/ding@$out/bin/ding@g" ding.desktop
 
-    cp ding $out/bin/
-    cp de-en.txt $out/share/dict/
-    cp ding.1 $out/share/man/man1/
-    cp ding.png $out/share/pixmaps/
-    cp ding.desktop $out/share/applications/
+    cp -v ding $out/bin/
+    cp -v de-en.txt $out/share/dict/
+    cp -v ding.1 $out/share/man/man1/
+    cp -v ding.png $out/share/pixmaps/
+    cp -v ding.desktop $out/share/applications/
 
-    wrapProgram $out/bin/ding --prefix PATH : ${stdenv.lib.makeBinPath [ gnugrep aspellEnv tk fortune ]} --prefix ASPELL_CONF : "\"prefix ${aspellEnv};\""
+    wrapProgram $out/bin/ding --prefix PATH : ${lib.makeBinPath [ gnugrep aspellEnv tk fortune ]} --prefix ASPELL_CONF : "\"prefix ${aspellEnv};\""
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Simple and fast dictionary lookup tool";
-    homepage = https://www-user.tu-chemnitz.de/~fri/ding/;
+    mainProgram = "ding";
+    homepage = "https://www-user.tu-chemnitz.de/~fri/ding/";
     license = licenses.gpl2Plus;
     platforms = platforms.linux; # homepage says: unix-like except darwin
     maintainers = [ maintainers.exi ];

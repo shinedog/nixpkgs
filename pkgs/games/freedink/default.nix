@@ -1,14 +1,15 @@
-{ stdenv, fetchurl, SDL, SDL_mixer, SDL_image, SDL_ttf, SDL_gfx
-, pkgconfig, intltool, fontconfig, libzip, zip, zlib }:
+{ lib, stdenv, fetchurl, SDL, SDL_mixer, SDL_image, SDL_ttf, SDL_gfx
+, pkg-config, intltool, fontconfig, libzip, zip, zlib }:
 
 let
   version = "1.08.20121209";
 
   freedink_data = stdenv.mkDerivation rec {
-    name = "freedink-data-${version}";
+    pname = "freedink-data";
+    inherit version;
 
     src = fetchurl {
-      url = "mirror://gnu/freedink/${name}.tar.gz";
+      url = "mirror://gnu/freedink/${pname}-${version}.tar.gz";
       sha256 = "1mhns09l1s898x18ahbcy9gabrmgsr8dv7pm0a2ivid8mhxahn1j";
     };
 
@@ -16,22 +17,32 @@ let
   };
 
 in stdenv.mkDerivation rec {
-  name = "freedink-${version}";
+  pname = "freedink";
+  inherit version;
 
   src = fetchurl {
-    url = "mirror://gnu/freedink/${name}.tar.gz";
+    url = "mirror://gnu/freedink/${pname}-${version}.tar.gz";
     sha256 = "19xximbcm6506kvpf3s0q96697kmzca3yrjdr6dgphklp33zqsqr";
   };
 
+  nativeBuildInputs = [ pkg-config intltool ];
+
   buildInputs = [
     SDL SDL_mixer SDL_image SDL_ttf SDL_gfx
-    pkgconfig intltool fontconfig libzip zip zlib
+    fontconfig libzip zip zlib
   ];
+
+  preConfigure = ''
+    # Build fails on Linux with windres.
+    export ac_cv_prog_ac_ct_WINDRES=
+  '';
 
   postInstall = ''
     mkdir -p "$out/share/"
     ln -s ${freedink_data}/share/dink "$out/share/"
   '';
+
+  enableParallelBuilding = true;
 
   meta = {
     description = "A free, portable and enhanced version of the Dink Smallwood game engine";
@@ -42,10 +53,11 @@ in stdenv.mkDerivation rec {
       with close compatibility, under multiple platforms.
     '';
 
-    homepage = http://www.freedink.org/;
-    license = stdenv.lib.licenses.gpl3Plus;
+    homepage = "https://www.gnu.org/software/freedink/"; # Formerly http://www.freedink.org
+    license = lib.licenses.gpl3Plus;
 
-    maintainers = [ stdenv.lib.maintainers.bjg ];
-    platforms = stdenv.lib.platforms.all;
+    maintainers = [ ];
+    platforms = lib.platforms.all;
+    hydraPlatforms = lib.platforms.linux; # sdl-config times out on darwin
   };
 }

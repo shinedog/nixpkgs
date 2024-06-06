@@ -1,30 +1,27 @@
-{ stdenv, fetchurl, ibus, ibus-table, pkgconfig, python3 }:
+{ lib, stdenv, fetchurl, ibus, ibus-table, pkg-config, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "ibus-table-others-${version}";
-  version = "1.3.7";
+  pname = "ibus-table-others";
+  version = "1.3.17";
 
   src = fetchurl {
-    url = "https://github.com/moebiuscurve/ibus-table-others/releases/download/${version}/${name}.tar.gz";
-    sha256 = "0vmz82il796062jbla5pawsr5dqyhs7ald7xjp84zfccc09dg9kx";
+    url = "https://github.com/moebiuscurve/ibus-table-others/releases/download/${version}/${pname}-${version}.tar.gz";
+    hash = "sha256-7//axHjQ1LgLpeWR4MTI8efLURm4Umj4JV3G33Y0m0g=";
   };
 
-  buildInputs = [ ibus ibus-table pkgconfig python3 ];
+  nativeBuildInputs = [ pkg-config python3 ];
+  buildInputs = [ ibus ibus-table ];
 
   preBuild = ''
-    export HOME=$(mktemp -d)/ibus-table-others
+    export HOME=$TMPDIR
   '';
 
-  postFixup = ''
-    rm -rf $HOME
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     isIbusEngine = true;
     description  = "Various table-based input methods for IBus";
-    homepage     = https://github.com/moebiuscurve/ibus-table-others;
+    homepage     = "https://github.com/moebiuscurve/ibus-table-others";
     license      = licenses.gpl3;
     platforms    = platforms.linux;
-    maintainers  = with maintainers; [ mudri ];
+    maintainers  = with maintainers; [ mudri McSinyx ];
   };
 }

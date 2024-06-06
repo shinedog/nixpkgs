@@ -1,44 +1,108 @@
-{ stdenv, fetchFromGitHub, asciidoc-full, gettext
-, gobjectIntrospection, gtk3, hicolor_icon_theme, libnotify, librsvg
-, pythonPackages, udisks2, wrapGAppsHook }:
+{ lib
+, asciidoc
+, fetchFromGitHub
+, gobject-introspection
+, gtk3
+, installShellFiles
+, libappindicator-gtk3
+, libnotify
+, librsvg
+, python3
+, udisks2
+, wrapGAppsHook3
+, testers
+, udiskie
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "udiskie-${version}";
-  version = "1.5.1";
+python3.pkgs.buildPythonApplication rec {
+  pname = "udiskie";
+  version = "2.5.2";
+
+  pyproject = true;
 
   src = fetchFromGitHub {
     owner = "coldfix";
     repo = "udiskie";
-    rev = version;
-    sha256 = "01x5fvllb262x6r3547l23z7p6hr7ddz034bkhmj2cqmf83sxwxd";
+    rev = "v${version}";
+    hash = "sha256-r9ppuWYY3e2thsfFh4ooOgfqNvmCVw7fS0SpJCJcysQ=";
   };
 
-  buildInputs = [
-    asciidoc-full        # For building man page.
-    hicolor_icon_theme
-    wrapGAppsHook
-    librsvg              # required for loading svg icons (udiskie uses svg icons)
+  patches = [
+    ./locale-path.patch
   ];
 
-  propagatedBuildInputs = [
-    gettext gobjectIntrospection gtk3 libnotify pythonPackages.docopt
-    pythonPackages.pygobject3 pythonPackages.pyyaml udisks2
-  ];
-
-  postBuild = "make -C doc";
-
-  postInstall = ''
-    mkdir -p $out/share/man/man8
-    cp -v doc/udiskie.8 $out/share/man/man8/
+  postPatch = ''
+    substituteInPlace udiskie/locale.py --subst-var out
   '';
 
-  # tests require dbusmock
-  doCheck = false;
+  nativeBuildInputs = [
+    asciidoc # Man page
+    gobject-introspection
+    installShellFiles
+    python3.pkgs.setuptools
+    wrapGAppsHook3
+  ];
 
-  meta = with stdenv.lib; {
+  dontWrapGApps = true;
+
+  buildInputs = [
+    gtk3
+    libappindicator-gtk3
+    libnotify
+    librsvg # SVG icons
+    udisks2
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    docopt
+    keyutils
+    pygobject3
+    pyyaml
+  ];
+
+  postBuild = ''
+    make -C doc
+  '';
+
+  postInstall = ''
+    installManPage doc/udiskie.8
+
+    installShellCompletion \
+      --bash completions/bash/* \
+      --zsh completions/zsh/*
+  '';
+
+  preFixup = ''
+    makeWrapperArgs+=("''${gappsWrapperArgs[@]}")
+  '';
+
+  nativeCheckInputs = with python3.pkgs; [
+    pytestCheckHook
+  ];
+
+  passthru.tests.version = testers.testVersion {
+    package = udiskie;
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/coldfix/udiskie";
+    changelog = "https://github.com/coldfix/udiskie/blob/${src.rev}/CHANGES.rst";
     description = "Removable disk automounter for udisks";
+    longDescription = ''
+      udiskie is a udisks2 front-end that allows to manage removeable media such
+      as CDs or flash drives from userspace.
+
+      Its features include:
+      - automount removable media
+      - notifications
+      - tray icon
+      - command line tools for manual un-/mounting
+      - LUKS encrypted devices
+      - unlocking with keyfiles (requires udisks 2.6.4)
+      - loop devices (mounting iso archives)
+      - password caching (requires python keyutils 0.3)
+    '';
     license = licenses.mit;
-    homepage = https://github.com/coldfix/udiskie;
-    maintainers = with maintainers; [ AndersonTorres ];
+    maintainers = with maintainers; [ AndersonTorres dotlambda ];
   };
 }

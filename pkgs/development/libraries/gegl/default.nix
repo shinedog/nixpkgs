@@ -1,36 +1,126 @@
-{ stdenv, fetchurl, pkgconfig, glib, babl, libpng, cairo, libjpeg
-, librsvg, pango, gtk2, bzip2, intltool
-, OpenGL ? null }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, vala
+, gi-docgen
+, gobject-introspection
+, glib
+, babl
+, libpng
+, llvmPackages
+, cairo
+, libjpeg
+, librsvg
+, lensfun
+, libspiro
+, maxflow
+, netsurf
+, pango
+, poly2tri-c
+, poppler
+, bzip2
+, json-glib
+, gettext
+, meson
+, ninja
+, libraw
+, gexiv2
+, libwebp
+, luajit
+, openexr
+, OpenCL
+, suitesparse
+, withLuaJIT ? lib.meta.availableOn stdenv.hostPlatform luajit
+}:
 
 stdenv.mkDerivation rec {
-  name = "gegl-0.2.0";
+  pname = "gegl";
+  version = "0.4.48";
+
+  outputs = [ "out" "dev" "devdoc" ];
+  outputBin = "dev";
 
   src = fetchurl {
-    url = "ftp://ftp.gtk.org/pub/gegl/0.2/${name}.tar.bz2";
-    sha256 = "df2e6a0d9499afcbc4f9029c18d9d1e0dd5e8710a75e17c9b1d9a6480dd8d426";
+    url = "https://download.gimp.org/pub/gegl/${lib.versions.majorMinor version}/gegl-${version}.tar.xz";
+    hash = "sha256-QYwm2UvogF19mPbeDGglyia9dPystsGI2kdTPZ7igkc=";
   };
 
-  patches = [( fetchurl {
-    url = "https://projects.archlinux.org/svntogit/packages.git/plain/trunk/"
-      + "gegl-0.2.0-CVE-2012-4433.patch?h=packages/gegl&id=57a60fbda5d7bbbd1cc4767cb0724baa80c5e3e9";
-    sha256 = "0p8mxj3w09nn1cc6cbxrd9hx742c5y27903i608wx6ja3kdjis59";
-    name = "CVE-2012-4433.patch";
-  })];
+  nativeBuildInputs = [
+    pkg-config
+    gettext
+    meson
+    ninja
+    vala
+    gobject-introspection
+    gi-docgen
+  ];
 
-  # needs fonts otherwise  don't know how to pass them
-  configureFlags = "--disable-docs";
+  buildInputs = [
+    libpng
+    cairo
+    libjpeg
+    librsvg
+    lensfun
+    libspiro
+    maxflow
+    netsurf.libnsgif
+    pango
+    poly2tri-c
+    poppler
+    bzip2
+    libraw
+    libwebp
+    gexiv2
+    openexr
+    suitesparse
+  ] ++ lib.optionals stdenv.isDarwin [
+    OpenCL
+  ] ++ lib.optionals stdenv.cc.isClang [
+    llvmPackages.openmp
+  ] ++ lib.optionals withLuaJIT [
+    luajit
+  ];
 
-  NIX_LDFLAGS = if stdenv.isDarwin then "-lintl" else null;
+  # for gegl-4.0.pc
+  propagatedBuildInputs = [
+    glib
+    json-glib
+    babl
+  ];
 
-  buildInputs = [ babl libpng cairo libjpeg librsvg pango gtk2 bzip2 intltool ]
-    ++ stdenv.lib.optional stdenv.isDarwin OpenGL;
+  mesonFlags = [
+    "-Dmrg=disabled" # not sure what that is
+    "-Dsdl2=disabled"
+    "-Dpygobject=disabled"
+    "-Dlibav=disabled"
+    "-Dlibv4l=disabled"
+    "-Dlibv4l2=disabled"
+    # Disabled due to multiple vulnerabilities, see
+    # https://github.com/NixOS/nixpkgs/pull/73586
+    "-Djasper=disabled"
+  ] ++ lib.optionals (!withLuaJIT) [
+    "-Dlua=disabled"
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  postPatch = ''
+    chmod +x tests/opencl/opencl_test.sh
+    patchShebangs tests/ff-load-save/tests_ff_load_save.sh tests/opencl/opencl_test.sh tools/xml_insert.sh
+  '';
 
-  meta = { 
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    moveToOutput "share/doc" "$devdoc"
+  '';
+
+  # tests fail to connect to the com.apple.fonts daemon in sandboxed mode
+  doCheck = !stdenv.isDarwin;
+
+  meta = with lib; {
     description = "Graph-based image processing framework";
-    homepage = http://www.gegl.org;
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://www.gegl.org";
+    license = licenses.lgpl3Plus;
+    maintainers = with maintainers; [ jtojnar ];
+    platforms = platforms.unix;
   };
 }

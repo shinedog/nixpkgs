@@ -1,35 +1,58 @@
-{ stdenv, fetchurl, cmake
-, alsaSupport ? !stdenv.isDarwin, alsaLib ? null
-, pulseSupport ? !stdenv.isDarwin, libpulseaudio ? null
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, removeReferencesTo
+, alsaSupport ? !stdenv.isDarwin, alsa-lib
+, dbusSupport ? !stdenv.isDarwin, dbus
+, pipewireSupport ? !stdenv.isDarwin, pipewire
+, pulseSupport ? !stdenv.isDarwin, libpulseaudio
 , CoreServices, AudioUnit, AudioToolbox
 }:
 
-with stdenv.lib;
-
-assert alsaSupport -> alsaLib != null;
-assert pulseSupport -> libpulseaudio != null;
-
 stdenv.mkDerivation rec {
-  version = "1.17.2";
-  name = "openal-soft-${version}";
+  pname = "openal-soft";
+  version = "1.23.1";
 
-  src = fetchurl {
-    url = "http://kcat.strangesoft.net/openal-releases/${name}.tar.bz2";
-    sha256 = "051k5fy8pk4fd9ha3qaqcv08xwbks09xl5qs4ijqq2qz5xaghhd3";
+  src = fetchFromGitHub {
+    owner = "kcat";
+    repo = "openal-soft";
+    rev = version;
+    sha256 = "sha256-jwY1NzNJdWIvVv7TvJyg4cIGFLWGZhL3BkMI1NbOEG0=";
   };
 
-  buildInputs = [ cmake ]
-    ++ optional alsaSupport alsaLib
-    ++ optional pulseSupport libpulseaudio
-    ++ optionals stdenv.isDarwin [ CoreServices AudioUnit AudioToolbox ];
+  patches = [
+    # this will make it find its own data files (e.g. HRTF profiles)
+    # without any other configuration
+    ./search-out.patch
+  ];
+  postPatch = ''
+    substituteInPlace core/helpers.cpp \
+      --replace "@OUT@" $out
+  '';
 
-  NIX_LDFLAGS = []
-    ++ optional alsaSupport "-lasound"
-    ++ optional pulseSupport "-lpulse";
+  strictDeps = true;
 
-  meta = {
+  nativeBuildInputs = [ cmake pkg-config removeReferencesTo ];
+
+  buildInputs = lib.optional alsaSupport alsa-lib
+    ++ lib.optional dbusSupport dbus
+    ++ lib.optional pipewireSupport pipewire
+    ++ lib.optional pulseSupport libpulseaudio
+    ++ lib.optionals stdenv.isDarwin [ CoreServices AudioUnit AudioToolbox ];
+
+  cmakeFlags = [
+    # Automatically links dependencies without having to rely on dlopen, thus
+    # removes the need for NIX_LDFLAGS.
+    "-DALSOFT_DLOPEN=OFF"
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    # https://github.com/NixOS/nixpkgs/issues/183774
+    "-DOSS_INCLUDE_DIR=${stdenv.cc.libc}/include"
+  ];
+
+  postInstall = lib.optional pipewireSupport ''
+    remove-references-to -t ${pipewire.dev} $(readlink -f $out/lib/*.so)
+  '';
+
+  meta = with lib; {
     description = "OpenAL alternative";
-    homepage = http://kcat.strangesoft.net/openal.html;
+    homepage = "https://openal-soft.org/";
     license = licenses.lgpl2;
     maintainers = with maintainers; [ftrvxmtrx];
     platforms = platforms.unix;

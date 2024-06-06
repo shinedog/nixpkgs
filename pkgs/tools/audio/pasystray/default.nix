@@ -1,37 +1,47 @@
-{stdenv, fetchFromGitHub, autoconf, automake, makeWrapper, pkgconfig
-, gnome3, avahi, gtk3, libnotify, libpulseaudio, xlibsWrapper}:
+{ lib, stdenv, fetchpatch, fetchFromGitHub, pkg-config, autoreconfHook, wrapGAppsHook3
+, gnome, avahi, gtk3, libayatana-appindicator, libnotify, libpulseaudio
+, gsettings-desktop-schemas
+}:
 
 stdenv.mkDerivation rec {
-  name = "pasystray-0.5.2";
+  pname = "pasystray";
+  version = "0.8.2";
 
   src = fetchFromGitHub {
     owner = "christophgysin";
     repo = "pasystray";
-    rev = "6709fc1e9f792baf4f7b4507a887d5876b2cfa70";
-    sha256 = "1z21wassdiwfnlcrkpdqh8ylblpd1xxjxcmib5mwix9va2lykdfv";
+    rev = version;
+    sha256 = "sha256-QaTQ8yUviJaFEQaQm2vYAUngqHliKe8TDYqfWt1Nx/0=";
   };
 
-  buildInputs = [ autoconf automake makeWrapper pkgconfig 
-                  gnome3.defaultIconTheme
-                  avahi gtk3 libnotify libpulseaudio xlibsWrapper ];
+  patches = [
+    # Use ayatana-appindicator instead of appindicator
+    # https://github.com/christophgysin/pasystray/issues/98
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/p/pasystray/0.8.1-1/debian/patches/0001-Build-against-ayatana-appindicator.patch";
+      sha256 = "sha256-/HKPqVARfHr/3Vyls6a1n8ejxqW9Ztu4+8KK4jK8MkI=";
+    })
+    # Require X11 backend
+    # https://github.com/christophgysin/pasystray/issues/90#issuecomment-361881076
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/p/pasystray/0.8.1-1/debian/patches/0002-Require-X11-backend.patch";
+      sha256 = "sha256-6njC3vqBPWFS1xAsa1katQ4C0KJdVkHAP1MCPiZ6ELM=";
+    })
+   ];
 
-  preConfigure = ''
-    aclocal
-    autoconf
-    autoheader
-    automake --add-missing
-  '';
+  nativeBuildInputs = [ pkg-config autoreconfHook wrapGAppsHook3 ];
+  buildInputs = [
+    gnome.adwaita-icon-theme
+    avahi gtk3 libayatana-appindicator libnotify libpulseaudio
+    gsettings-desktop-schemas
+  ];
 
-  preFixup = ''
-    wrapProgram "$out/bin/pasystray" \
-      --prefix XDG_DATA_DIRS : "${gnome3.defaultIconTheme}/share:$GSETTINGS_SCHEMAS_PATH"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "PulseAudio system tray";
     homepage = "https://github.com/christophgysin/pasystray";
     license = licenses.lgpl21Plus;
-    maintainers = [ maintainers.exlevan ];
+    maintainers = with maintainers; [ exlevan kamilchm ];
     platforms = platforms.linux;
+    mainProgram = "pasystray";
   };
 }

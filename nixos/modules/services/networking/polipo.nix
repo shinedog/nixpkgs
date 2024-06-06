@@ -23,20 +23,16 @@ in
 
     services.polipo = {
 
-      enable = mkOption {
-        type = types.bool;
-        default = false;
-        description = "Whether to run the polipo caching web proxy.";
-      };
+      enable = mkEnableOption "polipo caching web proxy";
 
       proxyAddress = mkOption {
-        type = types.string;
+        type = types.str;
         default = "127.0.0.1";
         description = "IP address on which Polipo will listen.";
       };
 
       proxyPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8123;
         description = "TCP port on which Polipo will listen.";
       };
@@ -51,7 +47,7 @@ in
       };
 
       parentProxy = mkOption {
-        type = types.string;
+        type = types.str;
         default = "";
         example = "localhost:8124";
         description = ''
@@ -61,7 +57,7 @@ in
       };
 
       socksParentProxy = mkOption {
-        type = types.string;
+        type = types.str;
         default = "";
         example = "localhost:9050";
         description = ''
@@ -74,7 +70,7 @@ in
         type = types.lines;
         default = "";
         description = ''
-          Polio configuration. Contents will be added 
+          Polio configuration. Contents will be added
           verbatim to the configuration file.
         '';
       };
@@ -85,17 +81,15 @@ in
 
   config = mkIf cfg.enable {
 
-    users.extraUsers = singleton
-      { name = "polipo";
-        uid = config.ids.uids.polipo;
+    users.users.polipo =
+      { uid = config.ids.uids.polipo;
         description = "Polipo caching proxy user";
         home = "/var/cache/polipo";
         createHome = true;
       };
 
-    users.extraGroups = singleton
-      { name = "polipo";
-        gid = config.ids.gids.polipo;
+    users.groups.polipo =
+      { gid = config.ids.gids.polipo;
         members = [ "polipo" ];
       };
 

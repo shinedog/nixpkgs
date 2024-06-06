@@ -1,10 +1,11 @@
-{ stdenv, fetchurl, m4, cxx ? true }:
+{ lib, stdenv, fetchurl, m4, cxx ? true }:
 
 let self = stdenv.mkDerivation rec {
-  name = "gmp-4.3.2";
+  pname = "gmp";
+  version = "4.3.2";
 
   src = fetchurl {
-    url = "mirror://gnu/gmp/${name}.tar.bz2";
+    url = "mirror://gnu/gmp/gmp-${version}.tar.bz2";
     sha256 = "0x8prpqi9amfcmi7r4zrza609ai9529pjaq0h4aw51i867064qck";
   };
 
@@ -27,8 +28,12 @@ let self = stdenv.mkDerivation rec {
     then "ln -sf configfsf.guess config.guess"
     else ''echo "Darwin host is `./config.guess`."'';
 
-  configureFlags = (if cxx then "--enable-cxx" else "--disable-cxx") +
-    stdenv.lib.optionalString stdenv.isDarwin " ac_cv_build=x86_64-apple-darwin13.4.0 ac_cv_host=x86_64-apple-darwin13.4.0";
+  configureFlags = [
+    (lib.enableFeature cxx "cxx")
+  ] ++ lib.optionals stdenv.isDarwin [
+    "ac_cv_build=x86_64-apple-darwin13.4.0"
+    "ac_cv_host=x86_64-apple-darwin13.4.0"
+  ];
 
   # The test t-lucnum_ui fails (on Linux/x86_64) when built with GCC 4.8.
   # Newer versions of GMP don't have that issue anymore.
@@ -60,11 +65,14 @@ let self = stdenv.mkDerivation rec {
          asymptotically faster algorithms.
       '';
 
-    homepage = http://gmplib.org/;
-    license = stdenv.lib.licenses.lgpl3Plus;
+    homepage = "https://gmplib.org/";
+    license = lib.licenses.lgpl3Plus;
 
     maintainers = [ ];
-    platforms = stdenv.lib.platforms.all;
+    platforms = lib.platforms.all;
+    badPlatforms = [ "x86_64-darwin" ];
+    # never built on aarch64-darwin, aarch64-linux since first introduction in nixpkgs
+    broken = (stdenv.isDarwin && stdenv.isAarch64) || (stdenv.isLinux && stdenv.isAarch64);
   };
 };
   in self

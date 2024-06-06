@@ -1,36 +1,36 @@
-{ fetchurl, fetchpatch, stdenv, pkgconfig, libtirpc
+{ fetchgit, lib, stdenv, pkg-config, libnsl, libtirpc, autoreconfHook
 , useSystemd ? true, systemd }:
 
-let version = "0.2.3";
-in stdenv.mkDerivation rec {
-  name = "rpcbind-${version}";
+stdenv.mkDerivation {
+  pname = "rpcbind";
+  version = "1.2.6";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/rpcbind/${version}/${name}.tar.bz2";
-    sha256 = "0yyjzv4161rqxrgjcijkrawnk55rb96ha0pav48s03l2klx855wq";
+  src = fetchgit {
+    url = "git://git.linux-nfs.org/projects/steved/rpcbind.git";
+    rev = "c0c89b3bf2bdf304a5fe3cab626334e0cdaf1ef2";
+    sha256 = "sha256-aidETIZaQYzC3liDGM915wyBWpMrn4OudxEcFS/Iucw=";
   };
 
   patches = [
     ./sunrpc.patch
-    ./0001-handle_reply-Don-t-use-the-xp_auth-pointer-directly.patch
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/r/rpcbind/0.2.3-0.5/debian/patches/CVE-2015-7236.patch";
-      sha256 = "1wsv5j8f5djzxr11n4027x107cam1avmx9w34g6l5d9s61j763wq";
-    })
   ];
 
-  buildInputs = [ libtirpc ]
-             ++ stdenv.lib.optional useSystemd systemd;
+  buildInputs = [ libnsl libtirpc ]
+             ++ lib.optional useSystemd systemd;
 
-  configureFlags = stdenv.lib.optional (!useSystemd) "--with-systemdsystemunitdir=no";
+  configureFlags = [
+    "--with-systemdsystemunitdir=${if useSystemd then "${placeholder "out"}/etc/systemd/system" else "no"}"
+    "--enable-warmstarts"
+    "--with-rpcuser=rpc"
+  ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "ONC RPC portmapper";
     license = licenses.bsd3;
     platforms = platforms.unix;
-    homepage = "http://sourceforge.net/projects/rpcbind/";
+    homepage = "https://linux-nfs.org/";
     maintainers = with maintainers; [ abbradar ];
     longDescription = ''
       Universal addresses to RPC program number mapper.

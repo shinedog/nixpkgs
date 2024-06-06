@@ -1,32 +1,55 @@
-{ stdenv, fetchFromGitHub
-, autoreconfHook, pkgconfig
-, ibus, m17n_lib, m17n_db, gettext, python3, pygobject3
+{ lib, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, ibus
+, gtk3
+, m17n_lib
+, m17n_db
+, gettext
+, python3
+, wrapGAppsHook3
 }:
 
 stdenv.mkDerivation rec {
-  name = "ibus-m17n-${version}";
-  version = "1.3.4";
+  pname = "ibus-m17n";
+  version = "1.4.29";
 
   src = fetchFromGitHub {
-    owner  = "ibus";
-    repo   = "ibus-m17n";
-    rev    = version;
-    sha256 = "1n0bvgc4jyksgvzrw5zs2pxcpxcn3gcc0j2kasbznm34fpv3frsr";
+    owner = "ibus";
+    repo = "ibus-m17n";
+    rev = version;
+    sha256 = "sha256-KHAdGTlRdTNpSuYbT6rocbT9rSNhxCdt4Z6QSLlbBsg=";
   };
 
-  buildInputs = [
-    ibus m17n_lib m17n_db gettext
-    python3 pygobject3
+  nativeBuildInputs = [
+    autoreconfHook
+    gettext
+    pkg-config
+    wrapGAppsHook3
   ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  buildInputs = [
+    ibus
+    gtk3
+    m17n_lib
+    m17n_db
+    (python3.withPackages (ps: [
+      ps.pygobject3
+      (ps.toPythonModule ibus)
+    ]))
+  ];
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--with-gtk=3.0"
+  ];
+
+  meta = with lib; {
     isIbusEngine = true;
-    description  = "m17n engine for ibus";
-    homepage     = https://github.com.com/ibus/ibus-m17n;
-    license      = licenses.gpl2;
-    platforms    = platforms.linux;
-    maintainers  = with maintainers; [ ericsagnes ];
+    description = "m17n engine for ibus";
+    homepage = "https://github.com/ibus/ibus-m17n";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ ericsagnes ];
   };
 }

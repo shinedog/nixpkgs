@@ -3,67 +3,75 @@
 with lib;
 
 let
+  cfg = config.services.pcscd;
   cfgFile = pkgs.writeText "reader.conf" config.services.pcscd.readerConfig;
+
+  package = if config.security.polkit.enable
+              then pkgs.pcscliteWithPolkit
+              else pkgs.pcsclite;
 
   pluginEnv = pkgs.buildEnv {
     name = "pcscd-plugins";
     paths = map (p: "${p}/pcsc/drivers") config.services.pcscd.plugins;
   };
 
-in {
+in
+{
+  options.services.pcscd = {
+    enable = mkEnableOption "PCSC-Lite daemon, to access smart cards using SCard API (PC/SC)";
 
-  ###### interface
+    plugins = mkOption {
+      type = types.listOf types.package;
+      defaultText = literalExpression "[ pkgs.ccid ]";
+      example = literalExpression "[ pkgs.pcsc-cyberjack ]";
+      description = "Plugin packages to be used for PCSC-Lite.";
+    };
 
-  options = {
+    readerConfig = mkOption {
+      type = types.lines;
+      default = "";
+      example = ''
+        FRIENDLYNAME      "Some serial reader"
+        DEVICENAME        /dev/ttyS0
+        LIBPATH           /path/to/serial_reader.so
+        CHANNELID         1
+      '';
+      description = ''
+        Configuration for devices that aren't hotpluggable.
 
-    services.pcscd = {
-      enable = mkEnableOption "PCSC-Lite daemon";
+        See {manpage}`reader.conf(5)` for valid options.
+      '';
+    };
 
-      plugins = mkOption {
-        type = types.listOf types.package;
-        default = [ pkgs.ccid ];
-        defaultText = "[ pkgs.ccid ]";
-        example = literalExample "[ pkgs.pcsc-cyberjack ]";
-        description = "Plugin packages to be used for PCSC-Lite.";
-      };
-
-      readerConfig = mkOption {
-        type = types.lines;
-        default = "";
-        example = ''
-          FRIENDLYNAME      "Some serial reader"
-          DEVICENAME        /dev/ttyS0
-          LIBPATH           /path/to/serial_reader.so
-          CHANNELID         1
-        '';
-        description = ''
-          Configuration for devices that aren't hotpluggable.
-
-          See <citerefentry><refentrytitle>reader.conf</refentrytitle>
-          <manvolnum>5</manvolnum></citerefentry> for valid options.
-        '';
-      };
+    extraArgs = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Extra command line arguments to be passed to the PCSC daemon.";
     };
   };
 
-  ###### implementation
-
   config = mkIf config.services.pcscd.enable {
+    environment.etc."reader.conf".source = cfgFile;
 
-    systemd.sockets.pcscd = {
-      description = "PCSC-Lite Socket";
-      wantedBy = [ "sockets.target" ];
-      before = [ "multi-user.target" ];
-      socketConfig.ListenStream = "/run/pcscd/pcscd.comm";
-    };
+    environment.systemPackages = [ package ];
+    systemd.packages = [ package ];
+
+    services.pcscd.plugins = [ pkgs.ccid ];
+
+    systemd.sockets.pcscd.wantedBy = [ "sockets.target" ];
 
     systemd.services.pcscd = {
-      description = "PCSC-Lite daemon";
       environment.PCSCLITE_HP_DROPDIR = pluginEnv;
-      serviceConfig = {
-        ExecStart = "${pkgs.pcsclite}/sbin/pcscd -f -x -c ${cfgFile}";
-        ExecReload = "${pkgs.pcsclite}/sbin/pcscd -H";
-      };
+
+      # If the cfgFile is empty and not specified (in which case the default
+      # /etc/reader.conf is assumed), pcscd will happily start going through the
+      # entire confdir (/etc in our case) looking for a config file and try to
+      # parse everything it finds. Doesn't take a lot of imagination to see how
+      # well that works. It really shouldn't do that to begin with, but to work
+      # around it, we force the path to the cfgFile.
+      #
+      # https://github.com/NixOS/nixpkgs/issues/121088
+      serviceConfig.ExecStart = [ "" "${lib.getExe package} -f -x -c ${cfgFile} ${lib.escapeShellArgs cfg.extraArgs}" ];
     };
   };
 }

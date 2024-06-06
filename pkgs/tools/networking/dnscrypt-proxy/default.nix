@@ -1,30 +1,27 @@
-{ stdenv, fetchurl, libsodium, pkgconfig, systemd }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-with stdenv.lib;
+buildGoModule rec {
+  pname = "dnscrypt-proxy";
+  version = "2.1.5";
 
-stdenv.mkDerivation rec {
-  name = "dnscrypt-proxy-${version}";
-  version = "1.7.0";
+  vendorHash = null;
 
-  src = fetchurl {
-    url = "https://download.dnscrypt.org/dnscrypt-proxy/${name}.tar.bz2";
-    sha256 = "1qw2nib0d5ia8581lbdnjxgn9c7pf2qw8vhpnnh1wjcjj3gpgbqx";
+  doCheck = false;
+
+  src = fetchFromGitHub {
+    owner = "DNSCrypt";
+    repo = "dnscrypt-proxy";
+    rev = version;
+    sha256 = "sha256-A9Cu4wcJxrptd9CpgXw4eyMX2nmNAogYBRDeeAjpEZY=";
   };
 
-  configureFlags = optional stdenv.isLinux "--with-systemd";
+  meta = with lib; {
+    description = "A tool that provides secure DNS resolution";
 
-  nativeBuildInputs = [ pkgconfig ];
-
-  buildInputs = [ libsodium ] ++ optional stdenv.isLinux systemd;
-
-  outputs = [ "out" "man" ];
-
-  meta = {
-    description = "A tool for securing communications between a client and a DNS resolver";
-    homepage = https://dnscrypt.org/;
     license = licenses.isc;
-    maintainers = with maintainers; [ joachifm jgeerds ];
-    # upstream claims OSX support, but Hydra fails
-    platforms = with platforms; allBut darwin;
+    homepage = "https://dnscrypt.info/";
+    maintainers = with maintainers; [ atemu waynr ];
+    mainProgram = "dnscrypt-proxy";
+    platforms = with platforms; unix;
   };
 }

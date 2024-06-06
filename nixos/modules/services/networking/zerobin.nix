@@ -1,4 +1,4 @@
-{ config, pkgs, lib, nodes, ... }:
+{ config, pkgs, lib, ... }:
 with lib;
 let
   cfg = config.services.zerobin;
@@ -74,21 +74,20 @@ in
     };
 
     config = mkIf (cfg.enable) {
-      users.users."${cfg.user}" =
-      if cfg.user == "zerobin" then {
+      users.users.${cfg.user} =
+      optionalAttrs (cfg.user == "zerobin") {
         isSystemUser = true;
         group = cfg.group;
         home = cfg.dataDir;
         createHome = true;
-      }
-      else {};
-      users.groups."${cfg.group}" = {};
+      };
+      users.groups.${cfg.group} = {};
 
       systemd.services.zerobin = {
         enable = true;
         after = [ "network.target" ];
         wantedBy = [ "multi-user.target" ];
-        serviceConfig.ExecStart = "${pkgs.pythonPackages.zerobin}/bin/zerobin ${cfg.listenAddress} ${toString cfg.listenPort} false ${cfg.user} ${cfg.group} ${zerobin_config}";
+        serviceConfig.ExecStart = "${pkgs.zerobin}/bin/zerobin ${cfg.listenAddress} ${toString cfg.listenPort} false ${cfg.user} ${cfg.group} ${zerobin_config}";
         serviceConfig.PrivateTmp="yes";
         serviceConfig.User = cfg.user;
         serviceConfig.Group = cfg.group;

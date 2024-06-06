@@ -1,28 +1,47 @@
-{ lib, stdenv, fetchFromGitHub, cmake, pkgconfig, libxml2, pcre }:
+{ lib, stdenv, fetchFromGitHub, fetchurl, cmake, pkg-config, libxml2, pcre
+, darwin}:
 
-# The exact revision specified by Blender's install_deps.sh script.
-let rev = "3335ac164e68b2512a40914b14c74db260e6ff7d"; in
+stdenv.mkDerivation rec {
+  pname = "opencollada";
 
-stdenv.mkDerivation {
-  name = "opencollada-1.3-${rev}";
+  version = "1.6.68";
 
   src = fetchFromGitHub {
     owner = "KhronosGroup";
     repo = "OpenCOLLADA";
-    inherit rev;
-    sha256 = "0s2m8crbg1kf09hpscrplv65a45dlg157b9c20chrv7wy0qizbw5";
+    rev = "v${version}";
+    sha256 = "1ym16fxx9qhf952vva71sdzgbm7ifis0h1n5fj1bfdj8zvvkbw5w";
   };
 
-  buildInputs = [ cmake pkgconfig ];
+  patches = [
+    ./pcre.patch
+
+    # fix build with gcc 13
+    (fetchurl {
+      url = "https://gitweb.gentoo.org/repo/gentoo.git/plain/media-libs/opencollada/files/opencollada-1.6.68-gcc13.patch?id=b76590f9fb8615da3da9d783ad841c0e3881a27b";
+      hash = "sha256-uimeLGHgXaFi61mmoaloJ5vo83c8EIQmtHEMngC2Nq4=";
+    })
+  ];
+
+  nativeBuildInputs = [ cmake pkg-config ];
+  buildInputs = lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [ AGL ]);
 
   propagatedBuildInputs = [ libxml2 pcre ];
 
-  enableParallelBuilding = true;
+  postPatch = ''
+    # Drop blanket -Werror as it tends to fail on newer toolchain for
+    # minor warnings. In this case it was gcc-13 build failure.
+    substituteInPlace DAEValidator/CMakeLists.txt --replace-fail ' -Werror"' '"'
+  '' + lib.optionalString stdenv.isDarwin ''
+    substituteInPlace GeneratedSaxParser/src/GeneratedSaxParserUtils.cpp \
+      --replace math.h cmath
+  '';
 
   meta = {
     description = "A library for handling the COLLADA file format";
-    homepage = https://github.com/KhronosGroup/OpenCOLLADA/;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/KhronosGroup/OpenCOLLADA/";
+    maintainers = [ lib.maintainers.eelco ];
+    platforms = lib.platforms.unix;
+    license = lib.licenses.mit;
   };
 }

@@ -1,49 +1,98 @@
-{ stdenv, fetchgit, alsaLib, fftwSinglePrec, freetype, libjack2
-, libxslt, lv2, pkgconfig, premake3, xorg, ladspa-sdk }:
+{ lib
+, stdenv
+, alsa-lib
+, fetchFromGitHub
+, fftwFloat
+, freetype
+, libGL
+, libX11
+, libXcursor
+, libXext
+, libXrender
+, meson
+, ninja
+, pkg-config
+}:
 
+let rpathLibs = [
+  fftwFloat
+];
+in
 stdenv.mkDerivation rec {
-  name = "distrho-ports-unstable-2016-06-26";
+  pname = "distrho-ports";
+  version = "2021-03-15";
 
-  src = fetchgit {
-    url = "https://github.com/DISTRHO/DISTRHO-Ports.git";
-    rev = "e3969853ec9ba897c50ac060f0167313e2a18b29";
-    sha256 = "0id4p8dlnlv5271yvmyawfr754nzah7xhvjkj633lw5yr3mq707m";
+  src = fetchFromGitHub {
+    owner = "DISTRHO";
+    repo = "DISTRHO-Ports";
+    rev = version;
+    sha256 = "00fgqwayd20akww3n2imyqscmyrjyc9jj0ar13k9dhpaxqk2jxbf";
   };
 
-  patchPhase = ''
-    sed -e "s#@./scripts#sh scripts#" -i Makefile
-  '';
+  nativeBuildInputs = [ pkg-config meson ninja ];
 
-  buildInputs = [
-    alsaLib fftwSinglePrec freetype libjack2 pkgconfig premake3
-    xorg.libX11 xorg.libXcomposite xorg.libXcursor xorg.libXext
-    xorg.libXinerama xorg.libXrender ladspa-sdk
+  buildInputs = rpathLibs ++ [
+    alsa-lib
+    freetype
+    libGL
+    libX11
+    libXcursor
+    libXext
+    libXrender
   ];
 
-  buildPhase = ''
-    sh ./scripts/premake-update.sh linux
-    make lv2
+  postFixup = ''
+    for file in \
+      $out/lib/lv2/vitalium.lv2/vitalium.so \
+      $out/lib/vst/vitalium.so \
+      $out/lib/vst3/vitalium.vst3/Contents/x86_64-linux/vitalium.so
+    do
+      patchelf --set-rpath "${lib.makeLibraryPath rpathLibs}:$(patchelf --print-rpath $file)" $file
+    done
   '';
 
-  installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/lib/lv2
-    cp -a bin/lv2/* $out/lib/lv2/
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = http://distrho.sourceforge.net;
-    description = "A collection of cross-platform audio effects and plugins";
+  meta = with lib; {
+    homepage = "http://distrho.sourceforge.net/ports";
+    description = "Linux audio plugins and LV2 ports";
     longDescription = ''
       Includes:
-      Dexed  drowaudio-distortion drowaudio-distortionshaper drowaudio-flanger
-      drowaudio-reverb drowaudio-tremolo drumsynt EasySSP  eqinox
-      JuceDemoPlugin klangfalter LUFSMeter luftikus obxd pitchedDelay
-      stereosourceseparation TAL-Dub-3 TAL-Filter TAL-Filter-2 TAL-NoiseMaker
-      TAL-Reverb TAL-Reverb-2 TAL-Reverb-3 TAL-Vocoder-2 TheFunction
-      ThePilgrim Vex Wolpertinger
+        arctican-function
+        arctican-pilgrim
+        dexed
+        drowaudio-distortion
+        drowaudio-distortionshaper
+        drowaudio-flanger
+        drowaudio-reverb
+        drowaudio-tremolo
+        drumsynth
+        easySSP
+        eqinox
+        HiReSam
+        juce-opl
+        klangfalter
+        LUFSMeter
+        LUFSMeter-Multi
+        luftikus
+        obxd
+        pitchedDelay
+        refine
+        stereosourceseparation
+        swankyamp
+        tal-dub-3
+        tal-filter
+        tal-filter-2
+        tal-noisemaker
+        tal-reverb
+        tal-reverb-2
+        tal-reverb-3
+        tal-vocoder-2
+        temper
+        vex
+        vitalium
+        wolpertinger
     '';
+    license = with licenses; [ gpl2Only gpl3Only gpl2Plus lgpl2Plus lgpl3Only mit ];
     maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
+    platforms = [ "x86_64-linux" ];
   };
 }

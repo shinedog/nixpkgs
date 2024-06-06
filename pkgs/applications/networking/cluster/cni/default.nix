@@ -1,36 +1,30 @@
-{ stdenv, fetchFromGitHub, go }:
+{ lib, fetchFromGitHub, buildGoModule }:
 
-stdenv.mkDerivation rec {
-  name = "cni-${version}";
-  version = "0.3.0";
+buildGoModule rec {
+  pname = "cni";
+  version = "1.2.0";
 
   src = fetchFromGitHub {
     owner = "containernetworking";
-    repo = "cni";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "1nvixvf5slnsdrfpfs2km64x680wf83jbyp7il12bcim37q2az7m";
+    hash = "sha256-32rmfBjPtc9w+B8PIb8sFOIlzZ7PnS6XSZRNLreMVl4=";
   };
 
-  buildInputs = [ go ];
+  vendorHash = "sha256-JWaQacekMQGT710U5UgiIpmEYgyUCh1uks5eSV5nhWc=";
 
-  outputs = ["out" "plugins"];
+  subPackages = [
+    "./cnitool"
+  ];
 
-  buildPhase = ''
-    patchShebangs build
-    ./build
-  '';
+  ldflags = [ "-s" "-w" ];
 
-  installPhase = ''
-    mkdir -p $out/bin $plugins
-    mv bin/cnitool $out/bin
-    mv bin/* $plugins/
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Container Network Interface - networking for Linux containers";
+    mainProgram = "cnitool";
     license = licenses.asl20;
-    homepage = https://github.com/containernetworking/cni;
-    maintainers = with maintainers; [offline];
-    platforms = [ "x86_64-linux" ];
+    homepage = "https://github.com/containernetworking/cni";
+    maintainers = with maintainers; [ offline vdemeester ];
+    platforms = [ "x86_64-linux" "aarch64-linux" ];
   };
 }

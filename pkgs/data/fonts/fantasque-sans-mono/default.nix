@@ -1,34 +1,29 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "fantasque-sans-mono-${version}";
-  version = "1.7.1";
+stdenvNoCC.mkDerivation rec {
+  pname = "fantasque-sans-mono";
+  version = "1.8.0";
 
-  src = fetchurl {
-    url = "https://github.com/belluzj/fantasque-sans/releases/download/v${version}/FantasqueSansMono.zip";
-    sha256 = "0lkky7mmpq6igpjh7lsv30xjx62mwlx27gd9zwcyv3mp2d2b5cvb";
+  src = fetchzip {
+    url = "https://github.com/belluzj/fantasque-sans/releases/download/v${version}/FantasqueSansMono-Normal.zip";
+    stripRoot = false;
+    hash = "sha256-MNXZoDPi24xXHXGVADH16a3vZmFhwX0Htz02+46hWFc=";
   };
 
-  buildInputs = [unzip];
-  phases = ["unpackPhase" "installPhase"];
-
-  unpackCmd = ''
-    mkdir -p ${name}
-    unzip -qq -d ${name} $src
-  '';
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    mkdir -p $out/share/doc/${name}
-    cp -v "OTF/"*.otf $out/share/fonts/opentype
-    cp -v README.md $out/share/doc/${name}
+    runHook preInstall
+
+    install -Dm644 OTF/*.otf -t $out/share/fonts/opentype
+    install -Dm644 README.md -t $out/share/doc/${pname}-${version}
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/belluzj/fantasque-sans;
+  meta = with lib; {
+    homepage = "https://github.com/belluzj/fantasque-sans";
     description = "A font family with a great monospaced variant for programmers";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

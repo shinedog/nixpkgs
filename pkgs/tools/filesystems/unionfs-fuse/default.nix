@@ -1,23 +1,31 @@
-{ stdenv, fetchurl, cmake, fuse }:
+{ lib, stdenv, fetchFromGitHub, cmake, fuse }:
 
 stdenv.mkDerivation rec {
-  name = "unionfs-fuse-${version}";
-  version = "1.0";
+  pname = "unionfs-fuse";
+  version = "2.2";
 
-  src = fetchurl {
-    url = "https://github.com/rpodgorny/unionfs-fuse/archive/v${version}.tar.gz";
-    sha256 = "02fcrjb06lxkxpk4l8arsqmai807sray24lj2nrasqaacg80ps1f";
+  src = fetchFromGitHub {
+    owner = "rpodgorny";
+    repo = "unionfs-fuse";
+    rev = "v${version}";
+    sha256 = "sha256-EJryML6E0CW4kvsqMRqV3cq77j50HuylNzgaHD6CL/o=";
   };
 
-  patches =
-    [ # Prevent the unionfs daemon from being killed during
-      # shutdown. See
-      # http://www.freedesktop.org/wiki/Software/systemd/RootStorageDaemons/
-      # for details.
-      ./prevent-kill-on-shutdown.patch
-    ];
+  patches = [
+    # Prevent the unionfs daemon from being killed during
+    # shutdown. See
+    # https://www.freedesktop.org/wiki/Software/systemd/RootStorageDaemons/
+    # for details.
+    ./prevent-kill-on-shutdown.patch
+  ];
 
-  buildInputs = [ cmake fuse ];
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace CMakeLists.txt \
+      --replace '/usr/local/include/osxfuse/fuse' '${fuse}/include/fuse'
+  '';
+
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ fuse ];
 
   # Put the unionfs mount helper in place as mount.unionfs-fuse. This makes it
   # possible to do:
@@ -25,17 +33,19 @@ stdenv.mkDerivation rec {
   #
   # This must be done in preConfigure because the build process removes
   # helper from the source directory during the build.
-  preConfigure = ''
+  preConfigure = lib.optionalString (!stdenv.isDarwin) ''
     mkdir -p $out/sbin
     cp -a mount.unionfs $out/sbin/mount.unionfs-fuse
     substituteInPlace $out/sbin/mount.unionfs-fuse --replace mount.fuse ${fuse}/sbin/mount.fuse
     substituteInPlace $out/sbin/mount.unionfs-fuse --replace unionfs $out/bin/unionfs
   '';
 
-  meta = {
+  meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "FUSE UnionFS implementation";
-    homepage = http://podgorny.cz/moin/UnionFsFuse;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/rpodgorny/unionfs-fuse";
+    license = licenses.bsd3;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ orivej ];
   };
 }

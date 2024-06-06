@@ -1,67 +1,42 @@
-{ stdenv, fetchurl, fetchpatch, pkgs }:
+{ lib, fetchpatch, fetchurl }:
 
-let
-
-  makeTuxonicePatch = { version, kernelVersion, sha256,
-    url ? "http://tuxonice.nigelcunningham.com.au/downloads/all/tuxonice-for-linux-${kernelVersion}-${version}.patch.bz2" }:
-    { name = "tuxonice-${kernelVersion}";
-      patch = stdenv.mkDerivation {
-        name = "tuxonice-${version}-for-${kernelVersion}.patch";
-        src = fetchurl {
-          inherit url sha256;
-        };
-        phases = [ "installPhase" ];
-        installPhase = ''
-          source $stdenv/setup
-          bunzip2 -c $src > $out
-        '';
-      };
+{
+  ath_regd_optional = rec {
+    name = "ath_regd_optional";
+    patch = fetchpatch {
+      name = name + ".patch";
+      url = "https://github.com/openwrt/openwrt/raw/ed2015c38617ed6624471e77f27fbb0c58c8c660/package/kernel/mac80211/patches/ath/402-ath_regd_optional.patch";
+      sha256 = "1ssDXSweHhF+pMZyd6kSrzeW60eb6MO6tlf0il17RC0=";
+      postFetch = ''
+        sed -i 's/CPTCFG_/CONFIG_/g' $out
+        sed -i '/--- a\/local-symbols/,$d' $out
+      '';
     };
-
-  grsecPatch = { grbranch ? "test", grver ? "3.1", kver, grrev, sha256 }: rec {
-    name = "grsecurity-${grver}-${kver}-${grrev}";
-
-    # Pass these along to allow the caller to determine compatibility
-    inherit grver kver grrev;
-
-    patch = fetchurl {
-      # When updating versions/hashes, ALWAYS use the official version; we use
-      # this mirror only because upstream removes sources files immediately upon
-      # releasing a new version ...
-      url = "https://raw.githubusercontent.com/slashbeast/grsecurity-scrape/master/${grbranch}/${name}.patch";
-      inherit sha256;
-    };
-
-    features.grsecurity = true;
   };
-in
-
-rec {
 
   bridge_stp_helper =
     { name = "bridge-stp-helper";
       patch = ./bridge-stp-helper.patch;
     };
 
-  no_xsave =
-    { name = "no-xsave";
-      patch = ./no-xsave.patch;
-      features.noXsave = true;
+  # Reverts the buggy commit causing https://bugzilla.kernel.org/show_bug.cgi?id=217802
+  dell_xps_regression = {
+    name = "dell_xps_regression";
+    patch = fetchpatch {
+      name = "Revert-101bd907b424-misc-rtsx-judge-ASPM-Mode-to-set.patch";
+      url = "https://raw.githubusercontent.com/openSUSE/kernel-source/1b02b1528a26f4e9b577e215c114d8c5e773ee10/patches.suse/Revert-101bd907b424-misc-rtsx-judge-ASPM-Mode-to-set.patch";
+      sha256 = "sha256-RHJdQ4p0msTOVPR+/dYiKuwwEoG9IpIBqT4dc5cJjf8=";
+    };
+  };
+
+  request_key_helper =
+    { name = "request-key-helper";
+      patch = ./request-key-helper.patch;
     };
 
-  mips_fpureg_emu =
-    { name = "mips-fpureg-emulation";
-      patch = ./mips-fpureg-emulation.patch;
-    };
-
-  mips_fpu_sigill =
-    { name = "mips-fpu-sigill";
-      patch = ./mips-fpu-sigill.patch;
-    };
-
-  mips_ext3_n32 =
-    { name = "mips-ext3-n32";
-      patch = ./mips-ext3-n32.patch;
+  request_key_helper_updated =
+    { name = "request-key-helper-updated";
+      patch = ./request-key-helper-updated.patch;
     };
 
   modinst_arg_list_too_long =
@@ -69,83 +44,53 @@ rec {
       patch = ./modinst-arg-list-too-long.patch;
     };
 
-  ubuntu_fan_4_4 =
-    { name = "ubuntu-fan";
-      patch = ./ubuntu-fan-4.4.patch;
+  hardened = let
+    mkPatch = kernelVersion: { version, sha256, patch }: let src = patch; in {
+      name = lib.removeSuffix ".patch" src.name;
+      patch = fetchurl (lib.filterAttrs (k: v: k != "extra") src);
+      extra = src.extra;
+      inherit version sha256;
+    };
+    patches = lib.importJSON ./hardened/patches.json;
+  in lib.mapAttrs mkPatch patches;
+
+  # Adapted for Linux 5.4 from:
+  # https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=04896832c94aae4842100cafb8d3a73e1bed3a45
+  rtl8761b_support =
+    { name = "rtl8761b-support";
+      patch = ./rtl8761b-support.patch;
     };
 
-  ubuntu_unprivileged_overlayfs =
-    { name = "ubuntu-unprivileged-overlayfs";
-      patch = ./ubuntu-unprivileged-overlayfs.patch;
-    };
-
-  tuxonice_3_10 = makeTuxonicePatch {
-    version = "2013-11-07";
-    kernelVersion = "3.10.18";
-    sha256 = "00b1rqgd4yr206dxp4mcymr56ymbjcjfa4m82pxw73khj032qw3j";
+  export-rt-sched-migrate = {
+    name = "export-rt-sched-migrate";
+    patch = ./export-rt-sched-migrate.patch;
   };
 
-  grsecurity_testing = grsecPatch
-    { kver   = "4.8.12";
-      grrev  = "201612062306";
-      sha256 = "16ddiqx3sry07d7gy7y7rm8fxaa8v9lgih5l4dd2i39m35za11fq";
+  rust_1_75 = {
+    name = "rust-1.75.patch";
+    patch = ./rust-1.75.patch;
+  };
+
+  rust_1_76 = {
+    name = "rust-1.76.patch";
+    patch = fetchurl {
+      name = "rust-1.76.patch";
+      url = "https://lore.kernel.org/rust-for-linux/20240217002638.57373-2-ojeda@kernel.org/raw";
+      hash = "sha256-q3iNBo8t4b1Rn5k5lau2myqOAqdA/9V9A+ok2jGkLdY=";
     };
+  };
 
-  # This patch relaxes grsec constraints on the location of usermode helpers,
-  # e.g., modprobe, to allow calling into the Nix store.
-  grsecurity_nixos_kmod =
-    {
-      name  = "grsecurity-nixos-kmod";
-      patch = ./grsecurity-nixos-kmod.patch;
+  rust_1_77-6_8 = {
+    name = "rust-1.77.patch";
+    patch = fetchurl {
+      name = "rust-1.77.patch";
+      url = "https://lore.kernel.org/rust-for-linux/20240217002717.57507-1-ojeda@kernel.org/raw";
+      hash = "sha256-0KW9nHpJeMSDssCPXWZbrN8kxq5bA434t+XuPfwslUc=";
     };
+  };
 
-  crc_regression =
-    { name = "crc-backport-regression";
-      patch = ./crc-regression.patch;
-    };
-
-  genksyms_fix_segfault =
-    { name = "genksyms-fix-segfault";
-      patch = ./genksyms-fix-segfault.patch;
-    };
-
-
-  chromiumos_Kconfig_fix_entries_3_14 =
-    { name = "Kconfig_fix_entries_3_14";
-      patch = ./chromiumos-patches/fix-double-Kconfig-entry-3.14.patch;
-    };
-
-  chromiumos_Kconfig_fix_entries_3_18 =
-    { name = "Kconfig_fix_entries_3_18";
-      patch = ./chromiumos-patches/fix-double-Kconfig-entry-3.18.patch;
-    };
-
-  chromiumos_no_link_restrictions =
-    { name = "chromium-no-link-restrictions";
-      patch = ./chromiumos-patches/no-link-restrictions.patch;
-    };
-
-  chromiumos_mfd_fix_dependency =
-    { name = "mfd_fix_dependency";
-      patch = ./chromiumos-patches/mfd-fix-dependency.patch;
-    };
-
-  hiddev_CVE_2016_5829 =
-    { name = "hiddev_CVE_2016_5829";
-      patch = fetchpatch {
-        url = "https://sources.debian.net/data/main/l/linux/4.6.3-1/debian/patches/bugfix/all/HID-hiddev-validate-num_values-for-HIDIOCGUSAGES-HID.patch";
-        sha256 = "14rm1qr87p7a5prz8g5fwbpxzdp3ighj095x8rvhm8csm20wspyy";
-      };
-    };
-
-  cpu-cgroup-v2 = import ./cpu-cgroup-v2-patches;
-
-  lguest_entry-linkage =
-    { name = "lguest-asmlinkage.patch";
-      patch = fetchpatch {
-        url = "https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git"
-            + "/patch/drivers/lguest/x86/core.c?id=cdd77e87eae52";
-        sha256 = "04xlx6al10cw039av6jkby7gx64zayj8m1k9iza40sw0fydcfqhc";
-    };
+  rust_1_77-6_9 = {
+    name = "rust-1.77.patch";
+    patch = ./rust-1.77.patch;
   };
 }

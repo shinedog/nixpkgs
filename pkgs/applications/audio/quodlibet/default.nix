@@ -1,67 +1,163 @@
-{ stdenv, fetchurl, python2Packages, intltool
-, gst_python, withGstPlugins ? false, gst_plugins_base ? null
-, gst_plugins_good ? null, gst_plugins_ugly ? null, gst_plugins_bad ? null }:
+{ lib
+, fetchFromGitHub
+, tag ? ""
 
-assert withGstPlugins -> gst_plugins_base != null
-                         || gst_plugins_good != null
-                         || gst_plugins_ugly != null
-                         || gst_plugins_bad != null;
+  # build time
+, gettext
+, gobject-introspection
+, wrapGAppsHook3
 
-let
-  version = "2.6.3";
-  inherit (python2Packages) buildPythonApplication python mutagen pygtk pygobject2 dbus-python;
-in buildPythonApplication {
-  # call the package quodlibet and just quodlibet
-  name = "quodlibet${stdenv.lib.optionalString withGstPlugins "-with-gst-plugins"}-${version}";
+  # runtime
+, adwaita-icon-theme
+, gdk-pixbuf
+, glib
+, glib-networking
+, gtk3
+, gtksourceview
+, kakasi
+, keybinder3
+, libappindicator-gtk3
+, libmodplug
+, librsvg
+, libsoup
+, webkitgtk
 
-  # XXX, tests fail
-  doCheck = false;
+  # optional features
+, withDbusPython ? false
+, withMusicBrainzNgs ? false
+, withPahoMqtt ? false
+, withPyInotify ? false
+, withPypresence ? false
+, withSoco ? false
 
-  srcs = [
-    (fetchurl {
-      url = "https://bitbucket.org/lazka/quodlibet-files/raw/default/releases/quodlibet-${version}.tar.gz";
-      sha256 = "0ilasi4b0ay8r6v6ba209wsm80fq2nmzigzc5kvphrk71jwypx6z";
-     })
-    (fetchurl {
-      url = "https://bitbucket.org/lazka/quodlibet-files/raw/default/releases/quodlibet-plugins-${version}.tar.gz";
-      sha256 = "1rv08rhdjad8sjhplqsspcf4vkazgkxyshsqmbfbrrk5kvv57ybc";
-     })
+  # backends
+, withGstPlugins ? withGstreamerBackend
+, withGstreamerBackend ? true
+, gst_all_1
+, withXineBackend ? true
+, xine-lib
+
+  # tests
+, dbus
+, glibcLocales
+, hicolor-icon-theme
+, python3
+, xvfb-run
+}:
+
+python3.pkgs.buildPythonApplication rec {
+  pname = "quodlibet${tag}";
+  version = "4.6.0";
+  format = "pyproject";
+
+  outputs = [ "out" "doc" ];
+
+  src = fetchFromGitHub {
+    owner = "quodlibet";
+    repo = "quodlibet";
+    rev = "refs/tags/release-${version}";
+    hash = "sha256-dkO/CFN7Dk72xhtmcSDcwUciOPMeEjQS2mch+jSfiII=";
+  };
+
+  nativeBuildInputs = [
+    gettext
+    gobject-introspection
+    wrapGAppsHook3
+  ] ++ (with python3.pkgs; [
+    sphinx-rtd-theme
+    sphinxHook
+    setuptools
+  ]);
+
+  buildInputs = [
+    adwaita-icon-theme
+    gdk-pixbuf
+    glib
+    glib-networking
+    gtk3
+    gtksourceview
+    kakasi
+    keybinder3
+    libappindicator-gtk3
+    libmodplug
+    libsoup
+    webkitgtk
+  ] ++ lib.optionals (withXineBackend) [
+    xine-lib
+  ] ++ lib.optionals (withGstreamerBackend) (with gst_all_1; [
+    gst-plugins-base
+    gstreamer
+  ] ++ lib.optionals (withGstPlugins) [
+    gst-libav
+    gst-plugins-bad
+    gst-plugins-good
+    gst-plugins-ugly
+  ]);
+
+  propagatedBuildInputs = with python3.pkgs; [
+    feedparser
+    gst-python
+    mutagen
+    pycairo
+    pygobject3
+  ]
+  ++ lib.optionals withDbusPython [ dbus-python ]
+  ++ lib.optionals withMusicBrainzNgs [ musicbrainzngs ]
+  ++ lib.optionals withPahoMqtt [ paho-mqtt ]
+  ++ lib.optionals withPyInotify [ pyinotify ]
+  ++ lib.optionals withPypresence [ pypresence ]
+  ++ lib.optionals withSoco [ soco ];
+
+  nativeCheckInputs = [
+    dbus
+    gdk-pixbuf
+    glibcLocales
+    hicolor-icon-theme
+    xvfb-run
+  ] ++ (with python3.pkgs; [
+    polib
+    pytest
+    pytest-xdist
+  ]);
+
+  pytestFlags = [
+    # missing translation strings in potfiles
+    "--deselect=tests/test_po.py::TPOTFILESIN::test_missing"
+    # require networking
+    "--deselect=tests/plugin/test_covers.py::test_live_cover_download"
+    "--deselect=tests/test_browsers_iradio.py::TInternetRadio::test_click_add_station"
+    # upstream does actually not enforce source code linting
+    "--ignore=tests/quality"
+  ] ++ lib.optionals (withXineBackend || !withGstPlugins) [
+    "--ignore=tests/plugin/test_replaygain.py"
   ];
 
-  preConfigure = ''
-    # TODO: for now don't a apply gdist overrides, will be needed for shipping icons, gtk, etc
-    sed -i /distclass/d setup.py
+  env.LC_ALL = "en_US.UTF-8";
+
+  preCheck = ''
+    export GDK_PIXBUF_MODULE_FILE=${librsvg}/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+    export HOME=$(mktemp -d)
+    export XDG_DATA_DIRS="$out/share:${gtk3}/share/gsettings-schemas/${gtk3.name}:$XDG_ICON_DIRS:$XDG_DATA_DIRS"
   '';
 
-  sourceRoot = "quodlibet-${version}";
+  checkPhase = ''
+    runHook preCheck
 
-  postUnpack = ''
-    # the patch searches for plugins in directory ../plugins
-    # so link the appropriate directory there
-    ln -sf quodlibet-plugins-${version} plugins
+    xvfb-run -s '-screen 0 1920x1080x24' \
+      dbus-run-session --config-file=${dbus}/share/dbus-1/session.conf \
+      pytest $pytestFlags
+
+    runHook postCheck
   '';
 
-  patches = [ ./quodlibet-package-plugins.patch ];
-
-  buildInputs = stdenv.lib.optionals withGstPlugins [
-    gst_plugins_base gst_plugins_good gst_plugins_ugly gst_plugins_bad
-  ];
-
-  propagatedBuildInputs = [
-    mutagen pygtk pygobject2 dbus-python gst_python intltool
-  ];
-
-  postInstall = stdenv.lib.optionalString withGstPlugins ''
-    # Wrap quodlibet so it finds the GStreamer plug-ins
-    wrapProgram "$out/bin/quodlibet" --prefix \
-      GST_PLUGIN_SYSTEM_PATH ":" "$GST_PLUGIN_SYSTEM_PATH"                                                     \
+  preFixup = lib.optionalString (kakasi != null) ''
+    gappsWrapperArgs+=(--prefix PATH : ${kakasi}/bin)
   '';
 
-  meta = {
-    description = "GTK+-based audio player written in Python, using the Mutagen tagging library";
-
+  meta = with lib; {
+    description = "GTK-based audio player written in Python, using the Mutagen tagging library";
     longDescription = ''
-      Quod Libet is a GTK+-based audio player written in Python, using
+      Quod Libet is a GTK-based audio player written in Python, using
       the Mutagen tagging library. It's designed around the idea that
       you know how to organize your music better than we do. It lets
       you make playlists based on regular expressions (don't worry,
@@ -73,8 +169,8 @@ in buildPythonApplication {
       player, like Unicode support, tag editing, Replay Gain, podcasts
       & internet radio, and all major audio formats.
     '';
-
-    maintainers = [ stdenv.lib.maintainers.coroa ];
-    homepage = http://code.google.com/p/quodlibet/;
+    homepage = "https://quodlibet.readthedocs.io/en/latest";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ coroa pbogdan ];
   };
 }

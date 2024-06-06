@@ -1,69 +1,71 @@
-{ stdenv, fetchurl
-# optional:
-, pkgconfig ? null  # most of the extra deps need pkgconfig to be found
-, curl ? null
-, iptables ? null
-, jdk ? null
-, libatasmart ? null
-, libcredis ? null
-, libdbi ? null
-, libgcrypt ? null
-, libmemcached ? null, cyrus_sasl ? null
-, libmodbus ? null
-, libnotify ? null, gdk_pixbuf ? null
-, liboping ? null
-, libpcap ? null
-, libsigrok ? null
-, libvirt ? null
-, libxml2 ? null
-, libtool ? null
-, lm_sensors ? null
-, lvm2 ? null
-, libmysql ? null
-, postgresql ? null
-, protobufc ? null
-, python ? null
-, rabbitmq-c ? null
-, riemann ? null
-, rrdtool ? null
-, udev ? null
-, varnish ? null
-, yajl ? null
-, net_snmp ? null
-, hiredis ? null
-, libmnl ? null
-}:
+{ lib, stdenv, fetchurl, fetchpatch, darwin, callPackage
+, autoreconfHook
+, pkg-config
+, libtool
+, nixosTests
+, ...
+}@args:
+let
+  plugins = callPackage ./plugins.nix args;
+in
 stdenv.mkDerivation rec {
-  version = "5.6.0";
-  name = "collectd-${version}";
+  version = "5.12.0";
+  pname = "collectd";
 
   src = fetchurl {
-    url = "http://collectd.org/files/${name}.tar.bz2";
-    sha256 = "08w6fjzczi2psk7va0xkjh9pigpar6sbjx2a6ayq4dmc3zcvpzzh";
+    url = "https://collectd.org/files/${pname}-${version}.tar.bz2";
+    sha256 = "1mh97afgq6qgmpvpr84zngh58m0sl1b4wimqgvvk376188q09bjv";
   };
 
-  buildInputs = [
-    pkgconfig curl iptables libatasmart libcredis libdbi libgcrypt libmemcached
-    cyrus_sasl libmodbus libnotify gdk_pixbuf liboping libpcap libsigrok libvirt
-    lm_sensors libxml2 lvm2 libmysql postgresql protobufc rabbitmq-c rrdtool
-    varnish yajl jdk libtool python udev net_snmp hiredis libmnl
-  ];
-
   patches = [
-    # Replace deprecated readdir_r() with readdir() to avoid a fatal warning.
-    ./readdir-fix.patch
+    # fix -t never printing syntax errors
+    # should be included in next release
+    (fetchpatch {
+      url = "https://github.com/collectd/collectd/commit/3f575419e7ccb37a3b10ecc82adb2e83ff2826e1.patch";
+      sha256 = "0jwjdlfl0dp7mlbwygp6h0rsbaqfbgfm5z07lr5l26z6hhng2h2y";
+    })
+    (fetchpatch {
+      name = "no_include_longintrepr.patch";
+      url = "https://github.com/collectd/collectd/commit/623e95394e0e62e7f9ced2104b786d21e9c0bf53.patch";
+      hash = "sha256-0eD7yNW3TWVyNMpLsADhYFDvy6COoCaI0kS1XJrwDgM=";
+    })
   ];
 
-  # for some reason libsigrok isn't auto-detected
-  configureFlags =
-    stdenv.lib.optional (libsigrok != null) "--with-libsigrok" ++
-    stdenv.lib.optional (python != null) "--with-python=${python}/bin/python";
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
+  buildInputs = [
+    libtool
+  ] ++ lib.optionals stdenv.isDarwin [
+    darwin.apple_sdk.frameworks.ApplicationServices
+  ] ++ plugins.buildInputs;
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--localstatedir=/var"
+    "--disable-werror"
+  ] ++ plugins.configureFlags
+  ++ lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [ "--with-fp-layout=nothing" ];
+
+  # do not create directories in /var during installPhase
+  postConfigure = ''
+     substituteInPlace Makefile --replace '$(mkinstalldirs) $(DESTDIR)$(localstatedir)/' '#'
+  '';
+
+  postInstall = ''
+    if [ -d $out/share/collectd/java ]; then
+      mv $out/share/collectd/java $out/share/
+    fi
+  '';
+
+  enableParallelBuilding = true;
+
+  passthru.tests = {
+    inherit (nixosTests) collectd;
+  };
+
+  meta = with lib; {
     description = "Daemon which collects system performance statistics periodically";
-    homepage = http://collectd.org;
-    license = licenses.gpl2;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ bjornfor fpletz ];
+    homepage = "https://collectd.org";
+    license = licenses.gpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ bjornfor ];
   };
 }

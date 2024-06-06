@@ -1,8 +1,12 @@
-{ kdeFramework, lib, fetchurl, ecm, shared_mime_info }:
+{
+  mkDerivation,
+  extra-cmake-modules,
+  qtbase, qttools, shared-mime-info
+}:
 
-kdeFramework {
-  name = "kcoreaddons";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ shared_mime_info ];
+mkDerivation {
+  pname = "kcoreaddons";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ qttools shared-mime-info ];
+  propagatedBuildInputs = [ qtbase ];
 }

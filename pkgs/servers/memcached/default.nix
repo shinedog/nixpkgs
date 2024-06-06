@@ -1,25 +1,34 @@
-{stdenv, fetchurl, cyrus_sasl, libevent}:
+{lib, stdenv, fetchurl, cyrus_sasl, libevent, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "memcached-1.4.33";
+  version = "1.6.26";
+  pname = "memcached";
 
   src = fetchurl {
-    url = "http://memcached.org/files/${name}.tar.gz";
-    sha256 = "07bpd6xdhzw6q2ga6xc075bw4jd44nxjl1vk4dqmd315d26nqwl3";
+    url = "https://memcached.org/files/${pname}-${version}.tar.gz";
+    sha256 = "sha256-yTnHhZo8HPYDA+ndCAxjrEo4fuKEbVlc1SY6PcrNwvc=";
   };
+
+  configureFlags = [
+     "ac_cv_c_endian=${if stdenv.hostPlatform.isBigEndian then "big" else "little"}"
+  ];
 
   buildInputs = [cyrus_sasl libevent];
 
   hardeningEnable = [ "pie" ];
 
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isDarwin "-Wno-error";
+  env.NIX_CFLAGS_COMPILE = toString ([ "-Wno-error=deprecated-declarations" ]
+    ++ lib.optional stdenv.isDarwin "-Wno-error");
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A distributed memory object caching system";
-    repositories.git = https://github.com/memcached/memcached.git;
-    homepage = http://memcached.org/;
+    homepage = "http://memcached.org/";
     license = licenses.bsd3;
     maintainers = [ maintainers.coconnor ];
     platforms = platforms.linux ++ platforms.darwin;
+    mainProgram = "memcached";
+  };
+  passthru.tests = {
+    smoke-tests = nixosTests.memcached;
   };
 }

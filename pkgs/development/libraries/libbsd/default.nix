@@ -1,18 +1,47 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, libmd
+, gitUpdater
+}:
 
-let name = "libbsd-0.8.2";
-in stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "libbsd";
+  version = "0.11.8";
 
   src = fetchurl {
-    url = "http://libbsd.freedesktop.org/releases/${name}.tar.xz";
-    sha256 = "02i5brb2007sxq3mn862mr7yxxm0g6nj172417hjyvjax7549xmj";
+    url = "https://libbsd.freedesktop.org/releases/${pname}-${version}.tar.xz";
+    hash = "sha256-Vf36Jpb7TVWlkvqa0Uqd+JfHsACN2zswxBmRSEH4XzM=";
   };
 
-  meta = {
+  outputs = [ "out" "dev" "man" ];
+
+  enableParallelBuilding = true;
+
+  doCheck = true;
+
+  nativeBuildInputs = [ autoreconfHook ];
+  propagatedBuildInputs = [ libmd ];
+
+  patches = lib.optionals stdenv.isDarwin [
+    # Temporary build system hack from upstream maintainer
+    # https://gitlab.freedesktop.org/libbsd/libbsd/-/issues/19#note_2017684
+    ./darwin-fix-libbsd.sym.patch
+  ];
+
+  passthru.updateScript = gitUpdater {
+    # No nicer place to find latest release.
+    url = "https://gitlab.freedesktop.org/libbsd/libbsd.git";
+  };
+
+  meta = with lib; {
     description = "Common functions found on BSD systems";
-    homepage = http://libbsd.freedesktop.org/;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://libbsd.freedesktop.org/";
+    license = with licenses; [ beerware bsd2 bsd3 bsdOriginal isc mit ];
+    platforms = platforms.unix;
+    # See architectures defined in src/local-elf.h.
+    badPlatforms = lib.platforms.microblaze;
+    maintainers = with maintainers; [ matthewbauer ];
   };
 }

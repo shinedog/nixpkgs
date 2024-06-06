@@ -1,32 +1,39 @@
-{ stdenv, fetchurl, gmp-static, gperf, autoreconfHook }:
+{ lib, stdenv, fetchFromGitHub, cudd, gmp-static, gperf, autoreconfHook, libpoly }:
 
 stdenv.mkDerivation rec {
-  name    = "yices-${version}";
-  version = "2.5.1";
+  pname = "yices";
+  # We never want X.Y.${odd} versions as they are moving development tags.
+  version = "2.6.4";
 
-  src = fetchurl {
-    url = "http://yices.csl.sri.com/cgi-bin/yices2-newnewdownload.cgi?file=yices-${version}-src.tar.gz&accept=I+Agree";
-    name = "yices-${version}-src.tar.gz";
-    sha256 = "1wfq6hcm54h0mqmbs1ip63i0ywlwnciav86sbzk3gafxyzg1nd0c";
+  src = fetchFromGitHub {
+    owner  = "SRI-CSL";
+    repo   = "yices2";
+    rev    = "Yices-${version}";
+    sha256 = "sha256-qdxh86CkKdm65oHcRgaafTG9GUOoIgTDjeWmRofIpNE=";
   };
 
-  patchPhase = ''patchShebangs tests/regress/check.sh'';
+  patches = [
+    # musl has no ldconfig, create symlinks explicitly
+    ./linux-no-ldconfig.patch
+  ];
+  postPatch = "patchShebangs tests/regress/check.sh";
 
-  configureFlags = [ "--with-static-gmp=${gmp-static.out}/lib/libgmp.a"
-                     "--with-static-gmp-include-dir=${gmp-static.dev}/include"
-                   ];
-  buildInputs = [ gmp-static gperf autoreconfHook ];
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ cudd gmp-static gperf libpoly ];
+  configureFlags =
+    [ "--with-static-gmp=${gmp-static.out}/lib/libgmp.a"
+      "--with-static-gmp-include-dir=${gmp-static.dev}/include"
+      "--enable-mcsat"
+    ];
 
   enableParallelBuilding = true;
   doCheck = true;
 
-  installPhase = ''make install LDCONFIG=true'';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A high-performance theorem prover and SMT solver";
-    homepage    = "http://yices.csl.sri.com";
-    license     = licenses.unfreeRedistributable;
-    platforms   = platforms.linux ++ platforms.darwin;
-    maintainers = [ maintainers.thoughtpolice ];
+    homepage    = "https://yices.csl.sri.com";
+    license     = licenses.gpl3;
+    platforms   = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ thoughtpolice ];
   };
 }

@@ -1,8 +1,13 @@
-{ kdeFramework, lib, ecm, kconfig, kwidgetsaddons }:
+{
+  mkDerivation,
+  extra-cmake-modules,
+  kconfig, kwidgetsaddons, qtbase, qttools
+}:
 
-kdeFramework {
-  name = "kcompletion";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ kconfig kwidgetsaddons ];
+mkDerivation {
+  pname = "kcompletion";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ kconfig kwidgetsaddons qttools ];
+  propagatedBuildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

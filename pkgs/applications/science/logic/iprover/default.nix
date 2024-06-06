@@ -1,36 +1,46 @@
-{ stdenv, fetchurl, ocaml, eprover }:
+{ lib, stdenv, fetchFromGitLab, ocamlPackages, eprover, z3, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "iprover-${version}";
-  version = "0.8.1";
+  pname = "iprover";
+  version = "3.8.1";
 
-  src = fetchurl {
-    url = "http://iprover.googlecode.com/files/iprover_v${version}.tar.gz";
-    sha256 = "15qn523w4l296np5rnkwi50a5x2xqz0kaza7bsh9bkazph7jma7w";
+  src = fetchFromGitLab {
+    owner = "korovin";
+    repo = pname;
+    rev = "f61edb113b705606c7314dc4dce0687832c3169f";
+    hash = "sha256-XXqbEoYKjoktE3ZBEIEFjLhA1B75zhnfPszhe8SvbI8=";
   };
 
-  buildInputs = [ ocaml eprover ];
+  postPatch = ''
+    substituteInPlace configure --replace Linux Debian
+  '';
 
-  preConfigure = ''patchShebangs .'';
+  strictDeps = true;
+
+  nativeBuildInputs = [ eprover ] ++ (with ocamlPackages; [
+    ocaml findlib
+  ]);
+  buildInputs = [ zlib ocamlPackages.z3 z3 ] ++ (with ocamlPackages; [
+    ocamlgraph yojson zarith
+  ]);
+
+  preConfigure = "patchShebangs .";
 
   installPhase = ''
+    runHook preInstall
     mkdir -p "$out/bin"
     cp iproveropt "$out/bin"
 
-    mkdir -p "$out/share/${name}"
-    cp *.p "$out/share/${name}"
-    echo -e "#! /bin/sh\\n$out/bin/iproveropt --clausifier \"${eprover}/bin/eprover\" --clausifier_options \" --tstp-format --silent --cnf \" \"\$@\"" > "$out"/bin/iprover
+    echo -e "#! ${stdenv.shell}\\n$out/bin/iproveropt --clausifier \"${eprover}/bin/eprover\" --clausifier_options \" --tstp-format --silent --cnf \" \"\$@\"" > "$out"/bin/iprover
     chmod a+x  "$out"/bin/iprover
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An automated first-order logic theorem prover";
-    maintainers = with maintainers;
-    [
-      raskin
-    ];
+    homepage = "http://www.cs.man.ac.uk/~korovink/iprover/";
+    maintainers = with maintainers; [ raskin gebner ];
     platforms = platforms.linux;
     license = licenses.gpl3;
-    downloadPage = "http://code.google.com/p/iprover/downloads/list";
   };
 }

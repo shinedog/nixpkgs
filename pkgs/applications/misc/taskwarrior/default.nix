@@ -1,28 +1,51 @@
-{ stdenv, fetchurl, cmake, libuuid, gnutls }:
+{ lib, stdenv, fetchFromGitHub, cmake, libuuid, gnutls, python3, xdg-utils, installShellFiles }:
 
 stdenv.mkDerivation rec {
-  name = "taskwarrior-${version}";
-  version = "2.5.1";
+  pname = "taskwarrior";
+  version = "2.6.2";
 
-  enableParallelBuilding = true;
-
-  src = fetchurl {
-    url = "http://www.taskwarrior.org/download/task-${version}.tar.gz";
-    sha256 = "059a9yc58wcicc6xxsjh1ph7k2yrag0spsahp1wqmsq6h7jwwyyq";
+  src = fetchFromGitHub {
+    owner = "GothenburgBitFactory";
+    repo = "taskwarrior";
+    rev = "v${version}";
+    sha256 = "sha256-0YveqiylXJi4cdDCfnPtwCVOJbQrZYsxnXES+9B4Yfw=";
+    fetchSubmodules = true;
   };
 
-  nativeBuildInputs = [ cmake libuuid gnutls ];
-
-  postInstall = ''
-    mkdir -p "$out/etc/bash_completion.d"
-    ln -s "../../share/doc/task/scripts/bash/task.sh" "$out/etc/bash_completion.d/"
+  postPatch = ''
+    substituteInPlace src/commands/CmdNews.cpp \
+      --replace "xdg-open" "${lib.getBin xdg-utils}/bin/xdg-open"
   '';
 
-  meta = with stdenv.lib; {
-    description = "GTD (getting things done) implementation";
-    homepage = http://taskwarrior.org;
+  nativeBuildInputs = [ cmake libuuid gnutls python3 installShellFiles ];
+
+  doCheck = true;
+  preCheck = ''
+    patchShebangs --build test
+  '';
+  checkTarget = "test";
+
+  postInstall = ''
+    # ZSH is installed automatically from some reason, only bash and fish need
+    # manual installation
+    installShellCompletion --cmd task \
+      --bash $out/share/doc/task/scripts/bash/task.sh \
+      --fish $out/share/doc/task/scripts/fish/task.fish
+    rm -r $out/share/doc/task/scripts/bash
+    rm -r $out/share/doc/task/scripts/fish
+    # Install vim and neovim plugin
+    mkdir -p $out/share/vim-plugins
+    mv $out/share/doc/task/scripts/vim $out/share/vim-plugins/task
+    mkdir -p $out/share/nvim
+    ln -s $out/share/vim-plugins/task $out/share/nvim/site
+  '';
+
+  meta = with lib; {
+    description = "Highly flexible command-line tool to manage TODO lists";
+    homepage = "https://taskwarrior.org";
     license = licenses.mit;
-    maintainers = with maintainers; [ marcweber jgeerds ];
-    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ marcweber oxalica ];
+    mainProgram = "task";
+    platforms = platforms.unix;
   };
 }

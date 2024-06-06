@@ -1,7 +1,7 @@
-{ stdenv, fetchFromGitHub, unzip, pkgconfig, glib, clang, gcc }:
+{ lib, stdenv, fetchFromGitHub, unzip, pkg-config, glib, llvmPackages }:
 
-stdenv.mkDerivation rec {
-  name = "milu-nightly-${version}";
+stdenv.mkDerivation {
+  pname = "milu-nightly";
   version = "2016-05-09";
 
   src = fetchFromGitHub {
@@ -15,8 +15,6 @@ stdenv.mkDerivation rec {
 
   preConfigure = ''
     sed -i 's#/usr/bin/##g' Makefile
-    sed -i "s#-lclang#-L$(clang --print-search-dirs |
-            sed -ne '/libraries:/{s/libraries: =//; s/:/ -L/gp}') -lclang#g" Makefile
   '';
 
   installPhase = ''
@@ -24,20 +22,19 @@ stdenv.mkDerivation rec {
     cp bin/milu $out/bin
   '';
 
+  nativeBuildInputs = [ pkg-config unzip ];
   buildInputs = [
-     pkgconfig
      glib
-     unzip
-     clang
-     gcc
+     llvmPackages.libclang
   ];
 
   meta = {
     description = "Higher Order Mutation Testing Tool for C and C++ programs";
-    homepage = http://github.com/yuejia/Milu;
-    license = stdenv.lib.licenses.bsd2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.vrthra ];
+    homepage = "https://github.com/yuejia/Milu";
+    license = lib.licenses.bsd2;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.vrthra ];
+    mainProgram = "milu";
   };
 }
 

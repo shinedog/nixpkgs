@@ -1,19 +1,29 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "which-2.21";
+  pname = "which";
+  version = "2.21";
 
   src = fetchurl {
-    url = "mirror://gnu/which/${name}.tar.gz";
-    sha256 = "1bgafvy3ypbhhfznwjv1lxmd6mci3x1byilnnkc7gcr486wlb8pl";
+    url = "mirror://gnu/which/which-${version}.tar.gz";
+    hash = "sha256-9KJFuUEks3fYtJZGv0IfkVXTaqdhS26/g3BdP/x26q0=";
   };
 
-  # FIXME needs gcc 4.9 in bootstrap tools
-  hardeningDisable = [ "stackprotector" ];
+  strictDeps = true;
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://ftp.gnu.org/gnu/which/;
-    platforms = platforms.all;
-    license = licenses.gpl3;
+  env.NIX_CFLAGS_COMPILE = toString (
+    # Enable 64-bit file API. Otherwise `which` fails to find tools
+    # on filesystems with 64-bit inodes (like `btrfs`) when running
+    # binaries from 32-bit systems (like `i686-linux`).
+    lib.optional stdenv.hostPlatform.is32bit "-D_FILE_OFFSET_BITS=64"
+  );
+
+  meta = {
+    homepage = "https://www.gnu.org/software/which/";
+    description = "Shows the full path of (shell) commands";
+    license = lib.licenses.gpl3Plus;
+    mainProgram = "which";
+    platforms = lib.platforms.all;
   };
 }

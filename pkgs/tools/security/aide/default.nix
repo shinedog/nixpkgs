@@ -1,15 +1,17 @@
-{ stdenv, fetchurl, flex, bison, libmhash, zlib, acl, attr, libselinux }:
+{ lib, stdenv, fetchurl, flex, bison, libmhash, zlib, acl, attr, libselinux, pcre2, pkg-config, libgcrypt }:
+
 stdenv.mkDerivation rec {
-  name = "aide-${version}";
-  version = "0.16a2";
+  pname = "aide";
+  version = "0.18.8";
 
   src = fetchurl {
-    url = "mirror://sourceforge/aide/devel/0.16a2/aide-${version}.tar.gz";
-    sha256 = "11qvp6l2x4ajq9485lmg722gfdikh8r2wqfw17m0jm68df0m295m";
+    url = "https://github.com/aide/aide/releases/download/v${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-FmYtxjLRfixWMLgBdS+XkSqOIml8Bl694XXxzDe4OmA=";
   };
 
-  buildInputs = [ flex bison libmhash zlib acl attr libselinux ];
+  buildInputs = [ flex bison libmhash zlib acl attr libselinux pcre2 libgcrypt ];
 
+  nativeBuildInputs = [ pkg-config ];
 
   configureFlags = [
     "--with-posix-acl"
@@ -17,11 +19,12 @@ stdenv.mkDerivation rec {
     "--with-xattr"
     ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://aide.sourceforge.net/";
+  meta = with lib; {
+    homepage = "https://aide.github.io/";
     description = "A file and directory integrity checker";
-    license = licenses.free;
-    maintainers = [ maintainers.tstrobel ];
+    mainProgram = "aide";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ happysalada ];
     platforms = platforms.linux;
   };
 }

@@ -1,83 +1,187 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, perl, perlXMLParser, libXft
-, libpng, zlib, popt, boehmgc, libxml2, libxslt, glib, gtkmm2
-, glibmm, libsigcxx, lcms, boost, gettext, makeWrapper, intltool
-, gsl, python2, poppler, imagemagick, libwpg, librevenge
-, libvisio, libcdr, libexif, unzip, automake114x, autoconf
-, boxMakerPlugin ? false # boxmaker plugin
+{ stdenv
+, lib
+, boehmgc
+, boost
+, cairo
+, callPackage
+, cmake
+, desktopToDarwinBundle
+, fetchurl
+, fetchpatch
+, gettext
+, ghostscript
+, glib
+, glibmm
+, gobject-introspection
+, gsl
+, gspell
+, gtk-mac-integration
+, gtkmm3
+, gdk-pixbuf
+, imagemagick
+, lcms
+, lib2geom
+, libcdr
+, libexif
+, libpng
+, librevenge
+, librsvg
+, libsigcxx
+, libsoup
+, libvisio
+, libwpg
+, libXft
+, libxml2
+, libxslt
+, ninja
+, perlPackages
+, pkg-config
+, poppler
+, popt
+, potrace
+, python3
+, substituteAll
+, wrapGAppsHook3
+, libepoxy
+, zlib
 }:
-
-let 
-  python2Env = python2.withPackages(ps: with ps; [ numpy lxml ]);
-
-boxmaker = fetchurl {
-  # http://www.inkscapeforum.com/viewtopic.php?f=11&t=10403
-  url = "http://www.keppel.demon.co.uk/111000/files/BoxMaker0.91.zip";
-  sha256 = "5c5697f43dc3a95468f61f479cb50b7e2b93379a1729abf19e4040ac9f43a1a8";
-};
-
-stdcxx-patch = fetchpatch {
-  url = http://bazaar.launchpad.net/~inkscape.dev/inkscape/trunk/diff/14542?context=3;
-  sha256 = "15h831lsh61ichgdygkdkbdm1dlb9mhprldq27hkx2472lcnyx6y";
-};
-
+let
+  python3Env = python3.withPackages
+    (ps: with ps; [
+      appdirs
+      beautifulsoup4
+      cachecontrol
+    ]
+    # CacheControl requires extra runtime dependencies for FileCache
+    # https://gitlab.com/inkscape/extras/extension-manager/-/commit/9a4acde6c1c028725187ff5972e29e0dbfa99b06
+    ++ cachecontrol.optional-dependencies.filecache
+    ++ [
+      numpy
+      lxml
+      packaging
+      pillow
+      scour
+      pyparsing
+      pyserial
+      requests
+      pygobject3
+    ] ++ inkex.propagatedBuildInputs);
 in
-
 stdenv.mkDerivation rec {
-  name = "inkscape-0.91";
+  pname = "inkscape";
+  version = "1.3.2";
 
   src = fetchurl {
-    url = "https://inkscape.global.ssl.fastly.net/media/resources/file/"
-        + "${name}.tar.bz2";
-    sha256 = "06ql3x732x2rlnanv0a8aharsnj91j5kplksg574090rks51z42d";
+    url = "https://inkscape.org/release/inkscape-${version}/source/archive/xz/dl/inkscape-${version}.tar.xz";
+    sha256 = "sha256-29GETcRD/l4Q0+mohxROX7ciOFL/8ZHPte963qsOCGs=";
   };
 
-  patches = [ ./deprecated-scopedptr.patch ];
+  # Inkscape hits the ARGMAX when linking on macOS. It appears to be
+  # CMake’s ARGMAX check doesn’t offer enough padding for NIX_LDFLAGS.
+  # Setting strictDeps it avoids duplicating some dependencies so it
+  # will leave us under ARGMAX.
+  strictDeps = true;
+
+  patches = [
+    (substituteAll {
+      src = ./fix-python-paths.patch;
+      # Python is used at run-time to execute scripts,
+      # e.g., those from the "Effects" menu.
+      python3 = "${python3Env}/bin/python";
+    })
+    (substituteAll {
+      # Fix path to ps2pdf binary
+      src = ./fix-ps2pdf-path.patch;
+      inherit ghostscript;
+    })
+
+    # Fix build with libxml2 2.12
+    # https://gitlab.com/inkscape/inkscape/-/merge_requests/6089
+    (fetchpatch {
+      url = "https://gitlab.com/inkscape/inkscape/-/commit/694d8ae43d06efff21adebf377ce614d660b24cd.patch";
+      hash = "sha256-9IXJzpZbNU5fnt7XKgqCzUDrwr08qxGwo8TqnL+xc6E=";
+    })
+  ];
 
   postPatch = ''
-    patch -i ${stdcxx-patch} -p 0
     patchShebangs share/extensions
-  ''
-  # Clang gets misdetected, so hardcode the right answer
-  + stdenv.lib.optionalString stdenv.cc.isClang ''
-    substituteInPlace src/ui/tool/node.h \
-      --replace "#if __cplusplus >= 201103L" "#if true"
+    patchShebangs share/templates
+    patchShebangs man/fix-roff-punct
+
+    # double-conversion is a dependency of 2geom
+    substituteInPlace CMakeScripts/DefineDependsandFlags.cmake \
+      --replace 'find_package(DoubleConversion REQUIRED)' ""
   '';
 
-  # Python is used at run-time to execute scripts, e.g., those from
-  # the "Effects" menu.
-  propagatedBuildInputs = [ python2Env ];
+  nativeBuildInputs = [
+    pkg-config
+    cmake
+    ninja
+    python3Env
+    glib # for setup hook
+    gdk-pixbuf # for setup hook
+    wrapGAppsHook3
+    gobject-introspection
+  ] ++ (with perlPackages; [
+    perl
+    XMLParser
+  ]) ++ lib.optionals stdenv.isDarwin [
+    desktopToDarwinBundle
+  ];
 
   buildInputs = [
-    pkgconfig perl perlXMLParser libXft libpng zlib popt boehmgc
-    libxml2 libxslt glib gtkmm2 glibmm libsigcxx lcms boost gettext
-    makeWrapper intltool gsl poppler imagemagick libwpg librevenge
-    libvisio libcdr libexif automake114x autoconf
-  ] ++ stdenv.lib.optional boxMakerPlugin unzip;
+    boehmgc
+    boost
+    gettext
+    glib
+    glibmm
+    gsl
+    gtkmm3
+    imagemagick
+    lcms
+    lib2geom
+    libcdr
+    libexif
+    libpng
+    librevenge
+    librsvg # for loading icons
+    libsigcxx
+    libsoup
+    libvisio
+    libwpg
+    libXft
+    libxml2
+    libxslt
+    perlPackages.perl
+    poppler
+    popt
+    potrace
+    python3Env
+    zlib
+    libepoxy
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    gspell
+  ] ++ lib.optionals stdenv.isDarwin [
+    cairo
+    gtk-mac-integration
+  ];
 
-  enableParallelBuilding = true;
-  doCheck = true;
-
-  postInstall = ''
-    ${if boxMakerPlugin then "
-      mkdir -p $out/share/inkscape/extensions/
-      # boxmaker packaged version 0.91 in a directory called 0.85 ?!??
-      unzip ${boxmaker};
-      cp boxmake-upd-0.85/* $out/share/inkscape/extensions/
-      rm -Rf boxmake-upd-0.85
-      "
-    else 
-      ""
-    }
-
-    # Make sure PyXML modules can be found at run-time.
-    rm "$out/share/icons/hicolor/icon-theme.cache"
+  # Make sure PyXML modules can be found at run-time.
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    for f in $out/lib/inkscape/*.dylib; do
+      ln -s $f $out/lib/$(basename $f)
+    done
   '';
 
-  meta = with stdenv.lib; {
-    license = "GPL";
-    homepage = http://www.inkscape.org;
+  passthru.tests.ps2pdf-plugin = callPackage ./test-ps2pdf-plugin.nix { };
+
+  meta = with lib; {
     description = "Vector graphics editor";
+    homepage = "https://www.inkscape.org";
+    license = licenses.gpl3Plus;
+    maintainers = [ maintainers.jtojnar ];
     platforms = platforms.all;
+    mainProgram = "inkscape";
     longDescription = ''
       Inkscape is a feature-rich vector graphics editor that edits
       files in the W3C SVG (Scalable Vector Graphics) file format.

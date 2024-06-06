@@ -1,37 +1,49 @@
-{ stdenv, fetchdarcs, rustPlatform, openssl, libssh }:
+{ lib, stdenv
+, fetchCrate
+, rustPlatform
+, installShellFiles
+, pkg-config
+, libsodium
+, openssl
+, xxHash
+, darwin
+, gitImportSupport ? true
+, libgit2 ? null
+}:
 
-with rustPlatform;
+rustPlatform.buildRustPackage rec {
+  pname = "pijul";
+  version = "1.0.0-beta.9";
 
-buildRustPackage rec {
-  name = "pijul-${version}";
-  version = "0.2-6ab9ba";
-
-  src = fetchdarcs {
-    url = "http://pijul.org/";
-    context = ./pijul.org.context;
-    sha256 = "1cgkcr5wdkwj7s0rda90bfchbwmchgi60w5d637894w20hkplsr4";
+  src = fetchCrate {
+    inherit version pname;
+    hash = "sha256-jy0mzgLw9iWuoWe2ictMTL3cHnjJ5kzs6TAK+pdm28g=";
   };
 
-  sourceRoot = "fetchdarcs/pijul";
+  cargoHash = "sha256-iXGvb4qmZK7Sjbf/Jkyzj+nhpZFV3ngjtJfz6x/8z2s=";
 
-  depsSha256 = "110bj2lava1xs75z6k34aip7zb7rcmnxk5hmiyi32i9hs0ddsdrz";
+  doCheck = false;
+  nativeBuildInputs = [ installShellFiles pkg-config ];
+  buildInputs = [ openssl libsodium xxHash ]
+    ++ (lib.optionals gitImportSupport [ libgit2 ])
+    ++ (lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
+      CoreServices Security SystemConfiguration
+    ]));
 
-  cargoUpdateHook = ''
-    cp -r ../libpijul src/
+  buildFeatures = lib.optional gitImportSupport "git";
+
+  postInstall = lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    installShellCompletion --cmd pijul \
+      --bash <($out/bin/pijul completion bash) \
+      --fish <($out/bin/pijul completion fish) \
+      --zsh <($out/bin/pijul completion zsh)
   '';
 
-  setSourceRoot = ''
-    chmod -R u+w "$sourceRoot"
-    cp -r "$sourceRoot"/../libpijul "$sourceRoot"/src/
-  '';
-
-  buildInputs = [ openssl libssh ];
-
-  meta = with stdenv.lib; {
-    homepage = https://pijul.org/;
-    description = "Fast DVCS based on a categorical theory of patches";
-    license = licenses.gpl3;
-    platforms = stdenv.lib.platforms.x86_64;  # i686 builds fail due to lmdb
-    maintainers = with maintainers; [ puffnfresh ];
+  meta = with lib; {
+    description = "A distributed version control system";
+    homepage = "https://pijul.org";
+    license = with licenses; [ gpl2Plus ];
+    maintainers = with maintainers; [ gal_bolle dywedir fabianhjr ];
+    mainProgram = "pijul";
   };
 }

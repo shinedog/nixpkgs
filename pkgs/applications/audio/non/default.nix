@@ -1,29 +1,29 @@
-{ stdenv, fetchFromGitHub, pkgconfig, python2, cairo, libjpeg, ntk, libjack2
-, libsndfile, ladspaH, liblrdf, liblo, libsigcxx
+{ lib, stdenv, fetchFromGitHub, pkg-config, python3, cairo, libjpeg, ntk, libjack2
+, libsndfile, ladspaH, liblo, libsigcxx, lrdf, wafHook
 }:
 
-stdenv.mkDerivation rec {
-  name = "non-${version}";
-  version = "2016-04-05";
+stdenv.mkDerivation {
+  pname = "non";
+  version = "unstable-2021-01-28";
   src = fetchFromGitHub {
-    owner = "original-male";
+    owner = "linuxaudio";
     repo = "non";
-    rev = "16885e69fe865495dc32d869d1454ab148b0dca6";
-    sha256 = "1nwzzgcdpbqh5kjvz40yy5nmzvpp8gcr9biyhhwi68s5bsg972ss";
+    rev = "cdad26211b301d2fad55a26812169ab905b85bbb";
+    sha256 = "sha256-iMJNMDytNXpEkUhL0RILSd25ixkm8HL/edtOZta0Pf4=";
   };
 
-  buildInputs = [ pkgconfig python2 cairo libjpeg ntk libjack2 libsndfile
-    ladspaH liblrdf liblo libsigcxx
+  nativeBuildInputs = [ pkg-config wafHook ];
+  buildInputs = [ python3 cairo libjpeg ntk libjack2 libsndfile
+                  ladspaH liblo libsigcxx lrdf
   ];
-  configurePhase = "python waf configure --prefix=$out";
-  buildPhase = "python waf build";
-  installPhase = "python waf install";
+
+  env.CXXFLAGS = "-std=c++14";
 
   meta = {
     description = "Lightweight and lightning fast modular Digital Audio Workstation";
-    homepage = http://non.tuxfamily.org;
-    license = stdenv.lib.licenses.lgpl21;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.nico202 ];
+    homepage = "http://non.tuxfamily.org";
+    license = lib.licenses.lgpl21;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.nico202 ];
   };
 }

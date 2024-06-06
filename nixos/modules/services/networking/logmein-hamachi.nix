@@ -17,8 +17,7 @@ in
     services.logmein-hamachi.enable = mkOption {
       type = types.bool;
       default = false;
-      description =
-        ''
+      description = ''
           Whether to enable LogMeIn Hamachi, a proprietary
           (closed source) commercial VPN software.
         '';
@@ -35,7 +34,7 @@ in
       description = "LogMeIn Hamachi Daemon";
 
       wantedBy = [ "multi-user.target" ];
-      after = [ "network.target" "local-fs.target" ];
+      after = [ "network.target" ];
 
       serviceConfig = {
         Type = "forking";

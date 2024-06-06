@@ -1,16 +1,17 @@
-{ stdenv, appleDerivation, dyld, osx_private_sdk }:
+{ lib, appleDerivation }:
 
 appleDerivation {
-  phases = [ "unpackPhase" "installPhase" ];
+  dontBuild = true;
 
+  # install headers only
   installPhase = ''
     mkdir -p $out/lib
     cp -R include $out/include
   '';
 
-  meta = with stdenv.lib; {
-    maintainers = with maintainers; [ copumpkin ];
+  meta = with lib; {
+    maintainers = with maintainers; [ copumpkin lnl7 ];
     platforms   = platforms.darwin;
-    license     = licenses.apsl20;
+    license     = licenses.apple-psl20;
   };
 }

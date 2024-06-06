@@ -1,17 +1,21 @@
-{stdenv, fetchurl, pkgconfig, alsaLib, spice_protocol, glib,
- libpciaccess, libxcb, libXrandr, libXinerama, libXfixes, dbus}:
+{lib, stdenv, fetchurl, pkg-config, alsa-lib, spice-protocol, glib,
+ libpciaccess, libxcb, libXrandr, libXinerama, libXfixes, dbus, libdrm,
+ systemd}:
 stdenv.mkDerivation rec {
-  name = "spice-vdagent-0.17.0";
+  pname = "spice-vdagent";
+  version = "0.22.1";
   src = fetchurl {
-    url = "http://www.spice-space.org/download/releases/${name}.tar.bz2";
-    sha256 = "0gdkyylyg1hksg0i0anvznqfli2q39335fnrmcd6847frpc8njpi";
+    url = "https://www.spice-space.org/download/releases/${pname}-${version}.tar.bz2";
+    hash = "sha256-k7DRWspHYsx9N5sXmnEBFJ267WK3IRL/+ys+kLEWh6A=";
   };
+
   postPatch = ''
     substituteInPlace data/spice-vdagent.desktop --replace /usr $out
   '';
-  buildInputs = [ pkgconfig alsaLib spice_protocol glib
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ alsa-lib spice-protocol glib libdrm
                   libpciaccess libxcb libXrandr libXinerama libXfixes
-                  dbus ] ;
+                  dbus systemd ] ;
   meta = {
     description = "Enhanced SPICE integration for linux QEMU guest";
     longDescription = ''
@@ -22,9 +26,9 @@ stdenv.mkDerivation rec {
          to the client resolution
        * Multiple displays
     '';
-    homepage = http://www.spice-space.org/home.html;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.aboseley ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.spice-space.org/";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [ lib.maintainers.aboseley ];
+    platforms = lib.platforms.linux;
   };
 }

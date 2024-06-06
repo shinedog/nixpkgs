@@ -1,24 +1,60 @@
-{ lib, fetchurl, stdenv, ncurses,
-IOKit }:
+{ lib, fetchFromGitHub, stdenv, autoreconfHook, pkg-config
+, ncurses
+, IOKit
+, libcap
+, libnl
+, sensorsSupport ? stdenv.isLinux, lm_sensors
+, systemdSupport ? lib.meta.availableOn stdenv.hostPlatform systemd, systemd
+}:
+
+assert systemdSupport -> stdenv.isLinux;
 
 stdenv.mkDerivation rec {
-  name = "htop-${version}";
-  version = "2.0.2";
+  pname = "htop";
+  version = "3.3.0";
 
-  src = fetchurl {
-    sha256 = "11zlwadm6dpkrlfvf3z3xll26yyffa7qrxd1w72y1kl0rgffk6qp";
-    url = "http://hisham.hm/htop/releases/${version}/${name}.tar.gz";
+  src = fetchFromGitHub {
+    owner = "htop-dev";
+    repo = pname;
+    rev = version;
+    hash = "sha256-qDhQkzY2zj2yxbgFUXwE0MGEgAFOsAhnapUuetO9WTw=";
   };
 
-  buildInputs =
-    [ ncurses ] ++
-    lib.optionals stdenv.isDarwin [ IOKit ];
+  nativeBuildInputs = [ autoreconfHook ]
+    ++ lib.optional stdenv.isLinux pkg-config
+  ;
 
-  meta = with stdenv.lib; {
-    description = "An interactive process viewer for Linux";
-    homepage = https://hisham.hm/htop/;
-    license = licenses.gpl2Plus;
-    platforms = with platforms; linux ++ freebsd ++ openbsd ++ darwin;
-    maintainers = with maintainers; [ rob relrod nckx ];
+  buildInputs = [ ncurses ]
+    ++ lib.optional stdenv.isDarwin IOKit
+    ++ lib.optionals stdenv.isLinux [ libcap libnl ]
+    ++ lib.optional sensorsSupport lm_sensors
+    ++ lib.optional systemdSupport systemd
+  ;
+
+  configureFlags = [ "--enable-unicode" "--sysconfdir=/etc" ]
+    ++ lib.optionals stdenv.isLinux [
+      "--enable-affinity"
+      "--enable-capabilities"
+      "--enable-delayacct"
+    ]
+    ++ lib.optional sensorsSupport "--enable-sensors"
+  ;
+
+  postFixup =
+    let
+      optionalPatch = pred: so: lib.optionalString pred "patchelf --add-needed ${so} $out/bin/htop";
+    in lib.optionalString (!stdenv.hostPlatform.isStatic) ''
+      ${optionalPatch sensorsSupport "${lm_sensors}/lib/libsensors.so"}
+      ${optionalPatch systemdSupport "${systemd}/lib/libsystemd.so"}
+    '';
+
+  meta = with lib; {
+    description = "An interactive process viewer";
+    homepage = "https://htop.dev";
+    license = licenses.gpl2Only;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ rob relrod SuperSandro2000 ];
+    changelog = "https://github.com/htop-dev/htop/blob/${version}/ChangeLog";
+    mainProgram = "htop";
   };
 }

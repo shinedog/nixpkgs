@@ -1,35 +1,87 @@
-{ stdenv, fetchurl, cmake, makeQtWrapper, exiv2, graphicsmagick
-, qtbase, qtdeclarative, qtmultimedia, qtquickcontrols, qttools
+{ lib
+, stdenv
+, fetchurl
+, cmake
+, extra-cmake-modules
+, qttools
+, wrapQtAppsHook
+, exiv2
+, graphicsmagick
+, libarchive
+, libraw
+, mpv
+, poppler
+, pugixml
+, qtbase
+, qtcharts
+, qtdeclarative
+, qtimageformats
+, qtlocation
+, qtmultimedia
+, qtpositioning
+, qtsvg
+, zxing-cpp
+, qtwayland
 }:
 
-let
-  version = "1.3";
-in
 stdenv.mkDerivation rec {
-  name = "photoqt-${version}";
+  pname = "photoqt";
+  version = "4.5";
+
   src = fetchurl {
-    url = "http://photoqt.org/pkgs/photoqt-${version}.tar.gz";
-    sha256 = "0j2kvxfb5pd9abciv161nkcsyam6n8kfqs8ymwj2mxiqflwbmfl1";
+    url = "https://photoqt.org/pkgs/photoqt-${version}.tar.gz";
+    hash = "sha256-QFziMNRhiM4LaNJ8RkJ0iCq/8J82wn0F594qJeSN3Lw=";
   };
 
-  buildInputs = [
-    cmake makeQtWrapper qtbase qtquickcontrols qttools exiv2 graphicsmagick
-    qtmultimedia qtdeclarative
+  nativeBuildInputs = [
+    cmake
+    extra-cmake-modules
+    qttools
+    wrapQtAppsHook
   ];
 
-  preConfigure = ''
-    export MAGICK_LOCATION="${graphicsmagick}/include/GraphicsMagick"
-  '';
+  buildInputs = [
+    exiv2
+    graphicsmagick
+    libarchive
+    libraw
+    mpv
+    poppler
+    pugixml
+    qtbase
+    qtcharts
+    qtdeclarative
+    qtimageformats
+    qtlocation
+    qtmultimedia
+    qtpositioning
+    qtsvg
+    zxing-cpp
+  ] ++ lib.optionals stdenv.isLinux [
+    qtwayland
+  ];
 
-  postInstall = ''
-    wrapQtProgram $out/bin/photoqt
+  cmakeFlags = [
+    (lib.cmakeBool "DEVIL" false)
+    (lib.cmakeBool "CHROMECAST" false)
+    (lib.cmakeBool "FREEIMAGE" false)
+    (lib.cmakeBool "IMAGEMAGICK" false)
+  ];
+
+  env.MAGICK_LOCATION = "${graphicsmagick}/include/GraphicsMagick";
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/Applications
+    mv $out/bin/photoqt.app $out/Applications
+    makeWrapper $out/{Applications/photoqt.app/Contents/MacOS,bin}/photoqt
   '';
 
   meta = {
-    homepage = "http://photoqt.org/";
     description = "Simple, yet powerful and good looking image viewer";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.eduarrrd ];
+    homepage = "https://photoqt.org/";
+    license = lib.licenses.gpl2Plus;
+    mainProgram = "photoqt";
+    maintainers = with lib.maintainers; [ wegank ];
+    platforms = lib.platforms.unix;
   };
 }

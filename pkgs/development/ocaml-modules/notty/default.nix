@@ -1,35 +1,25 @@
-{ stdenv, buildOcaml, fetchFromGitHub, findlib
-, result, uucp, uuseg, uutf
-, lwt     ? null }:
+{ lib, buildDunePackage, fetchurl, cppo
+, uutf
+, lwt
+}:
 
-with stdenv.lib;
+buildDunePackage rec {
+  version = "0.2.3";
+  pname = "notty";
 
-let withLwt = lwt != null; in
+  minimalOCamlVersion = "4.08";
 
-buildOcaml rec {
-  version = "0.1.1";
-  name = "notty";
-
-  minimumSupportedOcamlVersion = "4.02";
-
-  src = fetchFromGitHub {
-    owner  = "pqwy";
-    repo   = "notty";
-    rev    = "v${version}";
-    sha256 = "0bw3bq8z2y1rhc20zn13s78sazywyzpg8nmyjch33p7ypxfglf01";
+  src = fetchurl {
+    url = "https://github.com/pqwy/notty/releases/download/v${version}/notty-${version}.tbz";
+    sha256 = "sha256-dGWfsUBz20Q4mJiRqyTyS++Bqkl9rBbZpn+aHJwgCCQ=";
   };
 
-  buildInputs = [ findlib ];
-  propagatedBuildInputs = [ result uucp uuseg uutf ] ++
-                          optional withLwt [ lwt ];
+  nativeBuildInputs = [ cppo ];
 
-  configureFlags = [ "--enable-unix" ] ++
-                   (if withLwt then ["--enable-lwt"] else ["--disable-lwt"]);
+  propagatedBuildInputs = [ lwt uutf ];
 
-  configurePhase = "./configure --prefix $out $configureFlags";
-
-  meta = {
-    inherit (src.meta) homepage;
+  meta = with lib; {
+    homepage = "https://github.com/pqwy/notty";
     description = "Declarative terminal graphics for OCaml";
     license = licenses.isc;
     maintainers = with maintainers; [ sternenseemann ];

@@ -1,33 +1,50 @@
-{stdenv, fetchurl, pkgconfig, libbsd}:
+{ lib, stdenv, fetchFromGitLab, pkg-config, libbsd, installShellFiles }:
 
 stdenv.mkDerivation rec {
-  name = "netcat-openbsd-1.105";
-  version = "1.105";
+  pname = "netcat-openbsd";
+  version = "1.219-1";
 
-  srcs = [
-    (fetchurl {
-      url = "mirror://debian/pool/main/n/netcat-openbsd/netcat-openbsd_1.105.orig.tar.gz";
-      sha256 = "07i1vcz8ycnfwsvz356rqmim8akfh8yhjzmhc5mqf5hmdkk3yra0";
-    })
-    (fetchurl {
-      url = "mirror://debian/pool/main/n/netcat-openbsd/netcat-openbsd_1.105-7.debian.tar.gz";
-      sha256 = "0qxkhbwcifrps34s5mzzg79cmkvz3f96gphd3pl978pygwr5krzf";
-    })
-  ];
-
-  buildInputs = [ pkgconfig libbsd ];
-  sourceRoot = name;
-  patches = [ "../debian/patches/*.patch" ];
-
-  installPhase = ''
-    install -Dm0755 nc $out/bin/nc
-    install -Dm0644 nc.1 $out/share/man/man1/nc.1
-  '';
-
-  meta = {
-    homepage = "http://packages.debian.org/netcat-openbsd";
-    description = "TCP/IP swiss army knife, OpenBSD variant";
-    platforms = stdenv.lib.platforms.linux;
+  src = fetchFromGitLab {
+    domain = "salsa.debian.org";
+    owner = "debian";
+    repo = "netcat-openbsd";
+    rev = "refs/tags/debian/${version}";
+    sha256 = "sha256-rN8pl3Qf0T8bXGtVH22tBpGY/EcnbgGm1G8Z2patGbo=";
   };
 
+  strictDeps = true;
+  nativeBuildInputs = [ pkg-config installShellFiles ];
+  buildInputs = [ libbsd ];
+
+  postPatch = ''
+    for file in $(cat debian/patches/series); do
+      patch -p1 < debian/patches/$file
+    done
+  '';
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/bin
+    mv nc $out/bin/nc
+    installManPage nc.1
+
+    runHook postInstall
+  '';
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/nc -h 2> /dev/null
+  '';
+
+  meta = with lib; {
+    description = "TCP/IP swiss army knife. OpenBSD variant";
+    homepage = "https://salsa.debian.org/debian/netcat-openbsd";
+    maintainers = with maintainers; [ artturin ];
+    license = licenses.bsd3;
+    platforms = platforms.unix;
+    mainProgram = "nc";
+    # never built on aarch64-darwin, x86_64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin;
+  };
 }

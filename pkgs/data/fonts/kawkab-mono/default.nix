@@ -1,27 +1,26 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "kawkab-mono-20151015";
+stdenvNoCC.mkDerivation {
+  pname = "kawkab-mono";
+  version = "20151015";
 
-  src = fetchurl {
+  src = fetchzip {
     url = "http://makkuk.com/kawkab-mono/downloads/kawkab-mono-0.1.zip";
-    sha256 = "16pv9s4q7199aacbzfi2d10rcrq77vyfvzcy42g80nhfrkz1cb0m";
+    stripRoot = false;
+    hash = "sha256-arZTzXj7Ba5G4WF3eZVGNaONhOsYVPih9iBgsN/lg14=";
   };
 
-  buildInputs = [ unzip ];
-  sourceRoot = ".";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    cp *.ttf $out/share/fonts/truetype
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
   meta = {
     description = "An arab fixed-width font";
-    homepage = "http://makkuk.com/kawkab-mono/";
-    license = stdenv.lib.licenses.ofl;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://makkuk.com/kawkab-mono/";
+    license = lib.licenses.ofl;
   };
 }
-
-

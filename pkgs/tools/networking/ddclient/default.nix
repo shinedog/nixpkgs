@@ -1,41 +1,53 @@
-{ stdenv, buildPerlPackage, fetchurl, perlPackages, iproute }:
+{ lib, fetchFromGitHub, perlPackages, autoreconfHook, perl, curl }:
 
-buildPerlPackage rec {
-  name = "ddclient-${version}";
-  version = "3.8.3";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/ddclient/${name}.tar.gz";
-    sha256 = "1j8zdn7fy7i0bjk3jf0hxnbnshc2yf054vxq64imxdpfd7n5zgfy";
-  };
+let
+  myPerl = perl.withPackages (ps: [ ps.JSONPP ]);
+in
+perlPackages.buildPerlPackage rec {
+  pname = "ddclient";
+  version = "3.11.2";
 
   outputs = [ "out" ];
 
-  buildInputs = [ perlPackages.IOSocketSSL perlPackages.DigestSHA1 ];
+  src = fetchFromGitHub {
+    owner = "ddclient";
+    repo = "ddclient";
+    rev = "v${version}";
+    sha256 = "sha256-d1G+AM28nBpMWh1QBjm78KKeOL5b5arxERYRCXohwBg=";
+  };
 
-  patches = [ ./ddclient-line-buffer-stdout.patch ];
-
-  # Use iproute2 instead of ifconfig
-  preConfigure = ''
+  postPatch = ''
     touch Makefile.PL
-    substituteInPlace ddclient --replace 'in the output of ifconfig' 'in the output of ip addr show'
-    substituteInPlace ddclient --replace 'ifconfig -a' '${iproute}/sbin/ip addr show'
-    substituteInPlace ddclient --replace 'ifconfig $arg' '${iproute}/sbin/ip addr show $arg'
   '';
+
+  nativeBuildInputs = [ autoreconfHook ];
+
+  buildInputs = [ curl myPerl ];
+
+  # Prevent ddclient from picking up build time perl which is implicitly added
+  # by buildPerlPackage.
+  configureFlags = [
+    "--with-perl=${lib.getExe myPerl}"
+  ];
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp ddclient $out/bin
+    runHook preInstall
+
+    install -Dm755 ddclient $out/bin/ddclient
+    install -Dm644 -t $out/share/doc/ddclient COP* README.* ChangeLog.md
+
+    runHook postInstall
   '';
 
+  # TODO: run upstream tests
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://sourceforge.net/p/ddclient/wiki/Home/;
+  meta = with lib; {
     description = "Client for updating dynamic DNS service entries";
+    homepage = "https://ddclient.net/";
     license = licenses.gpl2Plus;
-
-    # Mostly since `iproute` is Linux only.
     platforms = platforms.linux;
+    maintainers = with maintainers; [ bjornfor ];
+    mainProgram = "ddclient";
   };
 }

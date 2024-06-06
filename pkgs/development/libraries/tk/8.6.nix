@@ -1,13 +1,20 @@
-{ callPackage, fetchurl, tcl, stdenv, ... } @ args:
+{ lib
+, stdenv
+, callPackage
+, fetchurl
+, tcl
+, ...
+} @ args:
 
-callPackage ./generic.nix (args // rec {
+callPackage ./generic.nix (args // {
 
   src = fetchurl {
     url = "mirror://sourceforge/tcl/tk${tcl.version}-src.tar.gz";
-    sha256 = "17diivcfcwdhp4v5zi6j9nkxncccjqkivhp363c4wx5lf4d3fb6n";
+    sha256 = "sha256-LmX6BpojNlRAo8VsVWuGc7XjKig4ANjZslfj9YTOBnU=";
   };
 
-  patches = [ ./different-prefix-with-tcl.patch ] ++ stdenv.lib.optionals stdenv.isDarwin [ ./Fix-bad-install_name-for-libtk8.6.dylib.patch ];
+  patches = [
+    ./tk-8_6_13-find-library.patch
+  ];
 
 })
-

@@ -1,18 +1,33 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "libmodbus-3.0.6";
+  pname = "libmodbus";
+  version = "3.1.10";
 
-  src = fetchurl {
-    url = "http://libmodbus.org/releases/${name}.tar.gz";
-    sha256 = "1dkijjv3dq0c5vc5z5f1awm8dlssbwg6ivsnvih22pkm1zqn6v84";
+  src = fetchFromGitHub {
+    owner = "stephane";
+    repo = "libmodbus";
+    rev = "v${version}";
+    hash = "sha256-e2lB5D41a5MOmz9M90ZXfIltSOxNDOrQUpRNU2yYd1k=";
   };
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ autoreconfHook ];
+
+  configureFlags = [
+    # when cross-compiling we assume that the host system will return a valid
+    # pointer for calls to malloc(0) or realloc(0)
+    # https://www.uclibc.org/FAQ.html#gnu_malloc
+    # https://www.gnu.org/software/autoconf/manual/autoconf.html#index-AC_005fFUNC_005fMALLOC-454
+    # the upstream source should be patched to avoid needing this
+    "ac_cv_func_malloc_0_nonnull=yes"
+    "ac_cv_func_realloc_0_nonnull=yes"
+  ];
+
+  meta = with lib; {
     description = "Library to send/receive data according to the Modbus protocol";
-    homepage = http://libmodbus.org/;
+    homepage = "https://libmodbus.org/";
     license = licenses.lgpl21Plus;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     maintainers = [ maintainers.bjornfor ];
   };
 }

@@ -1,33 +1,66 @@
-{ stdenv, fetchFromGitHub, zlib, xz
-, lz4 ? null
-, lz4Support ? false
+{ lib
+, stdenv
+, fetchFromGitHub
+, help2man
+, lz4
+, lzo
+, nixosTests
+, which
+, xz
+, zlib
+, zstd
 }:
 
-assert lz4Support -> (lz4 != null);
-
 stdenv.mkDerivation rec {
-  name = "squashfs-4.4dev";
+  pname = "squashfs";
+  version = "4.6.1";
 
   src = fetchFromGitHub {
     owner = "plougher";
     repo = "squashfs-tools";
-    sha256 = "059pa2shdysr3zfmwrhq28s12zbi5nyzbpzyaf5lmspgfh1493ks";
-    rev = "9c1db6d13a51a2e009f0027ef336ce03624eac0d";
+    rev = version;
+    hash = "sha256-C/awQpp1Q/0adx3YVNTq6ruEAzcjL5G7SkOCgpvAA50=";
   };
 
-  buildInputs = [ zlib xz ]
-    ++ stdenv.lib.optional lz4Support lz4;
+  patches = [
+    # This patch adds an option to pad filesystems (increasing size) in
+    # exchange for better chunking / binary diff calculation.
+    ./4k-align.patch
+  ];
 
-  preBuild = "cd squashfs-tools";
+  strictDeps = true;
+  nativeBuildInputs = [ which ]
+    # when cross-compiling help2man cannot run the cross-compiled binary
+    ++ lib.optionals (stdenv.hostPlatform == stdenv.buildPlatform) [ help2man ];
+  buildInputs = [ zlib xz zstd lz4 lzo ];
 
-  installFlags = "INSTALL_DIR=\${out}/bin";
+  preBuild = ''
+    cd squashfs-tools
+  '' ;
 
-  makeFlags = [ "XZ_SUPPORT=1" ]
-    ++ stdenv.lib.optional lz4Support "LZ4_SUPPORT=1";
+  installFlags = [
+    "INSTALL_DIR=${placeholder "out"}/bin"
+    "INSTALL_MANPAGES_DIR=${placeholder "out"}/share/man/man1"
+  ];
 
-  meta = {
-    homepage = http://squashfs.sourceforge.net/;
+  makeFlags = [
+    "XZ_SUPPORT=1"
+    "ZSTD_SUPPORT=1"
+    "LZ4_SUPPORT=1"
+    "LZMA_XZ_SUPPORT=1"
+    "LZO_SUPPORT=1"
+  ];
+
+  passthru.tests = {
+    nixos-iso-boots-and-verifies = nixosTests.boot.biosCdrom;
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/plougher/squashfs-tools";
     description = "Tool for creating and unpacking squashfs filesystems";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = platforms.unix;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ruuda ];
+    mainProgram = "mksquashfs";
   };
 }

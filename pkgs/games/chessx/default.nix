@@ -1,36 +1,73 @@
-{ stdenv, pkgconfig, zlib, qtbase, qtsvg, qttools, qtmultimedia, qmakeHook, fetchurl }:
-stdenv.mkDerivation rec {
-  name = "chessx-${version}";
-  version = "1.4.0";
+{ stdenv
+, lib
+, pkg-config
+, zlib
+, qtbase
+, qtsvg
+, qttools
+, qtmultimedia
+, qmake
+, fetchpatch
+, fetchurl
+, wrapQtAppsHook
+}:
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "chessx";
+  version = "1.6.0";
+
   src = fetchurl {
-    url = "mirror://sourceforge/chessx/chessx-${version}.tgz";
-    sha256 = "1x10c9idj2qks8xk9dy7aw3alc5w7z1kvv6dnahs0428j0sp4a74";
+    url = "mirror://sourceforge/chessx/chessx-${finalAttrs.version}.tgz";
+    hash = "sha256-76YOe1WpB+vdEoEKGTHeaWJLpCVE4RoyYu1WLy3Dxhg=";
   };
-  buildInputs = [
-   stdenv
-   pkgconfig
-   qtbase
-   qtsvg
-   qttools
-   qtmultimedia
-   zlib
-   qmakeHook
+
+  nativeBuildInputs = [
+    pkg-config
+    qmake
+    wrapQtAppsHook
   ];
 
+  buildInputs = [
+    qtbase
+    qtmultimedia
+    qtsvg
+    qttools
+    zlib
+  ];
+
+  patches =
+    # needed to backport patches to successfully build, due to broken release
+    let
+      repo = "https://github.com/Isarhamster/chessx/";
+    in
+    [
+      (fetchpatch {
+        url = "${repo}/commit/9797d46aa28804282bd58ce139b22492ab6881e6.diff";
+        hash = "sha256-RnIf6bixvAvyp1CKuri5LhgYFqhDNiAVYWUmSUDMgVw=";
+      })
+      (fetchpatch {
+        url = "${repo}/commit/4fab4d2f649d1cae2b54464c4e28337d1f20c214.diff";
+        hash = "sha256-EJVHricN+6uabKLfn77t8c7JjO7tMmZGsj7ZyQUGcXA=";
+      })
+    ];
+
   enableParallelBuilding = true;
+
   installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/bin"
-      mkdir -p "$out/share/applications"
-      cp -pr release/chessx "$out/bin"
-      cp -pr unix/chessx.desktop "$out/share/applications"
-      runHook postInstall
+    runHook preInstall
+
+    install -Dm555 release/chessx -t "$out/bin"
+    install -Dm444 unix/chessx.desktop -t "$out/share/applications"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://chessx.sourceforge.net/;
-    description = "ChessX allows you to browse and analyse chess games";
-    license = licenses.gpl2;
-    maintainers = [maintainers.luispedro];
+  meta = with lib; {
+    homepage = "https://chessx.sourceforge.io/";
+    description = "Browse and analyse chess games";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ eclairevoyant luispedro ];
+    platforms = platforms.linux;
+    mainProgram = "chessx";
   };
-}
+})

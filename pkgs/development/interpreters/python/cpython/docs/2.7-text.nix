@@ -2,17 +2,19 @@
 
 { stdenv, fetchurl, lib }:
 
-stdenv.mkDerivation rec {
-  name = "python27-docs-text-2.7.3";
+stdenv.mkDerivation {
+  pname = "python27-docs-text";
+  version = "2.7.18";
+
   src = fetchurl {
-    url = http://docs.python.org/ftp/python/doc/2.7.3/python-2.7.3-docs-text.tar.bz2;
-    sha256 = "1rxlb3jhh3892y65i45nk1y2lx981fr22a5hmfkp9gvjvdykjnzp";
+    url = "http://www.python.org/ftp/python/doc/2.7.18/python-2.7.18-docs-text.tar.bz2";
+    sha256 = "1wj7mxs52kp5lmn5mvv574sygkfnk00kbz9ya9c03yfq5dd5nvy8";
   };
   installPhase = ''
     mkdir -p $out/share/doc/python27
     cp -R ./ $out/share/doc/python27/text
   '';
   meta = {
-    maintainers = [ lib.maintainers.chaoflow ];
+    maintainers = [ ];
   };
 }

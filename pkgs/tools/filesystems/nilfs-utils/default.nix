@@ -1,40 +1,51 @@
-{ stdenv, fetchurl, libuuid, libselinux }:
-let 
-  sourceInfo = rec {
-    version = "2.2.6";
-    url = "http://nilfs.sourceforge.net/download/nilfs-utils-${version}.tar.bz2";
-    sha256 = "1rjj6pv7yx5wm7b3w6hv88v6r53jqaam5nrnkw2and4ifhsprf3y";
-    baseName = "nilfs-utils";
-    name = "${baseName}-${version}";
-  };
-in
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, libuuid, libselinux
+, e2fsprogs }:
+
 stdenv.mkDerivation rec {
-  src = fetchurl {
-    url = sourceInfo.url;
-    sha256 = sourceInfo.sha256;
+  pname = "nilfs-utils";
+  version = "2.2.11";
+
+  src = fetchFromGitHub {
+    owner = "nilfs-dev";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-qvs0PBkMYzGfIQ/Z2Wz0aHe2Y2Ia6fA4pMSk5Jhejf4=";
   };
 
-  inherit (sourceInfo) name version;
-  buildInputs = [libuuid libselinux];
+  nativeBuildInputs = [ autoreconfHook ];
 
-  preConfigure = ''
-    sed -e '/sysconfdir=\/etc/d; ' -i configure
-    sed -e "s@sbindir=/sbin@sbindir=$out/sbin@" -i configure
-    sed -e 's@/sbin/@'"$out"'/sbin/@' -i ./lib/cleaner*.c
+  buildInputs = [ libuuid libselinux ];
+
+  postPatch = ''
+    # Fix up hardcoded paths.
+    substituteInPlace lib/cleaner_exec.c --replace /sbin/ $out/bin/
+    substituteInPlace sbin/mkfs/mkfs.c --replace /sbin/ ${lib.getBin e2fsprogs}/bin/
   '';
 
-  # FIXME: Remove after https://github.com/NixOS/patchelf/pull/98 is in
-  dontPatchELF = true;
+  # According to upstream, libmount should be detected automatically but the
+  # build system fails to do this. This is likely a bug with their build system
+  # hence it is explicitly enabled here.
+  configureFlags = [ "--with-libmount" ];
 
-  meta = {
+  installFlags = [
+    "sysconfdir=${placeholder "out"}/etc"
+    "root_sbindir=${placeholder "out"}/sbin"
+  ];
+
+  # FIXME: https://github.com/NixOS/patchelf/pull/98 is in, but stdenv
+  # still doesn't use it
+  #
+  # To make sure patchelf doesn't mistakenly keep the reference via
+  # build directory
+  postInstall = ''
+    find . -name .libs -exec rm -rf -- {} +
+  '';
+
+  meta = with lib; {
     description = "NILFS utilities";
-    maintainers = with stdenv.lib.maintainers;
-    [
-      raskin
-    ];
-    platforms = with stdenv.lib.platforms;
-      linux;
+    maintainers = [ maintainers.raskin ];
+    platforms = platforms.linux;
+    license =  with licenses; [ gpl2Plus lgpl21 ];
     downloadPage = "http://nilfs.sourceforge.net/en/download.html";
-    updateWalker = true;
   };
 }

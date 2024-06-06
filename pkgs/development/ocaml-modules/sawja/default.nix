@@ -1,39 +1,46 @@
-{stdenv, fetchurl, which, perl, ocaml, findlib, javalib, camlp4 }:
-
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "3.12";
+{ lib, stdenv, fetchFromGitHub, which, ocaml, findlib, javalib }:
 
 let
   pname = "sawja";
-  version = "1.5";
-  webpage = "http://sawja.inria.fr/";
+  version = "1.5.12";
 in
-stdenv.mkDerivation rec {
 
-  name = "ocaml-${pname}-${version}";
+lib.throwIfNot (lib.versionAtLeast ocaml.version "4.08")
+  "${pname} is not available for OCaml ${ocaml.version}"
 
-  src = fetchurl {
-    url = "https://gforge.inria.fr/frs/download.php/33091/${pname}-${version}.tar.bz2";
-    sha256 = "0i8qgqkw9vgj6k2g6npss268ivxdkzx5qj2a52jbd8ih59rn68cm";
+stdenv.mkDerivation {
+
+  pname = "ocaml${ocaml.version}-${pname}";
+
+  inherit version;
+
+  src = fetchFromGitHub {
+    owner = "javalib-team";
+    repo = pname;
+    rev = version;
+    hash = "sha256-G1W8/G0TEcldnFnH/NAb9a6ZSGGP2fWTM47lI8bBHnw=";
   };
 
-  buildInputs = [ which perl ocaml findlib camlp4 ];
+  nativeBuildInputs = [ which ocaml findlib ];
+
+  strictDeps = true;
 
   patches = [ ./configure.sh.patch ./Makefile.config.example.patch ];
 
   createFindlibDestdir = true;
 
-  preConfigure = "patchShebangs ./configure.sh";
-
   configureScript = "./configure.sh";
   dontAddPrefix = "true";
+  dontAddStaticConfigureFlags = true;
+  configurePlatforms = [];
 
   propagatedBuildInputs = [ javalib ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library written in OCaml, relying on Javalib to provide a high level representation of Java bytecode programs";
-    homepage = "${webpage}";
+    homepage = "http://sawja.inria.fr/";
     license = licenses.gpl3Plus;
     maintainers = [ maintainers.vbgl ];
-    platforms = ocaml.meta.platforms or [];
+    inherit (ocaml.meta) platforms;
   };
 }

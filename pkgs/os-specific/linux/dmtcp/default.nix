@@ -1,35 +1,39 @@
-{stdenv, fetchurl, perl, python}:
-# Perl and Python required by the test suite.
+{ lib, stdenv, fetchFromGitHub, bash, perl, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "dmtcp-${version}";
+  pname = "dmtcp";
+  version = "unstable-2022-02-28";
 
-  version = "2.3.1";
-
-  buildInputs = [ perl python ];
-
-  src = fetchurl {
-    url = "mirror://sourceforge/dmtcp/dmtcp-${version}.tar.gz";
-    sha256 = "1f83ae112e102d4fbf69dded0dfaa6daeb60c4c0c569297553785a876e95ba15";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "133687764c6742906006a1d247e3b83cd860fa1d";
+    hash = "sha256-9Vr8IhoeATCfyt7Lp7kYe/7e87mFX9KMNGTqxJgIztE=";
   };
 
-  preConfigure = ''
-    substituteInPlace src/dmtcp_coordinator.cpp \
+  dontDisableStatic = true;
+
+  patches = [ ./ld-linux-so-buffer-size.patch ];
+
+  postPatch = ''
+    patchShebangs .
+
+    substituteInPlace configure \
+      --replace '#define ELF_INTERPRETER "$interp"' \
+                "#define ELF_INTERPRETER \"$(cat $NIX_CC/nix-support/dynamic-linker)\""
+    substituteInPlace src/restartscript.cpp \
       --replace /bin/bash ${stdenv.shell}
-    substituteInPlace util/gdb-add-symbol-file \
+    substituteInPlace util/dmtcp_restart_wrapper.sh \
       --replace /bin/bash ${stdenv.shell}
     substituteInPlace test/autotest.py \
-      --replace /usr/bin/env $(type -p env) \
-      --replace /bin/bash $(type -p bash) \
-      --replace /usr/bin/perl $(type -p perl) \
-      --replace /usr/bin/python $(type -p python) \
+      --replace /bin/bash ${bash}/bin/bash \
+      --replace /usr/bin/perl ${perl}/bin/perl \
+      --replace /usr/bin/python ${python3.interpreter} \
       --replace "os.environ['USER']" "\"nixbld1\"" \
       --replace "os.getenv('USER')" "\"nixbld1\""
   '';
 
-  doCheck = false;
-
-  meta = {
+  meta = with lib; {
     description = "Distributed MultiThreaded Checkpointing";
     longDescription = ''
       DMTCP (Distributed MultiThreaded Checkpointing) is a tool to
@@ -37,7 +41,8 @@ stdenv.mkDerivation rec {
       programs spread across many machines and connected by sockets. It does
       not modify the user's program or the operating system.
     '';
-    homepage = http://dmtcp.sourceforge.net/;
-    license = stdenv.lib.licenses.lgpl3Plus; # most files seem this or LGPL-2.1+
+    homepage = "http://dmtcp.sourceforge.net/";
+    license = licenses.lgpl3Plus; # most files seem this or LGPL-2.1+
+    platforms = intersectLists platforms.linux platforms.x86; # broken on ARM and Darwin
   };
 }

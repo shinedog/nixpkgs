@@ -1,44 +1,35 @@
-{ fetchurl, stdenv, autoconf, automake, libtool, pkgconfig, openwsman, openssl }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
+, openssl, openwsman }:
 
 stdenv.mkDerivation rec {
-  version = "2.6.0";
-  name = "wsmancli-${version}";
+  pname = "wsmancli";
+  version = "2.6.2";
 
-  src = fetchurl {
-    url = "https://github.com/Openwsman/wsmancli/archive/v${version}.tar.gz";
-    sha256 = "03ay6sa4ii8h6rr3l2qiqqml8xl6gplrlg4v2avdh9y6sihfyvvn";
+  src = fetchFromGitHub {
+    owner  = "Openwsman";
+    repo   = "wsmancli";
+    rev    = "v${version}";
+    sha256 = "sha256-A2PVhQuKVTZ/nDKyy+vZVBNLB/3xujBYBzUEWcTIYYg=";
   };
 
-  buildInputs = [ autoconf automake libtool pkgconfig openwsman openssl ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
 
-  preConfigure = ''
-    ./bootstrap
+  buildInputs = [ openwsman openssl ];
 
-    configureFlagsArray=(
-      LIBS="-L${openssl.out}/lib -lssl -lcrypto"
-    )
+  postPatch = ''
+    touch AUTHORS NEWS README
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Openwsman command-line client";
-
-    longDescription =
-      '' Openwsman provides a command-line tool, wsman, to perform basic
-         operations on the command-line. These operations include Get, Put,
-         Invoke, Identify, Delete, Create, and Enumerate. The command-line tool
-         also has several switches to allow for optional features of the
-         WS-Management specification and Testing.
-      '';
-
-    homepage = https://github.com/Openwsman/wsmancli;
+    longDescription = ''
+      Openwsman provides a command-line tool, wsman, to perform basic
+      operations on the command-line. These operations include Get, Put,
+      Invoke, Identify, Delete, Create, and Enumerate. The command-line tool
+      also has several switches to allow for optional features of the
+      WS-Management specification and Testing.
+    '';
     downloadPage = "https://github.com/Openwsman/wsmancli/releases";
-
-    maintainers = [ stdenv.lib.maintainers.deepfire ];
-
-    license = stdenv.lib.licenses.bsd3;
-
-    platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
-
-    inherit version;
+    inherit (openwsman.meta) homepage license maintainers platforms;
   };
 }

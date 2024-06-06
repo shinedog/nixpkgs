@@ -1,22 +1,33 @@
-{ stdenv, fetchurl, pkgconfig, dbus_libs, nettle, libidn, libnetfilter_conntrack }:
+{ lib, stdenv, fetchurl, pkg-config, nettle
+, libidn, libnetfilter_conntrack, nftables, buildPackages
+, dbusSupport ? stdenv.isLinux
+, dbus
+, nixosTests
+}:
 
-with stdenv.lib;
 let
-  copts = concatStringsSep " " ([
+  copts = lib.concatStringsSep " " ([
     "-DHAVE_IDN"
     "-DHAVE_DNSSEC"
-  ] ++ optionals stdenv.isLinux [
+  ] ++ lib.optionals dbusSupport [
     "-DHAVE_DBUS"
+  ] ++ lib.optionals stdenv.isLinux [
     "-DHAVE_CONNTRACK"
+    "-DHAVE_NFTSET"
   ]);
 in
 stdenv.mkDerivation rec {
-  name = "dnsmasq-2.76";
+  pname = "dnsmasq";
+  version = "2.90";
 
   src = fetchurl {
-    url = "http://www.thekelleys.org.uk/dnsmasq/${name}.tar.xz";
-    sha256 = "15lzih6671gh9knzpl8mxchiml7z5lfqzr7jm2r0rjhrxs6nk4jb";
+    url = "https://www.thekelleys.org.uk/dnsmasq/${pname}-${version}.tar.xz";
+    hash = "sha256-jlAwm9g3v+yWSagS4GbAm2mItz10m30pPAbFfUahCeQ=";
   };
+
+  postPatch = lib.optionalString stdenv.hostPlatform.isLinux ''
+    sed '1i#include <linux/sockios.h>' -i src/dhcp.c
+  '';
 
   preBuild = ''
     makeFlagsArray=("COPTS=${copts}")
@@ -27,11 +38,12 @@ stdenv.mkDerivation rec {
     "BINDIR=$(out)/bin"
     "MANDIR=$(out)/man"
     "LOCALEDIR=$(out)/share/locale"
+    "PKG_CONFIG=${buildPackages.pkg-config}/bin/${buildPackages.pkg-config.targetPrefix}pkg-config"
   ];
 
   hardeningEnable = [ "pie" ];
 
-  postBuild = optionalString stdenv.isLinux ''
+  postBuild = lib.optionalString stdenv.isLinux ''
     make -C contrib/lease-tools
   '';
 
@@ -39,12 +51,18 @@ stdenv.mkDerivation rec {
   # module can create it in Nix-land?
   postInstall = ''
     install -Dm644 trust-anchors.conf $out/share/dnsmasq/trust-anchors.conf
-  '' + optionalString stdenv.isLinux ''
-    install -Dm644 dbus/dnsmasq.conf $out/etc/dbus-1/system.d/dnsmasq.conf
+  '' + lib.optionalString stdenv.isDarwin ''
+    install -Dm644 contrib/MacOSX-launchd/uk.org.thekelleys.dnsmasq.plist \
+      $out/Library/LaunchDaemons/uk.org.thekelleys.dnsmasq.plist
+    substituteInPlace $out/Library/LaunchDaemons/uk.org.thekelleys.dnsmasq.plist \
+      --replace "/usr/local/sbin" "$out/bin"
+  '' + lib.optionalString stdenv.isLinux ''
     install -Dm755 contrib/lease-tools/dhcp_lease_time $out/bin/dhcp_lease_time
     install -Dm755 contrib/lease-tools/dhcp_release $out/bin/dhcp_release
     install -Dm755 contrib/lease-tools/dhcp_release6 $out/bin/dhcp_release6
 
+  '' + lib.optionalString dbusSupport ''
+    install -Dm644 dbus/dnsmasq.conf $out/share/dbus-1/system.d/dnsmasq.conf
     mkdir -p $out/share/dbus-1/system-services
     cat <<END > $out/share/dbus-1/system-services/uk.org.thekelleys.dnsmasq.service
     [D-BUS Service]
@@ -55,15 +73,26 @@ stdenv.mkDerivation rec {
     END
   '';
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [ nettle libidn ]
-    ++ optionals stdenv.isLinux [ dbus_libs libnetfilter_conntrack ];
+    ++ lib.optionals dbusSupport [ dbus ]
+    ++ lib.optionals stdenv.isLinux [ libnetfilter_conntrack nftables ];
 
-  meta = {
+  passthru.tests = {
+    prometheus-exporter = nixosTests.prometheus-exporters.dnsmasq;
+
+    # these tests use dnsmasq incidentally
+    inherit (nixosTests) dnscrypt-proxy2;
+    kubernetes-dns-single = nixosTests.kubernetes.dns-single-node;
+    kubernetes-dns-multi = nixosTests.kubernetes.dns-multi-node;
+  };
+
+  meta = with lib; {
     description = "An integrated DNS, DHCP and TFTP server for small networks";
-    homepage = http://www.thekelleys.org.uk/dnsmasq/doc.html;
-    license = licenses.gpl2;
+    homepage = "https://www.thekelleys.org.uk/dnsmasq/doc.html";
+    license = licenses.gpl2Only;
+    mainProgram = "dnsmasq";
     platforms = with platforms; linux ++ darwin;
-    maintainers = with maintainers; [ eelco fpletz ];
+    maintainers = with maintainers; [ eelco fpletz globin ];
   };
 }

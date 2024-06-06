@@ -1,33 +1,48 @@
-{ stdenv, fetchgit, openssl, doxygen, boost, sqlite, cryptopp, pkgconfig, python, pythonPackages }:
-let
-  version = "4c32e7";
-in
-stdenv.mkDerivation {
-  name = "ndn-cxx-0.1-${version}";
-  src = fetchgit {
-    url = "https://github.com/named-data/ndn-cxx.git";
-    rev = "4c32e748863d5165cc0e3d6b54a8383f4836cdf1";
-    sha256 = "18szs3j3ig8wlcqngran0daxaj7j2qsmch0212ids6fymj1hgax4";
+{ lib
+, stdenv
+, fetchFromGitHub
+, doxygen
+, pkg-config
+, python3
+, python3Packages
+, wafHook
+, boost179
+, openssl
+, sqlite
+}:
+
+stdenv.mkDerivation rec {
+  pname = "ndn-cxx";
+  version = "0.8.1";
+
+  src = fetchFromGitHub {
+    owner = "named-data";
+    repo = "ndn-cxx";
+    rev = "${pname}-${version}";
+    sha256 = "sha256-nnnxlkYVTSRB6ZcuIUDFol999+amGtqegHXK+06ITK8=";
   };
-  buildInputs = [ openssl doxygen boost sqlite cryptopp pkgconfig python pythonPackages.sphinx];
-  preConfigure = ''
-    patchShebangs waf
-    ./waf configure \
-      --with-cryptopp=${cryptopp} \
-      --boost-includes=${boost.dev}/include \
-      --boost-libs=${boost.out}/lib \
-      --with-examples \
-      --prefix=$out
+
+  nativeBuildInputs = [ doxygen pkg-config python3 python3Packages.sphinx wafHook ];
+
+  buildInputs = [ boost179 openssl sqlite ];
+
+  wafConfigureFlags = [
+    "--with-openssl=${openssl.dev}"
+    "--boost-includes=${boost179.dev}/include"
+    "--boost-libs=${boost179.out}/lib"
+    "--with-tests"
+  ];
+
+  doCheck = false; # some tests fail in upstream, some fail because of the sandbox environment
+  checkPhase = ''
+    runHook preCheck
+    LD_PRELOAD=build/libndn-cxx.so build/unit-tests
+    runHook postCheck
   '';
-  buildPhase = ''
-    ./waf
-  '';
-  installPhase = ''
-    ./waf install
-  '';
-  meta = with stdenv.lib; {
-    homepage = "http://named-data.net/";
-    description = "A Named Data Neworking (NDN) or Content Centric Networking (CCN) abstraction";
+
+  meta = with lib; {
+    homepage = "https://named-data.net/";
+    description = "A Named Data Networking (NDN) or Content Centric Networking (CCN) abstraction";
     longDescription = ''
       ndn-cxx is a C++ library, implementing Named Data Networking (NDN)
       primitives that can be used to implement various NDN applications.
@@ -42,7 +57,7 @@ stdenv.mkDerivation {
       and consuming less resources overall.
     '';
     license = licenses.lgpl3;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ maintainers.sjmackenzie ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ sjmackenzie bertof ];
   };
 }

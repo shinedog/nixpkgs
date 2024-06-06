@@ -1,43 +1,40 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, fetchzip, stdenvNoCC }:
 
-stdenv.mkDerivation rec {
-  name = "raleway-${version}";
-  version = "2016-08-30";
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "raleway";
+  version = "4.101";
 
-  src = fetchFromGitHub {
-    owner = "impallari";
-    repo = "Raleway";
-    rev = "fa27f47b087fc093c6ae11cfdeb3999ac602929a";
-    sha256 = "1i6a14ynm29gqjr7kfk118v69vjpd3g4ylwfvhwa66xax09jkhlr";
+  src = fetchzip {
+    url = "https://github.com/theleagueof/raleway/releases/download/${finalAttrs.version}/Raleway-${finalAttrs.version}.tar.xz";
+    hash = "sha256-itNHIMoRjiaqYAJoDNetkCquv47VAfel8MAzwsd//Ww=";
   };
-  dontBuild = true;
 
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    cp "$src/fonts/OTF v3.000 Fontlab"/*.otf $out/share/fonts/opentype
-    find -type f -maxdepth 1 -exec cp "{}" $out/ \;
+    runHook preInstall
+
+    install -D -m444 -t $out/share/fonts/truetype $src/static/TTF/*.ttf
+    install -D -m444 -t $out/share/fonts/opentype $src/static/OTF/*.otf
+
+    runHook postInstall
   '';
 
   meta = {
     description = "Raleway is an elegant sans-serif typeface family";
-
     longDescription = ''
       Initially designed by Matt McInerney as a single thin weight, it was
       expanded into a 9 weight family by Pablo Impallari and Rodrigo Fuenzalida
-      in 2012 and iKerned by Igino Marini. In 2013 the Italics where added.
+      in 2012 and iKerned by Igino Marini. In 2013 the Italics where added, and
+      most recently — a variable version.
 
-      It is a display face and the download features both old style and lining
-      numerals, standard and discretionary ligatures, a pretty complete set of
-      diacritics, as well as a stylistic alternate inspired by more geometric
-      sans-serif typefaces than its neo-grotesque inspired default character
-      set.
+      It features both old style and lining numerals, standard and
+      discretionary ligatures, a pretty complete set of diacritics, as well as
+      a stylistic alternate inspired by more geometric sans-serif typefaces
+      than its neo-grotesque inspired default character set.
 
       It also has a sister display family, Raleway Dots.
     '';
-
-    homepage = src.meta.homepage;
-    license = stdenv.lib.licenses.ofl;
-
-    maintainers = with stdenv.lib.maintainers; [ profpatsch ];
+    homepage = "https://www.theleagueofmoveabletype.com/raleway";
+    license = lib.licenses.ofl;
+    maintainers = with lib.maintainers; [ minijackson ];
   };
-}
+})

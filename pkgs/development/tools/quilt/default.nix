@@ -1,24 +1,53 @@
-{ stdenv, fetchurl, pkgs}:
-
-with pkgs;
+{ lib
+, stdenv
+, fetchurl
+, makeWrapper
+, bash
+, coreutils
+, diffstat
+, diffutils
+, findutils
+, gawk
+, gnugrep
+, gnused
+, patch
+, perl
+, unixtools
+}:
 
 stdenv.mkDerivation rec {
-  name = "quilt-0.63";
+
+  pname = "quilt";
+  version = "0.68";
 
   src = fetchurl {
-    url = "mirror://savannah/quilt/${name}.tar.gz";
-    sha256 = "2846788221aa8844c54f10239c7cbc5e88031859162bcc285449446c3cfffe52";
+    url = "mirror://savannah/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-/owJ3gPBBuhbNzfI8DreFHyVa3ntevSFocijhY2zhCY=";
   };
 
-  buildInputs = [ makeWrapper perl bash diffutils patch findutils diffstat ];
+  nativeBuildInputs = [ makeWrapper ];
+
+  buildInputs = [
+    bash
+    coreutils
+    diffstat
+    diffutils
+    findutils
+    gawk
+    gnugrep
+    gnused
+    patch
+    perl
+    unixtools.column
+    unixtools.getopt
+  ];
 
   postInstall = ''
-    wrapProgram $out/bin/quilt --prefix PATH : \
-      ${perl}/bin:${bash}/bin:${diffstat}/bin:${diffutils}/bin:${findutils}/bin:${patch}/bin
+    wrapProgram $out/bin/quilt --prefix PATH : ${lib.makeBinPath buildInputs}
   '';
 
-  meta = {
-    homepage = http://savannah.nongnu.org/projects/quilt;
+  meta = with lib; {
+    homepage = "https://savannah.nongnu.org/projects/quilt";
     description = "Easily manage large numbers of patches";
 
     longDescription = ''
@@ -28,7 +57,9 @@ stdenv.mkDerivation rec {
       and more.
     '';
 
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.all;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ smancill ];
+    platforms = platforms.all;
   };
+
 }

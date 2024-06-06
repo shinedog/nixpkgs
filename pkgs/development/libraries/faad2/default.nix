@@ -1,25 +1,42 @@
-{stdenv, fetchurl
-, drmSupport ? false # Digital Radio Mondiale
+{lib
+, stdenv
+, fetchFromGitHub
+, cmake
+
+# for passthru.tests
+, gst_all_1
+, mpd
+, ocamlPackages
+, vlc
 }:
 
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "faad2-${version}";
-  version = "2.7";
+  pname = "faad2";
+  version = "2.11.1";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/faac/${name}.tar.bz2";
-    sha256 = "1db37ydb6mxhshbayvirm5vz6j361bjim4nkpwjyhmy4ddfinmhl";
+  src = fetchFromGitHub {
+    owner = "knik0";
+    repo = "faad2";
+    rev = version;
+    hash = "sha256-E6oe7yjYy1SJo8xQkyUk1sSucKDMPxwUFVSAyrf4Pd8=";
   };
 
-  configureFlags = []
-    ++ optional drmSupport "--with-drm";
+  outputs = [ "out" "dev" "man" ];
 
-  meta = {
+  nativeBuildInputs = [ cmake ];
+
+  passthru.tests = {
+    inherit mpd vlc;
+    inherit (gst_all_1) gst-plugins-bad;
+    ocaml-faad = ocamlPackages.faad;
+  };
+
+  meta = with lib; {
     description = "An open source MPEG-4 and MPEG-2 AAC decoder";
-    homepage    = http://www.audiocoding.com/faad2.html;
-    license     = licenses.gpl2;
+    homepage = "https://sourceforge.net/projects/faac/";
+    license     = licenses.gpl2Plus;
     maintainers = with maintainers; [ codyopel ];
+    mainProgram = "faad";
     platforms   = platforms.all;
   };
 }

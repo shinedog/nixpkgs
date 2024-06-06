@@ -1,21 +1,23 @@
-{stdenv, fetchurl}:
+{lib, stdenv, fetchurl}:
 
 stdenv.mkDerivation rec {
-  name = "ii-1.7";
-  
+  pname = "ii";
+  version = "2.0";
+
   src = fetchurl {
-    url = "http://dl.suckless.org/tools/${name}.tar.gz";
-    sha256 = "176cqwnn6h7w4kbfd66hzqa243l26pqp2b06bii0nmnm0rkaqwis";
+    url = "https://dl.suckless.org/tools/${pname}-${version}.tar.gz";
+    sha256 = "sha256-T2evzSCMB5ObiKrb8hSXpwKtCgf5tabOhh+fOf/lQls=";
   };
 
-  installPhase = ''
-    make install PREFIX=$out
-  '';
+  makeFlags = [ "CC:=$(CC)" ];
+
+  installFlags = [ "PREFIX=$(out)" ];
 
   meta = {
-    homepage = http://tools.suckless.org/ii/;
-    license = stdenv.lib.licenses.mit;
+    homepage = "https://tools.suckless.org/ii/";
+    license = lib.licenses.mit;
     description = "Irc it, simple FIFO based irc client";
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "ii";
+    platforms = lib.platforms.unix;
   };
 }

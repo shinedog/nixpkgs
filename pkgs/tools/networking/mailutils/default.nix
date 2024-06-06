@@ -1,32 +1,122 @@
-{ fetchurl, stdenv, gettext, gdbm, libtool, pam, readline
-, ncurses, gnutls, sasl, fribidi, gss , mysql, guile, texinfo,
-  gnum4, dejagnu, nettools }:
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, autoreconfHook
+, dejagnu
+, gettext
+, gnum4
+, pkg-config
+, texinfo
+, fribidi
+, gdbm
+, gnutls
+, gss
+, guile_2_2
+, libmysqlclient
+, mailcap
+, nettools
+, pam
+, readline
+, ncurses
+, python3
+, sasl
+, system-sendmail
+, libxcrypt
+, mkpasswd
+
+, pythonSupport ? true
+, guileSupport ? true
+}:
 
 stdenv.mkDerivation rec {
-  name = "mailutils-2.2";
+  pname = "mailutils";
+  version = "3.17";
 
   src = fetchurl {
-    url = "mirror://gnu/mailutils/${name}.tar.bz2";
-    sha256 = "0szbqa12zqzldqyw97lxqax3ja2adis83i7brdfsxmrfw68iaf65";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.xz";
+    hash = "sha256-+km6zsN1Zv5S+IIh04cWc6Yzru4M2SPMOo5lu+8rhOk=";
   };
 
-  hardeningDisable = [ "format" ];
+  separateDebugInfo = true;
 
-  patches = [ ./path-to-cat.patch ./no-gets.patch ./scm_c_string.patch ];
+  postPatch = ''
+    sed -i -e '/chown root:mail/d' \
+           -e 's/chmod [24]755/chmod 0755/' \
+      */Makefile{.in,.am}
+    sed -i 's:/usr/lib/mysql:${libmysqlclient}/lib/mysql:' configure.ac
+  '';
 
-  configureFlags = [
-    "--with-gsasl"
-    "--with-gssapi=${gss}"
+  nativeBuildInputs = [
+    autoreconfHook
+    gettext
+    gnum4
+    pkg-config
+    texinfo
   ];
 
-  buildInputs =
-   [ gettext gdbm libtool pam readline ncurses
-     gnutls mysql.lib guile texinfo gnum4 sasl fribidi gss nettools ]
-   ++ stdenv.lib.optional doCheck dejagnu;
+  buildInputs = [
+    fribidi
+    gdbm
+    gnutls
+    gss
+    libmysqlclient
+    mailcap
+    ncurses
+    pam
+    readline
+    sasl
+    libxcrypt
+  ] ++ lib.optionals stdenv.isLinux [ nettools ]
+  ++ lib.optionals pythonSupport [ python3 ]
+  ++ lib.optionals guileSupport [ guile_2_2 ];
 
-  doCheck = true;
+  patches = [
+    ./fix-build-mb-len-max.patch
+    ./path-to-cat.patch
+    # Fix cross-compilation
+    # https://lists.gnu.org/archive/html/bug-mailutils/2020-11/msg00038.html
+    (fetchpatch {
+      url = "https://lists.gnu.org/archive/html/bug-mailutils/2020-11/txtiNjqcNpqOk.txt";
+      sha256 = "0ghzqb8qx2q8cffbvqzw19mivv7r5f16whplzhm7hdj0j2i6xf6s";
+    })
+    # https://github.com/NixOS/nixpkgs/issues/223967
+    # https://lists.gnu.org/archive/html/bug-mailutils/2023-04/msg00000.html
+    ./don-t-use-descrypt-password-in-the-test-suite.patch
+  ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+  hardeningDisable = [ "format" ];
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--with-gssapi"
+    "--with-gsasl"
+    "--with-mysql"
+    "--with-path-sendmail=${system-sendmail}/bin/sendmail"
+    "--with-mail-rc=/etc/mail.rc"
+    "DEFAULT_CUPS_CONFDIR=${mailcap}/etc" # provides mime.types to mimeview
+  ] ++ lib.optional (!pythonSupport) "--without-python"
+    ++ lib.optional (!guileSupport) "--without-guile";
+
+  nativeCheckInputs = [ dejagnu mkpasswd ];
+  doCheck = !stdenv.isDarwin; # ERROR: All 46 tests were run, 46 failed unexpectedly.
+  doInstallCheck = false; # fails
+
+  preCheck = ''
+    # Disable comsat tests that fail without tty in the sandbox.
+    tty -s || echo > comsat/tests/testsuite.at
+    # Remove broken macro
+    sed -i '/AT_TESTED/d' libmu_scm/tests/testsuite.at
+    # Provide libraries for mhn.
+    export LD_LIBRARY_PATH=$(pwd)/lib/.libs
+  '';
+
+  postCheck = ''
+    unset LD_LIBRARY_PATH
+  '';
+
+  meta = with lib; {
     description = "Rich and powerful protocol-independent mail framework";
 
     longDescription = ''
@@ -44,9 +134,8 @@ stdenv.mkDerivation rec {
       Scheme.
 
       The utilities provided by Mailutils include imap4d and pop3d mail
-      servers, mail reporting utility comsatd, general-purpose mail delivery
-      agent maidag, mail filtering program sieve, and an implementation of MH
-      message handling system.
+      servers, mail reporting utility comsatd, mail filtering program sieve,
+      and an implementation of MH message handling system.
     '';
 
     license = with licenses; [
@@ -54,11 +143,12 @@ stdenv.mkDerivation rec {
       gpl3Plus /* tools */
     ];
 
-    maintainers = with maintainers; [ vrthra ];
+    maintainers = with maintainers; [ orivej vrthra ];
 
-    homepage = http://www.gnu.org/software/mailutils/;
+    homepage = "https://www.gnu.org/software/mailutils/";
+    changelog = "https://git.savannah.gnu.org/cgit/mailutils.git/tree/NEWS";
 
     # Some of the dependencies fail to build on {cyg,dar}win.
-    platforms = platforms.gnu;
+    platforms = platforms.gnu ++ platforms.unix;
   };
 }

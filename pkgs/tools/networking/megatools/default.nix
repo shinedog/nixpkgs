@@ -1,31 +1,51 @@
-{ stdenv, fetchurl, pkgconfig, glib, fuse, curl, glib_networking, gsettings_desktop_schemas
-, makeWrapper }:
+{ lib
+, stdenv
+, fetchgit
+, asciidoc
+, docbook_xml_dtd_45
+, docbook2x
+, libxml2
+, meson
+, ninja
+, pkg-config
+, curl
+, glib
+, fuse
+}:
 
 stdenv.mkDerivation rec {
-  name = "megatools-${version}";
-  version = "1.9.97";
+  pname = "megatools";
+  version = "1.11.0";
 
-  src = fetchurl {
-    url = "http://megatools.megous.com/builds/${name}.tar.gz";
-    sha256 = "1wssf8f2ndh43sdzcfc644azqa7bjppl3b9s26mz1pjswmpca5ik";
+  src = fetchgit {
+    url = "https://megous.com/git/megatools";
+    rev = version;
+    sha256 = "sha256-Q9hMJBQBenufubbmeAw8Q8w+Oo+UcZLWathKNDwTv3s=";
   };
 
-  buildInputs = [ pkgconfig glib fuse curl makeWrapper
-      gsettings_desktop_schemas ];
+  nativeBuildInputs = [
+    asciidoc
+    docbook_xml_dtd_45
+    docbook2x
+    libxml2
+    meson
+    ninja
+    pkg-config
+  ];
 
-  postInstall = ''
-    for i in $(find $out/bin/ -type f); do
-      wrapProgram "$i" \
-            --prefix GIO_EXTRA_MODULES : "${glib_networking.out}/lib/gio/modules" \
-            --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH"
-    done
-  '';
+  buildInputs = [
+    curl
+    glib
+  ] ++ lib.optionals stdenv.isLinux [ fuse ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+  strictDeps = true;
+
+  meta = with lib; {
     description = "Command line client for Mega.co.nz";
-    homepage = http://megatools.megous.com/;
+    homepage = "https://megatools.megous.com/";
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.viric maintainers.AndersonTorres ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ viric AndersonTorres ];
+    platforms = platforms.unix;
   };
 }

@@ -1,44 +1,71 @@
-{ stdenv, fetchFromGitHub, gnat, zlib, llvm_35, ncurses, clang, flavour ? "mcode" }:
+{ stdenv
+, fetchFromGitHub
+, callPackage
+, gnat
+, zlib
+, llvm
+, lib
+, backend ? "mcode"
+}:
 
-# mcode only works on x86, while the llvm flavour works on both x86 and x86_64.
+assert backend == "mcode" || backend == "llvm";
 
-
-assert flavour == "llvm" || flavour == "mcode";
-
-let
-  inherit (stdenv.lib) optional;
-  inherit (stdenv.lib) optionals;
-  version = "0.33";
-in
-stdenv.mkDerivation rec {
-  name = "ghdl-${flavour}-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ghdl-${backend}";
+  version = "4.1.0";
 
   src = fetchFromGitHub {
-    owner = "tgingold";
-    repo = "ghdl";
-    rev = "v${version}";
-    sha256 = "0g72rk2yzr0lrpncq2c1qcv71w3mi2hjq84r1yzgjr6d0qm87r2a";
+    owner  = "ghdl";
+    repo   = "ghdl";
+    rev    = "v${finalAttrs.version}";
+    hash   = "sha256-tPSHer3qdtEZoPh9BsEyuTOrXgyENFUyJqnUS3UYAvM=";
   };
 
-  buildInputs = [ gnat zlib ] ++ optionals (flavour == "llvm") [ clang ncurses ];
+  LIBRARY_PATH = "${stdenv.cc.libc}/lib";
 
-  configureFlags = optional (flavour == "llvm") "--with-llvm=${llvm_35}";
+  nativeBuildInputs = [
+    gnat
+  ];
+  buildInputs = [
+    zlib
+  ] ++ lib.optionals (backend == "llvm") [
+    llvm
+  ];
+  propagatedBuildInputs = [
+  ] ++ lib.optionals (backend == "llvm") [
+    zlib
+  ];
 
-  patchPhase = ''
-    # Disable warnings-as-errors, because there are warnings (unused things)
-    sed -i s/-gnatwae/-gnatwa/ Makefile.in ghdl.gpr.in
+  preConfigure = ''
+    # If llvm 7.0 works, 7.x releases should work too.
+    sed -i 's/check_version  7.0/check_version  7/g' configure
   '';
 
-  hardeningDisable = [ "all" ];
+  configureFlags = [
+    # See https://github.com/ghdl/ghdl/pull/2058
+    "--disable-werror"
+    "--enable-synth"
+  ] ++ lib.optionals (backend == "llvm") [
+    "--with-llvm-config=${llvm.dev}/bin/llvm-config"
+  ];
 
   enableParallelBuilding = true;
 
-  meta = {
-    homepage = "http://sourceforge.net/p/ghdl-updates/wiki/Home/";
-    description = "Free VHDL simulator";
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = with stdenv.lib.platforms; (if flavour == "llvm" then [ "i686-linux" "x86_64-linux" ]
-      else [ "i686-linux" ]);
-    license = stdenv.lib.licenses.gpl2Plus;
+  passthru = {
+    # run with either of
+    # nix-build -A ghdl-mcode.passthru.tests
+    # nix-build -A ghdl-llvm.passthru.tests
+    tests = {
+      simple = callPackage ./test-simple.nix { inherit backend; };
+    };
   };
-}
+
+  meta = {
+    homepage = "https://github.com/ghdl/ghdl";
+    description = "VHDL 2008/93/87 simulator";
+    license = lib.licenses.gpl2Plus;
+    mainProgram = "ghdl";
+    maintainers = with lib.maintainers; [ lucus16 thoughtpolice ];
+    platforms = lib.platforms.linux;
+  };
+})

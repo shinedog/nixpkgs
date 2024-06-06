@@ -1,48 +1,59 @@
-{ stdenv, lib, fetchurl, dpkg, patchelf, qt4, libXtst, libXext, libX11, makeWrapper, libXScrnSaver }:
+{ stdenv, lib, fetchurl, dpkg, patchelf, qt5, libXtst, libXext, libX11, mkDerivation, libXScrnSaver, writeScript, common-updater-scripts, curl, pup }:
 
 let
+  version = "2.16.5.1";
   src =
-    if stdenv.system == "i686-linux" then fetchurl {
+    if stdenv.hostPlatform.system == "i686-linux" then fetchurl {
       name = "rescuetime-installer.deb";
-      url = "https://www.rescuetime.com/installers/rescuetime_current_i386.deb";
-      sha256 = "1wi9ikwmc9jfilj8adad3rcb7rmmxkpkfcp2gkfxvdyw6n0mzcnf";
+      url = "https://www.rescuetime.com/installers/rescuetime_${version}_i386.deb";
+      sha256 = "1xrvyy0higc1fbc8ascpaszvg2bl6x0a35bzmdq6dkay48hnrd8b";
     } else fetchurl {
       name = "rescuetime-installer.deb";
-      url = "https://www.rescuetime.com/installers/rescuetime_current_amd64.deb";
-      sha256 = "074yivz7rz1ac1962dix0aahpyqvsrkizh32kk5hyw5az0vqpcjs";
+      url = "https://www.rescuetime.com/installers/rescuetime_${version}_amd64.deb";
+      sha256 = "09ng0yal66d533vzfv27k9l2va03rqbqmsni43qi3hgx7w9wx5ii";
     };
-
-in
-
-stdenv.mkDerivation {
+in mkDerivation rec {
   # https://www.rescuetime.com/updates/linux_release_notes.html
-  name = "rescuetime-2.9.10.1255";
+  inherit version;
+  pname = "rescuetime";
   inherit src;
-  buildInputs = [ dpkg makeWrapper ];
+  nativeBuildInputs = [ dpkg ];
+  # avoid https://github.com/NixOS/patchelf/issues/99
+  dontStrip = true;
   unpackPhase = ''
     mkdir pkg
     dpkg-deb -x $src pkg
     sourceRoot=pkg
   '';
-  installPhase = let
-
-    lib = p: stdenv.lib.makeLibraryPath [ p ];
-
-  in ''
+  installPhase = ''
     mkdir -p $out/bin
     cp usr/bin/rescuetime $out/bin
 
     ${patchelf}/bin/patchelf \
       --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+      --set-rpath "${lib.makeLibraryPath [ qt5.qtbase libXtst libXext libX11 libXScrnSaver ]}" \
       $out/bin/rescuetime
-
-    wrapProgram $out/bin/rescuetime \
-      --prefix LD_PRELOAD : ${lib qt4}/libQtGui.so.4:${lib qt4}/libQtCore.so.4:${lib libXtst}/libXtst.so.6:${lib libXext}/libXext.so.6:${lib libX11}/libX11.so.6:${lib libXScrnSaver}/libXss.so.1
   '';
+
+  passthru.updateScript = writeScript "${pname}-updater" ''
+    #!${stdenv.shell}
+    set -eu -o pipefail
+    PATH=${lib.makeBinPath [curl pup common-updater-scripts]}:$PATH
+    latestVersion="$(curl -sS https://www.rescuetime.com/release-notes/linux | pup '.release:first-of-type h2 strong text{}' | tr -d '\n')"
+
+    for platform in ${lib.concatStringsSep " " meta.platforms}; do
+      # The script will not perform an update when the version attribute is up to date from previous platform run
+      # We need to clear it before each run
+      update-source-version ${pname} 0 $(yes 0 | head -64 | tr -d "\n") --system=$platform
+      update-source-version ${pname} "$latestVersion" --system=$platform
+    done
+  '';
+
   meta = with lib; {
     description = "Helps you understand your daily habits so you can focus and be more productive";
     homepage    = "https://www.rescuetime.com";
-    maintainers = with maintainers; [ cstrahan ];
+    maintainers = with maintainers; [ ];
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
     license     = licenses.unfree;
     platforms   = [ "i686-linux" "x86_64-linux" ];
   };

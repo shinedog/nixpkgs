@@ -1,31 +1,49 @@
-{ stdenv, fetchurl, cln, gmp, swig, pkgconfig, readline, libantlr3c, boost, jdk, autoreconfHook, python2 }:
+{ lib, stdenv, fetchFromGitHub, cmake, cln, gmp, git, swig, pkg-config
+, readline, libantlr3c, boost, jdk, python3, antlr3_4
+}:
 
 stdenv.mkDerivation rec {
-  name = "cvc4-${version}";
-  version = "1.5pre-smtcomp2016";
+  pname = "cvc4";
+  version = "1.8";
 
-  src = fetchurl {
-    url = "http://cvc4.cs.nyu.edu/builds/src/cvc4-${version}.tar.gz";
-    sha256 = "15wz0plfc9q8acrwq1ljgsgqmh8pyz5alzv5xpchvv9w76lvj2zf";
+  src = fetchFromGitHub {
+    owner  = "cvc4";
+    repo   = "cvc4";
+    rev    = version;
+    sha256 = "1rhs4pvzaa1wk00czrczp58b2cxfghpsnq534m0l3snnya2958jp";
   };
 
-  buildInputs = [ gmp cln pkgconfig readline swig libantlr3c boost jdk autoreconfHook python2 ];
+  nativeBuildInputs = [ pkg-config cmake ];
+  buildInputs = [ gmp git python3.pkgs.toml readline swig libantlr3c antlr3_4 boost jdk python3 ]
+    ++ lib.optionals (!stdenv.isDarwin) [ cln ];
   configureFlags = [
     "--enable-language-bindings=c,c++,java"
     "--enable-gpl"
-    "--with-cln"
     "--with-readline"
     "--with-boost=${boost.dev}"
+  ] ++ lib.optionals (!stdenv.isDarwin) [ "--with-cln" ];
+
+  prePatch = ''
+    patch -p1 -i ${./minisat-fenv.patch} -d src/prop/minisat
+    patch -p1 -i ${./minisat-fenv.patch} -d src/prop/bvminisat
+  '';
+
+  patches = [
+    ./cvc4-bash-patsub-replacement.patch
   ];
+
   preConfigure = ''
     patchShebangs ./src/
   '';
 
-  meta = with stdenv.lib; {
+  cmakeBuildType = "Production";
+
+  meta = with lib; {
     description = "A high-performance theorem prover and SMT solver";
-    homepage    = http://cvc4.cs.nyu.edu/web/;
+    mainProgram = "cvc4";
+    homepage    = "http://cvc4.cs.stanford.edu/web/";
     license     = licenses.gpl3;
     platforms   = platforms.unix;
-    maintainers = with maintainers; [ vbgl thoughtpolice ];
+    maintainers = with maintainers; [ vbgl thoughtpolice gebner ];
   };
 }

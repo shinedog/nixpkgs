@@ -1,18 +1,32 @@
-{ stdenv, fetchurl, libxml2, openssl, zlib, bzip2 }:
+{ lib, stdenv, fetchurl, pkg-config, libxml2, xz, openssl, zlib, bzip2, fts, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  version = "1.5.2";
-  name    = "xar-${version}";
+  version = "1.6.1";
+  pname = "xar";
 
   src = fetchurl {
-    url    = "https://xar.googlecode.com/files/${name}.tar.gz";
-    sha256 = "1rp3va6akzlh35yqrapfqnbxaxa0zi8wyr93swbapprwh215cpac";
+    url    = "https://github.com/downloads/mackyle/xar/${pname}-${version}.tar.gz";
+    sha256 = "0ghmsbs6xwg1092v7pjcibmk5wkyifwxw6ygp08gfz25d2chhipf";
   };
 
-  buildInputs = [ libxml2 openssl zlib bzip2 ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ libxml2 xz openssl zlib bzip2 fts ];
+
+  patches = [
+    ./0001-Add-useless-descriptions-to-AC_DEFINE.patch
+    ./0002-Use-pkg-config-for-libxml2.patch
+  ];
+
+  postPatch = ''
+    substituteInPlace configure.ac \
+      --replace 'OpenSSL_add_all_ciphers' 'OPENSSL_init_crypto' \
+      --replace 'openssl/evp.h' 'openssl/crypto.h'
+  '';
+
+  configureFlags = lib.optional (fts != null) "LDFLAGS=-lfts";
 
   meta = {
-    homepage    = https://code.google.com/p/xar/;
+    homepage    = "https://mackyle.github.io/xar/";
     description = "Extensible Archiver";
 
     longDescription =
@@ -27,8 +41,9 @@ stdenv.mkDerivation rec {
          of content's rich meta-data.
       '';
 
-    license     = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ copumpkin ];
-    platforms   = stdenv.lib.platforms.all;
+    license     = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ copumpkin ];
+    platforms   = lib.platforms.all;
+    mainProgram = "xar";
   };
 }

@@ -1,11 +1,13 @@
-{ kdeFramework, lib
-, ecm
-, avahi
+{
+  mkDerivation,
+  extra-cmake-modules,
+  avahi, qtbase, qttools,
 }:
 
-kdeFramework {
-  name = "kdnssd";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ avahi ];
+mkDerivation {
+  pname = "kdnssd";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ avahi qttools ];
+  propagatedBuildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

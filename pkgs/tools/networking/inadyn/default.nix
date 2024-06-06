@@ -1,24 +1,34 @@
-{ stdenv, fetchurl, gnutls, autoreconfHook, pkgconfig, libite, libconfuse }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
+, gnutls, libite, libconfuse }:
 
-let
-  version = "2.0";
-in
-stdenv.mkDerivation {
-  name = "inadyn-${version}";
+stdenv.mkDerivation rec {
+  pname = "inadyn";
+  version = "2.12.0";
 
-  src = fetchurl {
-    url = "https://github.com/troglobit/inadyn/releases/download/v${version}/inadyn-${version}.tar.xz";
-    sha256 = "16nmbxj337vkqkk6f7vx7fa8mczjv6dl3ybaxy16c23h486y0mzh";
+  src = fetchFromGitHub {
+    owner = "troglobit";
+    repo = "inadyn";
+    rev = "v${version}";
+    sha256 = "sha256-aQHJtnMDaHF1XY9lwQVR6f78Zk2UI7OC3Oxt1r1KMak=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+
   buildInputs = [ gnutls libite libconfuse ];
 
-  meta = {
-    homepage = http://inadyn.sourceforge.net/;
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+  ];
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://troglobit.com/projects/inadyn/";
     description = "Free dynamic DNS client";
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = with stdenv.lib.platforms; linux;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
+    mainProgram = "inadyn";
   };
 }

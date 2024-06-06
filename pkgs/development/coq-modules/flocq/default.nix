@@ -1,34 +1,36 @@
-{stdenv, bash, which, autoconf, automake, fetchurl, coq}:
+{ lib, bash, autoconf, automake,
+  mkCoqDerivation, coq, version ? null }:
 
-stdenv.mkDerivation rec {
+mkCoqDerivation {
+  pname = "flocq";
+  owner = "flocq";
+  domain = "gitlab.inria.fr";
+  inherit version;
+  defaultVersion = with lib.versions; lib.switch coq.coq-version [
+    { case = range "8.14" "8.19"; out = "4.1.4"; }
+    { case = range "8.14" "8.18"; out = "4.1.3"; }
+    { case = range "8.14" "8.17"; out = "4.1.1"; }
+    { case = range "8.14" "8.16"; out = "4.1.0"; }
+    { case = range "8.7" "8.15"; out = "3.4.3"; }
+    { case = range "8.5" "8.8"; out = "2.6.1"; }
+  ] null;
+  release."4.1.4".sha256 = "sha256-Use6Mlx79yef1CkCPyGoOItsD69B9KR+mQArCtmre4s=";
+  release."4.1.3".sha256 = "sha256-os3cI885xNpxI+1p5rb8fSNnxKr7SFxqh83+3AM3t4I=";
+  release."4.1.1".sha256 = "sha256-FbClxlV0ZaxITe7s9SlNbpeMNDJli+Dfh2TMrjaMtHo=";
+  release."4.1.0".sha256 = "sha256:09rak9cha7q11yfqracbcq75mhmir84331h1218xcawza48rbjik";
+  release."3.4.3".sha256 = "sha256-YTdWlEmFJjCcHkl47jSOgrGqdXoApJY4u618ofCaCZE=";
+  release."3.4.2".sha256 = "1s37hvxyffx8ccc8mg5aba7ivfc39p216iibvd7f2cb9lniqk1pw";
+  release."3.3.1".sha256 = "1mk8adhi5hrllsr0hamzk91vf2405sjr4lh5brg9201mcw11abkz";
+  release."2.6.1".sha256 = "0q5a038ww5dn72yvwn5298d3ridkcngb1dik8hdyr3xh7gr5qibj";
+  releaseRev = v: "flocq-${v}";
 
-  name = "coq-flocq-${coq.coq-version}-${version}";
-  version = "2.5.1";
+  nativeBuildInputs = [ bash autoconf ];
+  mlPlugin = true;
+  useMelquiondRemake.logpath = "Flocq";
 
-  src = fetchurl {
-    url = https://gforge.inria.fr/frs/download.php/file/35430/flocq-2.5.1.tar.gz;
-    sha256 = "1a0gznvg32ckxgs3jzznc1368p8x2ny4vfwrnavb3h0ljcl1mlzy";
-  };
-
-  buildInputs = [ coq.ocaml coq.camlp5 bash which autoconf automake ];
-  propagatedBuildInputs = [ coq ];
-
-  buildPhase = ''
-    ${bash}/bin/bash autogen.sh
-    ${bash}/bin/bash configure --libdir=$out/lib/coq/${coq.coq-version}/user-contrib/Flocq
-    ./remake
-  '';
-
-  installPhase = ''
-    ./remake install
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = http://flocq.gforge.inria.fr/;
+  meta = with lib; {
     description = "A floating-point formalization for the Coq system";
     license = licenses.lgpl3;
     maintainers = with maintainers; [ jwiegley ];
-    platforms = coq.meta.platforms;
   };
-
 }

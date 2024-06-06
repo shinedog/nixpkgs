@@ -1,19 +1,29 @@
-{ stdenv, fetchurl, pkgconfig, guile }:
+{ lib
+, stdenv
+, fetchurl
+, guile
+, pkg-config
+}:
 
 stdenv.mkDerivation rec {
-  name = "guile-opengl-0.1.0";
-
-  meta = with stdenv.lib; {
-    description = "Guile binding for the OpenGL graphics API";
-    homepage    = "http://gnu.org/s/guile-opengl";
-    license     = licenses.gpl3Plus;
-    platforms   = platforms.linux;
-  };
+  pname = "guile-opengl";
+  version = "0.2.0";
 
   src = fetchurl {
-    url = "mirror://gnu/guile-opengl/${name}.tar.gz";
-    sha256 = "13qfx4xh8baryxqrv986l848ygd0piqwm6s2s90pxk9c0m9vklim";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
+    hash = "sha256-uPCH7CiCPQmfuELDupQQS7BPqecIFmSHpHGYnhwXbGU=";
   };
 
-  nativeBuildInputs = [ pkgconfig guile ];
+  nativeBuildInputs = [
+    pkg-config
+    guile
+  ];
+
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/guile-opengl/";
+    description = "Guile bindings for the OpenGL graphics API";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ vyp ];
+    platforms = platforms.unix;
+  };
 }

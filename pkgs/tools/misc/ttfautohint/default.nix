@@ -1,28 +1,50 @@
-{ stdenv, fetchurl, harfbuzz, pkgconfig, qt4 }:
+{
+  stdenv, lib, fetchurl, pkg-config, autoreconfHook
+, freetype, harfbuzz, libiconv, qtbase
+, enableGUI ? true
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.3";
-  name = "ttfautohint-${version}";
-  
+  version = "1.8.3";
+  pname = "ttfautohint";
+
   src = fetchurl {
-    url = "mirror://savannah/freetype/${name}.tar.gz";
-    sha256 = "01719jgdzgf0m4fzkkij563iksr40c7wydv1yq8ygpxjj0vs17y3";
+    url = "mirror://savannah/freetype/${pname}-${version}.tar.gz";
+    sha256 = "0zpqgihn3yh3v51ynxwr8asqrijvs4gv686clwv7bm8sawr4kfw7";
   };
 
-  buildInputs = [ harfbuzz pkgconfig qt4 ];
+  postAutoreconf = ''
+    substituteInPlace configure --replace "macx-g++" "macx-clang"
+  '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
+
+  buildInputs = [ freetype harfbuzz libiconv ] ++ lib.optional enableGUI qtbase;
+
+  configureFlags = [ ''--with-qt=${if enableGUI then "${qtbase}/lib" else "no"}'' ];
+
+  # workaround https://github.com/NixOS/nixpkgs/issues/155458
+  preBuild = lib.optionalString stdenv.cc.isClang ''
+    rm version
+  '';
+
+  enableParallelBuilding = true;
+
+  dontWrapQtApps = true;
+
+  meta = with lib; {
     description = "An automatic hinter for TrueType fonts";
+    mainProgram = "ttfautohint";
     longDescription = ''
       A library and two programs which take a TrueType font as the
       input, remove its bytecode instructions (if any), and return a
       new font where all glyphs are bytecode hinted using the
       information given by FreeType’s auto-hinting module.
     '';
-    homepage = http://www.freetype.org/ttfautohint/;
+    homepage = "https://www.freetype.org/ttfautohint";
     license = licenses.gpl2Plus; # or the FreeType License (BSD + advertising clause)
-    maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ goibhniu ];
+    platforms = platforms.unix;
   };
 
 }

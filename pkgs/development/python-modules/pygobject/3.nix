@@ -1,24 +1,78 @@
-{ stdenv, fetchurl, mkPythonDerivation, python, pkgconfig, glib, gobjectIntrospection, pycairo, cairo, which, ncurses}:
+{
+  lib,
+  stdenv,
+  fetchurl,
+  buildPythonPackage,
+  pkg-config,
+  glib,
+  gobject-introspection,
+  pycairo,
+  cairo,
+  ncurses,
+  meson,
+  ninja,
+  pythonOlder,
+  gnome,
+  python,
+}:
 
-mkPythonDerivation rec {
-  major = "3.22";
-  minor = "0";
-  name = "pygobject-${major}.${minor}";
+buildPythonPackage rec {
+  pname = "pygobject";
+  version = "3.48.2";
+
+  outputs = [
+    "out"
+    "dev"
+  ];
+
+  disabled = pythonOlder "3.8";
+
+  format = "other";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/pygobject/${major}/${name}.tar.xz";
-    sha256 = "08b29cfb08efc80f7a8630a2734dec65a99c1b59f1e5771c671d2e4ed8a5cbe7";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-B5SutKm+MaCSrCBiG19U7CgPkYWUPTKLEFza5imK0ac=";
   };
 
-  outputs = [ "out" "dev" ];
+  depsBuildBuild = [ pkg-config ];
 
-  buildInputs = [ pkgconfig glib gobjectIntrospection ]
-                 ++ stdenv.lib.optionals stdenv.isDarwin [ which ncurses ];
-  propagatedBuildInputs = [ pycairo cairo ];
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    gobject-introspection
+  ];
 
-  meta = {
-    homepage = http://live.gnome.org/PyGObject;
+  buildInputs = [
+    cairo
+    glib
+  ] ++ lib.optionals stdenv.isDarwin [ ncurses ];
+
+  propagatedBuildInputs = [
+    pycairo
+    gobject-introspection # e.g. try building: python3Packages.urwid python3Packages.pydbus
+  ];
+
+  mesonFlags = [
+    # This is only used for figuring out what version of Python is in
+    # use, and related stuff like figuring out what the install prefix
+    # should be, but it does need to be able to execute Python code.
+    "-Dpython=${python.pythonOnBuildForHost.interpreter}"
+  ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      attrPath = "python3.pkgs.${pname}3";
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
+    homepage = "https://pygobject.readthedocs.io/";
     description = "Python bindings for Glib";
-    platforms = stdenv.lib.platforms.unix;
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ jtojnar ];
+    platforms = platforms.unix;
   };
 }

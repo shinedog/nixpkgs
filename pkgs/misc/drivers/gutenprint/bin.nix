@@ -1,6 +1,4 @@
-{ stdenv, fetchurl, rpm, cpio, zlib }:
-
-assert stdenv.system == "x86_64-linux";
+{ lib, stdenv, fetchurl, rpm, cpio, zlib }:
 
 /* usage: (sorry, its still impure but works!)
 
@@ -23,22 +21,25 @@ sed -n 's/^ServerBin //p' $(sed -n 's/respawn.*-c \(.*''\) -F.*''/\1/p' /etc/eve
 then. I've tried that.
 
 TODO tidy this all up. Find source instead of binary. Fix paths ... Find out how to check ink levels etc
- 
+
 */
 
 stdenv.mkDerivation {
-  name = "cups-gutenprint-binary-5.0.1";
+  pname = "cups-gutenprint-binary";
+  version = "5.0.1";
 
-  src = if stdenv.system == "x86_64-linux" then fetchurl {
-    url = http://www.openprinting.org/download/printdriver/debian/dists/lsb3.1/main/binary-amd64/gutenprint_5.0.1-1lsb3.1_amd64.deb;
+  src = if stdenv.hostPlatform.system == "x86_64-linux" then fetchurl {
+    url = "https://www.openprinting.org/download/printdriver/debian/dists/lsb3.1/main/binary-amd64/gutenprint_5.0.1-1lsb3.1_amd64.deb";
     sha256 = "0an5gba6r6v54r53s2gj2fjk8fzpl4lrksjas2333528b0k8gbbc";
   } else throw "TODO"; # get from openprint.com -> drivers -> gutenprint
 
   buildInputs = [ rpm cpio ];
 
-  phases = "buildPhase";
+  dontUnpack = true;
+  dontInstall = true;
+  dontFixup = true;
 
-  libPath = stdenv.lib.makeLibraryPath [ stdenv.cc.cc zlib ];
+  libPath = lib.makeLibraryPath [ stdenv.cc.cc zlib ];
 
   buildPhase = ''
     ar -x $src data.tar.gz
@@ -56,13 +57,14 @@ stdenv.mkDerivation {
       patchelf --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
           --set-rpath $libPath $p
     done
-    
+
     mkdir $out/lib
     ln -s $out/cups/lib $out/lib/cups
   '';
 
   meta = {
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
     description = "Some additional CUPS drivers including Canon drivers";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = [ "x86_64-linux" ];
   };
 }

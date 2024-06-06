@@ -1,34 +1,61 @@
-{ stdenv, fetchurl, boost, cmake, doxygen, fftw, fftwSinglePrec, hdf5, ilmbase
-, libjpeg, libpng, libtiff, openexr, python2Packages }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, boost
+, cmake
+, fftw
+, fftwSinglePrec
+, hdf5
+, ilmbase
+, libjpeg
+, libpng
+, libtiff
+, openexr
+, python3
+}:
 
 let
-  inherit (python2Packages) python numpy;
-  # Might want to use `python2.withPackages(ps: [ps.numpy]);` here...
-in stdenv.mkDerivation rec {
-  name = "vigra-${version}";
-  version = "1.10.0";
+  python = python3.withPackages (py: with py; [ numpy ]);
+in
+stdenv.mkDerivation rec {
+  pname = "vigra";
+  version = "unstable-2022-01-11";
 
-  src = fetchurl {
-    url = "https://github.com/ukoethe/vigra/archive/Version-${stdenv.lib.replaceChars ["."] ["-"] version}.tar.gz";
-    sha256 = "1y3yii8wnyz68n0mzcmjylwd6jchqa3l913v39l2zsd2rv5nyvs0";
+  src = fetchFromGitHub {
+    owner = "ukoethe";
+    repo = "vigra";
+    rev = "093d57d15c8c237adf1704d96daa6393158ce299";
+    sha256 = "sha256-pFANoT00Wkh1/Dyd2x75IVTfyaoVA7S86tafUSr29Og=";
   };
 
-  NIX_CFLAGS_COMPILE = "-I${ilmbase.dev}/include/OpenEXR";
+  env.NIX_CFLAGS_COMPILE = "-I${ilmbase.dev}/include/OpenEXR";
 
-  buildInputs = [ boost cmake fftw fftwSinglePrec hdf5 ilmbase libjpeg libpng
-                  libtiff numpy openexr python ];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [
+    boost
+    fftw
+    fftwSinglePrec
+    hdf5
+    ilmbase
+    libjpeg
+    libpng
+    libtiff
+    openexr
+    python
+  ];
 
-  preConfigure = "cmakeFlags+=\" -DVIGRANUMPY_INSTALL_DIR=$out/lib/${python.libPrefix}/site-packages\"";
+  preConfigure = "cmakeFlags+=\" -DVIGRANUMPY_INSTALL_DIR=$out/${python.sitePackages}\"";
 
   cmakeFlags = [ "-DWITH_OPENEXR=1" ]
-            ++ stdenv.lib.optionals (stdenv.system == "x86_64-linux")
-                  [ "-DCMAKE_CXX_FLAGS=-fPIC" "-DCMAKE_C_FLAGS=-fPIC" ];
+    ++ lib.optionals (stdenv.hostPlatform.system == "x86_64-linux")
+    [ "-DCMAKE_CXX_FLAGS=-fPIC" "-DCMAKE_C_FLAGS=-fPIC" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Novel computer vision C++ library with customizable algorithms and data structures";
-    homepage = http://hci.iwr.uni-heidelberg.de/vigra;
+    mainProgram = "vigra-config";
+    homepage = "https://hci.iwr.uni-heidelberg.de/vigra";
     license = licenses.mit;
     maintainers = [ maintainers.viric ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

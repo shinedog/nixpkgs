@@ -1,23 +1,60 @@
-{stdenv, fetchFromGitHub, autoreconfHook, givaro, pkgconfig, openblas, liblapack}:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, givaro, pkg-config, blas, lapack
+, gmpxx
+}:
+
+assert (!blas.isILP64) && (!lapack.isILP64);
+
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "fflas-ffpack";
-  version = "2.2.2";
+  version = "2.5.0";
+
   src = fetchFromGitHub {
     owner = "linbox-team";
-    repo = "${pname}";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "0k1f4pb7azrm6ajncvg7vni7ixfmn6fssd5ld4xddbi6jqbsf9rd";
+    sha256 = "sha256-Eztc2jUyKRVUiZkYEh+IFHkDuPIy+Gx3ZW/MsuOVaMc=";
   };
-  buildInputs = [autoreconfHook givaro (liblapack.override {shared = true;}) openblas];
-  nativeBuildInputs = [pkgconfig];
-  configureFlags = "--with-blas-libs=-lopenblas --with-lapack-libs=-llapack";
-  meta = {
-    inherit version;
-    description = ''Finite Field Linear Algebra Subroutines'';
-    license = stdenv.lib.licenses.lgpl21Plus;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+
+  nativeCheckInputs = [
+    gmpxx
+  ];
+
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ] ++ lib.optionals doCheck nativeCheckInputs;
+
+  buildInputs = [ givaro blas lapack ];
+
+  configureFlags = [
+    "--with-blas-libs=-lcblas"
+    "--with-lapack-libs=-llapacke"
+    "--without-archnative"
+  ] ++ lib.optionals stdenv.isx86_64 [
+    # disable SIMD instructions (which are enabled *when available* by default)
+    # for now we need to be careful to disable *all* relevant versions of an instruction set explicitly (https://github.com/linbox-team/fflas-ffpack/issues/284)
+    "--${if stdenv.hostPlatform.sse3Support   then "enable" else "disable"}-sse3"
+    "--${if stdenv.hostPlatform.ssse3Support  then "enable" else "disable"}-ssse3"
+    "--${if stdenv.hostPlatform.sse4_1Support then "enable" else "disable"}-sse41"
+    "--${if stdenv.hostPlatform.sse4_2Support then "enable" else "disable"}-sse42"
+    "--${if stdenv.hostPlatform.avxSupport    then "enable" else "disable"}-avx"
+    "--${if stdenv.hostPlatform.avx2Support   then "enable" else "disable"}-avx2"
+    "--${if stdenv.hostPlatform.avx512Support then "enable" else "disable"}-avx512f"
+    "--${if stdenv.hostPlatform.avx512Support then "enable" else "disable"}-avx512dq"
+    "--${if stdenv.hostPlatform.avx512Support then "enable" else "disable"}-avx512vl"
+    "--${if stdenv.hostPlatform.fmaSupport    then "enable" else "disable"}-fma"
+    "--${if stdenv.hostPlatform.fma4Support   then "enable" else "disable"}-fma4"
+  ];
+  doCheck = true;
+
+  meta = with lib; {
+    description = "Finite Field Linear Algebra Subroutines";
+    mainProgram = "fflas-ffpack-config";
+    license = licenses.lgpl21Plus;
+    maintainers = teams.sage.members;
+    platforms = platforms.unix;
     homepage = "https://linbox-team.github.io/fflas-ffpack/";
   };
 }

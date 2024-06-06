@@ -1,4 +1,5 @@
-#! @shell@
+#! @runtimeShell@
+# shellcheck shell=bash
 
 case "$1" in
   -h|--help)
@@ -6,9 +7,25 @@ case "$1" in
     exit 1
     ;;
   --hash|--revision)
-    echo "@nixosRevision@"
+    if ! [[ @revision@ =~ ^[0-9a-f]+$ ]]; then
+      echo "$0: Nixpkgs commit hash is unknown" >&2
+      exit 1
+    fi
+    echo "@revision@"
+    ;;
+  --configuration-revision)
+    if [[ "@configurationRevision@" =~ "@" ]]; then
+      echo "$0: configuration revision is unknown" >&2
+      exit 1
+    fi
+    echo "@configurationRevision@"
+    ;;
+  --json)
+    cat <<EOF
+@json@
+EOF
     ;;
   *)
-    echo "@nixosVersion@ (@nixosCodeName@)"
+    echo "@version@ (@codeName@)"
     ;;
 esac

@@ -1,28 +1,53 @@
-{ stdenv, fetchurl, pkgconfig, docbook2x, docbook_xml_dtd_45
-, flex, bison, libmnl, libnftnl, gmp, readline }:
+{ lib, stdenv, fetchurl, pkg-config, bison, flex
+, asciidoc, libxslt, findXMLCatalogs, docbook_xml_dtd_45, docbook_xsl
+, libmnl, libnftnl, libpcap
+, gmp, jansson
+, autoreconfHook
+, withDebugSymbols ? false
+, withCli ? true, libedit
+, withXtables ? true, iptables
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "nftables-0.6";
+  version = "1.0.9";
+  pname = "nftables";
 
   src = fetchurl {
-    url = "http://netfilter.org/projects/nftables/files/${name}.tar.bz2";
-    sha256 = "0bbcrn9nz75daic8bq7rspvcw3ck7l82vqcvkyyg4mhwbxjn5pny";
+    url = "https://netfilter.org/projects/nftables/files/${pname}-${version}.tar.xz";
+    hash = "sha256-o8MEzZugYSOe4EdPmvuTipu5nYm5YCRvZvDDoKheFM0=";
   };
 
-  configureFlags = [
-    "CONFIG_MAN=y"
-    "DB2MAN=docbook2man"
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config bison flex
+    asciidoc docbook_xml_dtd_45 docbook_xsl findXMLCatalogs libxslt
   ];
 
-  XML_CATALOG_FILES = "${docbook_xml_dtd_45}/xml/dtd/docbook/catalog.xml";
+  buildInputs = [
+    libmnl libnftnl libpcap
+    gmp jansson
+  ] ++ lib.optional withCli libedit
+    ++ lib.optional withXtables iptables;
 
-  buildInputs = [ pkgconfig docbook2x flex bison libmnl libnftnl gmp readline ];
+  configureFlags = [
+    "--with-json"
+    (lib.withFeatureAs withCli "cli" "editline")
+  ] ++ lib.optional (!withDebugSymbols) "--disable-debug"
+    ++ lib.optional withXtables "--with-xtables";
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    inherit (nixosTests) firewall-nftables;
+    lxd-nftables = nixosTests.lxd.nftables;
+    nat = { inherit (nixosTests.nat.nftables) firewall standalone; };
+  };
+
+  meta = with lib; {
     description = "The project that aims to replace the existing {ip,ip6,arp,eb}tables framework";
-    homepage = http://netfilter.org/projects/nftables;
-    license = licenses.gpl2;
+    homepage = "https://netfilter.org/projects/nftables/";
+    license = licenses.gpl2Only;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ izorkin ] ++ teams.helsinki-systems.members;
+    mainProgram = "nft";
   };
 }

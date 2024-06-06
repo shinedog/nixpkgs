@@ -1,11 +1,11 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "aha-${version}";
-  version = "0.4.10.2";
+  pname = "aha";
+  version = "0.5.1";
 
   src = fetchFromGitHub {
-    sha256 = "14n0py8dzlvirawb8brq143nq0sy9s2z6in5589krrya0frlrlkj";
+    sha256 = "1gywad0rvvz3c5balz8cxsnx0562hj2ngzqyr8zsy2mb4pn0lpgv";
     rev = version;
     repo = "aha";
     owner = "theZiz";
@@ -15,14 +15,15 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "ANSI HTML Adapter";
+    mainProgram = "aha";
     longDescription = ''
       aha takes ANSI SGR-coloured input and produces W3C-conformant HTML code.
     '';
-    homepage = https://github.com/theZiz/aha;
+    homepage = "https://github.com/theZiz/aha";
     license = with licenses; [ lgpl2Plus mpl11 ];
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
+    maintainers = with maintainers; [ pSub ];
+    platforms = platforms.all;
   };
 }

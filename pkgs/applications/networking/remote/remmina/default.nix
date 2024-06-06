@@ -1,76 +1,98 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, wrapGAppsHook
-, glib, gtk3, gettext, libxkbfile, libgnome_keyring, libX11
-, freerdp, libssh, libgcrypt, gnutls, makeDesktopItem
-, pcre, webkitgtk, libdbusmenu-gtk3, libappindicator-gtk3
+{ lib, stdenv, fetchFromGitLab, cmake, ninja, pkg-config, wrapGAppsHook3
+, curl, fuse3, fetchpatch2
+, desktopToDarwinBundle
+, glib, gtk3, gettext, libxkbfile, libX11, python3
+, freerdp3, libssh, libgcrypt, gnutls, vte
+, pcre2, libdbusmenu-gtk3, libappindicator-gtk3
 , libvncserver, libpthreadstubs, libXdmcp, libxkbcommon
-, libsecret, spice_protocol, spice_gtk, epoxy, at_spi2_core
-, openssl }:
+, libsecret, libsoup_3, spice-protocol, spice-gtk, libepoxy, at-spi2-core
+, openssl, gsettings-desktop-schemas, json-glib, libsodium, webkitgtk_4_1, harfbuzz
+, wayland
+# The themes here are soft dependencies; only icons are missing without them.
+, gnome
+, withKf5Wallet ? stdenv.isLinux, libsForQt5
+, withLibsecret ? stdenv.isLinux
+, withVte ? true
+}:
 
-let
-  version = "1.2.0-rcgit.15";
-  
-  desktopItem = makeDesktopItem {
-    name = "remmina";
-    desktopName = "Remmina";
-    genericName = "Remmina Remote Desktop Client";
-    exec = "remmina";
-    icon = "remmina";
-    comment = "Connect to remote desktops";
-    categories = "GTK;GNOME;X-GNOME-NetworkSettings;Network;";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "remmina";
+  version = "1.4.35";
+
+  src = fetchFromGitLab {
+    owner = "Remmina";
+    repo = "Remmina";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-0z2fcBnChCBYPxyFm/xpAW0jHaUGA92NQgjt+lWFUnM=";
   };
 
-  # Latest release of remmina refers to thing that aren't yet in
-  # a FreeRDP release so we need to build one from git source
-  # See also https://github.com/FreeRDP/Remmina/pull/731
-  # Remove when FreeRDP release catches up with this commit
-  freerdp_git = stdenv.lib.overrideDerivation freerdp (args: {
-    name = "freerdp-git-2016-09-30";
-    src = fetchFromGitHub {
-      owner  = "FreeRDP";
-      repo   = "FreeRDP";
-      rev    = "dbb353db92e7a5cb0be3c73aa950fb1113e627ec";
-      sha256 = "1nhm4v6z9var9hasp4bkmhvlrksbdizx95swx19shizfc82s9g4y";
-    };
-  });
+  patches = [
+    (fetchpatch2 {
+      name = "add-a-conditional-check-for-darwin-and-NetBSD.patch";
+      url = "https://gitlab.com/Remmina/Remmina/-/commit/3b681398c823e070c7f780166b9d9fc2158e66c1.diff";
+      hash = "sha256-Ovdrsl9bftXiuXV+sqvDP9VGuXQZzC5VKOmkYmBXhNA=";
+    })
+  ];
 
-in
+  nativeBuildInputs = [ cmake ninja pkg-config wrapGAppsHook3 ]
+    ++ lib.optionals stdenv.isDarwin [ desktopToDarwinBundle ];
 
-stdenv.mkDerivation {
-  name = "remmina-${version}";
+  buildInputs = [
+    curl
+    gsettings-desktop-schemas
+    glib gtk3 gettext libxkbfile libX11
+    freerdp3 libssh libgcrypt gnutls
+    pcre2
+    libvncserver libpthreadstubs libXdmcp libxkbcommon
+    libsoup_3 spice-protocol
+    spice-gtk
+    libepoxy at-spi2-core
+    openssl gnome.adwaita-icon-theme json-glib libsodium
+    harfbuzz python3
+    wayland
+  ] ++ lib.optionals stdenv.isLinux [ fuse3 libappindicator-gtk3 libdbusmenu-gtk3 webkitgtk_4_1 ]
+    ++ lib.optionals withLibsecret [ libsecret ]
+    ++ lib.optionals withKf5Wallet [ libsForQt5.kwallet ]
+    ++ lib.optionals withVte [ vte ];
 
-  src = fetchFromGitHub {
-    owner  = "FreeRDP";
-    repo   = "Remmina";
-    rev    = "v${version}";
-    sha256 = "07lj6a7x9cqcff18pwfkx8c8iml015zp6sq29dfcxpfg4ai578h0";
-  };
+  cmakeFlags = [
+    "-DWITH_FREERDP3=ON"
+    "-DWITH_VTE=${if withVte then "ON" else "OFF"}"
+    "-DWITH_TELEPATHY=OFF"
+    "-DWITH_AVAHI=OFF"
+    "-DWITH_KF5WALLET=${if withKf5Wallet then "ON" else "OFF"}"
+    "-DWITH_LIBSECRET=${if withLibsecret then "ON" else "OFF"}"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "-DHAVE_LIBAPPINDICATOR=OFF"
+    "-DWITH_CUPS=OFF"
+    "-DWITH_ICON_CACHE=OFF"
+    "-DWITH_WEBKIT2GTK=OFF"
+  ];
 
-  buildInputs = [ cmake pkgconfig wrapGAppsHook
-                  glib gtk3 gettext libxkbfile libgnome_keyring libX11
-                  freerdp_git libssh libgcrypt gnutls
-                  pcre webkitgtk libdbusmenu-gtk3 libappindicator-gtk3
-                  libvncserver libpthreadstubs libXdmcp libxkbcommon
-                  libsecret spice_protocol spice_gtk epoxy at_spi2_core
-                  openssl ];
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin (toString [
+    "-DTARGET_OS_IPHONE=0"
+    "-DTARGET_OS_WATCH=0"
+  ]);
 
-  cmakeFlags = "-DWITH_VTE=OFF -DWITH_TELEPATHY=OFF -DWITH_AVAHI=OFF -DWINPR_INCLUDE_DIR=${freerdp_git}/include/winpr2";
+  dontWrapQtApps = true;
 
   preFixup = ''
     gappsWrapperArgs+=(
+      --set-default SSL_CERT_DIR "/etc/ssl/certs/"
       --prefix LD_LIBRARY_PATH : "${libX11.out}/lib"
+      ${lib.optionalString stdenv.isDarwin ''
+        --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS"
+      ''}
     )
   '';
 
-  postInstall = ''
-    mkdir -pv $out/share/applications
-    cp ${desktopItem}/share/applications/* $out/share/applications
-  '';
-
-  meta = with stdenv.lib; {
-    license = stdenv.lib.licenses.gpl2;
-    homepage = "http://remmina.sourceforge.net/";
-    description = "Remote desktop client written in GTK+";
-    maintainers = [];
-    platforms = platforms.linux;
+  meta = with lib; {
+    license = licenses.gpl2Plus;
+    homepage = "https://gitlab.com/Remmina/Remmina";
+    changelog = "https://gitlab.com/Remmina/Remmina/-/blob/master/CHANGELOG.md#${lib.replaceStrings ["."] [""] finalAttrs.src.rev}";
+    description = "Remote desktop client written in GTK";
+    mainProgram = "remmina";
+    maintainers = with maintainers; [ bbigras melsigl ryantm ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
-}
+})

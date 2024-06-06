@@ -1,23 +1,32 @@
-{stdenv, fetchurl, gmp}:
+{ lib, stdenv
+, fetchFromGitHub
+, gmp
+, autoreconfHook
+, texliveSmall
+}:
+
 stdenv.mkDerivation rec {
-  name = "cddlib-${version}";
-  fileVersion = "094h";
-  version = "0.94h";
-  src = fetchurl {
-    urls = [
-      "http://archive.ubuntu.com/ubuntu/pool/universe/c/cddlib/cddlib_${fileVersion}.orig.tar.gz"
-      "ftp://ftp.math.ethz.ch/users/fukudak/cdd/cddlib-${fileVersion}.tar.gz"
-    ];
-    name = "";
-    sha256 = "1dasasscwfg793q8fwzgwf64xwj7w62yfvszpr8x8g38jka08vgy";
+  pname = "cddlib";
+  version = "0.94m";
+  src = fetchFromGitHub {
+    owner = "cddlib";
+    repo = "cddlib";
+    rev = version;
+    sha256 = "09s8323h5w9j6mpl1yc6lm770dkskfxd2ayyafkcjllmnncxzfa0";
   };
   buildInputs = [gmp];
-  meta = {
-    inherit version;
-    description = ''An implementation of the Double Description Method for generating all vertices of a convex polyhedron'';
-    license = stdenv.lib.licenses.gpl2Plus ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+  nativeBuildInputs = [
+    autoreconfHook
+    texliveSmall # for building the documentation
+  ];
+  # No actual checks yet (2018-05-05), but maybe one day.
+  # Requested here: https://github.com/cddlib/cddlib/issues/25
+  doCheck = true;
+  meta = with lib; {
+    description = "An implementation of the Double Description Method for generating all vertices of a convex polyhedron";
+    license = licenses.gpl2Plus;
+    maintainers = teams.sage.members;
+    platforms = platforms.unix;
     homepage = "https://www.inf.ethz.ch/personal/fukudak/cdd_home/index.html";
   };
 }

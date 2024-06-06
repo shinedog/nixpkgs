@@ -1,52 +1,55 @@
-{ fetchgit, pkgconfig, gettext, runCommand, makeWrapper
-, elfutils, kernel, gnumake }:
+{ lib, fetchgit, pkg-config, gettext, runCommand, makeWrapper
+, cpio, elfutils, kernel, gnumake, python3
+}:
+
 let
   ## fetchgit info
-  url = git://sourceware.org/git/systemtap.git;
-  rev = "a10bdceb7c9a7dc52c759288dd2e555afcc5184a";
-  sha256 = "1kllzfnh4ksis0673rma5psglahl6rvy0xs5v05qkqn6kl7irmg1";
-  version = "2016-09-16";
+  url = "git://sourceware.org/git/systemtap.git";
+  rev = "release-${version}";
+  sha256 = "sha256-2L7+k/tgI6trkstDTY4xxfFzmNDlxbCHDRKAFaERQeM=";
+  version = "5.0a";
 
   inherit (kernel) stdenv;
-  inherit (stdenv) lib;
 
   ## stap binaries
   stapBuild = stdenv.mkDerivation {
-    name = "systemtap-${version}";
+    pname = "systemtap";
+    inherit version;
     src = fetchgit { inherit url rev sha256; };
-    buildInputs = [ elfutils pkgconfig gettext ];
+    nativeBuildInputs = [ pkg-config cpio python3 python3.pkgs.setuptools ];
+    buildInputs = [ elfutils gettext python3 ];
     enableParallelBuilding = true;
+    env.NIX_CFLAGS_COMPILE = toString [ "-Wno-error=deprecated-declarations" ]; # Needed with GCC 12
   };
 
-  ## a kernel build dir as expected by systemtap
-  kernelBuildDir = runCommand "kbuild-${kernel.version}-merged" { } ''
-    mkdir -p $out
-    for f in \
-        ${kernel}/System.map \
-        ${kernel.dev}/vmlinux \
-        ${kernel.dev}/lib/modules/${kernel.modDirVersion}/build/{*,.*}
-    do
-      ln -s $(readlink -f $f) $out
-    done
+  ## symlink farm for --sysroot flag
+  sysroot = runCommand "systemtap-sysroot-${kernel.version}" { } ''
+    mkdir -p $out/boot $out/usr/lib/debug
+    ln -s ${kernel.dev}/vmlinux ${kernel.dev}/lib $out
+    ln -s ${kernel.dev}/vmlinux $out/usr/lib/debug
+    ln -s ${kernel}/System.map $out/boot/System.map-${kernel.version}
   '';
 
+  pypkgs = with python3.pkgs; makePythonPath [ pyparsing ];
+
 in runCommand "systemtap-${kernel.version}-${version}" {
-  inherit stapBuild kernelBuildDir;
-  buildInputs = [ makeWrapper ];
+  inherit stapBuild;
+  nativeBuildInputs = [ makeWrapper ];
   meta = {
-    homepage = https://sourceware.org/systemtap/;
-    repositories.git = url;
+    homepage = "https://sourceware.org/systemtap/";
     description = "Provides a scripting language for instrumentation on a live kernel plus user-space";
     license = lib.licenses.gpl2;
-    platforms = lib.platforms.linux;
+    platforms = lib.systems.inspect.patterns.isGnu;
   };
 } ''
   mkdir -p $out/bin
-  for bin in $stapBuild/bin/*; do # hello emacs */
+  for bin in $stapBuild/bin/*; do
     ln -s $bin $out/bin
   done
-  rm $out/bin/stap
+  rm $out/bin/stap $out/bin/dtrace
   makeWrapper $stapBuild/bin/stap $out/bin/stap \
-    --add-flags "-r $kernelBuildDir" \
-    --prefix PATH : ${lib.makeBinPath [ stdenv.cc.cc elfutils gnumake ]}
+    --add-flags "--sysroot ${sysroot}" \
+    --prefix PATH : ${lib.makeBinPath [ stdenv.cc.cc stdenv.cc.bintools elfutils gnumake ]}
+  makeWrapper $stapBuild/bin/dtrace $out/bin/dtrace \
+    --prefix PYTHONPATH : ${pypkgs}
 ''

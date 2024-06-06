@@ -1,34 +1,56 @@
-{stdenv, lib, fetchurl, pythonPackages
-, gnutar, unzip, lhasa, rpm, binutils, cpio, gzip, p7zip, cabextract, unrar, unshield
-, bzip2, xz, lzip
-# unzip is handled by p7zip
+{ lib
+, fetchFromGitHub
+, gitUpdater
+, python3Packages
+, gnutar
+, unzip
+, lhasa
+, rpm
+, binutils
+, cpio
+, gzip
+, p7zip
+, cabextract
+, unrar
+, unshield
+, bzip2
+, xz
+, lzip
 , unzipSupport ? false
-, unrarSupport ? false }:
+, unrarSupport ? false
+}:
 
-let
-  archivers = lib.makeBinPath ([ gnutar lhasa rpm binutils cpio gzip p7zip cabextract unshield ]
-  ++ lib.optional (unzipSupport) unzip
-  ++ lib.optional (unrarSupport) unrar
-  ++ [ bzip2 xz lzip ]);
+python3Packages.buildPythonApplication rec {
+  pname = "dtrx";
+  version = "8.5.3";
 
-in pythonPackages.buildPythonApplication rec {
-  name = "dtrx-${version}";
-  version = "7.1";
-
-  src = fetchurl {
-    url = "http://brettcsmith.org/2007/dtrx/dtrx-${version}.tar.gz";
-    sha1 = "05cfe705a04a8b84571b0a5647cd2648720791a4";
+  src = fetchFromGitHub {
+    owner = "dtrx-py";
+    repo = "dtrx";
+    rev = version;
+    sha256 = "sha256-LB3F6jcqQPRsjFO4L2fPAPnacDAdtcaadgGbwXA9LAw=";
   };
 
-  postInstall = ''
-    wrapProgram "$out/bin/dtrx" --prefix PATH : "${archivers}"
-  '';
+  makeWrapperArgs =
+    let
+      archivers = lib.makeBinPath (
+        [ gnutar lhasa rpm binutils cpio gzip p7zip cabextract unshield bzip2 xz lzip ]
+        ++ lib.optional (unzipSupport) unzip
+        ++ lib.optional (unrarSupport) unrar
+      );
+    in [
+      ''--prefix PATH : "${archivers}"''
+    ];
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ python3Packages.invoke ];
+
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
     description = "Do The Right Extraction: A tool for taking the hassle out of extracting archives";
-    homepage = "http://brettcsmith.org/2007/dtrx/";
+    homepage = "https://github.com/dtrx-py/dtrx";
     license = licenses.gpl3Plus;
-    maintainers = [ maintainers.spwhitt ];
-    platforms = platforms.all;
+    maintainers = [ ];
+    mainProgram = "dtrx";
   };
 }

@@ -1,30 +1,28 @@
-{ stdenv, fetchurl, zlib } :
+{ lib, stdenv, fetchFromGitLab, autoreconfHook, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "osmctools-${version}";
-  version = "0.8.5";
+  pname = "osmctools";
+  version = "0.9";
 
-  src = fetchurl {
-    url = http://m.m.i24.cc/osmconvert.c;
-    sha256 = "9da0940912d1bc62223b962483fd796f92c959c48749806aee5806164e5875d7";
+  src = fetchFromGitLab {
+    owner = "osm-c-tools";
+    repo = pname;
+    rev = version;
+    sha256 = "1m8d3r1q1v05pkr8k9czrmb4xjszw6hvgsf3kn9pf0v14gpn4r8f";
   };
 
+  nativeBuildInputs = [ autoreconfHook ];
   buildInputs = [ zlib ];
 
-  phases = [ "buildPhase" "installPhase" ];
-
-  buildPhase = ''
-    cc $src -lz -O3 -o osmconvert
-  '';
-
-  installPhase = ''
-    mkdir -p $out/bin
-    mv osmconvert $out/bin
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Converter between various Open Street Map file formats";
-    homepage = http://wiki.openstreetmap.org/wiki/Osmconvert;
+  meta = with lib; {
+    description = "Command line tools for transforming Open Street Map files";
+    homepage = [
+      "https://wiki.openstreetmap.org/wiki/osmconvert"
+      "https://wiki.openstreetmap.org/wiki/osmfilter"
+      "https://wiki.openstreetmap.org/wiki/osmupdate"
+    ];
+    maintainers = with maintainers; [ sikmir ];
     platforms = platforms.unix;
+    license = licenses.agpl3Only;
   };
 }

@@ -1,42 +1,28 @@
-{ stdenv, fetchFromGitHub, boost, sqlite }:
+{ lib, rustPlatform, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "udpt-${version}";
-  version = "2016-02-20"; # v2.0-rc0 with sample config
-
-  enableParallelBuilding = true;
-
-  # Suitable for a network facing daemon.
-  hardeningEnable = [ "pie" ];
+rustPlatform.buildRustPackage rec {
+  pname = "udpt";
+  version = "3.1.1";
 
   src = fetchFromGitHub {
     owner = "naim94a";
     repo = "udpt";
-    rev = "0790558de8b5bb841bb10a9115bbf72c3b4711b5";
-    sha256 = "0rgkjwvnqwbnqy7pm3dk176d3plb5lypaf12533yr0yfzcp6gnzk";
+    rev = "${pname}-${version}";
+    sha256 = "sha256-G3LzbV3b1Y/2SPIBS1kZDuLuGF5gV/H1LFBRhevpdjU=";
   };
 
-  buildInputs = [ boost sqlite ];
+  cargoSha256 = "sha256-ebLVyUB65fW8BWctxXnYxrnl/2IESd4YJXeiMsMXn9s=";
 
-  postPatch = ''
-    # Enabling optimization (implied by fortify hardening) causes htons
-    # to be re-defined as a macro, turning this use of :: into a syntax error.
-    sed -i '104a#undef htons' src/udpTracker.cpp
-  '';
-
-  installPhase = ''
-    mkdir -p $out/bin $out/etc/
-    cp udpt $out/bin
-    cp udpt.conf $out/etc/
-    # without this, the resulting binary is unstripped.
-    runHook postInstall
+  postInstall = ''
+    install -D udpt.toml $out/share/udpt/udpt.toml
   '';
 
   meta = {
     description = "A lightweight UDP torrent tracker";
-    homepage = https://naim94a.github.io/udpt;
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ makefu ];
+    homepage = "https://naim94a.github.io/udpt";
+    license = lib.licenses.gpl3;
+    platforms = lib.platforms.all;
+    maintainers = with lib.maintainers; [ makefu ];
+    mainProgram = "udpt-rs";
   };
 }

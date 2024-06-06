@@ -1,26 +1,80 @@
-{ stdenv, fetchurl, pythonPackages, glibcLocales} :
+{
+  lib,
+  devpi-server,
+  git,
+  glibcLocales,
+  python3,
+  fetchPypi,
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "devpi-client-${version}";
-  version = "2.7.0";
+python3.pkgs.buildPythonApplication rec {
+  pname = "devpi-client";
+  version = "7.0.3";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "mirror://pypi/d/devpi-client/${name}.tar.gz";
-    sha256 = "0z7vaf0a66n82mz0vx122pbynjvkhp2mjf9lskgyv09y3bxzzpj3";
+  src = fetchPypi {
+    pname = "devpi_client";
+    inherit version;
+    hash = "sha256-5aF6EIFnhfywDeAfWSN+eZUpaO6diPCP5QHT11Y/IQI=";
   };
 
-  doCheck = false;
+  build-system = with python3.pkgs; [
+    setuptools
+    setuptools-changelog-shortener
+  ];
+
+  buildInputs = [ glibcLocales ];
+
+  dependencies = with python3.pkgs; [
+    build
+    check-manifest
+    devpi-common
+    iniconfig
+    pkginfo
+    pluggy
+    platformdirs
+  ];
+
+  nativeCheckInputs =
+    [
+      devpi-server
+      git
+    ]
+    ++ (with python3.pkgs; [
+      mercurial
+      mock
+      pypitoken
+      pytestCheckHook
+      sphinx
+      virtualenv
+      webtest
+      wheel
+    ]);
+
+  preCheck = ''
+    export HOME=$(mktemp -d);
+  '';
+
+  pytestFlagsArray = [
+    # --fast skips tests which try to start a devpi-server improperly
+    "--fast"
+  ];
 
   LC_ALL = "en_US.UTF-8";
-  buildInputs = with pythonPackages; [ glibcLocales tox check-manifest pkginfo ];
 
-  propagatedBuildInputs = with pythonPackages; [ py devpi-common ];
+  __darwinAllowLocalNetworking = true;
 
-  meta = {
-    homepage = http://doc.devpi.net;
-    description = "Github-style pypi index server and packaging meta tool";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ lewo makefu ];
+  pythonImportsCheck = [ "devpi" ];
 
+  meta = with lib; {
+    description = "Client for devpi, a pypi index server and packaging meta tool";
+    homepage = "http://doc.devpi.net";
+    changelog = "https://github.com/devpi/devpi/blob/client-${version}/client/CHANGELOG";
+    license = licenses.mit;
+    maintainers = with maintainers; [
+      lewo
+      makefu
+    ];
+    mainProgram = "devpi";
   };
 }

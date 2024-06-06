@@ -1,34 +1,40 @@
-{ stdenv, fetchurl, makeDesktopItem
+{ lib, stdenv, fetchurl, makeDesktopItem
 , ghostscript, atk, gtk2, glib, fontconfig, freetype
-, libgnomecanvas, libgnomeprint, libgnomeprintui
-, pango, libX11, xproto, zlib, poppler
-, autoconf, automake, libtool, pkgconfig}:
+, libgnomecanvas
+, pango, libX11, xorgproto, zlib, poppler
+, autoconf, automake, libtool, pkg-config}:
+
+let
+  isGdkQuartzBackend = (gtk2.gdktarget == "quartz");
+in
+
 stdenv.mkDerivation rec {
-  version = "0.4.8";
-  name = "xournal-" + version;
+  version = "0.4.8.2016";
+  pname = "xournal";
   src = fetchurl {
-    url = "mirror://sourceforge/xournal/${name}.tar.gz";
-    sha256 = "0c7gjcqhygiyp0ypaipdaxgkbivg6q45vhsj8v5jsi9nh6iqff13";
+    url = "mirror://sourceforge/xournal/xournal-${version}.tar.gz";
+    sha256 = "09i88v3wacmx7f96dmq0l3afpyv95lh6jrx16xzm0jd1szdrhn5j";
   };
 
   buildInputs = [
     ghostscript atk gtk2 glib fontconfig freetype
-    libgnomecanvas libgnomeprint libgnomeprintui
-    pango libX11 xproto zlib poppler
+    libgnomecanvas
+    pango libX11 xorgproto zlib poppler
   ];
 
-  nativeBuildInputs = [ autoconf automake libtool pkgconfig ];
+  nativeBuildInputs = [ autoconf automake libtool pkg-config ];
 
-  NIX_LDFLAGS = [ "-lX11" "-lz" ];
+  NIX_LDFLAGS = "-lz"
+    + lib.optionalString (!isGdkQuartzBackend) " -lX11";
 
   desktopItem = makeDesktopItem {
-    name = name;
+    name = "xournal-${version}";
     exec = "xournal";
     icon = "xournal";
     desktopName = "Xournal";
     comment = meta.description;
-    categories = "Office;Graphics;";
-    mimeType = "application/pdf;application/x-xoj";
+    categories = [ "Office" "Graphics" ];
+    mimeTypes = [ "application/pdf" "application/x-xoj" ];
     genericName = "PDF Editor";
   };
 
@@ -47,11 +53,12 @@ stdenv.mkDerivation rec {
       cp $out/share/xournal/pixmaps/xournal.png $out/share/icons
   '';
 
-  meta = {
-    homepage = http://xournal.sourceforge.net/;
+  meta = with lib; {
+    homepage = "https://xournal.sourceforge.net/";
     description = "Note-taking application (supposes stylus)";
-    maintainers = [ stdenv.lib.maintainers.guibert ];
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = [ maintainers.guibert ];
+    license = licenses.gpl2;
+    platforms = with platforms; linux ++ darwin;
+    mainProgram = "xournal";
   };
 }

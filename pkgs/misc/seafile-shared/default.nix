@@ -1,41 +1,64 @@
-{stdenv, fetchurl, which, automake, autoconf, pkgconfig, curl, libtool, vala_0_23, python, intltool, fuse, ccnet}:
+{ lib, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, curl
+, libevent
+, libsearpc
+, libuuid
+, pkg-config
+, python3
+, sqlite
+, vala
+, libwebsockets
+}:
 
-stdenv.mkDerivation rec
-{
-  version = "5.0.7";
-  name = "seafile-shared-${version}";
+stdenv.mkDerivation rec {
+  pname = "seafile-shared";
+  version = "9.0.6";
 
-  src = fetchurl
-  {
-    url = "https://github.com/haiwen/seafile/archive/v${version}.tar.gz";
-    sha256 = "ec166c86a41e7ab3b1ae97a56326ab4a2b1ec38686486b956c3d153b8023c670";
+  src = fetchFromGitHub {
+    owner = "haiwen";
+    repo = "seafile";
+    rev = "v${version}";
+    sha256 = "sha256-ig22Rw9VWPqOsJS1Wxy69OjdMRcxh2fOyqMHBEky/Uo=";
   };
 
-  buildInputs = [ which automake autoconf pkgconfig libtool vala_0_23 python intltool fuse ];
-  propagatedBuildInputs = [ ccnet curl ];
+  nativeBuildInputs = [
+    libwebsockets
+    autoreconfHook
+    vala
+    pkg-config
+    python3
+    python3.pkgs.wrapPython
+  ];
 
-  preConfigure = ''
-  sed -ie 's|/bin/bash|/bin/sh|g' ./autogen.sh
-  ./autogen.sh
+  buildInputs = [
+    libuuid
+    sqlite
+    libsearpc
+    libevent
+    curl
+  ];
+
+  configureFlags = [
+    "--disable-server"
+    "--with-python3"
+  ];
+
+  pythonPath = with python3.pkgs; [
+    future
+    pysearpc
+  ];
+
+  postFixup = ''
+    wrapPythonPrograms
   '';
 
-  configureFlags = "--disable-server --disable-console";
-
-  buildPhase = "make -j1";
-
-  postInstall = ''
-  # Remove seafile binary
-  rm -rf "$out/bin/seafile"
-  # Remove cli client binary
-  rm -rf "$out/bin/seaf-cli"
-  '';
-
-  meta =
-  {
+  meta = with lib; {
     homepage = "https://github.com/haiwen/seafile";
     description = "Shared components of Seafile: seafile-daemon, libseafile, libseafile python bindings, manuals, and icons";
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.calrama ];
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ greizgh schmittlauch ];
   };
 }

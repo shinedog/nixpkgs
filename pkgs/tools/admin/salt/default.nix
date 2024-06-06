@@ -1,48 +1,71 @@
-{
-  stdenv, fetchurl, python2Packages, openssl,
-
+{ lib
+, stdenv
+, python3
+, fetchPypi
+, openssl
   # Many Salt modules require various Python modules to be installed,
   # passing them in this array enables Salt to find them.
-  extraInputs ? []
+, extraInputs ? []
 }:
 
-python2Packages.buildPythonApplication rec {
-  name = "salt-${version}";
-  version = "2016.3.3";
+python3.pkgs.buildPythonApplication rec {
+  pname = "salt";
+  version = "3007.1";
+  format = "setuptools";
 
-  src = fetchurl {
-    url = "mirror://pypi/s/salt/${name}.tar.gz";
-    sha256 = "1djjglnh6203y8dirziz5w6zh2lgszxp8ivi86nb7fgijj2h61jr";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-uTOsTLPksRGLRtraVcnMa9xvD5S0ySh3rsRLJcaijJo=";
   };
 
-  propagatedBuildInputs = with python2Packages; [
-    futures
+  patches = [
+    ./fix-libcrypto-loading.patch
+  ];
+
+  postPatch = ''
+    substituteInPlace "salt/utils/rsax931.py" \
+      --subst-var-by "libcrypto" "${lib.getLib openssl}/lib/libcrypto${stdenv.hostPlatform.extensions.sharedLibrary}"
+    substituteInPlace requirements/base.txt \
+      --replace contextvars ""
+
+    # Don't require optional dependencies on Darwin, let's use
+    # `extraInputs` like on any other platform
+    echo -n > "requirements/darwin.txt"
+
+    # Remove windows-only requirement
+    substituteInPlace "requirements/zeromq.txt" \
+      --replace 'pyzmq==25.0.2 ; sys_platform == "win32"' ""
+  '';
+
+  propagatedBuildInputs = with python3.pkgs; [
+    distro
     jinja2
+    jmespath
+    looseversion
     markupsafe
     msgpack
-    pycrypto
+    packaging
+    psutil
+    pycryptodomex
     pyyaml
     pyzmq
     requests
     tornado
   ] ++ extraInputs;
 
-  patches = [ ./fix-libcrypto-loading.patch ];
-
-  postPatch = ''
-    substituteInPlace "salt/utils/rsax931.py" \
-      --subst-var-by "libcrypto" "${openssl.out}/lib/libcrypto.so"
-  '';
+  # Don't use fixed dependencies on Darwin
+  USE_STATIC_REQUIREMENTS = "0";
 
   # The tests fail due to socket path length limits at the very least;
   # possibly there are more issues but I didn't leave the test suite running
   # as is it rather long.
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://saltstack.com/;
+  meta = with lib; {
+    homepage = "https://saltproject.io/";
+    changelog = "https://docs.saltproject.io/en/latest/topics/releases/${version}.html";
     description = "Portable, distributed, remote execution and configuration management system";
-    maintainers = with maintainers; [ aneeshusa ];
+    maintainers = with maintainers; [ Flakebi ];
     license = licenses.asl20;
   };
 }

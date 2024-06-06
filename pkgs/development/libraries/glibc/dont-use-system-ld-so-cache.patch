@@ -1,8 +1,47 @@
-diff -ru glibc-2.16.0-orig/elf/ldconfig.c glibc-2.16.0/elf/ldconfig.c
---- glibc-2.16.0-orig/elf/ldconfig.c	2012-06-30 15:12:34.000000000 -0400
-+++ glibc-2.16.0/elf/ldconfig.c	2012-09-18 11:59:27.463284814 -0400
-@@ -50,7 +50,7 @@
- #endif
+diff --git a/elf/Makefile b/elf/Makefile
+index 5d666b1b..a5017e9c 100644
+--- a/elf/Makefile
++++ b/elf/Makefile
+@@ -669,14 +669,14 @@ $(objpfx)sln: $(sln-modules:%=$(objpfx)%.o)
+ 
+ $(objpfx)ldconfig: $(ldconfig-modules:%=$(objpfx)%.o)
+ 
+-SYSCONF-FLAGS := -D'SYSCONFDIR="$(sysconfdir)"'
+-CFLAGS-ldconfig.c += $(SYSCONF-FLAGS) -D'LIBDIR="$(libdir)"' \
++PREFIX-FLAGS := -D'PREFIX="$(prefix)"'
++CFLAGS-ldconfig.c += $(PREFIX-FLAGS) -D'LIBDIR="$(libdir)"' \
+ 		    -D'SLIBDIR="$(slibdir)"'
+ libof-ldconfig = ldconfig
+-CFLAGS-dl-cache.c += $(SYSCONF-FLAGS)
+-CFLAGS-cache.c += $(SYSCONF-FLAGS)
+-CFLAGS-rtld.c += $(SYSCONF-FLAGS)
+-CFLAGS-dl-usage.c += $(SYSCONF-FLAGS) \
++CFLAGS-dl-cache.c += $(PREFIX-FLAGS)
++CFLAGS-cache.c += $(PREFIX-FLAGS)
++CFLAGS-rtld.c += $(PREFIX-FLAGS)
++CFLAGS-dl-usage.c += $(PREFIX-FLAGS) \
+   -D'RTLD="$(rtlddir)/$(rtld-installed-name)"'
+ 
+ cpp-srcs-left := $(all-rtld-routines:=.os)
+diff --git a/elf/dl-diagnostics.c b/elf/dl-diagnostics.c
+index bef224b3..8e166b12 100644
+--- a/elf/dl-diagnostics.c
++++ b/elf/dl-diagnostics.c
+@@ -205,7 +205,7 @@ print_paths (void)
+ {
+   _dl_diagnostics_print_labeled_string ("path.prefix", PREFIX);
+   _dl_diagnostics_print_labeled_string ("path.rtld", RTLD);
+-  _dl_diagnostics_print_labeled_string ("path.sysconfdir", SYSCONFDIR);
++  _dl_diagnostics_print_labeled_string ("path.sysconfdir", PREFIX "/etc");
+
+   unsigned int index = 0;
+   static const char *system_dirs = SYSTEM_DIRS "\0";
+diff --git a/elf/ldconfig.c b/elf/ldconfig.c
+index 28ed637a..6f07b79a 100644
+--- a/elf/ldconfig.c
++++ b/elf/ldconfig.c
+@@ -57,7 +57,7 @@
+ #define TLS_HWCAP_BIT 63
  
  #ifndef LD_SO_CONF
 -# define LD_SO_CONF SYSCONFDIR "/ld.so.conf"
@@ -10,32 +49,11 @@ diff -ru glibc-2.16.0-orig/elf/ldconfig.c glibc-2.16.0/elf/ldconfig.c
  #endif
  
  /* Get libc version number.  */
-diff -ru glibc-2.16.0-orig/elf/Makefile glibc-2.16.0/elf/Makefile
---- glibc-2.16.0-orig/elf/Makefile	2012-06-30 15:12:34.000000000 -0400
-+++ glibc-2.16.0/elf/Makefile	2012-09-18 12:03:30.031955196 -0400
-@@ -415,12 +415,12 @@
- 
- $(objpfx)ldconfig: $(ldconfig-modules:%=$(objpfx)%.o)
- 
--SYSCONF-FLAGS := -D'SYSCONFDIR="$(sysconfdir)"'
--CFLAGS-ldconfig.c = $(SYSCONF-FLAGS) -D'LIBDIR="$(libdir)"' \
-+PREFIX-FLAGS := -D'PREFIX="$(prefix)"'
-+CFLAGS-ldconfig.c = $(PREFIX-FLAGS) -D'LIBDIR="$(libdir)"' \
- 		    -D'SLIBDIR="$(slibdir)"'
- libof-ldconfig = ldconfig
--CFLAGS-dl-cache.c = $(SYSCONF-FLAGS)
--CFLAGS-cache.c = $(SYSCONF-FLAGS)
--CFLAGS-rtld.c = $(SYSCONF-FLAGS)
-+CFLAGS-dl-cache.c = $(PREFIX-FLAGS)
-+CFLAGS-cache.c = $(PREFIX-FLAGS)
-+CFLAGS-rtld.c = $(PREFIX-FLAGS)
- 
- cpp-srcs-left := $(all-rtld-routines:=.os)
- lib := rtld
-diff -ru glibc-2.16.0-orig/sysdeps/generic/dl-cache.h glibc-2.16.0/sysdeps/generic/dl-cache.h
---- glibc-2.16.0-orig/sysdeps/generic/dl-cache.h	2012-06-30 15:12:34.000000000 -0400
-+++ glibc-2.16.0/sysdeps/generic/dl-cache.h	2012-09-18 11:59:27.465284809 -0400
-@@ -28,7 +28,7 @@
+diff --git a/sysdeps/generic/dl-cache.h b/sysdeps/generic/dl-cache.h
+index 964d50a4..2224d651 100644
+--- a/sysdeps/generic/dl-cache.h
++++ b/sysdeps/generic/dl-cache.h
+@@ -35,7 +35,7 @@
  #endif
  
  #ifndef LD_SO_CACHE

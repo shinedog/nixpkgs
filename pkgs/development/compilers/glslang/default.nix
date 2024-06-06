@@ -1,25 +1,55 @@
-{ stdenv, fetchFromGitHub, cmake, bison }:
-
+{ lib, stdenv
+, fetchFromGitHub
+, bison
+, cmake
+, jq
+, python3
+, spirv-headers
+, spirv-tools
+}:
 stdenv.mkDerivation rec {
-  name = "glslang-git-${version}";
-  version = "2016-08-26";
+  pname = "glslang";
+  version = "14.2.0";
 
-  # `vulkan-loader` requires a specific version of `glslang` as specified in
-  # `<vulkan-loader-repo>/glslang_revision`.
   src = fetchFromGitHub {
     owner = "KhronosGroup";
     repo = "glslang";
-    rev = "81cd764b5ffc475bc73f1fb35f75fd1171bb2343";
-    sha256 = "1vfwl6lzkjh9nh29q32b7zca4q1abf3q4nqkahskijgznw5lr59g";
+    rev = version;
+    hash = "sha256-B6jVCeoFjd2H6+7tIses+Kj8DgHS6E2dkVzQAIzDHEc=";
   };
 
-  patches = [ ./install-headers.patch ];
+  # These get set at all-packages, keep onto them for child drvs
+  passthru = {
+    spirv-tools = spirv-tools;
+    spirv-headers = spirv-headers;
+  };
 
-  buildInputs = [ cmake bison ];
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ cmake python3 bison jq ];
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    cp --no-preserve=mode -r "${spirv-tools.src}" External/spirv-tools
+    ln -s "${spirv-headers.src}" External/spirv-tools/external/spirv-headers
+  '';
+
+  # This is a dirty fix for lib/cmake/SPIRVTargets.cmake:51 which includes this directory
+  postInstall = ''
+    mkdir $out/include/External
+  '';
+
+  # Fix the paths in .pc, even though it's unclear if these .pc are really useful.
+  postFixup = ''
+    substituteInPlace $out/lib/pkgconfig/*.pc \
+      --replace '=''${prefix}//' '=/'
+
+    # add a symlink for backwards compatibility
+    ln -s $out/bin/glslang $out/bin/glslangValidator
+  '';
+
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "Khronos reference front-end for GLSL and ESSL";
+    license = licenses.asl20;
+    platforms = platforms.unix;
+    maintainers = [ maintainers.ralith ];
   };
 }

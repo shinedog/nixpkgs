@@ -1,38 +1,37 @@
-{ stdenv, fetchurl, writeText, python2, dpkg, binutils }:
+{ lib, stdenv, fetchurl
 
-let arch = if stdenv.system == "x86_64-linux" then "amd64"
-           else if stdenv.system == "i686-linux" then "i386"
-           else abort "Unsupported platform";
+# for update script
+, writeShellScript, curl, nix-update
+}:
 
-    input = builtins.getAttr arch (import ./runtime-generated.nix { inherit fetchurl; });
+stdenv.mkDerivation (finalAttrs: {
 
-    inputFile = writeText "steam-runtime.json" (builtins.toJSON input);
+  pname = "steam-runtime";
+  # from https://repo.steampowered.com/steamrt-images-scout/snapshots/latest-steam-client-general-availability/VERSION.txt
+  version = "0.20231127.68515";
 
-in stdenv.mkDerivation {
-  name = "steam-runtime-2016-08-13";
-
-  nativeBuildInputs = [ python2 dpkg binutils ];
+  src = fetchurl {
+    url = "https://repo.steampowered.com/steamrt-images-scout/snapshots/${finalAttrs.version}/steam-runtime.tar.xz";
+    hash = "sha256-invUOdJGNhrswsj9Vj/bSAkEigWtBQ554sBAyvPf0mk=";
+    name = "scout-runtime-${finalAttrs.version}.tar.gz";
+  };
 
   buildCommand = ''
     mkdir -p $out
-    python2 ${./build-runtime.py} -i ${inputFile} -r $out
+    tar -C $out --strip=1 -x -f $src
   '';
 
-  passthru = rec {
-    inherit arch;
-
-    gnuArch = if arch == "amd64" then "x86_64-linux-gnu"
-              else if arch == "i386" then "i386-linux-gnu"
-              else abort "Unsupported architecture";
-
-    libs = [ "lib/${gnuArch}" "lib" "usr/lib/${gnuArch}" "usr/lib" ];
-    bins = [ "bin" "usr/bin" ];
+  passthru = {
+    updateScript = writeShellScript "update.sh" ''
+      version=$(${curl}/bin/curl https://repo.steampowered.com/steamrt-images-scout/snapshots/latest-steam-client-general-availability/VERSION.txt)
+      ${lib.getExe nix-update} --version "$version" steamPackages.steam-runtime
+    '';
   };
 
-  meta = with stdenv.lib; {
+  meta = {
     description = "The official runtime used by Steam";
-    homepage = https://github.com/ValveSoftware/steam-runtime;
-    license = licenses.unfreeRedistributable; # Includes NVIDIA CG toolkit
-    maintainers = with maintainers; [ hrdinka abbradar ];
+    homepage = "https://github.com/ValveSoftware/steam-runtime";
+    license = lib.licenses.unfreeRedistributable; # Includes NVIDIA CG toolkit
+    maintainers = with lib.maintainers; [ hrdinka abbradar ];
   };
-}
+})

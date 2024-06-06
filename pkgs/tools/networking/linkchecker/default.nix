@@ -1,38 +1,61 @@
-{ stdenv, lib, fetchurl, python2Packages, gettext }:
+{ lib
+, fetchFromGitHub
+, python3
+, gettext
+}:
 
-python2Packages.buildPythonApplication rec {
-  name = "LinkChecker-${version}";
-  version = "9.3";
+python3.pkgs.buildPythonApplication rec {
+  pname = "linkchecker";
+  version = "10.2.1";
+  pyproject = true;
 
-  buildInputs = with python2Packages ; [ pytest ];
-  propagatedBuildInputs = with python2Packages ; [ requests2 ] ++ [ gettext ];
-
-  src = fetchurl {
-    url = "mirror://pypi/L/LinkChecker/${name}.tar.gz";
-    sha256 = "0v8pavf0bx33xnz1kwflv0r7lxxwj7vg3syxhy2wzza0wh6sc2pf";
+  src = fetchFromGitHub {
+    owner = "linkchecker";
+    repo = "linkchecker";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-z7Qp74cai8GfsxB4n9dSCWQepp0/4PimFiRJQBaVSoo=";
   };
 
-  # 1. upstream refuses to support ignoring robots.txt
-  # 2. work around requests2 version detection - can be dropped >v9.3
-  patches = [
-    ./add-no-robots-flag.patch
-    ./no-version-check.patch
+  nativeBuildInputs = [ gettext ];
+
+  build-system = with python3.pkgs; [
+    hatchling
+    hatch-vcs
+    polib # translations
   ];
 
-  postInstall = ''
-    rm $out/bin/linkchecker-gui
-  '';
+  dependencies = with python3.pkgs; [
+    argcomplete
+    beautifulsoup4
+    dnspython
+    requests
+  ];
 
-  checkPhase = ''
-    # the mime test fails for me...
-    rm tests/test_mimeutil.py
-    make test PYTESTOPTS="--tb=short" TESTS="tests/test_*.py tests/logger/test_*.py"
-  '';
+  nativeCheckInputs = with python3.pkgs; [
+    pyopenssl
+    parameterized
+    pytestCheckHook
+  ];
 
-  meta = {
+  disabledTests = [
+    "TestLoginUrl"
+    "test_timeit2" # flakey, and depends sleep being precise to the milisecond
+    "test_internet" # uses network, fails on Darwin (not sure why it doesn't fail on linux)
+  ];
+
+  disabledTestPaths = [
+    "tests/checker/telnetserver.py"
+    "tests/checker/test_telnet.py"
+  ];
+
+  __darwinAllowLocalNetworking = true;
+
+  meta = with lib; {
     description = "Check websites for broken links";
-    homepage = "https://wummel.github.io/linkchecker/";
-    license = lib.licenses.gpl2;
-    maintainers = with lib.maintainers; [ peterhoeg ];
+    mainProgram = "linkchecker";
+    homepage = "https://linkcheck.github.io/linkchecker/";
+    changelog = "https://github.com/linkchecker/linkchecker/releases/tag/v${version}";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ peterhoeg tweber ];
   };
 }

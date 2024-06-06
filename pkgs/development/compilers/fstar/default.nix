@@ -1,77 +1,83 @@
-{ stdenv, fetchFromGitHub, mono, fsharp, dotnetPackages, z3, ocamlPackages, openssl, makeWrapper }:
+{ callPackage
+, fetchFromGitHub
+, installShellFiles
+, lib
+, makeWrapper
+, ocamlPackages
+, removeReferencesTo
+, stdenv
+, writeScript
+, z3
+}:
 
-stdenv.mkDerivation rec {
-  name = "fstar-${version}";
-  version = "0.9.2.0";
+let
+
+  version = "2024.01.13";
 
   src = fetchFromGitHub {
     owner = "FStarLang";
     repo = "FStar";
     rev = "v${version}";
-    sha256 = "0vrxmxfaslngvbvkzpm1gfl1s34hdsprv8msasxf9sjqc3hlir3l";
+    hash = "sha256-xjSWDP8mSjLcn+0hsRpEdzsBgBR+mKCZB8yLmHl+WqE=";
   };
 
-  nativeBuildInputs = [ makeWrapper ];
+  fstar-dune = ocamlPackages.callPackage ./dune.nix { inherit version src; };
 
-  buildInputs = with ocamlPackages; [
-    mono fsharp z3 dotnetPackages.FsLexYacc ocaml findlib ocaml_batteries openssl
+  fstar-ulib = callPackage ./ulib.nix { inherit version src fstar-dune z3; };
+
+in
+
+stdenv.mkDerivation {
+  pname = "fstar";
+  inherit version src;
+
+  nativeBuildInputs = [
+    installShellFiles
+    makeWrapper
+    removeReferencesTo
   ];
 
-  preBuild = ''
-    substituteInPlace src/Makefile --replace "\$(RUNTIME) VS/.nuget/NuGet.exe" "true"
+  inherit (fstar-dune) propagatedBuildInputs;
 
-    source setenv.sh
+  dontBuild = true;
+
+  installPhase = ''
+    mkdir $out
+
+    CP="cp -r --no-preserve=mode"
+    $CP ${fstar-dune}/* $out
+    $CP ${fstar-ulib}/* $out
+
+    PREFIX=$out make -C src/ocaml-output install-sides
+
+    chmod +x $out/bin/fstar.exe
+    wrapProgram $out/bin/fstar.exe --prefix PATH ":" ${z3}/bin
+    remove-references-to -t '${ocamlPackages.ocaml}' $out/bin/fstar.exe
+
+    substituteInPlace $out/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib/fstar/dune-package \
+      --replace ${fstar-dune} $out
+
+    installShellCompletion --bash .completion/bash/fstar.exe.bash
+    installShellCompletion --fish .completion/fish/fstar.exe.fish
+    installShellCompletion --zsh --name _fstar.exe .completion/zsh/__fstar.exe
   '';
 
-  makeFlags = [
-    "FSYACC=${dotnetPackages.FsLexYacc}/bin/fsyacc"
-    "FSLEX=${dotnetPackages.FsLexYacc}/bin/fslex"
-    "NUGET=true"
-    "PREFIX=$(out)"
-  ];
+  passthru.updateScript = writeScript "update-fstar" ''
+    #!/usr/bin/env nix-shell
+    #!nix-shell -i bash -p git gnugrep common-updater-scripts
+    set -eu -o pipefail
 
-  buildFlags = "-C src";
-
-  # Now that the .NET fstar.exe is built, use it to build the native OCaml binary
-  postBuild = ''
-    patchShebangs bin/fstar.exe
-
-    # Workaround for fsharp/fsharp#419
-    cp ${fsharp}/lib/mono/4.5/FSharp.Core.dll bin/
-
-    # Use the built .NET binary to extract the sources of itself from F* to OCaml
-    make ''${enableParallelBuilding:+-j''${NIX_BUILD_CORES} -l''${NIX_BUILD_CORES}} \
-        $makeFlags "''${makeFlagsArray[@]}" \
-        ocaml -C src
-
-    # Build the extracted OCaml sources
-    make ''${enableParallelBuilding:+-j''${NIX_BUILD_CORES} -l''${NIX_BUILD_CORES}} \
-        $makeFlags "''${makeFlagsArray[@]}" \
-        -C src/ocaml-output
+    version="$(git ls-remote --tags git@github.com:FStarLang/FStar.git | grep -Po 'v\K\d{4}\.\d{2}\.\d{2}' | sort | tail -n1)"
+    update-source-version fstar "$version"
   '';
 
-  # https://github.com/FStarLang/FStar/issues/676
-  doCheck = false;
-
-  preCheck = "ulimit -s unlimited";
-
-  # Basic test suite:
-  #checkFlags = "VERBOSE=y -C examples";
-
-  # Complete, but heavyweight test suite:
-  checkTarget = "regressions";
-  checkFlags = "VERBOSE=y -C src";
-
-  installFlags = "-C src/ocaml-output";
-
-  postInstall = ''
-    wrapProgram $out/bin/fstar.exe --prefix PATH ":" "${z3}/bin"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "ML-like functional programming language aimed at program verification";
     homepage = "https://www.fstar-lang.org";
+    changelog = "https://github.com/FStarLang/FStar/raw/v${version}/CHANGES.md";
     license = licenses.asl20;
+    maintainers = with maintainers; [ gebner pnmadelaine ];
+    mainProgram = "fstar.exe";
     platforms = with platforms; darwin ++ linux;
   };
 }

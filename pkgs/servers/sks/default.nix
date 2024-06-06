@@ -1,23 +1,42 @@
-{ stdenv, fetchFromBitbucket, ocaml, zlib, db48, perl }:
+{ lib, stdenv, fetchFromGitHub, ocamlPackages, perl
+, zlib, db
+}:
+
+let
+  inherit (ocamlPackages)
+    ocaml
+    findlib
+    cryptokit
+    num
+    ;
+in
 
 stdenv.mkDerivation rec {
-  name = "sks-${version}";
-  version = "1.1.6";
+  pname = "sks";
+  version = "unstable-2021-02-04";
 
-  src = fetchFromBitbucket {
-    owner = "skskeyserver";
+  src = fetchFromGitHub {
+    owner = "SKS-Keyserver";
     repo = "sks-keyserver";
-    rev = "${version}";
-    sha256 = "00q5ma5rvl10rkc6cdw8d69bddgrmvy0ckqj3hbisy65l4idj2zm";
+    rev = "c3ba6d5abb525dcb84745245631c410c11c07ec1";
+    sha256 = "0fql07sc69hv6jy7x5svb19977cdsz0p1j8wv53k045a6v7rw1jw";
   };
 
-  buildInputs = [ ocaml zlib db48 perl ];
+  # pkgs.db provides db_stat, not db$major.$minor_stat
+  patches = [
+    ./adapt-to-nixos.patch
+  ];
+
+  outputs = [ "out" "webSamples" ];
+
+  nativeBuildInputs = [ ocaml findlib perl ];
+  buildInputs = [ zlib db cryptokit num ];
 
   makeFlags = [ "PREFIX=$(out)" "MANDIR=$(out)/share/man" ];
   preConfigure = ''
     cp Makefile.local.unused Makefile.local
     sed -i \
-      -e "s:^LIBDB=.*$:LIBDB=-ldb-4.8:g" \
+      -e "s:^LIBDB=.*$:LIBDB=-ldb:g" \
       Makefile.local
   '';
 
@@ -26,9 +45,11 @@ stdenv.mkDerivation rec {
   doCheck = true;
   checkPhase = "./sks unit_test";
 
-  meta = with stdenv.lib; {
-    description = "An OpenPGP keyserver whose goal is to provide easy to
-      deploy, decentralized, and highly reliable synchronization";
+  # Copy the web examples for the NixOS module
+  postInstall = "cp -R sampleWeb $webSamples";
+
+  meta = with lib; {
+    description = "An easily deployable & decentralized OpenPGP keyserver";
     longDescription = ''
       SKS is an OpenPGP keyserver whose goal is to provide easy to deploy,
       decentralized, and highly reliable synchronization. That means that a key
@@ -37,9 +58,9 @@ stdenv.mkDerivation rec {
       spotty connectivity, can fully synchronize with rest of the system.
     '';
     inherit (src.meta) homepage;
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ primeos ];
+    maintainers = with maintainers; [ ];
   };
 }
 

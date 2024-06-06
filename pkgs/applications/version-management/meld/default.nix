@@ -1,51 +1,74 @@
-{ stdenv, fetchurl, itstool, python2Packages, intltool, wrapGAppsHook
-, libxml2, gobjectIntrospection, gtk3, gnome3, cairo, file
+{ lib
+, fetchurl
+, gettext
+, itstool
+, python3
+, meson
+, ninja
+, wrapGAppsHook3
+, libxml2
+, pkg-config
+, desktop-file-utils
+, gobject-introspection
+, gtk3
+, gtksourceview4
+, gnome
+, gsettings-desktop-schemas
 }:
 
+python3.pkgs.buildPythonApplication rec {
+  pname = "meld";
+  version = "3.22.2";
 
-let
-  minor = "3.16";
-  version = "${minor}.2";
-  inherit (python2Packages) python buildPythonApplication pycairo pygobject3;
-in buildPythonApplication rec {
-  name = "meld-${version}";
+  format = "other";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/meld/${minor}/meld-${version}.tar.xz";
-    sha256 = "2dd3f58b95444bf721e0c912668c29cf8f47a402440b772ea12c4b9a0c94966f";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "sha256-RqCnE/vNGxU7N3oeB1fIziVcmCJGdljqz72JsekjFu8=";
   };
 
-  buildInputs = [
-    intltool wrapGAppsHook itstool libxml2
-    gnome3.gtksourceview gnome3.gsettings_desktop_schemas pycairo cairo
-    gnome3.defaultIconTheme gnome3.dconf file
+  nativeBuildInputs = [
+    meson
+    ninja
+    gettext
+    itstool
+    libxml2
+    pkg-config
+    desktop-file-utils
+    gobject-introspection
+    wrapGAppsHook3
+    gtk3 # for gtk-update-icon-cache
   ];
-  propagatedBuildInputs = [ gobjectIntrospection pygobject3 gtk3 ];
 
-  installPhase = ''
-    mkdir -p "$out/lib/${python.libPrefix}/site-packages"
+  buildInputs = [
+    gtk3
+    gtksourceview4
+    gsettings-desktop-schemas
+    gnome.adwaita-icon-theme
+  ];
 
-    export PYTHONPATH="$out/lib/${python.libPrefix}/site-packages:$PYTHONPATH"
+  pythonPath = with python3.pkgs; [
+    pygobject3
+    pycairo
+  ];
 
-    ${python}/bin/${python.executable} setup.py install \
-      --install-lib=$out/lib/${python.libPrefix}/site-packages \
-      --prefix="$out"
-
-    mkdir -p $out/share/gsettings-schemas/$name
-    mv $out/share/glib-2.0 $out/share/gsettings-schemas/$name/
+  postPatch = ''
+    patchShebangs meson_shebang_normalisation.py
   '';
 
-  patchPhase = ''
-    patchShebangs bin/meld
-  '';
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none"; # should be odd-unstable but we are tracking unstable versions for now
+    };
+  };
 
-  pythonPath = [ gtk3 ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Visual diff and merge tool";
-    homepage = http://meldmerge.org/;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = platforms.linux ++ stdenv.lib.platforms.darwin;
-    maintainers = [ maintainers.mimadrid ];
+    homepage = "https://meld.app/";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ jtojnar mimame ];
+    mainProgram = "meld";
   };
 }

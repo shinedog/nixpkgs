@@ -17,48 +17,44 @@ in
   options = {
 
     services.memcached = {
-
-      enable = mkOption {
-        default = false;
-        description = "
-          Whether to enable Memcached.
-        ";
-      };
+      enable = mkEnableOption "Memcached";
 
       user = mkOption {
+        type = types.str;
         default = "memcached";
         description = "The user to run Memcached as";
       };
 
       listen = mkOption {
+        type = types.str;
         default = "127.0.0.1";
-        description = "The IP address to bind to";
+        description = "The IP address to bind to.";
       };
 
       port = mkOption {
+        type = types.port;
         default = 11211;
-        description = "The port to bind to";
+        description = "The port to bind to.";
       };
 
-      socket = mkOption {
-        default = "";
-        description = "Unix socket path to listen on. Setting this will disable network support";
-        example = "/var/run/memcached";
-      };
+      enableUnixSocket = mkEnableOption "Unix Domain Socket at /run/memcached/memcached.sock instead of listening on an IP address and port. The `listen` and `port` options are ignored.";
 
       maxMemory = mkOption {
+        type = types.ints.unsigned;
         default = 64;
         description = "The maximum amount of memory to use for storage, in megabytes.";
       };
 
       maxConnections = mkOption {
+        type = types.ints.unsigned;
         default = 1024;
-        description = "The maximum number of simultaneous connections";
+        description = "The maximum number of simultaneous connections.";
       };
 
       extraOptions = mkOption {
+        type = types.listOf types.str;
         default = [];
-        description = "A list of extra options that will be added as a suffix when running memcached";
+        description = "A list of extra options that will be added as a suffix when running memcached.";
       };
     };
 
@@ -68,31 +64,55 @@ in
 
   config = mkIf config.services.memcached.enable {
 
-    users.extraUsers.memcached =
-      { name = cfg.user;
-        uid = config.ids.uids.memcached;
-        description = "Memcached server user";
-      };
+    users.users = optionalAttrs (cfg.user == "memcached") {
+      memcached.description = "Memcached server user";
+      memcached.isSystemUser = true;
+      memcached.group = "memcached";
+    };
+    users.groups = optionalAttrs (cfg.user == "memcached") { memcached = {}; };
 
     environment.systemPackages = [ memcached ];
 
-    systemd.services.memcached =
-      { description = "Memcached server";
+    systemd.services.memcached = {
+      description = "Memcached server";
 
-        wantedBy = [ "multi-user.target" ];
-        after = [ "network.target" ];
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network.target" ];
 
-        serviceConfig = {
-          ExecStart =
-            let
-              networking = if cfg.socket != ""
-                then "-s ${cfg.socket}"
-                else "-l ${cfg.listen} -p ${toString cfg.port}";
-            in "${memcached}/bin/memcached ${networking} -m ${toString cfg.maxMemory} -c ${toString cfg.maxConnections} ${concatStringsSep " " cfg.extraOptions}";
+      serviceConfig = {
+        ExecStart =
+        let
+          networking = if cfg.enableUnixSocket
+          then "-s /run/memcached/memcached.sock"
+          else "-l ${cfg.listen} -p ${toString cfg.port}";
+        in "${memcached}/bin/memcached ${networking} -m ${toString cfg.maxMemory} -c ${toString cfg.maxConnections} ${concatStringsSep " " cfg.extraOptions}";
 
-          User = cfg.user;
-        };
+        User = cfg.user;
+
+        # Filesystem access
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectControlGroups = true;
+        RuntimeDirectory = "memcached";
+        # Caps
+        CapabilityBoundingSet = "";
+        NoNewPrivileges = true;
+        # Misc.
+        LockPersonality = true;
+        RestrictRealtime = true;
+        PrivateMounts = true;
+        MemoryDenyWriteExecute = true;
       };
+    };
   };
+  imports = [
+    (mkRemovedOptionModule ["services" "memcached" "socket"] ''
+      This option was replaced by a fixed unix socket path at /run/memcached/memcached.sock enabled using services.memcached.enableUnixSocket.
+    '')
+  ];
 
 }

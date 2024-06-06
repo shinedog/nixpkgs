@@ -1,9 +1,9 @@
-{ config, coreutils, lib, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 
 with lib;
 
 let cfg     = config.services.tvheadend;
-    pidFile = "${config.users.extraUsers.tvheadend.home}/tvheadend.pid";
+    pidFile = "${config.users.users.tvheadend.home}/tvheadend.pid";
 in
 
 {
@@ -25,12 +25,14 @@ in
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers.tvheadend = {
+    users.users.tvheadend = {
       description = "Tvheadend Service user";
       home        = "/var/lib/tvheadend";
       createHome  = true;
-      uid         = config.ids.uids.tvheadend;
+      isSystemUser = true;
+      group = "tvheadend";
     };
+    users.groups.tvheadend = {};
 
     systemd.services.tvheadend = {
       description = "Tvheadend TV streaming server";

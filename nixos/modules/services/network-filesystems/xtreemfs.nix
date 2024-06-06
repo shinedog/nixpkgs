@@ -11,7 +11,7 @@ let
   home = cfg.homeDir;
 
   startupScript = class: configPath: pkgs.writeScript "xtreemfs-osd.sh" ''
-    #! ${pkgs.stdenv.shell}
+    #! ${pkgs.runtimeShell}
     JAVA_HOME="${pkgs.jdk}"
     JAVADIR="${xtreemfs}/share/java"
     JAVA_CALL="$JAVA_HOME/bin/java -ea -cp $JAVADIR/XtreemFS.jar:$JAVADIR/BabuDB.jar:$JAVADIR/Flease.jar:$JAVADIR/protobuf-java-2.5.0.jar:$JAVADIR/Foundation.jar:$JAVADIR/jdmkrt.jar:$JAVADIR/jdmktk.jar:$JAVADIR/commons-codec-1.3.jar"
@@ -92,6 +92,7 @@ in
       enable = mkEnableOption "XtreemFS";
 
       homeDir = mkOption {
+        type = types.path;
         default = "/var/lib/xtreemfs";
         description = ''
           XtreemFS home dir for the xtreemfs user.
@@ -100,26 +101,31 @@ in
 
       dir = {
         enable = mkOption {
+          type = types.bool;
           default = true;
           description = ''
             Whether to enable XtreemFS DIR service.
           '';
         };
+
         uuid = mkOption {
           example = "eacb6bab-f444-4ebf-a06a-3f72d7465e40";
+          type = types.str;
           description = ''
             Must be set to a unique identifier, preferably a UUID according to
             RFC 4122. UUIDs can be generated with `uuidgen` command, found in
-            the `utillinux` package.
+            the `util-linux` package.
           '';
         };
         port = mkOption {
           default = 32638;
+          type = types.port;
           description = ''
             The port to listen on for incoming connections (TCP).
           '';
         };
         address = mkOption {
+          type = types.str;
           example = "127.0.0.1";
           default = "";
           description = ''
@@ -129,12 +135,14 @@ in
         };
         httpPort = mkOption {
           default = 30638;
+          type = types.port;
           description = ''
             Specifies the listen port for the HTTP service that returns the
             status page.
           '';
         };
         syncMode = mkOption {
+          type = types.enum [ "ASYNC" "SYNC_WRITE_METADATA" "SYNC_WRITE" "FDATASYNC" "FSYNC" ];
           default = "FSYNC";
           example = "FDATASYNC";
           description = ''
@@ -168,7 +176,7 @@ in
           description = ''
             Configuration of XtreemFS DIR service.
             WARNING: configuration is saved as plaintext inside nix store.
-            For more options: http://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
+            For more options: https://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
           '';
         };
         replication = {
@@ -210,7 +218,7 @@ in
             description = ''
               Configuration of XtreemFS DIR replication plugin.
               WARNING: configuration is saved as plaintext inside nix store.
-              For more options: http://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
+              For more options: https://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
             '';
           };
         };
@@ -218,27 +226,32 @@ in
 
       mrc = {
         enable = mkOption {
+          type = types.bool;
           default = true;
           description = ''
             Whether to enable XtreemFS MRC service.
           '';
         };
+
         uuid = mkOption {
           example = "eacb6bab-f444-4ebf-a06a-3f72d7465e41";
+          type = types.str;
           description = ''
             Must be set to a unique identifier, preferably a UUID according to
             RFC 4122. UUIDs can be generated with `uuidgen` command, found in
-            the `utillinux` package.
+            the `util-linux` package.
           '';
         };
         port = mkOption {
           default = 32636;
+          type = types.port;
           description = ''
             The port to listen on for incoming connections (TCP).
           '';
         };
         address = mkOption {
           example = "127.0.0.1";
+          type = types.str;
           default = "";
           description = ''
             If specified, it defines the interface to listen on. If not
@@ -247,6 +260,7 @@ in
         };
         httpPort = mkOption {
           default = 30636;
+          type = types.port;
           description = ''
             Specifies the listen port for the HTTP service that returns the
             status page.
@@ -254,6 +268,7 @@ in
         };
         syncMode = mkOption {
           default = "FSYNC";
+          type = types.enum [ "ASYNC" "SYNC_WRITE_METADATA" "SYNC_WRITE" "FDATASYNC" "FSYNC" ];
           example = "FDATASYNC";
           description = ''
             The sync mode influences how operations are committed to the disk
@@ -304,7 +319,7 @@ in
           description = ''
             Configuration of XtreemFS MRC service.
             WARNING: configuration is saved as plaintext inside nix store.
-            For more options: http://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
+            For more options: https://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
           '';
         };
         replication = {
@@ -346,7 +361,7 @@ in
             description = ''
               Configuration of XtreemFS MRC replication plugin.
               WARNING: configuration is saved as plaintext inside nix store.
-              For more options: http://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
+              For more options: https://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
             '';
           };
         };
@@ -354,27 +369,32 @@ in
 
       osd = {
         enable = mkOption {
+          type = types.bool;
           default = true;
           description = ''
             Whether to enable XtreemFS OSD service.
           '';
         };
+
         uuid = mkOption {
           example = "eacb6bab-f444-4ebf-a06a-3f72d7465e42";
+          type = types.str;
           description = ''
             Must be set to a unique identifier, preferably a UUID according to
             RFC 4122. UUIDs can be generated with `uuidgen` command, found in
-            the `utillinux` package.
+            the `util-linux` package.
           '';
         };
         port = mkOption {
           default = 32640;
+          type = types.port;
           description = ''
             The port to listen on for incoming connections (TCP and UDP).
           '';
         };
         address = mkOption {
           example = "127.0.0.1";
+          type = types.str;
           default = "";
           description = ''
             If specified, it defines the interface to listen on. If not
@@ -383,6 +403,7 @@ in
         };
         httpPort = mkOption {
           default = 30640;
+          type = types.port;
           description = ''
             Specifies the listen port for the HTTP service that returns the
             status page.
@@ -417,7 +438,7 @@ in
           description = ''
             Configuration of XtreemFS OSD service.
             WARNING: configuration is saved as plaintext inside nix store.
-            For more options: http://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
+            For more options: https://www.xtreemfs.org/xtfs-guide-1.5.1/index.html
           '';
         };
       };
@@ -432,14 +453,14 @@ in
 
     environment.systemPackages = [ xtreemfs ];
 
-    users.extraUsers.xtreemfs =
+    users.users.xtreemfs =
       { uid = config.ids.uids.xtreemfs;
         description = "XtreemFS user";
         createHome = true;
         home = home;
       };
 
-    users.extraGroups.xtreemfs =
+    users.groups.xtreemfs =
       { gid = config.ids.gids.xtreemfs;
       };
 

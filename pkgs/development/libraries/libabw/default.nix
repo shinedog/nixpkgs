@@ -1,26 +1,27 @@
-{ stdenv, fetchurl, boost, doxygen, gperf, pkgconfig, librevenge, libxml2, perl }:
+{ lib, stdenv, fetchurl, boost, doxygen, gperf, pkg-config, librevenge, libxml2, perl }:
 
 stdenv.mkDerivation rec {
-  name = "libabw-${version}";
-  version = "0.1.1";
+  pname = "libabw";
+  version = "0.1.3";
 
   src = fetchurl {
-    url = "http://dev-www.libreoffice.org/src/libabw/${name}.tar.xz";
-    sha256 = "0zi1zj4fpxgpglbbb5n1kg3dmhqq5rpf46lli89r5daavp19iing";
+    url = "https://dev-www.libreoffice.org/src/libabw/${pname}-${version}.tar.xz";
+    sha256 = "1vbfrmnvib3cym0yyyabnd8xpx4f7wp20vnn09s6dln347fajqz7";
   };
 
-  # Boost 1.59 compatability fix
+  # Boost 1.59 compatibility fix
   # Attempt removing when updating
   postPatch = ''
     sed -i 's,^CPPFLAGS.*,\0 -DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED,' src/lib/Makefile.in
   '';
 
-  buildInputs = [ boost doxygen gperf pkgconfig librevenge libxml2 perl ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ boost doxygen gperf librevenge libxml2 perl ];
 
-  meta = with stdenv.lib; {
-    homepage = https://wiki.documentfoundation.org/DLP/Libraries/libabw;
+  meta = with lib; {
+    homepage = "https://wiki.documentfoundation.org/DLP/Libraries/libabw";
     description = "Library parsing abiword documents";
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     license = licenses.mpl20;
   };
 }

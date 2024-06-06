@@ -1,33 +1,56 @@
-{stdenv, fetchurl, atomicparsley, flvstreamer, ffmpeg, makeWrapper, perl, buildPerlPackage, perlPackages, rtmpdump}:
-buildPerlPackage rec {
-  name = "get_iplayer-${version}";
-  version = "2.97";
+{ lib
+, perlPackages
+, fetchFromGitHub
+, makeWrapper
+, stdenv
+, shortenPerlShebang
+, perl
+, atomicparsley
+, ffmpeg
+}:
 
-  buildInputs = [makeWrapper perl];
-  propagatedBuildInputs = with perlPackages; [HTMLParser HTTPCookies LWP XMLLibXML XMLSimple];
+perlPackages.buildPerlPackage rec {
+  pname = "get_iplayer";
+  version = "3.35";
+
+  src = fetchFromGitHub {
+    owner = "get-iplayer";
+    repo = "get_iplayer";
+    rev = "v${version}";
+    hash = "sha256-fqzrgmtqy7dlmGEaTXAqpdt9HqZCVooJ0Vf6/JUKihw=";
+  };
+
+  nativeBuildInputs = [ makeWrapper ] ++ lib.optional stdenv.isDarwin shortenPerlShebang;
+  buildInputs = [ perl ];
+  propagatedBuildInputs = with perlPackages; [
+    LWP LWPProtocolHttps XMLLibXML Mojolicious
+  ];
 
   preConfigure = "touch Makefile.PL";
   doCheck = false;
   outputs = [ "out" "man" ];
 
   installPhase = ''
-    mkdir -p $out/bin $out/share/man/man1
-    cp get_iplayer $out/bin
-    wrapProgram $out/bin/get_iplayer --suffix PATH : ${stdenv.lib.makeBinPath [ atomicparsley ffmpeg flvstreamer rtmpdump ]} --prefix PERL5LIB : $PERL5LIB
-    cp get_iplayer.1 $out/share/man/man1
+    runHook preInstall
+
+    install -D get_iplayer -t $out/bin
+    wrapProgram $out/bin/get_iplayer --suffix PATH : ${lib.makeBinPath [ atomicparsley ffmpeg ]} --prefix PERL5LIB : $PERL5LIB
+    install -Dm444 get_iplayer.1 -t $out/share/man/man1
+
+    runHook postInstall
   '';
-  
-  src = fetchurl {
-    url = "https://github.com/get-iplayer/get_iplayer/archive/v${version}.tar.gz";
-    sha256 = "0bb6kmzjmazwfxq5ip7yxm39vssfgz3v5vfx1114wfssp6pw0r44";
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    shortenPerlShebang $out/bin/.get_iplayer-wrapped
+  '';
+
+  meta = with lib; {
+    description = "Downloads TV and radio programmes from BBC iPlayer and BBC Sounds";
+    mainProgram = "get_iplayer";
+    license = licenses.gpl3Plus;
+    homepage = "https://github.com/get-iplayer/get_iplayer";
+    platforms = platforms.all;
+    maintainers = with maintainers; [ rika chewblacka ];
   };
 
-  meta = {
-    description = "Downloads TV and radio from BBC iPlayer";
-    license = stdenv.lib.licenses.gpl3Plus;
-    homepage = https://squarepenguin.co.uk/;
-    downloadPage = https://github.com/get-iplayer/get_iplayer/releases;
-    platforms = stdenv.lib.platforms.all;
-  };
-  
 }

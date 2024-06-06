@@ -1,20 +1,47 @@
-{stdenv, fetchFromGitHub}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, gdk-pixbuf
+, gd
+, libjpeg
+, pkg-config
+}:
 stdenv.mkDerivation rec {
-  version = "1.6.1";
-  name = "libsixel-${version}";
+  pname = "libsixel";
+  version = "1.10.3";
 
   src = fetchFromGitHub {
+    owner = "libsixel";
     repo = "libsixel";
-    rev = "ef4374f80385edc48e0844cf324d7ef757688e44";
-    owner = "saitoha";
-    sha256 = "08m5q2ppk235bzbwff1wg874vr1bh4080qdj26l39v8lw1xzlqcp";
+    rev = "v${version}";
+    sha256 = "1nny4295ipy4ajcxmmh04c796hcds0y7z7rv3qd17mj70y8j0r2d";
   };
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    gdk-pixbuf gd
+  ];
+
+  nativeBuildInputs = [
+    meson ninja pkg-config
+  ];
+
+  doCheck = true;
+
+  mesonFlags = [
+    "-Dtests=enabled"
+    # build system seems to be broken here, it still seems to handle jpeg
+    # through some other ways.
+    "-Djpeg=disabled"
+    "-Dpng=disabled"
+  ];
+
+  meta = with lib; {
     description = "The SIXEL library for console graphics, and converter programs";
-    homepage = http://saitoha.github.com/libsixel;
+    homepage = "https://github.com/libsixel/libsixel";
     maintainers = with maintainers; [ vrthra ];
     license = licenses.mit;
-    platforms = with platforms; unix;
+    platforms = platforms.unix;
   };
 }

@@ -1,35 +1,55 @@
-{ stdenv, fetchFromGitHub, avrgcclibc, libelf, which, git, pkgconfig, freeglut
-, mesa }:
+{ lib, stdenv, makeSetupHook, fetchFromGitHub, libelf, which, pkg-config, freeglut
+, avrgcc, avrlibc
+, libGLU, libGL
+, GLUT }:
 
-stdenv.mkDerivation rec {
-  name = "simavr-${version}";
-  version = "1.3";
-  enableParallelBuilding = true;
+let
+  setupHookDarwin = makeSetupHook {
+    name = "darwin-avr-gcc-hook";
+    substitutions = {
+      darwinSuffixSalt = stdenv.cc.suffixSalt;
+      avrSuffixSalt = avrgcc.suffixSalt;
+    };
+  } ./setup-hook-darwin.sh;
+in stdenv.mkDerivation rec {
+  pname = "simavr";
+  version = "1.7";
 
   src = fetchFromGitHub {
     owner = "buserror";
     repo = "simavr";
-    rev = "51d5fa69f9bc3d62941827faec02f8fbc7e187ab";
-    sha256 = "0k8xwzw9i6xsmf98q43fxhphq0wvflvmzqma1n4jd1ym9wi48lfx";
+    rev = "v${version}";
+    sha256 = "0njz03lkw5374x1lxrq08irz4b86lzj2hibx46ssp7zv712pq55q";
   };
 
-  buildFlags = "AVR_ROOT=${avrgcclibc}/avr SIMAVR_VERSION=${version}";
-  installFlags = buildFlags + " DESTDIR=$(out)";
+  makeFlags = [
+    "DESTDIR=$(out)"
+    "PREFIX="
+    "AVR_ROOT=${avrlibc}/avr"
+    "SIMAVR_VERSION=${version}"
+    "AVR=avr-"
+  ];
 
-  postFixup = ''
-    target="$out/bin/simavr"
-    patchelf --set-rpath "$(patchelf --print-rpath "$target"):$out/lib" "$target"
+  nativeBuildInputs = [ which pkg-config avrgcc ]
+    ++ lib.optional stdenv.isDarwin setupHookDarwin;
+  buildInputs = [ libelf freeglut libGLU libGL ]
+    ++ lib.optional stdenv.isDarwin GLUT;
+
+  # remove forbidden references to $TMPDIR
+  preFixup = lib.optionalString stdenv.isLinux ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out"/bin/*
   '';
 
-  buildInputs = [ which git avrgcclibc libelf pkgconfig freeglut mesa ];
+  doCheck = true;
+  checkTarget = "-C tests run_tests";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A lean and mean Atmel AVR simulator";
-    homepage    = https://github.com/buserror/simavr;
+    mainProgram = "simavr";
+    homepage    = "https://github.com/buserror/simavr";
     license     = licenses.gpl3;
-    platforms   = platforms.linux;
+    platforms   = platforms.unix;
     maintainers = with maintainers; [ goodrone ];
   };
 
 }
-

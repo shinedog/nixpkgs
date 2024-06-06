@@ -1,24 +1,55 @@
-{stdenv, fetchurl, pkgconfig, gettext, perl, perlXMLParser, intltool
-, libxml2, glib}:
+{ stdenv
+, lib
+, fetchFromGitLab
+, meson
+, ninja
+, pkg-config
+, gettext
+, itstool
+, libxml2
+, glib
+, shared-mime-info
+}:
 
-let version = "1.7"; in
 stdenv.mkDerivation rec {
-  name = "shared-mime-info-${version}";
+  pname = "shared-mime-info";
+  version = "2.4";
 
-  src = fetchurl {
-    url = "http://freedesktop.org/~hadess/${name}.tar.xz";
-    sha256 = "0bjd2j1rqrj150mr04j7ib71lfdlgbf235fg8d70g8mszqf7ik7a";
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "xdg";
+    repo = pname;
+    rev = version;
+    hash = "sha256-5eyMkfSBUOD7p8woIYTgz5C/L8uQMXyr0fhL0l23VMA=";
   };
 
   nativeBuildInputs = [
-    pkgconfig gettext intltool perl perlXMLParser libxml2 glib
+    meson
+    ninja
+    pkg-config
+    gettext
+    libxml2
+  ] ++ lib.optional (stdenv.hostPlatform != stdenv.buildPlatform) shared-mime-info;
+
+  buildInputs = [
+    libxml2
+    glib
   ];
 
-  meta = {
-    inherit version;
+  strictDeps = true;
+
+  mesonFlags = [
+    "-Dupdate-mimedb=true"
+  ];
+
+  meta = with lib; {
     description = "A database of common MIME types";
-    homepage = http://freedesktop.org/wiki/Software/shared-mime-info;
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "http://freedesktop.org/wiki/Software/shared-mime-info";
+    license = licenses.gpl2Plus;
+    platforms = platforms.unix;
+    maintainers = teams.freedesktop.members ++ [ maintainers.mimame ];
+    mainProgram = "update-mime-database";
   };
 }

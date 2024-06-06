@@ -1,30 +1,72 @@
-{ stdenv, fetchurl, pkgconfig, libusb1 }:
+{ stdenv
+, autoconf
+, automake
+, fetchFromGitHub
+, fetchpatch
+, gettext
+, lib
+, libiconv
+, libtool
+, libusb1
+, pkg-config
+, buildPackages
+}:
 
 stdenv.mkDerivation rec {
-  name = "libmtp-1.1.11";
+  pname = "libmtp";
+  version = "1.1.21";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/libmtp/${name}.tar.gz";
-    sha256 = "1sc768q2cixwanlwrz95mp389iaadl4s95486caavxx4g7znvn8m";
+  src = fetchFromGitHub {
+    owner = "libmtp";
+    repo = "libmtp";
+    rev = "libmtp-${builtins.replaceStrings [ "." ] [ "-" ] version}";
+    sha256 = "sha256-m9QFVD8udQ3SdGwn276BnIKqGeATA5QuokOK29Ykc1k=";
   };
+
+  patches = [
+    # Backport cross fix.
+    (fetchpatch {
+      url = "https://github.com/libmtp/libmtp/commit/467fa26e6b14c0884b15cf6d191de97e5513fe05.patch";
+      sha256 = "2DrRrdcguJ9su4LxtT6YOjer8gUTxIoHVpk+6M9P4cg=";
+    })
+  ];
 
   outputs = [ "bin" "dev" "out" ];
 
+  nativeBuildInputs = [
+    autoconf
+    automake
+    gettext
+    libtool
+    pkg-config
+  ];
+
+  buildInputs = [ libiconv ];
+
   propagatedBuildInputs = [ libusb1 ];
-  buildInputs = [ pkgconfig ];
 
-  # tried to install files to /lib/udev, hopefully OK
-  configureFlags = [ "--with-udev=$$bin/lib/udev" ];
+  preConfigure = "NOCONFIGURE=1 ./autogen.sh";
 
-  meta = {
-    homepage = http://libmtp.sourceforge.net;
+  configureFlags = [ "--with-udev=${placeholder "out"}/lib/udev" ];
+
+  configurePlatforms = [ "build" "host" ];
+
+  makeFlags = lib.optionals (stdenv.isLinux && !stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    "MTP_HOTPLUG=${buildPackages.libmtp}/bin/mtp-hotplug"
+  ];
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://github.com/libmtp/libmtp";
     description = "An implementation of Microsoft's Media Transfer Protocol";
     longDescription = ''
       libmtp is an implementation of Microsoft's Media Transfer Protocol (MTP)
       in the form of a library suitable primarily for POSIX compliant operating
       systems. We implement MTP Basic, the stuff proposed for standardization.
-      '';
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    '';
+    platforms = platforms.unix;
+    license = licenses.lgpl21;
+    maintainers = with maintainers; [ lovesegfault ];
   };
 }

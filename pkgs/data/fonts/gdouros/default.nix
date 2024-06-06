@@ -1,62 +1,46 @@
-{stdenv, fetchurl, unzip, lib }:
+{ lib, stdenvNoCC, fetchzip }:
+
 let
   fonts = {
-    symbola = { version = "9.00"; file = "Symbola.zip"; sha256 = "0d9zrlvzh8inhr17p99banr0dmrvkwxbk3q7zhqqx2z4gf2yavc5";
-                description = "Basic Latin, Greek, Cyrillic and many Symbol blocks of Unicode"; };
-    aegyptus = { version = "6.00"; file = "Aegyptus.zip"; sha256 = "10mr54ja9b169fhqfkrw510jybghrpjx7a8a7m38k5v39ck8wz6v";
-                 description = "Egyptian Hieroglyphs, Coptic, Meroitic"; };
-    akkadian = { version = "7.13"; file = "Akkadian.zip"; sha256 = "1jd2fb6jnwpdwgkidsi2pnw0nk2cpya8k85299w591sqslfkxyij";
-                 description = "Sumero-Akkadian Cuneiform"; };
-    anatolian = { version = "5.02"; file = "Anatolian.zip"; sha256 = "0arm58sijzk0bqmfb70k1sjvq79wgw16hx3j2g4l8qz4sv05bp8l";
-                  description = "Anatolian Hieroglyphs"; };
-    maya = { version = "4.14"; file = "Maya.zip"; sha256 = "0l97racgncrhb96mfbsx8dr5n4j289iy0nnwhxf9b21ns58a9x4f";
-             description = "Maya Hieroglyphs"; };
-    unidings = { version = "8.00"; file = "Unidings.zip"; sha256 = "1i0z3mhgj4680188lqpmk7rx3yiz4l7yybb4wq6zk35j75l28irm";
-                 description = "Glyphs and Icons for blocks of The Unicode Standard"; };
-    musica = { version = "3.12"; file = "Musica.zip"; sha256 = "079vyb0mpxvlcf81d5pqh9dijkcvidfbcyvpbgjpmgzzrrj0q210";
-               description = "Musical Notation"; };
-    analecta = { version = "5.00"; file = "Analecta.zip"; sha256 = "0rphylnz42fqm1zpx5jx60k294kax3sid8r2hx3cbxfdf8fnpb1f";
-                 description = "Coptic, Gothic, Deseret"; };
-    # the following are also available from http://users.teilar.gr/~g1951d/
-    # but not yet packaged:
-    #  - Aroania
-    #  - Anaktoria
-    #  - Alexander
-    #  - Avdira
-    #  - Asea
-    #  - Aegean
+    aegan     = { version = "13.00"; file = "Aegean.zip";       hash = "sha256-3HmCqCMZLN6zF1N/EirQOPnHKTGHoc4aHKoZxFYTB34="; description = "Aegean"; };
+    aegyptus  = { version = "13.00"; file = "Aegyptus.zip";     hash = "sha256-SSAK707xhpsUTq8tSBcrzNGunCYad58amtCqAWuevnY="; description = "Egyptian Hieroglyphs, Coptic, Meroitic"; };
+    akkadian  = { version = "13.00"; file = "Akkadian.zip";     hash = "sha256-wXiDYyfujAs6fklOCqXq7Ms7wP5RbPlpNVwkUy7CV4k="; description = "Sumero-Akkadian Cuneiform"; };
+    assyrian  = { version = "13.00"; file = "Assyrian.zip";     hash = "sha256-CZj1sc89OexQ0INb7pbEu5GfE/w2E5JmhjT8cosoLSg="; description = "Neo-Assyrian in Unicode with OpenType"; };
+    eemusic   = { version = "13.00"; file = "EEMusic.zip";      hash = "sha256-LxOcQOPEImw0wosxJotbOJRbe0qlK5dR+kazuhm99Kg="; description = "Byzantine Musical Notation in Unicode with OpenType"; };
+    maya      = { version = "13.00"; file = "Maya%20Hieroglyphs.zip"; hash = "sha256-PAwF1lGqm6XVf4NQCA8AFLGU40N0Xsn5Q8x9ikHJDhY="; description = "Maya Hieroglyphs"; };
+    symbola   = { version = "13.00"; file = "Symbola.zip";      hash = "sha256-TsHWmzkEyMa8JOZDyjvk7PDhm239oH/FNllizNFf398="; description = "Basic Latin, Greek, Cyrillic and many Symbol blocks of Unicode"; };
+    textfonts = { version = "13.00"; file = "Textfonts.zip";    hash = "sha256-7S3NiiyDvyYoDrLPt2z3P9bEEFOEZACv2sIHG1Tn6yI="; description = "Aroania, Anaktoria, Alexander, Avdira and Asea"; };
+    unidings  = { version = "13.00"; file = "Unidings.zip";     hash = "sha256-WUY+Ylphep6WuzqLQ3Owv+vK5Yuu/aAkn4GOFXL0uQY="; description = "Glyphs and Icons for blocks of The Unicode Standard"; };
   };
-  mkpkg = name_: {version, file, sha256, description}:
-    stdenv.mkDerivation rec {
-      name = "${name_}-${version}";
 
-      src = fetchurl {
-        url = "http://users.teilar.gr/~g1951d/${file}";
-        inherit sha256;
-      };
+  mkpkg = pname: { version, file, hash, description }: stdenvNoCC.mkDerivation rec {
+    inherit pname version;
 
-      buildInputs = [ unzip ];
-
-      sourceRoot = ".";
-
-      installPhase = ''
-        mkdir -p $out/share/fonts/truetype
-        cp -v *.ttf $out/share/fonts/truetype/
-
-        mkdir -p "$out/doc/${name}"
-        cp -v *.docx *.pdf *.xlsx "$out/doc/${name}/"
-      '';
-
-      meta = {
-        inherit description;
-        # In lieu of a license:
-        # Fonts in this site are offered free for any use;
-        # they may be installed, embedded, opened, edited, modified, regenerated, posted, packaged and redistributed.
-        license = stdenv.lib.licenses.free;
-        homepage = http://users.teilar.gr/~g1951d/;
-        platforms = stdenv.lib.platforms.unix;
-      };
+    src = fetchzip {
+      url = "https://dn-works.com/wp-content/uploads/2020/UFAS-Fonts/${file}";
+      stripRoot = false;
+      inherit hash;
     };
 
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/share/{fonts/opentype,doc/${pname}}
+      mv *.otf                -t "$out/share/fonts/opentype"
+      mv *.{odt,ods,pdf,xlsx}       -t "$out/share/doc/${pname}"  || true  # install docs if any
+
+      runHook postInstall
+    '';
+
+    meta = {
+      inherit description;
+      # see https://dn-works.com/wp-content/uploads/2020/UFAS-Docs/License.pdf
+      # quite draconian: non-commercial, no modifications,
+      # no redistribution, "a single instantiation and no
+      # network installation"
+      license = lib.licenses.unfree;
+      homepage = "https://dn-works.com/ufas/";
+    };
+  };
 in
 lib.mapAttrs mkpkg fonts

@@ -1,82 +1,158 @@
-{ stdenv, fetchurl, lib, bash, firefox, perl, unzipNLS, xorg }:
+{ lib
+, stdenv
+, fetchurl
+, wrapGAppsHook3
+, makeDesktopItem
+, atk
+, cairo
+, coreutils
+, curl
+, cups
+, dbus-glib
+, dbus
+, dconf
+, fontconfig
+, freetype
+, gdk-pixbuf
+, glib
+, glibc
+, gtk3
+, libX11
+, libXScrnSaver
+, libxcb
+, libXcomposite
+, libXcursor
+, libXdamage
+, libXext
+, libXfixes
+, libXi
+, libXinerama
+, libXrender
+, libXt
+, libnotify
+, gnome
+, libGLU
+, libGL
+, nspr
+, nss
+, pango
+, gsettings-desktop-schemas
+}:
 
-let
-
-  xpi = fetchurl {
-    url = "https://download.zotero.org/extension/zotero-${version}.xpi";
-    sha256 = "1dyf578yfj3xr9kkhmsvbkvraw2arghmh67ksi5c8qlxczx5i1xy";
-  };
-
-  version = "4.0.29";
-
-in
-stdenv.mkDerivation {
-  name = "zotero-${version}";
-  inherit version;
+stdenv.mkDerivation rec {
+  pname = "zotero";
+  version = "6.0.35";
 
   src = fetchurl {
-    url = "https://github.com/zotero/zotero-standalone-build/archive/4.0.29.2.tar.gz";
-    sha256 = "0pfip6s5dawp7wp8r5czvzlnxvvdwjja64g71h9dxyxrh49v2mxa";
+    url =
+      "https://download.zotero.org/client/release/${version}/Zotero-${version}_linux-x86_64.tar.bz2";
+    hash = "sha256-HAVLmamEPuFf0548/iEXes+f4XnQ7kU1u9hyOYhVyZ0=";
   };
 
-  nativeBuildInputs = [ perl unzipNLS ];
+  nativeBuildInputs = [ wrapGAppsHook3 ];
+  buildInputs =
+    [ gsettings-desktop-schemas glib gtk3 gnome.adwaita-icon-theme dconf ];
 
-  inherit bash firefox;
+  dontConfigure = true;
+  dontBuild = true;
+  dontStrip = true;
+  dontPatchELF = true;
 
-  phases = "unpackPhase installPhase fixupPhase";
+  libPath = lib.makeLibraryPath [
+    stdenv.cc.cc
+    atk
+    cairo
+    curl
+    cups
+    dbus-glib
+    dbus
+    fontconfig
+    freetype
+    gdk-pixbuf
+    glib
+    glibc
+    gtk3
+    libX11
+    libXScrnSaver
+    libXcomposite
+    libXcursor
+    libxcb
+    libXdamage
+    libXext
+    libXfixes
+    libXi
+    libXinerama
+    libXrender
+    libXt
+    libnotify
+    libGLU
+    libGL
+    nspr
+    nss
+    pango
+  ] + ":" + lib.makeSearchPathOutput "lib" "lib64" [ stdenv.cc.cc ];
 
-  installPhase = ''
-    mkdir -p "$out/libexec/zotero"
-    unzip "${xpi}" -d "$out/libexec/zotero"
-
-    BUILDID=`date +%Y%m%d`
-    GECKO_VERSION="${lib.removeSuffix "esr" firefox.passthru.version}"
-    UPDATE_CHANNEL="default"
-
-    # Copy branding
-    cp -R assets/branding "$out/libexec/zotero/chrome/branding"
-
-    # Adjust chrome.manifest
-    echo "" >> "$out/libexec/zotero/chrome.manifest"
-    cat assets/chrome.manifest >> "$out/libexec/zotero/chrome.manifest"
-
-    # Copy updater.ini
-    cp assets/updater.ini "$out/libexec/zotero"
-
-    # Adjust connector pref
-    perl -pi -e 's/pref\("extensions\.zotero\.httpServer\.enabled", false\);/pref("extensions.zotero.httpServer.enabled", true);/g' "$out/libexec/zotero/defaults/preferences/zotero.js"
-    perl -pi -e 's/pref\("extensions\.zotero\.connector\.enabled", false\);/pref("extensions.zotero.connector.enabled", true);/g' "$out/libexec/zotero/defaults/preferences/zotero.js"
-
-    # Copy icons
-    cp -r assets/icons "$out/libexec/zotero/chrome/icons"
-
-    # Copy application.ini and modify
-    cp assets/application.ini "$out/libexec/zotero/application.ini"
-    perl -pi -e "s/\{\{VERSION}}/$version/" "$out/libexec/zotero/application.ini"
-    perl -pi -e "s/\{\{BUILDID}}/$BUILDID/" "$out/libexec/zotero/application.ini"
-    perl -pi -e "s/^MaxVersion.*\$/MaxVersion=$GECKO_VERSION/" "$out/libexec/zotero/application.ini"
-
-    # Copy prefs.js and modify
-    cp assets/prefs.js "$out/libexec/zotero/defaults/preferences"
-    perl -pi -e 's/pref\("app\.update\.channel", "[^"]*"\);/pref\("app\.update\.channel", "'"$UPDATE_CHANNEL"'");/' "$out/libexec/zotero/defaults/preferences/prefs.js"
-    perl -pi -e 's/%GECKO_VERSION%/'"$GECKO_VERSION"'/g' "$out/libexec/zotero/defaults/preferences/prefs.js"
-
-    # Add platform-specific standalone assets
-    cp -R assets/unix "$out/libexec/zotero"
-
-    mkdir -p "$out/bin"
-    substituteAll "${./zotero.sh}" "$out/bin/zotero"
-    chmod +x "$out/bin/zotero"
+  postPatch = ''
+    sed -i '/pref("app.update.enabled", true);/c\pref("app.update.enabled", false);' defaults/preferences/prefs.js
   '';
 
-  doInstallCheck = true;
-  installCheckPhase = "$out/bin/zotero --version";
+  desktopItem = makeDesktopItem {
+    name = "zotero";
+    exec = "zotero -url %U";
+    icon = "zotero";
+    comment = meta.description;
+    desktopName = "Zotero";
+    genericName = "Reference Management";
+    categories = [ "Office" "Database" ];
+    startupNotify = true;
+    mimeTypes = [ "x-scheme-handler/zotero" "text/plain" ];
+  };
 
-  meta = with stdenv.lib; {
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p "$prefix/usr/lib/zotero-bin-${version}"
+    cp -r * "$prefix/usr/lib/zotero-bin-${version}"
+    mkdir -p "$out/bin"
+    ln -s "$prefix/usr/lib/zotero-bin-${version}/zotero" "$out/bin/"
+
+    # install desktop file and icons.
+    mkdir -p $out/share/applications
+    cp ${desktopItem}/share/applications/* $out/share/applications/
+    for size in 16 32 48 256; do
+      install -Dm444 chrome/icons/default/default$size.png \
+        $out/share/icons/hicolor/''${size}x''${size}/apps/zotero.png
+    done
+
+    for executable in \
+      zotero-bin plugin-container \
+      updater minidump-analyzer
+    do
+      if [ -e "$out/usr/lib/zotero-bin-${version}/$executable" ]; then
+        patchelf --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+          "$out/usr/lib/zotero-bin-${version}/$executable"
+      fi
+    done
+    find . -executable -type f -exec \
+      patchelf --set-rpath "$libPath" \
+        "$out/usr/lib/zotero-bin-${version}/{}" \;
+
+    runHook postInstall
+  '';
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix PATH : ${lib.makeBinPath [ coreutils ]}
+    )
+  '';
+
+  meta = with lib; {
     homepage = "https://www.zotero.org";
     description = "Collect, organize, cite, and share your research sources";
-    license = licenses.agpl3;
-    platforms = platforms.linux;
-    broken = true; # probably; see #20049
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = licenses.agpl3Only;
+    platforms = [ "x86_64-linux" ];
+    maintainers = with maintainers; [ i077 ];
+    mainProgram = "zotero";
   };
 }

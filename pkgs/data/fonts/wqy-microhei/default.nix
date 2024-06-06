@@ -1,21 +1,27 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "wqy-microhei-0.2.0-beta";
+stdenvNoCC.mkDerivation rec {
+  pname = "wqy-microhei";
+  version = "0.2.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/wqy/${name}.tar.gz";
-    sha256 = "0gi1yxqph8xx869ichpzzxvx6y50wda5hi77lrpacdma4f0aq0i8";
+    url = "mirror://sourceforge/wqy/${pname}-${version}-beta.tar.gz";
+    hash = "sha256-KAKsgCOqNqZupudEWFTjoHjTd///QhaTQb0jeHH3IT4=";
   };
 
-  installPhase = ''install -Dm644 wqy-microhei.ttc $out/share/fonts/wqy-microhei.ttc'';
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 wqy-microhei.ttc $out/share/fonts/wqy-microhei.ttc
+
+    runHook postInstall
+  '';
 
   meta = {
     description = "A (mainly) Chinese Unicode font";
-    homepage = http://wenq.org;
-    license = stdenv.lib.licenses.asl20;
-    maintainers = [ stdenv.lib.maintainers.pkmx ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = "http://wenq.org";
+    license = lib.licenses.asl20;
+    maintainers = [ lib.maintainers.pkmx ];
+    platforms = lib.platforms.all;
   };
 }
-

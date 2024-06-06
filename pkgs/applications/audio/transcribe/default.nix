@@ -1,56 +1,100 @@
-{ stdenv, fetchzip, lib, makeWrapper, alsaLib, atk, cairo, gdk_pixbuf
-, glib, gst_ffmpeg, gst_plugins_bad, gst_plugins_base
-, gst_plugins_good, gst_plugins_ugly, gstreamer, gtk2, libSM, libX11
-, libpng12, pango, zlib }:
+{ stdenv
+, fetchzip
+, lib
+, wrapGAppsHook3
+, xdg-utils
+, which
+, alsa-lib
+, atk
+, cairo
+, fontconfig
+, gdk-pixbuf
+, glib
+, gst_all_1
+, gtk3
+, libSM
+, libX11
+, libXtst
+, libpng12
+, pango
+, zlib
+}:
 
 stdenv.mkDerivation rec {
-  name = "transcribe-${version}";
-  version = "8.40";
+  pname = "transcribe";
+  version = "9.40.0";
 
-  src = if stdenv.system == "i686-linux" then
-    fetchzip {
-      url = "https://www.seventhstring.com/xscribe/downlinux32_old/xscsetup.tar.gz";
-      sha256 = "1ngidmj9zz8bmv754s5xfsjv7v6xr03vck4kigzq4bpc9b1fdhjq";
-    }
-  else if stdenv.system == "x86_64-linux" then
-    fetchzip {
-      url = "https://www.seventhstring.com/xscribe/downlinux64_old/xsc64setup.tar.gz";
-      sha256 = "0svzi8svj6zn06gj0hr8mpnhq4416dvb4g5al0gpb1g3paywdaf9";
-    }
-  else throw "Platform not supported";
+  src =
+    if stdenv.hostPlatform.system == "x86_64-linux" then
+      fetchzip
+        {
+          url = "https://www.seventhstring.com/xscribe/downlo/xscsetup-${version}.tar.gz";
+          sha256 = "sha256-GHTr1rk7Kh5M0UYnryUlCk/G6pW3p80GJ6Ai0zXdfNs=";
+        }
+    else throw "Platform not supported";
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [
+    which
+    xdg-utils
+    wrapGAppsHook3
+  ];
 
-  buildInputs = [ gst_plugins_base gst_plugins_good
-    gst_plugins_bad gst_plugins_ugly gst_ffmpeg ];
+  buildInputs = with gst_all_1; [
+    gst-plugins-base
+    gst-plugins-good
+    gst-plugins-bad
+    gst-plugins-ugly
+  ];
 
   dontPatchELF = true;
 
-  libPath = lib.makeLibraryPath [
-    stdenv.cc.cc glib gtk2 atk pango cairo gdk_pixbuf alsaLib
-    libX11 libSM libpng12 gstreamer gst_plugins_base zlib
+  libPath = with gst_all_1; lib.makeLibraryPath [
+    stdenv.cc.cc
+    glib
+    gtk3
+    atk
+    fontconfig
+    pango
+    cairo
+    gdk-pixbuf
+    alsa-lib
+    libX11
+    libXtst
+    libSM
+    libpng12
+    gstreamer
+    gst-plugins-base
+    zlib
   ];
 
   installPhase = ''
     mkdir -p $out/bin $out/libexec $out/share/doc
     cp transcribe $out/libexec
     cp xschelp.htb readme_gtk.html $out/share/doc
-    cp -r gtkicons $out/share/icons
-
     ln -s $out/share/doc/xschelp.htb $out/libexec
-
+    # The script normally installs to the home dir
+    sed -i -E 's!BIN_DST=.*!BIN_DST=$out!' install-linux.sh
+    sed -i -e 's!Exec=''${BIN_DST}/transcribe/transcribe!Exec=transcribe!' install-linux.sh
+    sed -i -e 's!''${BIN_DST}/transcribe!''${BIN_DST}/libexec!' install-linux.sh
+    rm -f xschelp.htb readme_gtk.html *.so
+    XDG_DATA_HOME=$out/share bash install-linux.sh -i
     patchelf \
       --set-interpreter $(cat ${stdenv.cc}/nix-support/dynamic-linker) \
       $out/libexec/transcribe
+  '';
 
-    wrapProgram $out/libexec/transcribe \
-      --prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH" \
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH_1_0"
       --prefix LD_LIBRARY_PATH : "${libPath}"
+    )
+  '';
 
+  postFixup = ''
     ln -s $out/libexec/transcribe $out/bin/
-    '';
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Software to help transcribe recorded music";
     longDescription = ''
       The Transcribe! application is an assistant for people who want
@@ -61,9 +105,11 @@ stdenv.mkDerivation rec {
       has many transcription-specific features not found on
       conventional music players.
     '';
-    homepage = https://www.seventhstring.com/xscribe/;
+    homepage = "https://www.seventhstring.com/xscribe/";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
     license = licenses.unfree;
+    maintainers = with maintainers; [ iwanb ];
     platforms = platforms.linux;
-    maintainers = with maintainers; [ michalrus ];
+    mainProgram = "transcribe";
   };
 }

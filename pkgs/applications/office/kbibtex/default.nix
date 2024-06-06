@@ -1,21 +1,80 @@
-{ stdenv, fetchurl, automoc4, cmake, perl, pkgconfig
-, kdelibs, libxslt, poppler_qt4
+{ lib
+, mkDerivation
+, fetchurl
+# build-time
+, extra-cmake-modules
+, shared-mime-info
+# Qt
+, qtxmlpatterns
+, qtwebengine
+, qca-qt5
+, qtnetworkauth
+# KDE
+, ki18n
+, kxmlgui
+, kio
+, kiconthemes
+, kitemviews
+, kparts
+, kcoreaddons
+, kservice
+, ktexteditor
+, kdoctools
+, kwallet
+, kcrash
+# other
+, poppler
+, bibutils
 }:
 
-stdenv.mkDerivation rec {
+mkDerivation rec {
   pname = "kbibtex";
-  version = "0.4";
-  name = "${pname}-${version}";
+  version = "0.10.0";
 
-  src = fetchurl {
-    url = "http://download.gna.org/${pname}/${version}/${name}.tar.bz2";
-    sha256 = "1hq0az0dp96195z26wjfwj9ynd57pfv13f1xcl5vbsswcjfrczws";
+  src = let
+    majorMinorPatch = lib.concatStringsSep "." (lib.take 3 (lib.splitVersion version));
+  in fetchurl {
+    url = "mirror://kde/stable/KBibTeX/${majorMinorPatch}/kbibtex-${version}.tar.xz";
+    hash = "sha256-sSeyQKfNd8U4YZ3IgqOZs8bM13oEQopJevkG8U0JuMQ=";
   };
 
-  patchPhase = ''
-    sed -e '25i#include <QModelIndex>' -i src/gui/preferences/settingsabstractwidget.h
-    '';
+  nativeBuildInputs = [
+    extra-cmake-modules
+    shared-mime-info
+  ];
 
-  buildInputs = [ kdelibs libxslt poppler_qt4 ];
-  nativeBuildInputs = [ automoc4 cmake perl pkgconfig ];
+  buildInputs = [
+    qtxmlpatterns
+    qtwebengine
+    qca-qt5
+    qtnetworkauth
+    # TODO qtoauth
+    ki18n
+    kxmlgui
+    kio
+    kiconthemes
+    kitemviews
+    kparts
+    kcoreaddons
+    kservice
+    ktexteditor
+    kdoctools
+    kwallet
+    kcrash
+    poppler
+  ];
+
+  qtWrapperArgs = [
+    "--prefix" "PATH" ":" "${lib.makeBinPath [ bibutils ]}"
+  ];
+
+  meta = with lib; {
+    description = "Bibliography editor for KDE";
+    mainProgram = "kbibtex";
+    homepage = "https://userbase.kde.org/KBibTeX";
+    changelog = "https://invent.kde.org/office/kbibtex/-/raw/v${version}/ChangeLog";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ dotlambda ];
+    platforms = platforms.linux;
+  };
 }

@@ -1,37 +1,48 @@
-{ stdenv, fetchurl, jre, graphviz }:
+{ lib
+, stdenvNoCC
+, fetchurl
+, makeBinaryWrapper
+, jre
+, graphviz
+}:
 
-stdenv.mkDerivation rec {
-  version = "8047";
-  name = "plantuml-${version}";
+stdenvNoCC.mkDerivation (finalAttrs: {
+  pname = "plantuml";
+  version = "1.2024.5";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/plantuml/plantuml.${version}.jar";
-    sha256 = "11a1qchalymvc7qn9kqxamp8qm8fljpnxmfi4zs8sg75nzddjnlm";
+    url = "https://github.com/plantuml/plantuml/releases/download/v${finalAttrs.version}/plantuml-pdf-${finalAttrs.version}.jar";
+    hash = "sha256-YayIedHIIpecVF7BZSvBTp66Eb7He+l+1RCir5KuL28=";
   };
 
-  # It's only a .jar file and a shell wrapper
-  phases = [ "installPhase" ];
+  nativeBuildInputs = [
+    makeBinaryWrapper
+  ];
 
-  installPhase = ''
-    mkdir -p "$out/bin"
-    mkdir -p "$out/lib"
+  buildCommand = ''
+    install -Dm644 $src $out/lib/plantuml.jar
 
-    cp "$src" "$out/lib/plantuml.jar"
-
-    cat > "$out/bin/plantuml" << EOF
-    #!${stdenv.shell}
-    export GRAPHVIZ_DOT="${graphviz}/bin/dot"
-    exec "${jre}/bin/java" -jar "$out/lib/plantuml.jar" "\$@"
-    EOF
-    chmod a+x "$out/bin/plantuml"
+    mkdir -p $out/bin
+    makeWrapper ${jre}/bin/java $out/bin/plantuml \
+      --argv0 plantuml \
+      --set GRAPHVIZ_DOT ${graphviz}/bin/dot \
+      --add-flags "-jar $out/lib/plantuml.jar"
   '';
 
-  meta = with stdenv.lib; {
+  doInstallCheck = true;
+  postCheckInstall = ''
+    $out/bin/plantuml -help
+    $out/bin/plantuml -testdot
+  '';
+
+  meta = {
     description = "Draw UML diagrams using a simple and human readable text description";
-    homepage = http://plantuml.sourceforge.net/;
-    # "java -jar plantuml.jar -license" says GPLv3 or later
-    license = licenses.gpl3Plus;
-    maintainers = [ maintainers.bjornfor ];
-    platforms = platforms.linux;
+    homepage = "https://plantuml.com/";
+    # "plantuml -license" says GPLv3 or later
+    license = lib.licenses.gpl3Plus;
+    mainProgram = "plantuml";
+    maintainers = with lib.maintainers; [ bjornfor Mogria ];
+    platforms = lib.platforms.unix;
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
   };
-}
+})

@@ -1,26 +1,61 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "mplus-${version}";
-  version = "062";
+let pname = "mplus-outline-fonts";
+in
+{
+  osdnRelease = stdenvNoCC.mkDerivation {
+    pname = "${pname}-osdn";
+    version = "063a";
 
-  src = fetchurl {
-    url = "mirror://sourceforgejp/mplus-fonts/62344/mplus-TESTFLIGHT-${version}.tar.xz";
-    sha256 = "1f44vmnma5njhfiz351gwblxmdh9njv486864zrxqaa1h5pvdhha";
+    src = fetchurl {
+      url = "mirror://osdn/mplus-fonts/62344/mplus-TESTFLIGHT-063a.tar.xz";
+      hash = "sha256-ROuXO0tq/1dN5FTbEF3cI+Z0nCKUc0vZyx4Nc05M3Xk=";
+    };
+
+    installPhase = ''
+      runHook preInstall
+
+      install -m444 -Dt $out/share/fonts/truetype/${pname} *.ttf
+
+      runHook postInstall
+    '';
+
+    meta = with lib; {
+      description = "M+ Outline Fonts (legacy OSDN release)";
+      homepage = "https://mplus-fonts.osdn.jp";
+      maintainers = with maintainers; [ uakci ];
+      platforms = platforms.all;
+      license = licenses.mplus;
+    };
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
+  githubRelease = stdenvNoCC.mkDerivation {
+    pname = "${pname}-github";
+    version = "unstable-2022-05-19";
 
-  installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    cp *.ttf $out/share/fonts/truetype
-  '';
+    src = fetchFromGitHub {
+      owner = "coz-m";
+      repo = "MPLUS_FONTS";
+      rev = "336fec4e9e7c1e61bd22b82e6364686121cf3932";
+      hash = "sha256-jzDDUs1dKjqNjsMeTA2/4vm+akIisnOuE2mPQS7IDSA=";
+    };
 
-  meta = with stdenv.lib; {
-    description = "M+ Outline Fonts";
-    homepage = http://mplus-fonts.sourceforge.jp/mplus-outline-fonts/index-en.html;
-    license = licenses.mit;
-    maintainers = with maintainers; [ henrytill ];
-    platforms = platforms.all;
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/share/fonts/{truetype,opentype}/${pname}
+      mv fonts/ttf/* $out/share/fonts/truetype/${pname}
+      mv fonts/otf/* $out/share/fonts/opentype/${pname}
+
+      runHook postInstall
+    '';
+
+    meta = with lib; {
+      description = "M+ Outline Fonts (GitHub release)";
+      homepage = "https://mplusfonts.github.io";
+      maintainers = with maintainers; [ uakci ];
+      platforms = platforms.all;
+      license = licenses.ofl;
+    };
   };
 }

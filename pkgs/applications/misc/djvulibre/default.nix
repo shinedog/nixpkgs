@@ -1,24 +1,50 @@
-{ stdenv, fetchurl, libjpeg, libtiff, librsvg, libintlOrEmpty }:
+{ lib, stdenv
+, fetchurl
+, libjpeg
+, libtiff
+, librsvg
+, libiconv
+, bash
+}:
 
 stdenv.mkDerivation rec {
-  name = "djvulibre-3.5.27";
+  pname = "djvulibre";
+  version = "3.5.28";
 
   src = fetchurl {
-    url = "mirror://sourceforge/djvu/${name}.tar.gz";
-    sha256 = "0psh3zl9dj4n4r3lx25390nx34xz0bg0ql48zdskhq354ljni5p6";
+    url = "mirror://sourceforge/djvu/${pname}-${version}.tar.gz";
+    sha256 = "1p1fiygq9ny8aimwc4vxwjc6k9ykgdsq1sq06slfbzalfvm0kl7w";
   };
 
   outputs = [ "bin" "dev" "out" ];
 
-  buildInputs = [ libjpeg libtiff librsvg ] ++ libintlOrEmpty;
+  strictDeps = true;
+  nativeBuildInputs = [
+    librsvg
+  ];
 
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  buildInputs = [
+    libjpeg
+    libtiff
+    libiconv
+    bash
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A library and viewer for the DJVU file format for scanned images";
-    homepage = http://djvu.sourceforge.net;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ urkud ];
+  enableParallelBuilding = true;
+
+  patches = [
+    # Remove uses of the `register` storage class specifier, which was removed in C++17.
+    # Fixes compilation with clang 16, which defaults to C++17.
+    ./c++17-register-class.patch
+
+    ./CVE-2021-3500+CVE-2021-32490+CVE-2021-32491+CVE-2021-32492+CVE-2021-32493.patch
+  ];
+
+  meta = with lib; {
+    description = "The big set of CLI tools to make/modify/optimize/show/export DJVU files";
+    homepage = "https://djvu.sourceforge.net";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ Anton-Latukha ];
     platforms = platforms.all;
   };
 }

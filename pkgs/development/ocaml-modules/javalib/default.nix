@@ -1,42 +1,47 @@
-{stdenv, fetchurl, which, ocaml, findlib, camlzip, extlib, camlp4}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, which
+, ocaml
+, findlib
+, camlzip
+, extlib
+}:
 
-let
-  pname = "javalib";
-  webpage = "http://sawja.inria.fr/";
-in
+lib.throwIfNot (lib.versionAtLeast ocaml.version "4.08")
+  "javalib is not available for OCaml ${ocaml.version}"
+
 stdenv.mkDerivation rec {
-  name = "ocaml-${pname}-${version}";
-  version = "2.3";
+  pname = "ocaml${ocaml.version}-javalib";
+  version = "3.2.2";
 
-  src = fetchurl {
-    url = "https://gforge.inria.fr/frs/download.php/33090/${pname}-${version}.tar.bz2";
-    sha256 = "1i8djcanzm250mwilm3jfy37cz0k0x7jbnrz8a5vvdi91kyzh52j";
+  src = fetchFromGitHub {
+    owner = "javalib-team";
+    repo = "javalib";
+    rev = version;
+    hash = "sha256-XaI7GTU/O5UEWuYX4yqaIRmEoH7FuvCg/+gtKbE/P1s=";
   };
 
-  buildInputs = [ which ocaml findlib camlp4 ];
+  nativeBuildInputs = [ which ocaml findlib ];
+
+  strictDeps = true;
 
   patches = [ ./configure.sh.patch ./Makefile.config.example.patch ];
 
   createFindlibDestdir = true;
 
-  preConfigure = "patchShebangs ./configure.sh";
-
   configureScript = "./configure.sh";
   dontAddPrefix = "true";
-
-  preBuild = ''
-    make ptrees;
-    make installptrees;
-    export OCAMLPATH=$out/lib/ocaml/${ocaml.version}/site-lib/:$OCAMLPATH;
-  '';
+  dontAddStaticConfigureFlags = true;
+  configurePlatforms = [ ];
 
   propagatedBuildInputs = [ camlzip extlib ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library that parses Java .class files into OCaml data structures";
-    homepage = "${webpage}";
+    homepage = "https://javalib-team.github.io/javalib/";
     license = licenses.lgpl3;
     maintainers = [ maintainers.vbgl ];
-    platforms = ocaml.meta.platforms or [];
+    inherit (ocaml.meta) platforms;
   };
 }

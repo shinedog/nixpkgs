@@ -1,20 +1,25 @@
-{ stdenv, fetchurl, pkgconfig, glib, python3, libsigrok, check }:
+{ lib, stdenv, fetchgit, pkg-config, autoreconfHook, glib, python3, check, libxcrypt }:
 
 stdenv.mkDerivation rec {
-  name = "libsigrokdecode-0.4.0";
+  pname = "libsigrokdecode";
+  version = "0.5.3-unstable-2023-10-23";
 
-  src = fetchurl {
-    url = "http://sigrok.org/download/source/libsigrokdecode/${name}.tar.gz";
-    sha256 = "0drmxjc2xavccjl2i6vcjipijrn7459nv8cpmm788pi4fcdrszpx";
+  src = fetchgit {
+    url = "git://sigrok.org/libsigrokdecode";
+    rev = "0c35c5c5845d05e5f624c99d58af992d2f004446";
+    hash = "sha256-1kQB7uk2c+6Uriw+1o6brThDcBLoCdPV0MVWAha7ohk=";
   };
 
-  buildInputs = [ pkgconfig glib python3 libsigrok check ];
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
+  buildInputs = [ glib python3 libxcrypt ];
+  nativeCheckInputs = [ check ];
+  doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Protocol decoding library for the sigrok signal analysis software suite";
-    homepage = http://sigrok.org/;
+    homepage = "https://sigrok.org/";
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ bjornfor vifino ];
   };
 }

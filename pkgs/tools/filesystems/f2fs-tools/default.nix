@@ -1,21 +1,33 @@
-{ stdenv, fetchurl, autoreconfHook, libselinux, libuuid, pkgconfig }:
+{ lib, stdenv, fetchzip, fetchpatch
+, autoreconfHook, libselinux, libuuid, pkg-config
+}:
 
 stdenv.mkDerivation rec {
-  name = "f2fs-tools-${version}";
-  version = "1.7.0";
+  pname = "f2fs-tools";
+  version = "1.16.0";
 
-  src = fetchurl {
-    url = "http://git.kernel.org/cgit/linux/kernel/git/jaegeuk/f2fs-tools.git/snapshot/${name}.tar.gz";
-    sha256 = "1m6bn1ibq0p53m0n97il91xqgjgn2pzlz74lb5bfzassx7159m1k";
+  src = fetchzip {
+    url = "https://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs-tools.git/snapshot/f2fs-tools-v${version}.tar.gz";
+    sha256 = "sha256-zNG1F//+BTBzlEc6qNVixyuCB6PMZD5Kf8pVK0ePYiA=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ libselinux libuuid pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ libselinux libuuid ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://git.kernel.org/cgit/linux/kernel/git/jaegeuk/f2fs-tools.git/";
+  patches = [
+    ./f2fs-tools-cross-fix.patch
+
+    (fetchpatch {
+      name = "lfs64.patch";
+      url = "https://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs-tools.git/patch/?id=b15b6cc56ac7764be17acbdbf96448f388992adc";
+      hash = "sha256-9XrNf9MMMDGOsuP3DvUhm30Sa2xICDtXbUIvM/TP35o=";
+    })
+  ];
+
+  meta = with lib; {
+    homepage = "https://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs-tools.git/";
     description = "Userland tools for the f2fs filesystem";
-    license = licenses.gpl2;
+    license = licenses.gpl2Only;
     platforms = platforms.linux;
     maintainers = with maintainers; [ ehmry jagajaga ];
   };

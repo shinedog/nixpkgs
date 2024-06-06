@@ -1,18 +1,18 @@
-{stdenv, fetchurl, IOKit}:
+{lib, stdenv, fetchurl, IOKit}:
 
 stdenv.mkDerivation rec {
-  name = "libdvdcss-${version}";
-  version = "1.4.0";
+  pname = "libdvdcss";
+  version = "1.4.3";
 
-  buildInputs = stdenv.lib.optional stdenv.isDarwin IOKit;
+  buildInputs = lib.optional stdenv.isDarwin IOKit;
 
   src = fetchurl {
-    url = "http://get.videolan.org/libdvdcss/${version}/${name}.tar.bz2";
-    sha256 = "0nl45ifc4xcb196snv9d6hinfw614cqpzcqp92dg43c0hickg290";
+    url = "http://get.videolan.org/libdvdcss/${version}/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-IzzJL13AHF06lvWzWCvn1c7lo1pS06CBWHRdPYYHAHk=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = http://www.videolan.org/developers/libdvdcss.html;
+  meta = with lib; {
+    homepage = "http://www.videolan.org/developers/libdvdcss.html";
     description = "A library for decrypting DVDs";
     license = licenses.gpl2;
     platforms = with platforms; linux ++ darwin;

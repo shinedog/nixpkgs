@@ -1,17 +1,17 @@
-{ stdenv, fetchurl, gcc, flex, bison, texinfo, jdk, erlang, makeWrapper
+{ lib, stdenv, fetchurl, gcc, flex, bison, texinfo, jdk_headless, erlang, makeWrapper
 , readline }:
 
 stdenv.mkDerivation rec {
-  name    = "mercury-${version}";
-  version = "14.01.1";
+  pname = "mercury";
+  version = "22.01.8";
 
   src = fetchurl {
-    url    = "http://dl.mercurylang.org/release/mercury-srcdist-${version}.tar.gz";
-    sha256 = "12z8qi3da8q50mcsjsy5bnr4ia6ny5lkxvzy01a3c9blgbgcpxwq";
+    url    = "https://dl.mercurylang.org/release/mercury-srcdist-${version}.tar.gz";
+    sha256 = "sha256-oJfozI7KAVLtlSfByvc+XJyD9q2h0xOiW4D+eQcvutg=";
   };
 
-  buildInputs = [ gcc flex bison texinfo jdk erlang makeWrapper
-                  readline ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ gcc flex bison texinfo jdk_headless erlang readline ];
 
   patchPhase = ''
     # Fix calls to programs in /bin
@@ -37,7 +37,7 @@ stdenv.mkDerivation rec {
     for e in $(ls $out/bin) ; do
       wrapProgram $out/bin/$e \
         --prefix PATH ":" "${gcc}/bin" \
-        --prefix PATH ":" "${jdk}/bin" \
+        --prefix PATH ":" "${jdk_headless}/bin" \
         --prefix PATH ":" "${erlang}/bin"
     done
   '';
@@ -54,9 +54,10 @@ stdenv.mkDerivation rec {
       allowing modularity, separate compilation, and numerous optimization/time
       trade-offs.
     '';
-    homepage    = "http://mercurylang.org";
-    license     = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    homepage    = "https://mercurylang.org/";
+    changelog   = "https://dl.mercurylang.org/release/release-notes-${version}.html";
+    license     = lib.licenses.gpl2Only;
+    platforms   = lib.platforms.all;
     maintainers = [ ];
   };
 }

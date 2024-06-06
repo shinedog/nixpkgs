@@ -1,25 +1,37 @@
-{ stdenv, fetchurl
+{ lib, stdenv, fetchurl, darwin
+
+# Build runit-init as a static binary
 , static ? false
 }:
 
 stdenv.mkDerivation rec {
-  name = "runit-${version}";
+  pname = "runit";
   version = "2.1.2";
 
   src = fetchurl {
-    url = "http://smarden.org/runit/${name}.tar.gz";
+    url = "http://smarden.org/runit/${pname}-${version}.tar.gz";
     sha256 = "065s8w62r6chjjs6m9hapcagy33m75nlnxb69vg0f4ngn061dl3g";
   };
 
+  patches = [
+    ./fix-ar-ranlib.patch
+  ];
+
   outputs = [ "out" "man" ];
 
-  sourceRoot = "admin/${name}";
+  sourceRoot = "admin/${pname}-${version}";
 
   doCheck = true;
 
-  buildInputs = stdenv.lib.optionals static [ stdenv.cc.libc stdenv.cc.libc.static ];
+  buildInputs = lib.optionals static [ stdenv.cc.libc stdenv.cc.libc.static ] ++
+    lib.optional stdenv.isDarwin darwin.apple_sdk.libs.utmp;
 
-  postPatch = stdenv.lib.optionalString (!static) ''
+  postPatch = ''
+    sed -i "s,\(#define RUNIT\) .*,\1 \"$out/bin/runit\"," src/runit.h
+    # usernamespace sandbox of nix seems to conflict with runit's assumptions
+    # about unix users. Therefor skip the check
+    sed -i '/.\/chkshsgr/d' src/Makefile
+  '' + lib.optionalString (!static) ''
     sed -i 's,-static,,g' src/Makefile
   '';
 
@@ -27,8 +39,8 @@ stdenv.mkDerivation rec {
     cd src
 
     # Both of these are originally hard-coded to gcc
-    echo cc > conf-cc
-    echo cc > conf-ld
+    echo ${stdenv.cc.targetPrefix}cc > conf-cc
+    echo ${stdenv.cc.targetPrefix}cc ${lib.optionalString stdenv.isDarwin "-Xlinker -x "}> conf-ld
   '';
 
   installPhase = ''
@@ -39,11 +51,11 @@ stdenv.mkDerivation rec {
     cp -r ../man $man/share/man/man8
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "UNIX init scheme with service supervision";
     license = licenses.bsd3;
     homepage = "http://smarden.org/runit";
-    maintainers = with maintainers; [ rickynils joachifm ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [ joachifm ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

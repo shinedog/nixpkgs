@@ -1,35 +1,26 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opam }:
+{ lib, stdenv, fetchurl, ocaml, findlib, topkg, ocamlbuild }:
 
-stdenv.mkDerivation {
-  name = "ocaml-react-1.2.0";
+stdenv.mkDerivation rec {
+  pname = "ocaml-react";
+  version = "1.2.2";
 
   src = fetchurl {
-    url = http://erratique.ch/software/react/releases/react-1.2.0.tbz;
-    sha256 = "0knhgbngphv5sp1yskfd97crf169qhpc0igr6w7vqw0q36lswyl8";
+    url = "https://erratique.ch/software/react/releases/react-${version}.tbz";
+    sha256 = "sha256-xK3TFdbx8VPRFe58qN1gwSZf9NQIwmYSX8tRJP0ij5k=";
   };
 
-  unpackCmd = "tar xjf $src";
-  buildInputs = [ ocaml findlib ocamlbuild opam ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild ];
+  buildInputs = [ topkg ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  configurePhase = "ocaml pkg/git.ml";
-  buildPhase     = "ocaml pkg/build.ml native=true native-dynlink=true";
+  inherit (topkg) buildPhase installPhase;
 
-  installPhase   =
-  let ocamlVersion = (builtins.parseDrvName (ocaml.name)).version;
-  in
-   ''
-    opam-installer --script --prefix=$out react.install > install.sh
-    sed -i s!lib/react!lib/ocaml/${ocamlVersion}/site-lib/react! install.sh
-    sh install.sh
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = http://erratique.ch/software/react;
+  meta = with lib; {
+    homepage = "https://erratique.ch/software/react";
     description = "Applicative events and signals for OCaml";
     license = licenses.bsd3;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [ z77z vbmithr gal_bolle];
+    inherit (ocaml.meta) platforms;
+    maintainers = with maintainers; [ maggesi vbmithr gal_bolle ];
   };
 }

@@ -1,19 +1,35 @@
-{ stdenv, fetchurl, netcdf, hdf5, curl, gfortran }:
+{ lib, stdenv, fetchFromGitHub, netcdf, hdf5, curl, gfortran, CoreFoundation, CoreServices, SystemConfiguration }:
 stdenv.mkDerivation rec {
-  name = "netcdf-fortran-${version}";
-  version = "4.4.3";
+  pname = "netcdf-fortran";
+  version = "4.4.5";
 
-  src = fetchurl {
-    url = "https://github.com/Unidata/netcdf-fortran/archive/v${version}.tar.gz";
-    sha256 = "4170fc018c9ee8222e317215c6a273542623185f5f6ee00d37bbb4e024e4e998";
+  src = fetchFromGitHub {
+    owner = "Unidata";
+    repo = "netcdf-fortran";
+    rev = "v${version}";
+    sha256 = "sha256-nC93NcA4VJbrqaLwyhjP10j/t6rQSYcAzKBxclpZVe0=";
   };
 
-  buildInputs = [ netcdf hdf5 curl gfortran ];
+  nativeBuildInputs = [ gfortran ];
+  buildInputs = [ netcdf hdf5 curl ]
+    ++ lib.optionals stdenv.isDarwin [
+      CoreFoundation
+      CoreServices
+      SystemConfiguration
+    ];
+  env.NIX_LDFLAGS = toString (lib.optionals stdenv.isDarwin [
+    "-F${CoreServices}/Library/Frameworks"
+    "-F${SystemConfiguration}/Library/Frameworks"
+  ]);
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  FFLAGS = [ "-std=legacy" ];
+  FCFLAGS = [ "-std=legacy" ];
+
+  meta = with lib; {
     description = "Fortran API to manipulate netcdf files";
-    homepage = http://www.unidata.ucar.edu/software/netcdf/;
+    mainProgram = "nf-config";
+    homepage = "https://www.unidata.ucar.edu/software/netcdf/";
     license = licenses.free;
     maintainers = [ maintainers.bzizou ];
     platforms = platforms.unix;

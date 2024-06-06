@@ -1,34 +1,104 @@
-{ stdenv, fetchurl, cmake, freetype, libpng, mesa, gettext, openssl, perl, libiconv
-, qtscript, qtserialport, qttools, makeQtWrapper
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, perl
+, wrapGAppsHook3
+, wrapQtAppsHook
+, qtbase
+, qtcharts
+, qtpositioning
+, qtmultimedia
+, qtserialport
+, qtwayland
+, qtwebengine
+, calcmysky
+, qxlsx
+, indilib
+, libnova
+, qttools
+, exiv2
+, nlopt
 }:
 
-stdenv.mkDerivation rec {
-  name = "stellarium-0.14.3";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "stellarium";
+  version = "24.1";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/stellarium/${name}.tar.gz";
-    sha256 = "1919wzlvhfxdxficbwhp31xlhm0571grgcmsfdp5y36z9yqwahfy";
+  src = fetchFromGitHub {
+    owner = "Stellarium";
+    repo = "stellarium";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-t3eFmiG9X2cmnjc/PQwZ2bw1SCHaNRA83wiT1cPbKJc=";
   };
 
-  nativeBuildInputs = [ makeQtWrapper ];
-
-  buildInputs = [
-    cmake freetype libpng mesa gettext openssl perl libiconv qtscript
-    qtserialport qttools
+  patches = [
+    # Compatibility with INDI 2.0 series from https://github.com/Stellarium/stellarium/pull/3269
+    (fetchpatch {
+      url = "https://github.com/Stellarium/stellarium/commit/31fd7bebf33fa710ce53ac8375238a24758312bc.patch";
+      hash = "sha256-eJEqqitZgtV6noeCi8pDBYMVTFIVWXZU1fiEvoilX8o=";
+    })
   ];
 
-  enableParallelBuilding = true;
-
-  postInstall = ''
-    wrapQtProgram "$out/bin/stellarium"
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace CMakeLists.txt \
+      --replace 'SET(CMAKE_INSTALL_PREFIX "''${PROJECT_BINARY_DIR}/Stellarium.app/Contents")' \
+                'SET(CMAKE_INSTALL_PREFIX "${placeholder "out"}/Applications/Stellarium.app/Contents")'
+    substituteInPlace src/CMakeLists.txt \
+      --replace "\''${_qt_bin_dir}/../" "${qtmultimedia}/lib/qt-6/"
   '';
 
-  meta = {
-    description = "Free open-source planetarium";
-    homepage = "http://stellarium.org/";
-    license = stdenv.lib.licenses.gpl2;
+  nativeBuildInputs = [
+    cmake
+    perl
+    wrapGAppsHook3
+    wrapQtAppsHook
+    qttools
+  ];
 
-    platforms = stdenv.lib.platforms.linux; # should be mesaPlatforms, but we don't have qt on darwin
-    maintainers = [ stdenv.lib.maintainers.peti ];
+  buildInputs = [
+    qtbase
+    qtcharts
+    qtpositioning
+    qtmultimedia
+    qtserialport
+    qtwebengine
+    calcmysky
+    qxlsx
+    indilib
+    libnova
+    exiv2
+    nlopt
+  ] ++ lib.optionals stdenv.isLinux [
+    qtwayland
+  ];
+
+  preConfigure = ''
+    export SOURCE_DATE_EPOCH=$(date -d 20${lib.versions.major finalAttrs.version}0101 +%s)
+  '' + lib.optionalString stdenv.isDarwin ''
+    export LC_ALL=en_US.UTF-8
+  '';
+
+  # fatal error: 'QtSerialPort/QSerialPortInfo' file not found
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-F${qtserialport}/lib";
+
+  dontWrapGApps = true;
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    makeWrapper $out/Applications/Stellarium.app/Contents/MacOS/Stellarium $out/bin/stellarium
+  '';
+
+  preFixup = ''
+    qtWrapperArgs+=("''${gappsWrapperArgs[@]}")
+  '';
+
+  meta =  {
+    description = "Free open-source planetarium";
+    mainProgram = "stellarium";
+    homepage = "https://stellarium.org/";
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ kilianar ];
   };
-}
+})

@@ -1,32 +1,65 @@
-{ stdenv, fetchurl, pam ? null, glibcCross ? null }:
-
+{ lib, stdenv, fetchFromGitHub, fetchpatch
+, runtimeShell, nixosTests
+, autoreconfHook, bison, flex
+, docbook_xml_dtd_45, docbook_xsl
+, itstool, libbsd, libxml2, libxslt
+, libxcrypt, pkg-config
+, glibcCross ? null
+, pam ? null
+, withTcb ? lib.meta.availableOn stdenv.hostPlatform tcb, tcb
+}:
 let
-
   glibc =
-    if stdenv ? cross
-    then glibcCross
-    else assert stdenv ? glibc; stdenv.glibc;
-
-  dots_in_usernames = fetchurl {
-    url = http://sources.gentoo.org/cgi-bin/viewvc.cgi/gentoo-x86/sys-apps/shadow/files/shadow-4.1.3-dots-in-usernames.patch;
-    sha256 = "1fj3rg6x3jppm5jvi9y7fhd2djbi4nc5pgwisw00xlh4qapgz692";
-  };
+    if stdenv.hostPlatform != stdenv.buildPlatform then glibcCross
+    else assert stdenv.hostPlatform.libc == "glibc"; stdenv.cc.libc;
 
 in
 
 stdenv.mkDerivation rec {
-  name = "shadow-4.2.1";
+  pname = "shadow";
+  version = "4.14.6";
 
-  src = fetchurl {
-    url = "http://pkg-shadow.alioth.debian.org/releases/${name}.tar.xz";
-    sha256 = "0h9x1zdbq0pqmygmc1x459jraiqw4gqz8849v268crk78z8r621v";
+  src = fetchFromGitHub {
+    owner = "shadow-maint";
+    repo = pname;
+    rev = version;
+    hash = "sha256-+klU1a0cSgHPwZkDnbCSjKnBUKIm2Z3OGUvR/zrqQxo=";
   };
 
-  buildInputs = stdenv.lib.optional (pam != null && stdenv.isLinux) pam;
+  outputs = [ "out" "su" "dev" "man" ];
 
-  patches = [ ./keep-path.patch dots_in_usernames ];
+  RUNTIME_SHELL = runtimeShell;
 
-  outputs = [ "out" "su" "man" ];
+  nativeBuildInputs = [
+    autoreconfHook bison flex
+    docbook_xml_dtd_45 docbook_xsl
+    itstool libxml2 libxslt
+    pkg-config
+  ];
+
+  buildInputs = [ libbsd libxcrypt ]
+    ++ lib.optional (pam != null && stdenv.isLinux) pam
+    ++ lib.optional withTcb tcb;
+
+  patches = [
+    ./keep-path.patch
+    # Obtain XML resources from XML catalog (patch adapted from gtk-doc)
+    ./respect-xml-catalog-files-var.patch
+    ./runtime-shell.patch
+    ./fix-install-with-tcb.patch
+    # Fix build against `clang-16` and upcoming `gcc-14`:
+    #   https://github.com/shadow-maint/shadow/pull/857
+    (fetchpatch {
+      name = "fix-implicit-getdef_bool.patch";
+      url = "https://github.com/shadow-maint/shadow/commit/5abe0811b880208600f646356549b7e5cad89060.patch";
+      hash = "sha256-XqvVv8mYY58uXJBKRwncHQRSI45PUkp3dQNn44gzezU=";
+    })
+  ];
+
+  # The nix daemon often forbids even creating set[ug]id files.
+  postPatch = ''
+    sed 's/^\(s[ug]idperms\) = [0-9]755/\1 = 0755/' -i src/Makefile.am
+  '';
 
   # Assume System V `setpgrp (void)', which is the default on GNU variants
   # (`AC_FUNC_SETPGRP' is not cross-compilation capable.)
@@ -35,29 +68,41 @@ stdenv.mkDerivation rec {
     export shadow_cv_logdir=/var/log
   '';
 
-  preBuild = assert glibc != null;
-    ''
-      substituteInPlace lib/nscd.c --replace /usr/sbin/nscd ${glibc.bin}/bin/nscd
-    '';
+  configureFlags = [
+    "--enable-man"
+    "--with-group-name-max-length=32"
+    "--with-bcrypt"
+    "--with-yescrypt"
+  ] ++ lib.optional (stdenv.hostPlatform.libc != "glibc") "--disable-nscd"
+    ++ lib.optional withTcb "--with-tcb";
 
-  postInstall =
-    ''
-      # Don't install ‘groups’, since coreutils already provides it.
-      rm $out/bin/groups
-      rm $man/share/man/man1/groups.*
+  preBuild = lib.optionalString (stdenv.hostPlatform.libc == "glibc") ''
+    substituteInPlace lib/nscd.c --replace /usr/sbin/nscd ${glibc.bin}/bin/nscd
+  '';
 
-      # Move the su binary into the su package
-      mkdir -p $su/bin
-      mv $out/bin/su $su/bin
-    '';
+  postInstall = ''
+    # Don't install ‘groups’, since coreutils already provides it.
+    rm $out/bin/groups
+    rm $man/share/man/man1/groups.*
 
-  meta = {
-    homepage = http://pkg-shadow.alioth.debian.org/;
+    # Move the su binary into the su package
+    mkdir -p $su/bin
+    mv $out/bin/su $su/bin
+  '';
+
+  enableParallelBuilding = true;
+
+  disallowedReferences = lib.optional (stdenv.buildPlatform != stdenv.hostPlatform) stdenv.shellPackage;
+
+  meta = with lib; {
+    homepage = "https://github.com/shadow-maint";
     description = "Suite containing authentication-related tools such as passwd and su";
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.bsd3;
+    platforms = platforms.linux;
   };
 
   passthru = {
     shellPath = "/bin/nologin";
+    tests = { inherit (nixosTests) shadow; };
   };
 }

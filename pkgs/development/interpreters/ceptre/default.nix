@@ -1,12 +1,15 @@
-{ stdenv, fetchgit, mlton }:
+{ lib, stdenv, fetchFromGitHub, mlton }:
 
-stdenv.mkDerivation rec {
-  name = "ceptre-2016-01-01";
+stdenv.mkDerivation {
+  pname = "ceptre";
+  version = "unstable-2016-11-27";
 
-  src = fetchgit {
-    url = https://github.com/chrisamaphone/interactive-lp;
-    rev = "b3d21489d4994f03d2982de273eea90bc7fba5d0";
-    sha256 = "1qpyasr3jg4i2x547yq1dzksvjagvnrmkdd00s108wvw9npc2jj1";
+  src = fetchFromGitHub {
+    owner = "chrisamaphone";
+    repo = "interactive-lp";
+    rev = "e436fda2ccd44e9c9d226feced9d204311deacf5";
+    sha256 = "sha256-COYrE9O/Y1/ZBNHNakBwrUVklCuk144RF9bjwa3rl5w=";
+    fetchSubmodules = true;
   };
 
   nativeBuildInputs = [ mlton ];
@@ -16,10 +19,11 @@ stdenv.mkDerivation rec {
     cp ceptre $out/bin
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A linear logic programming language for modeling generative interactive systems";
-    homepage = https://github.com/chrisamaphone/interactive-lp;
+    mainProgram = "ceptre";
+    homepage = "https://github.com/chrisamaphone/interactive-lp";
     maintainers = with maintainers; [ pSub ];
-    platforms = with platforms; linux;
+    platforms = platforms.unix;
   };
 }

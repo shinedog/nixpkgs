@@ -1,45 +1,105 @@
-{ stdenv, writeText, fetchurl,
-  libpng, fftw,
-  mpiSupport ? false, mpi ? null
+{ lib
+, stdenv
+, fetchFromGitHub
+, libpng
+, gzip
+, fftw
+, blas
+, lapack
+, cmake
+, autoAddDriverRunpath
+, pkg-config
+# Available list of packages can be found near here:
+#
+# - https://github.com/lammps/lammps/blob/develop/cmake/CMakeLists.txt#L222
+# - https://docs.lammps.org/Build_extras.html
+, packages ? {
+  ASPHERE = true;
+  BODY = true;
+  CLASS2 = true;
+  COLLOID = true;
+  COMPRESS = true;
+  CORESHELL = true;
+  DIPOLE = true;
+  GRANULAR = true;
+  KSPACE = true;
+  MANYBODY = true;
+  MC = true;
+  MISC = true;
+  MOLECULE = true;
+  OPT = true;
+  PERI = true;
+  QEQ = true;
+  REPLICA = true;
+  RIGID = true;
+  SHOCK = true;
+  ML-SNAP = true;
+  SRD = true;
+  REAXFF = true;
+}
+# Extra cmakeFlags to add as "-D${attr}=${value}"
+, extraCmakeFlags ? {}
+# Extra `buildInputs` - meant for packages that require more inputs
+, extraBuildInputs ? []
 }:
 
-assert mpiSupport -> mpi != null;
+stdenv.mkDerivation (finalAttrs: {
+  # LAMMPS has weird versioning convention. Updates should go smoothly with:
+  # nix-update --commit lammps --version-regex 'stable_(.*)'
+  version = "2Aug2023_update3";
+  pname = "lammps";
 
-stdenv.mkDerivation rec {
-  # LAMMPS has weird versioning converted to ISO 8601 format
-  version = "2016-02-16";
-  name = "lammps-${version}";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/lammps/lammps-16Feb16.tar.gz";
-    sha256 = "1yzfbkxma3xa1288rnn66h4w0smbmjkwq1fx1y60pjiw0prmk105";
+  src = fetchFromGitHub {
+    owner = "lammps";
+    repo = "lammps";
+    rev = "stable_${finalAttrs.version}";
+    hash = "sha256-jx0hkiYxQlnE2sa4WTvluEgphF//sNbK91VGAQJMwjw=";
   };
+  preConfigure = ''
+    cd cmake
+  '';
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    # Although not always needed, it is needed if cmakeFlags include
+    # GPU_API=cuda, and it doesn't users that don't enable the GPU package.
+    autoAddDriverRunpath
+  ];
 
   passthru = {
-    inherit mpi;
+    # Remove these at some point - perhaps after release 23.11. See discussion at:
+    # https://github.com/NixOS/nixpkgs/pull/238771#discussion_r1235459961
+    mpi = throw "`lammps-mpi.passthru.mpi` was removed in favor of `extraBuildInputs`";
+    inherit packages;
+    inherit extraCmakeFlags;
+    inherit extraBuildInputs;
   };
+  cmakeFlags = [
+  ]
+  ++ (builtins.map (p: "-DPKG_${p}=ON") (builtins.attrNames (lib.filterAttrs (n: v: v) packages)))
+  ++ (lib.mapAttrsToList (n: v: "-D${n}=${v}") extraCmakeFlags)
+  ;
 
-  buildInputs = [ fftw libpng ]
-  ++ (stdenv.lib.optionals mpiSupport [ mpi ]);
+  buildInputs = [
+    fftw
+    libpng
+    blas
+    lapack
+    gzip
+  ] ++ extraBuildInputs
+  ;
 
-  # Must do manual build due to LAMMPS requiring a seperate build for
-  # the libraries and executable
-  builder = writeText "builder.sh" ''
-    source $stdenv/setup
-
-    tar xzf $src
-    cd lammps-*/src
-    make mode=exe ${if mpiSupport then "mpi" else "serial"} SHELL=$SHELL LMP_INC="-DLAMMPS_GZIP -DLAMMPS_PNG" FFT_PATH=-DFFT_FFTW3 FFT_LIB=-lfftw3 JPG_LIB=-lpng
-    make mode=shlib ${if mpiSupport then "mpi" else "serial"} SHELL=$SHELL LMP_INC="-DLAMMPS_GZIP -DLAMMPS_PNG" FFT_PATH=-DFFT_FFTW3 FFT_LIB=-lfftw3 JPG_LIB=-lpng
-
-    mkdir -p $out/bin
-    cp -v lmp_* $out/bin/lammps
-
-    mkdir -p $out/lib
-    cp -v liblammps* $out/lib/
+  postInstall = ''
+    # For backwards compatibility
+    ln -s $out/bin/lmp $out/bin/lmp_serial
+    # Install vim and neovim plugin
+    install -Dm644 ../../tools/vim/lammps.vim $out/share/vim-plugins/lammps/syntax/lammps.vim
+    install -Dm644 ../../tools/vim/filetype.vim $out/share/vim-plugins/lammps/ftdetect/lammps.vim
+    mkdir -p $out/share/nvim
+    ln -s $out/share/vim-plugins/lammps $out/share/nvim/site
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Classical Molecular Dynamics simulation code";
     longDescription = ''
       LAMMPS is a classical molecular dynamics simulation code designed to
@@ -48,8 +108,14 @@ stdenv.mkDerivation rec {
       funding from the DOE. It is an open-source code, distributed freely
       under the terms of the GNU Public License (GPL).
       '';
-    homepage = "http://lammps.sandia.gov";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.lammps.org";
+    license = licenses.gpl2Only;
+    platforms = platforms.linux;
+    # compiling lammps with 64 bit support blas and lapack might cause runtime
+    # segfaults. In anycase both blas and lapack should have the same #bits
+    # support.
+    broken = (blas.isILP64 && lapack.isILP64);
+    maintainers = [ maintainers.costrouc maintainers.doronbehar ];
+    mainProgram = "lmp";
   };
-}
+})

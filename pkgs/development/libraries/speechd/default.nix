@@ -1,39 +1,120 @@
-{ fetchurl, lib, stdenv, intltool, libtool, pkgconfig, glib, dotconf, libsndfile
-, libao, python3Packages
-, withEspeak ? false, espeak
+{ stdenv
+, lib
+, substituteAll
+, pkg-config
+, fetchurl
+, python3Packages
+, gettext
+, itstool
+, libtool
+, texinfo
+, util-linux
+, autoreconfHook
+, glib
+, dotconf
+, libsndfile
+, withLibao ? true, libao
+, withPulse ? false, libpulseaudio
+, withAlsa ? false, alsa-lib
+, withOss ? false
+, withFlite ? true, flite
+, withEspeak ? true, espeak, sonic, pcaudiolib
+, mbrola
 , withPico ? true, svox
 }:
 
-stdenv.mkDerivation rec {
-  name = "speech-dispatcher-${version}";
-  version = "0.8.5";
+let
+  inherit (python3Packages) python pyxdg wrapPython;
+in stdenv.mkDerivation rec {
+  pname = "speech-dispatcher";
+  version = "0.11.5";
 
   src = fetchurl {
-    url = "http://www.freebsoft.org/pub/projects/speechd/${name}.tar.gz";
-    sha256 = "18jlxnhlahyi6njc6l6576hfvmzivjjgfjyd2n7vvrvx9inphjrb";
+    url = "https://github.com/brailcom/speechd/releases/download/${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-HOR1n/q7rxrrQzpewHOb4Gdum9+66URKezvhsq8+wSs=";
   };
 
-  buildInputs = [ intltool libtool glib dotconf libsndfile libao python3Packages.python ]
-             ++ lib.optional withEspeak espeak
-             ++ lib.optional withPico svox;
-  nativeBuildInputs = [ pkgconfig python3Packages.wrapPython ];
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      utillinux = util-linux;
+    })
+  ] ++ lib.optionals (withEspeak && espeak.mbrolaSupport) [
+    # Replace FHS paths.
+    (substituteAll {
+      src = ./fix-mbrola-paths.patch;
+      inherit espeak mbrola;
+    })
+  ];
 
-  hardeningDisable = [ "format" ];
+  nativeBuildInputs = [
+    pkg-config
+    autoreconfHook
+    gettext
+    libtool
+    itstool
+    texinfo
+    wrapPython
+  ];
 
-  pythonPath = with python3Packages; [ pyxdg ];
+  buildInputs = [
+    glib
+    dotconf
+    libsndfile
+    libao
+    libpulseaudio
+    alsa-lib
+    python
+  ] ++ lib.optionals withEspeak [
+    espeak
+    sonic
+    pcaudiolib
+  ] ++ lib.optionals withFlite [
+    flite
+  ] ++ lib.optionals withPico [
+    svox
+  ];
 
-  postPatch = lib.optionalString withPico ''
-    sed -i 's,/usr/share/pico/lang/,${svox}/share/pico/lang/,g' src/modules/pico.c
+  pythonPath = [
+    pyxdg
+  ];
+
+  configureFlags = [
+    # Audio method falls back from left to right.
+    "--with-default-audio-method=\"libao,pulse,alsa,oss\""
+    "--with-systemdsystemunitdir=${placeholder "out"}/lib/systemd/system"
+  ] ++ lib.optionals withPulse [
+  "--with-pulse"
+  ] ++ lib.optionals withAlsa [
+    "--with-alsa"
+  ] ++ lib.optionals withLibao [
+    "--with-libao"
+  ] ++ lib.optionals withOss [
+    "--with-oss"
+  ] ++ lib.optionals withEspeak [
+    "--with-espeak-ng"
+  ] ++ lib.optionals withPico [
+    "--with-pico"
+  ];
+
+  postPatch = ''
+    substituteInPlace src/modules/pico.c --replace "/usr/share/pico/lang" "${svox}/share/pico/lang"
   '';
 
   postInstall = ''
     wrapPythonPrograms
   '';
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Common interface to speech synthesis";
-    homepage = http://www.freebsoft.org/speechd;
+    homepage = "https://devel.freebsoft.org/speechd";
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [
+      berce
+      jtojnar
+    ];
     platforms = platforms.linux;
   };
 }

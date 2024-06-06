@@ -1,38 +1,51 @@
-{ stdenv, fetchurl, cups }:
+{ lib, stdenv, fetchurl, cups }:
 
-let
-  version = "1.6.8";
-in
-  stdenv.mkDerivation {
+let version = "1.7.20";
+in stdenv.mkDerivation {
+  pname = "epson-escpr";
+  inherit version;
 
-    name = "epson-escpr-${version}";
-  
-    src = fetchurl {
-      url = "https://download3.ebz.epson.net/dsc/f/03/00/05/10/61/125006df4ffc84861395c1158a02f1f73e6f1753/epson-inkjet-printer-escpr-1.6.8-1lsb3.2.tar.gz";
-      sha256 = "02v8ljzw6xhfkz1x8m50mblcckgfbpa89fc902wcmi2sy8fihgh4";
-    }; 
+  src = fetchurl {
+    # To find new versions, visit
+    # http://download.ebz.epson.net/dsc/search/01/search/?OSC=LX and search for
+    # some printer like for instance "WF-7110" to get to the most recent
+    # version.
+    # NOTE: Don't forget to update the webarchive link too!
+    urls = [
+      "https://download3.ebz.epson.net/dsc/f/03/00/13/76/45/5ac2ea8f9cf94a48abd64afd0f967f98c4fc24aa/epson-inkjet-printer-escpr-${version}-1lsb3.2.tar.gz"
 
-    patches = [ ./cups-filter-ppd-dirs.patch ]; 
+      "https://web.archive.org/web/https://download3.ebz.epson.net/dsc/f/03/00/13/76/45/5ac2ea8f9cf94a48abd64afd0f967f98c4fc24aa/epson-inkjet-printer-escpr-${version}-1lsb3.2.tar.gz"
+    ];
+    sha256 = "sha256:09rscpm557dgaflylr93wcwmyn6fnvr8nc77abwnq97r6hxwrkhk";
+  };
 
-    buildInputs = [ cups ];
+  patches = [ ./cups-filter-ppd-dirs.patch ];
 
-    meta = with stdenv.lib; {
-      homepage = "http://download.ebz.epson.net/dsc/search/01/search/";
-      description = "ESC/P-R Driver (generic driver)";
-      longDescription = ''
-        Epson Inkjet Printer Driver (ESC/P-R) for Linux and the
-	corresponding PPD files. The list of supported printers
-	can be found at http://www.openprinting.org/driver/epson-escpr/ .
+  buildInputs = [ cups ];
 
-	To use the driver adjust your configuration.nix file:
-	  services.printing = {
-	    enable = true;
-	    drivers = [ pkgs.epson-escpr ];
-	  };
-      '';
-      license = licenses.gpl3Plus;
-      maintainers = with maintainers; [ artuuge ];
-      platforms = platforms.linux;
-    };
+  meta = with lib; {
+    homepage = "http://download.ebz.epson.net/dsc/search/01/search/";
+    description = "ESC/P-R Driver (generic driver)";
+    longDescription = ''
+      Epson Inkjet Printer Driver (ESC/P-R) for Linux and the
+      corresponding PPD files. The list of supported printers
+      can be found at http://www.openprinting.org/driver/epson-escpr/ .
 
-  }
+      To use the driver adjust your configuration.nix file:
+        services.printing = {
+          enable = true;
+          drivers = [ pkgs.epson-escpr ];
+        };
+
+      To setup a wireless printer, enable Avahi which provides
+      printer's hostname to CUPS and nss-mdns to make this
+      hostname resolvable:
+        services.avahi = {
+          enable = true;
+          nssmdns4 = true;
+        };'';
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ artuuge ];
+    platforms = platforms.linux;
+  };
+}

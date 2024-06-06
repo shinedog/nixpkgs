@@ -1,20 +1,15 @@
-{ lib, stdenv, fetchurl, texinfo, perl }:
+{ callPackage, texinfo, perl }:
 
-let build = import ./common.nix; in
-
-/* null cross builder */
-build null {
-  name = "glibc-info";
-
-  inherit fetchurl stdenv lib;
+callPackage ./common.nix {} {
+  pname = "glibc-info";
 
   outputs = [ "out" ];
 
   configureFlags = [ "--enable-add-ons" ];
 
-  buildInputs = [ texinfo perl ];
+  extraNativeBuildInputs = [ texinfo perl ];
 
-  buildPhase = "make info";
+  makeFlags = [ "info" ];
 
   # I don't know why the info is not generated in 'build'
   # Somehow building the info still does not work, because the final

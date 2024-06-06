@@ -1,27 +1,34 @@
-{ stdenv, fetchurl }:
+{ stdenv, lib, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "mp4v2-1.9.1p4";
+  pname = "mp4v2";
+  version = "5.0.1";
 
-  src = fetchurl {
-    url = "http://mp4v2.googlecode.com/files/${name}.tar.bz2";
-    sha256 = "1d73qbi0faqad3bpmjfr4kk0mfmqpl1f43ysrx4gq9i3mfp1qf2w";
+  src = fetchFromGitHub {
+    # 2020-06-20: THE current upstream, maintained and used in distros fork.
+    owner = "TechSmith";
+    repo = "mp4v2";
+    rev = "Release-ThirdParty-MP4v2-${version}";
+    sha256 = "sha256-OP+oVTH9pqYfHtYL1Kjrs1qey/J40ijLi5Gu8GJnvSY=";
   };
 
-  # From Handbrake
-  # mp4v2 doesn't seem to be actively maintained any more :-/
-  patches = [
-    ./A00-nero-vobsub.patch ./A01-divide-zero.patch ./A02-meaningful-4gb-warning.patch
-    ./P00-mingw-dllimport.patch
-  ];
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=narrowing";
+
   # `faac' expects `mp4.h'.
   postInstall = "ln -s mp4v2/mp4v2.h $out/include/mp4.h";
 
-  hardeningDisable = [ "format" ];
+  enableParallelBuilding = true;
 
   meta = {
-    homepage = http://code.google.com/p/mp4v2;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    platforms = stdenv.lib.platforms.linux;
+    description = "Provides functions to read, create, and modify mp4 files";
+    longDescription = ''
+      MP4v2 library provides an API to work with mp4 files
+      as defined by ISO-IEC:14496-1:2001 MPEG-4 Systems.
+      This container format is derived from Apple's QuickTime format.
+    '';
+    homepage = "https://github.com/TechSmith/mp4v2";
+    maintainers = [ lib.maintainers.Anton-Latukha ];
+    platforms = lib.platforms.unix;
+    license = lib.licenses.mpl11;
   };
 }

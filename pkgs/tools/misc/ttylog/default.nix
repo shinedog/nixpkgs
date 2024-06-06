@@ -1,27 +1,27 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib, stdenv, fetchFromGitHub, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "ttylog-${version}";
-  version = "0.26";
+  pname = "ttylog";
+  version = "0.31";
 
   src = fetchFromGitHub {
     owner = "rocasa";
     repo = "ttylog";
     rev = version;
-    sha256 = "1xvqch1dwpl2d89n9cjcxhqbpvm50fspj5yn883wbii6dpg62p84";
+    sha256 = "0c746bpjpa77vsr88fxk8h1803p5np1di1mpjf4jy5bv5x3zwm07";
   };
 
   nativeBuildInputs = [ cmake ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://ttylog.sourceforg.net";
+  meta = with lib; {
+    homepage = "https://ttylog.sourceforge.net";
     description = "Simple serial port logger";
     longDescription = ''
       A serial port logger which can be used to print everything to stdout
       that comes from a serial device.
     '';
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
+    mainProgram = "ttylog";
   };
 }

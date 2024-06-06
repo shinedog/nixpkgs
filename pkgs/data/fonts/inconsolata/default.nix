@@ -1,25 +1,24 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "inconsolata-${version}";
-  version = "1.010";
+stdenv.mkDerivation {
+  pname = "inconsolata";
+  version = "3.001";
 
-  src = fetchurl {
-    url = "http://www.levien.com/type/myfonts/Inconsolata.otf";
-    sha256 = "06js6znbcf7swn8y3b8ki416bz96ay7d3yvddqnvi88lqhbfcq8m";
+  src = fetchFromGitHub {
+    owner = "google";
+    repo = "fonts";
+    rev = "0f203e3740b5eb77e0b179dff1e5869482676782";
+    sha256 = "sha256-Q8eUJ0mkoB245Ifz5ulxx61x4+AqKhG0uqhWF2nSLpw=";
   };
 
-  phases = [ "installPhase" ];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    cp -v $src $out/share/fonts/opentype/inconsolata.otf
+    install -m644 --target $out/share/fonts/truetype/inconsolata -D $src/ofl/inconsolata/static/*.ttf
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.levien.com/type/myfonts/inconsolata.html;
+  meta = with lib; {
+    homepage = "https://www.levien.com/type/myfonts/inconsolata.html";
     description = "A monospace font for both screen and print";
-    maintainers = with maintainers; [ raskin rycee ];
+    maintainers = with maintainers; [ appsforartists mikoim raskin ];
     license = licenses.ofl;
     platforms = platforms.all;
   };

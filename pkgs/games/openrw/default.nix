@@ -1,20 +1,46 @@
-{ stdenv, fetchgit, cmake, sfml, mesa, bullet, glm, libmad, x11 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, sfml
+, libGLU
+, libGL
+, bullet
+, glm
+, libmad
+, openal
+, SDL2
+, boost
+, ffmpeg_4
+, Cocoa
+, OpenAL }:
 
-stdenv.mkDerivation rec {
-  version = "2016-06-29";
-  name = "openrw-${version}";
-  src = fetchgit {
-    url = "https://github.com/rwengine/openrw";
-    rev = "46a7254a41d9f6e1eda8d31e742de492abb2540e";
-    sha256 = "16ip9779dy59xcj9src2i4zp8jq2h0h5mb4a7d5cpkhd3xlcpabm";
+stdenv.mkDerivation {
+  version = "unstable-2021-10-14";
+  pname = "openrw";
+
+  src = fetchFromGitHub {
+    owner = "rwengine";
+    repo = "openrw";
+    rev = "0f83c16f6518c427a4f156497c3edc843610c402";
+    sha256 = "0i6nx9g0xb8sziak5swi8636fszcjjx8n2jwgz570izw2fl698ff";
     fetchSubmodules = true;
   };
 
-  buildInputs = [ cmake sfml mesa bullet glm libmad x11 ];
+  postPatch = lib.optional (stdenv.cc.isClang && (lib.versionAtLeast stdenv.cc.version "9"))''
+    substituteInPlace cmake_configure.cmake \
+      --replace 'target_link_libraries(rw_interface INTERFACE "stdc++fs")' ""
+  '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ cmake ];
+
+  buildInputs = [
+    sfml libGLU libGL bullet glm libmad openal SDL2 boost ffmpeg_4
+  ] ++ lib.optionals stdenv.isDarwin [ OpenAL Cocoa ];
+
+  meta = with lib; {
     description = "Unofficial open source recreation of the classic Grand Theft Auto III game executable";
-    homepage = https://github.com/rwengine/openrw;
+    homepage = "https://github.com/rwengine/openrw";
     license = licenses.gpl3;
     longDescription = ''
       OpenRW is an open source re-implementation of Rockstar Games' Grand Theft
@@ -22,5 +48,6 @@ stdenv.mkDerivation rec {
     '';
     maintainers = with maintainers; [ kragniz ];
     platforms = platforms.all;
+    mainProgram = "rwgame";
   };
 }

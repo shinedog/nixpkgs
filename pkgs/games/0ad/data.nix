@@ -1,12 +1,12 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl, zeroad-unwrapped }:
 
 stdenv.mkDerivation rec {
-  name = "0ad-data-${version}";
-  version = "0.0.21";
+  pname = "0ad-data";
+  inherit (zeroad-unwrapped) version;
 
   src = fetchurl {
     url = "http://releases.wildfiregames.com/0ad-${version}-alpha-unix-data.tar.xz";
-    sha256 = "15xadyrpvq27lm9p1ny7bcmmv56m16h3xadbkdx69gfkzxc3razk";
+    sha256 = "sgDkhVj4goB5EOPGhlZ7ajliSNnUGAROz94JCwV3LX0=";
   };
 
   installPhase = ''
@@ -15,10 +15,11 @@ stdenv.mkDerivation rec {
     cp -r binaries/data $out/share/0ad/
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A free, open-source game of ancient warfare -- data files";
-    homepage = "http://wildfiregames.com/0ad/";
+    homepage = "https://play0ad.com/";
     license = licenses.cc-by-sa-30;
+    maintainers = with maintainers; [ chvp ];
     platforms = platforms.linux;
     hydraPlatforms = [];
   };

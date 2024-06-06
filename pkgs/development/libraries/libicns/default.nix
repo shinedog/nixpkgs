@@ -1,16 +1,23 @@
-{ stdenv, fetchurl, libpng, jasper }:
+{ lib, stdenv, fetchgit, autoreconfHook, pkg-config, libpng, openjpeg, zlib }:
 
-stdenv.mkDerivation rec {
-  name = "libicns-0.8.1";
+stdenv.mkDerivation {
+  pname = "libicns";
+  version = "0.8.1-unstable-2022-04-10";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/icns/${name}.tar.gz";
-    sha256 = "1hjm8lwap7bjyyxsyi94fh5817xzqhk4kb5y0b7mb6675xw10prk";
+  src = fetchgit {
+    name = "libicns";
+    url = "https://git.code.sf.net/p/icns/code";
+    rev = "921f972c461c505e5ac981aaddbdfdde97e8bb2b";
+    hash = "sha256-YeO0rlTujDNmrdJ3DRyl3TORswF2KFKA+wVUxJo8Dno";
   };
 
-  buildInputs = [ libpng jasper ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ libpng openjpeg zlib ];
 
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
+  meta = with lib; {
+    description = "Library for manipulation of the Mac OS icns resource format";
+    homepage = "https://icns.sourceforge.io";
+    license = with licenses; [ gpl2 lgpl2 lgpl21 ];
+    platforms = platforms.unix;
   };
 }

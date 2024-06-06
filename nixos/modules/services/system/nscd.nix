@@ -7,10 +7,6 @@ let
   nssModulesPath = config.system.nssModules.path;
   cfg = config.services.nscd;
 
-  inherit (lib) singleton;
-
-  cfgFile = pkgs.writeText "nscd.conf" cfg.config;
-
 in
 
 {
@@ -24,13 +20,63 @@ in
       enable = mkOption {
         type = types.bool;
         default = true;
-        description = "Whether to enable the Name Service Cache Daemon.";
+        description = ''
+          Whether to enable the Name Service Cache Daemon.
+          Disabling this is strongly discouraged, as this effectively disables NSS Lookups
+          from all non-glibc NSS modules, including the ones provided by systemd.
+        '';
+      };
+
+      enableNsncd = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Whether to use nsncd instead of nscd from glibc.
+          This is a nscd-compatible daemon, that proxies lookups, without any caching.
+          Using nscd from glibc is discouraged.
+        '';
+      };
+
+      user = mkOption {
+        type = types.str;
+        default = "nscd";
+        description = ''
+          User account under which nscd runs.
+        '';
+      };
+
+      group = mkOption {
+        type = types.str;
+        default = "nscd";
+        description = ''
+          User group under which nscd runs.
+        '';
       };
 
       config = mkOption {
         type = types.lines;
         default = builtins.readFile ./nscd.conf;
-        description = "Configuration to use for Name Service Cache Daemon.";
+        description = ''
+          Configuration to use for Name Service Cache Daemon.
+          Only used in case glibc-nscd is used.
+        '';
+      };
+
+      package = mkOption {
+        type = types.package;
+        default =
+          if pkgs.stdenv.hostPlatform.libc == "glibc"
+          then pkgs.stdenv.cc.libc.bin
+          else pkgs.glibc.bin;
+        defaultText = lib.literalExpression ''
+          if pkgs.stdenv.hostPlatform.libc == "glibc"
+            then pkgs.stdenv.cc.libc.bin
+            else pkgs.glibc.bin;
+        '';
+        description = ''
+          package containing the nscd binary to be used by the service.
+          Ignored when enableNsncd is set to true.
+        '';
       };
 
     };
@@ -41,49 +87,67 @@ in
   ###### implementation
 
   config = mkIf cfg.enable {
+    environment.etc."nscd.conf".text = cfg.config;
 
-    users.extraUsers.nscd =
-      { isSystemUser = true;
-        description = "Name service cache daemon user";
-      };
+    users.users.${cfg.user} = {
+      isSystemUser = true;
+      group = cfg.group;
+    };
+
+    users.groups.${cfg.group} = { };
 
     systemd.services.nscd =
-      { description = "Name Service Cache Daemon";
+      {
+        description = "Name Service Cache Daemon"
+          + lib.optionalString cfg.enableNsncd " (nsncd)";
 
-        wantedBy = [ "nss-lookup.target" "nss-user-lookup.target" ];
+        before = [ "nss-lookup.target" "nss-user-lookup.target" ];
+        wants = [ "nss-lookup.target" "nss-user-lookup.target" ];
+        wantedBy = [ "multi-user.target" ];
+        requiredBy = [ "nss-lookup.target" "nss-user-lookup.target" ];
 
         environment = { LD_LIBRARY_PATH = nssModulesPath; };
 
-        preStart =
-          ''
-            mkdir -m 0755 -p /run/nscd
-            rm -f /run/nscd/nscd.pid
-            mkdir -m 0755 -p /var/db/nscd
-          '';
+        restartTriggers = lib.optionals (!cfg.enableNsncd) ([
+          config.environment.etc.hosts.source
+          config.environment.etc."nsswitch.conf".source
+          config.environment.etc."nscd.conf".source
+        ] ++ optionals config.users.mysql.enable [
+          config.environment.etc."libnss-mysql.cfg".source
+          config.environment.etc."libnss-mysql-root.cfg".source
+        ]);
 
-        restartTriggers = [ config.environment.etc.hosts.source config.environment.etc."nsswitch.conf".source ];
-
+        # In some configurations, nscd needs to be started as root; it will
+        # drop privileges after all the NSS modules have read their
+        # configuration files. So prefix the ExecStart command with "!" to
+        # prevent systemd from dropping privileges early. See ExecStart in
+        # systemd.service(5). We use a static user, because some NSS modules
+        # sill want to read their configuration files after the privilege drop
+        # and so users can set the owner of those files to the nscd user.
         serviceConfig =
-          { ExecStart = "@${pkgs.glibc.bin}/sbin/nscd nscd -f ${cfgFile}";
-            Type = "forking";
+          {
+            ExecStart =
+              if cfg.enableNsncd then "${pkgs.nsncd}/bin/nsncd"
+              else "!@${cfg.package}/bin/nscd nscd";
+            Type = if cfg.enableNsncd then "notify" else "forking";
+            User = cfg.user;
+            Group = cfg.group;
+            RemoveIPC = true;
+            PrivateTmp = true;
+            NoNewPrivileges = true;
+            RestrictSUIDSGID = true;
+            ProtectSystem = "strict";
+            ProtectHome = "read-only";
+            RuntimeDirectory = "nscd";
             PIDFile = "/run/nscd/nscd.pid";
             Restart = "always";
             ExecReload =
-              [ "${pkgs.glibc.bin}/sbin/nscd --invalidate passwd"
-                "${pkgs.glibc.bin}/sbin/nscd --invalidate group"
-                "${pkgs.glibc.bin}/sbin/nscd --invalidate hosts"
+              lib.optionals (!cfg.enableNsncd) [
+                "${cfg.package}/bin/nscd --invalidate passwd"
+                "${cfg.package}/bin/nscd --invalidate group"
+                "${cfg.package}/bin/nscd --invalidate hosts"
               ];
           };
-
-        # Urgggggh... Nscd forks before opening its socket and writing
-        # its pid. So wait until it's ready.
-        postStart =
-          ''
-            while ! ${pkgs.glibc.bin}/sbin/nscd -g -f ${cfgFile} > /dev/null; do
-              sleep 0.2
-            done
-          '';
       };
-
   };
 }

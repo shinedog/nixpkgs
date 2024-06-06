@@ -1,17 +1,19 @@
-{ stdenv, fetchurl, autoconf, automake, puredata }:
+{ lib, stdenv, fetchurl, autoconf, automake, puredata }:
 
 stdenv.mkDerivation rec {
-  name = "zexy-${version}";
+  pname = "zexy";
   version = "2.2.4";
 
   src = fetchurl {
-    url = "http://puredata.info/downloads/zexy/releases/${version}/${name}.tar.gz";
+    url = "https://puredata.info/downloads/zexy/releases/${version}/${pname}-${version}.tar.gz";
     sha256 = "1xpgl82c2lc6zfswjsa7z10yhv5jb7a4znzh3nc7ffrzm1z8vylp";
   };
 
-  buildInputs = [ autoconf automake puredata ];
+  nativeBuildInputs = [ autoconf automake  ];
+  buildInputs = [ puredata ];
 
-  patchPhase = ''
+  preBuild = ''
+    export LD=$CXX
     cd src/
     for i in ${puredata}/include/pd/*; do
       ln -s $i .
@@ -27,9 +29,9 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "The swiss army knife for puredata";
-    homepage = http://puredata.info/downloads/zexy;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.magnetophon ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "http://puredata.info/downloads/zexy";
+    license = lib.licenses.gpl2;
+    maintainers = [ lib.maintainers.magnetophon ];
+    platforms = lib.platforms.linux;
   };
 }

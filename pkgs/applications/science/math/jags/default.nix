@@ -1,19 +1,26 @@
-{stdenv, fetchurl, gfortran, openblas}:
+{ lib, stdenv, fetchurl, gfortran, blas, lapack }:
 
 stdenv.mkDerivation rec {
-  name = "JAGS-4.1.0";
-  src = fetchurl {
-    url = "mirror://sourceforge/mcmc-jags/${name}.tar.gz";
-    sha256 = "08pmrnbwibc0brgn5cx860jcl0s2xaw4amw7g45649r1bcdz7v25";
-  };
-  buildInputs = [gfortran openblas];
-  configureFlags = [ "--with-blas=-lopenblas" "--with-lapack=-lopenblas" ];
+  pname = "JAGS";
+  version = "4.3.2";
 
-  meta = {
+  src = fetchurl {
+    url = "mirror://sourceforge/mcmc-jags/JAGS-${version}.tar.gz";
+    sha256 = "sha256-hx9VavQDp8LOag8C8Vz4WlcnY+CT0mZY66xVxKtHL8g=";
+  };
+
+  nativeBuildInputs = [ gfortran ];
+
+  buildInputs = [ blas lapack ];
+
+  configureFlags = [ "--with-blas=-lblas" "--with-lapack=-llapack" ];
+
+  meta = with lib; {
     description = "Just Another Gibbs Sampler";
-    license     = "GPL2";
-    homepage    = http://www-ice.iarc.fr/~martyn/software/jags/;
-    maintainers = [stdenv.lib.maintainers.andres];
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "jags";
+    license = licenses.gpl2;
+    homepage = "http://mcmc-jags.sourceforge.net";
+    maintainers = [ maintainers.andres ];
+    platforms = platforms.unix;
   };
 }

@@ -1,13 +1,25 @@
-{ stdenv, fetchurl, unzip, src, name, postInstall ? "true", meta ? {} }:
-
-assert unzip != null;
+{ lib, stdenv, unzip, src, version, postInstall ? "true", findXMLCatalogs }:
 
 stdenv.mkDerivation {
-  inherit src name postInstall;
-  builder = ./builder.sh;
-  buildInputs = [unzip];
+  inherit version src postInstall;
+  pname = "docbook-xml";
 
-  meta = meta // {
-    platforms = stdenv.lib.platforms.unix;
+  nativeBuildInputs = [ unzip ];
+  propagatedNativeBuildInputs = [ findXMLCatalogs ];
+
+  unpackPhase = ''
+    mkdir -p $out/xml/dtd/docbook
+    cd $out/xml/dtd/docbook
+    unpackFile $src
+  '';
+
+  installPhase = ''
+    find . -type f -exec chmod -x {} \;
+    runHook postInstall
+  '';
+
+  meta = {
+    branch = version;
+    platforms = lib.platforms.unix;
   };
 }

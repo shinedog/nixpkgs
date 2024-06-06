@@ -1,15 +1,14 @@
-{ stdenv, fetchurl, erlang }:
+{ lib, stdenv, fetchFromGitHub, erlang }:
 
+stdenv.mkDerivation rec {
+  pname = "rebar";
+  version = "2.6.4";
 
-let
-  version = "2.5.1";
-in
-stdenv.mkDerivation {
-  name = "rebar-${version}";
-
-  src = fetchurl {
-    url = "https://github.com/rebar/rebar/archive/${version}.tar.gz";
-    sha256 = "1y9b0smw0g5q197xf4iklzmcf8ad6w52p6mwzpf7b0ib1nd89jw6";
+  src = fetchFromGitHub {
+    owner = "rebar";
+    repo = "rebar";
+    rev = version;
+    sha256 = "sha256-okvG7X2uHtZ1p+HUoFOmslrWvYjk0QWBAvAMAW2E40c=";
   };
 
   buildInputs = [ erlang ];
@@ -23,6 +22,7 @@ stdenv.mkDerivation {
   meta = {
     homepage = "https://github.com/rebar/rebar";
     description = "Erlang build tool that makes it easy to compile and test Erlang applications, port drivers and releases";
+    mainProgram = "rebar";
 
     longDescription = ''
       rebar is a self-contained Erlang script, so it's easy to
@@ -32,9 +32,10 @@ stdenv.mkDerivation {
       work. rebar also provides dependency management, enabling
       application writers to easily re-use common libraries from a
       variety of locations (git, hg, etc).
-      '';
+    '';
 
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.the-kenny ];
+    platforms = lib.platforms.unix;
+    license = lib.licenses.asl20;
+    maintainers = lib.teams.beam.members;
   };
 }

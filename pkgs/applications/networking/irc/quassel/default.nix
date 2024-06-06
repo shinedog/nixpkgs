@@ -1,61 +1,85 @@
 { monolithic ? true # build monolithic Quassel
-, daemon ? false # build Quassel daemon
+, enableDaemon ? false # build Quassel daemon
 , client ? false # build Quassel client
-, previews ? false # enable webpage previews on hovering over URLs
-, tag ? "" # tag added to the package name
-, withKDE ? stdenv.isLinux # enable KDE integration
-, kdelibs ? null
+, tag ? "-kf5" # tag added to the package name
 , static ? false # link statically
 
-, stdenv, fetchurl, cmake, makeWrapper, qt, automoc4, phonon, dconf, qca2 }:
+, lib, stdenv, fetchFromGitHub, cmake, makeWrapper, dconf
+, mkDerivation, qtbase, boost, zlib, qtscript
+, phonon, libdbusmenu, qca-qt5, openldap
 
-let buildClient = monolithic || client;
-    buildCore = monolithic || daemon;
+, withKDE ? true # enable KDE integration
+, extra-cmake-modules
+, kconfigwidgets
+, kcoreaddons
+, knotifications
+, knotifyconfig
+, ktextwidgets
+, kwidgetsaddons
+, kxmlgui
+}:
+
+let
+    buildClient = monolithic || client;
+    buildCore = monolithic || enableDaemon;
 in
 
-assert stdenv.isLinux;
-
-assert monolithic -> !client && !daemon;
-assert client || daemon -> !monolithic;
-assert withKDE -> kdelibs != null;
+assert monolithic -> !client && !enableDaemon;
+assert client || enableDaemon -> !monolithic;
 assert !buildClient -> !withKDE; # KDE is used by the client only
 
 let
   edf = flag: feature: [("-D" + feature + (if flag then "=ON" else "=OFF"))];
-  source = import ./source.nix { inherit fetchurl; };
 
-in with stdenv; mkDerivation rec {
-  inherit (source) src version;
+in (if !buildClient then stdenv.mkDerivation else mkDerivation) rec {
+  pname = "quassel${tag}";
+  version = "0.14.0";
 
-  name = "quassel${tag}-${version}";
+  src = fetchFromGitHub {
+    owner = "quassel";
+    repo = "quassel";
+    rev = version;
+    sha256 = "sha256-eulhNcyCmy9ryietOhT2yVJeJH+MMZRbTUo2XuTy9qU=";
+  };
 
-  enableParallelBuilding = true;
+  # Prevent ``undefined reference to `qt_version_tag''' in SSL check
+  env.NIX_CFLAGS_COMPILE = "-DQT_NO_VERSION_TAGGING=1";
 
-  buildInputs =
-       [ cmake makeWrapper qt ]
-    ++ lib.optionals buildCore [qca2]
-    ++ lib.optionals withKDE [automoc4 kdelibs phonon];
-
-  NIX_CFLAGS_COMPILE = "-fPIC";
+  nativeBuildInputs = [ cmake makeWrapper ];
+  buildInputs = [ qtbase boost zlib ]
+    ++ lib.optionals buildCore [qtscript qca-qt5 openldap]
+    ++ lib.optionals buildClient [libdbusmenu phonon]
+    ++ lib.optionals (buildClient && withKDE) [
+      extra-cmake-modules kconfigwidgets kcoreaddons
+      knotifications knotifyconfig ktextwidgets kwidgetsaddons
+      kxmlgui
+    ];
 
   cmakeFlags = [
-    "-DEMBED_DATA=OFF" ]
+    "-DEMBED_DATA=OFF"
+    "-DUSE_QT5=ON"
+  ]
     ++ edf static "STATIC"
     ++ edf monolithic "WANT_MONO"
-    ++ edf daemon "WANT_CORE"
+    ++ edf enableDaemon "WANT_CORE"
+    ++ edf enableDaemon "WITH_LDAP"
     ++ edf client "WANT_QTCLIENT"
-    ++ edf withKDE "WITH_KDE"
-    ++ edf previews "WITH_WEBKIT";
+    ++ edf withKDE "WITH_KDE";
 
-  preFixup =
+  dontWrapQtApps = true;
+
+  postFixup =
+    lib.optionalString enableDaemon ''
+      wrapProgram "$out/bin/quasselcore" --suffix PATH : "${qtbase.bin}/bin"
+    '' +
     lib.optionalString buildClient ''
-        wrapProgram "$out/bin/quassel${lib.optionalString client "client"}" \
-          --prefix GIO_EXTRA_MODULES : "${dconf}/lib/gio/modules"
+      wrapQtApp "$out/bin/quassel${lib.optionalString client "client"}" \
+        --prefix GIO_EXTRA_MODULES : "${dconf}/lib/gio/modules"
     '';
 
-  meta = with stdenv.lib; {
-    homepage = http://quassel-irc.org/;
-    description = "Qt/KDE distributed IRC client suppporting a remote daemon";
+  meta = with lib; {
+    homepage = "https://quassel-irc.org/";
+    description = "Qt/KDE distributed IRC client supporting a remote daemon";
     longDescription = ''
       Quassel IRC is a cross-platform, distributed IRC client,
       meaning that one (or multiple) client(s) can attach to
@@ -63,9 +87,8 @@ in with stdenv; mkDerivation rec {
       combination of screen and a text-based IRC client such
       as WeeChat, but graphical (based on Qt4/KDE4 or Qt5/KF5).
     '';
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = with maintainers; [ phreedom ttuegel ];
-    repositories.git = https://github.com/quassel/quassel.git;
-    inherit (qt.meta) platforms;
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ ttuegel ];
+    inherit (qtbase.meta) platforms;
   };
 }

@@ -1,172 +1,222 @@
-{ stdenv, fetchurl, elfutils, mesa_noglu
-, xorg, patchelf, openssl, libdrm, libudev
-, libxcb, libxshmfence, epoxy, perl, zlib
-, fetchFromGitHub, ncurses
-, libsOnly ? false, kernel ? null
+{ lib
+, stdenv
+, fetchurl
+, elfutils
+, xorg
+, patchelf
+, libxcb
+, libxshmfence
+, perl
+, zlib
+, expat
+, libffi_3_3
+, libselinux
+, libdrm
+, udev
+, kernel ? null
 }:
 
-assert (!libsOnly) -> kernel != null;
-
-with stdenv.lib;
+with lib;
 
 let
-
-  kernelDir = if libsOnly then null else kernel.dev;
-
-  inherit (mesa_noglu) driverLink;
 
   bitness = if stdenv.is64bit then "64" else "32";
 
   libArch =
-    if stdenv.system == "i686-linux" then
+    if stdenv.hostPlatform.system == "i686-linux" then
       "i386-linux-gnu"
-    else if stdenv.system == "x86_64-linux" then
+    else if stdenv.hostPlatform.system == "x86_64-linux" then
       "x86_64-linux-gnu"
-    else throw "amdgpu-pro is Linux only. Sorry. The build was stopped.";
-
-  libReplaceDir = "/usr/lib/${libArch}";
-
-  ncurses5 = ncurses.override { abiVersion = "5"; };
+    else throw "amdgpu-pro is Linux only. Sorry ${stdenv.hostPlatform.system}.";
 
 in stdenv.mkDerivation rec {
 
-  version = "16.40";
+  version = "21.30";
   pname = "amdgpu-pro";
-  build = "16.40-348864";
-
-  libCompatDir = "/run/lib/${libArch}";
-
-  name = pname + "-" + version + (optionalString (!libsOnly) "-${kernelDir.version}");
+  build = "${version}-1290604";
 
   src = fetchurl {
-    url =
-    "https://www2.ati.com/drivers/linux/ubuntu/amdgpu-pro-${build}.tar.xz";
-    sha256 = "1c06lx07irmlpmbmgb3qcgpzj6q6rimszrbbdrgz8kqnfpcv3mjr";
-    curlOpts = "--referer http://support.amd.com/en-us/kb-articles/Pages/AMD-Radeon-GPU-PRO-Linux-Beta-Driver%e2%80%93Release-Notes.aspx";
+    url = "https://drivers.amd.com/drivers/linux/amdgpu-pro-${build}-ubuntu-20.04.tar.xz";
+    sha256 = "sha256-WECqxjo2WLP3kMWeVyJgYufkvHTzwGaj57yeMGXiQ4I=";
+    curlOpts = "--referer https://www.amd.com/en/support/kb/release-notes/rn-amdgpu-unified-linux-21-30";
   };
 
-  hardeningDisable = [ "pic" "format" ];
-
-  inherit libsOnly;
-
   postUnpack = ''
-    cd $sourceRoot
     mkdir root
-    cd root
-    for deb in ../*_all.deb ../*_i386.deb '' + optionalString stdenv.is64bit "../*_amd64.deb" + ''; do echo $deb; ar p $deb data.tar.xz | tar -xJ; done
-    sourceRoot=.
-  '';
-
-  modulePatches = [
-    ./patches/0001-Find-correct-System.map.patch
-    ./patches/0002-Fix-kernel-module-install-location.patch
-    ./patches/0003-Add-Gentoo-as-build-option.patch
-    ./patches/0004-Remove-extra-parameter-from-ttm_bo_reserve-for-4.7.0.patch
-    ./patches/0005-Remove-first-param-from-drm_gem_object_lookup.patch
-    ./patches/0006-Remove-vblank_disable_allowed-assignment.patch
-    ./patches/0007-Fix-__drm_atomic_helper_connector_destroy_state-call.patch
-    ./patches/0008-Change-seq_printf-format-for-64-bit-context.patch
-    ./patches/0009-Fix-vblank-calls.patch
-    ./patches/0010-Fix-crtc_gamma-functions-for-4.8.0.patch
-    ./patches/0011-Fix-drm_atomic_helper_swap_state-for-4.8.0.patch
-    ./patches/0012-Add-extra-flag-to-ttm_bo_move_ttm-for-4.8.0-rc2.patch
-    ./patches/0013-Remove-dependency-on-System.map.patch
-    ./patches/0014-disable-dal-by-default.patch
-  ];
-
-  patchPhase = optionalString (!libsOnly) ''
-    pushd usr/src/amdgpu-pro-${build}
-    for patch in $modulePatches
+    pushd $sourceRoot
+    for deb in *_all.deb *_${if stdenv.is64bit then "amd64" else "i386"}.deb
     do
-      echo $patch
-      patch -f -p1 < $patch || true
+      ar p $deb data.tar.xz | tar -C ../root -xJ
     done
     popd
+    # if we don't use a short sourceRoot, compilation can fail due to command
+    # line length
+    sourceRoot=root
   '';
 
-  preBuild = optionalString (!libsOnly) ''
-    makeFlags="$makeFlags M=$(pwd)/usr/src/amdgpu-pro-${build}"
-  '';
+  passthru = optionalAttrs (kernel != null) {
+    kmod = stdenv.mkDerivation rec {
+      inherit version src postUnpack;
+      name = "${pname}-${version}-kmod-${kernel.dev.version}";
 
-  postBuild = optionalString (!libsOnly) ''
-    xz usr/src/amdgpu-pro-${build}/amd/amdgpu/amdgpu.ko
-  '';
+      postPatch = ''
+        pushd usr/src/amdgpu-*
+        patchShebangs amd/dkms/*.sh
+        substituteInPlace amd/dkms/pre-build.sh --replace "./configure" "./configure --with-linux=${kernel.dev}/lib/modules/${kernel.modDirVersion}/source --with-linux-obj=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+        popd
+      '';
 
-  makeFlags = optionalString (!libsOnly)
-    "-C ${kernel.dev}/lib/modules/${kernel.modDirVersion}/build modules";
+      preConfigure = ''
+        pushd usr/src/amdgpu-*
+        makeFlags="$makeFlags M=$(pwd)"
+        amd/dkms/pre-build.sh ${kernel.version}
+        popd
+      '';
+
+      postBuild = ''
+        pushd usr/src/amdgpu-*
+        find -name \*.ko -exec xz {} \;
+        popd
+      '';
+
+      makeFlags = optionalString (kernel != null) "-C ${kernel.dev}/lib/modules/${kernel.modDirVersion}/build modules";
+
+      installPhase = ''
+        runHook preInstall
+
+        pushd usr/src/amdgpu-*
+        find -name \*.ko.xz -exec install -Dm444 {} $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/{} \;
+        popd
+
+        runHook postInstall
+      '';
+
+      # without this we get a collision with the ttm module from linux
+      meta.priority = 4;
+    };
+
+    fw = stdenv.mkDerivation rec {
+      inherit version src postUnpack;
+      name = "${pname}-${version}-fw";
+
+      installPhase = ''
+        runHook preInstall
+
+        mkdir -p $out/lib
+        cp -r usr/src/amdgpu-*/firmware $out/lib/firmware
+
+        runHook postInstall
+      '';
+    };
+  };
+
+  outputs = [ "out" "vulkan" ];
 
   depLibPath = makeLibraryPath [
-    stdenv.cc.cc.lib xorg.libXext xorg.libX11 xorg.libXdamage xorg.libXfixes zlib
-    xorg.libXxf86vm libxcb libxshmfence epoxy openssl libdrm elfutils libudev ncurses5
+    stdenv.cc.cc.lib
+    zlib
+    libxcb
+    libxshmfence
+    elfutils
+    expat
+    libffi_3_3
+    libselinux
+    # libudev is not listed in any dependencies, but is loaded dynamically
+    udev
+    xorg.libXext
+    xorg.libX11
+    xorg.libXfixes
+    xorg.libXdamage
+    xorg.libXxf86vm
   ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out
 
-    cp -r etc $out/etc
-    cp -r lib $out/lib
+    cp -r usr/lib/${libArch} $out/lib
+    cp -r usr/share $out/share
 
-    pushd usr
-    cp -r lib/${libArch}/* $out/lib
-  '' + optionalString (!libsOnly) ''
-    cp -r src/amdgpu-pro-${build}/firmware $out/lib/firmware
-  '' + ''
-    cp -r share $out/share
+    mkdir -p $out/opt/amdgpu{,-pro}
+    cp -r opt/amdgpu-pro/lib/${libArch} $out/opt/amdgpu-pro/lib
+    cp -r opt/amdgpu/lib/${libArch} $out/opt/amdgpu/lib
+
+    pushd $out/lib
+    ln -s ../opt/amdgpu-pro/lib/libGL.so* .
+    ln -s ../opt/amdgpu-pro/lib/libEGL.so* .
     popd
 
-    pushd opt/amdgpu-pro
-  '' + optionalString (!stdenv.is64bit) ''
-    cp -r bin $out/bin
-  '' + ''
-    cp -r include $out/include
-    cp -r lib/${libArch}/* $out/lib
-  '' + optionalString (!libsOnly) ''
-    mv lib/xorg $out/lib/xorg
-  '' + ''
+    # short name to allow replacement below
+    ln -s lib/dri $out/dri
+
+  '' + optionalString (stdenv.is64bit) ''
+    mkdir -p $out/etc
+    pushd etc
+    cp -r modprobe.d udev amd $out/etc
     popd
 
-  '' + optionalString (!libsOnly) ''
-    mkdir -p $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko.xz
-    cp usr/src/amdgpu-pro-${build}/amd/amdgpu/amdgpu.ko.xz $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko.xz
+    cp -r lib/udev/rules.d/* $out/etc/udev/rules.d
+    cp -r opt/amdgpu/lib/xorg $out/lib/xorg
+    cp -r opt/amdgpu-pro/lib/xorg/* $out/lib/xorg
+    cp -r opt/amdgpu/share $out/opt/amdgpu/share
   '' + ''
-    mv $out/etc/vulkan $out/share
-    interpreter="$(cat $NIX_CC/nix-support/dynamic-linker)"
-    libPath="$out/lib:$out/lib/gbm:$depLibPath"
-  '' + optionalString (!stdenv.is64bit) ''
-    for prog in clinfo modetest vbltest kms-universal-planes kms-steal-crtc modeprint amdgpu_test kmstest proptest; do
-      patchelf --interpreter "$interpreter" --set-rpath "$libPath" "$out/bin/$prog"
-    done
-  '' + ''
-    ln -s libgbm.so.1.0.0 $out/lib/libgbm.so.1
-    ln -s ${makeLibraryPath [ncurses5]}/libncursesw.so.5 $out/lib/libtinfo.so.5
+
+    mkdir -p $vulkan/share/vulkan/icd.d
+    install opt/amdgpu-pro/etc/vulkan/icd.d/amd_icd${bitness}.json $vulkan/share/vulkan/icd.d
+
+    runHook postInstall
   '';
 
-  # we'll just set the full rpath on everything to avoid having to track down dlopen problems
-  postFixup = assert (stringLength libReplaceDir == stringLength libCompatDir); ''
-    libPath="$out/lib:$out/lib/gbm:$depLibPath"
-    for lib in `find "$out/lib/" -name '*.so*' -type f`; do
-      patchelf --set-rpath "$libPath" "$lib"
-    done
-    for lib in libEGL.so.1 libGL.so.1.2 ${optionalString (!libsOnly) "xorg/modules/extensions/libglx.so"} dri/amdgpu_dri.so; do
-      perl -pi -e 's:${libReplaceDir}:${libCompatDir}:g' "$out/lib/$lib"
-    done
-    substituteInPlace "$out/share/vulkan/icd.d/amd_icd${bitness}.json" --replace "/opt/amdgpu-pro/lib/${libArch}" "$out/lib"
+  preFixup = (if stdenv.is64bit
+    # this could also be done with LIBGL_DRIVERS_PATH, but it would need to be
+    # set in the user session and for Xorg
+    then ''
+      expr1='s:/opt/amdgpu/lib/x86_64-linux-gnu/dri\0:/run/opengl-driver/lib/dri\0\0\0\0\0\0\0\0\0\0\0:g'
+      expr2='s:/usr/lib/x86_64-linux-gnu/dri[\0\:]:/run/opengl-driver/lib/dri\0\0\0\0:g'
+      perl -pi -e "$expr2" $out/lib/xorg/modules/extensions/libglx.so
+    ''
+    else ''
+      expr1='s:/opt/amdgpu/lib/i386-linux-gnu/dri\0:/run/opengl-driver-32/lib/dri\0\0\0\0\0\0:g'
+      # we replace a different path on 32-bit because it's the only one long
+      # enough to fit the target path :(
+      expr2='s:/usr/lib/i386-linux-gnu/dri[\0\:]:/run/opengl-driver-32/dri\0\0\0:g'
+    '') + ''
+    perl -pi -e "$expr1" \
+      $out/opt/amdgpu/lib/libEGL.so.1.0.0 \
+      $out/opt/amdgpu/lib/libgbm.so.1.0.0 \
+      $out/opt/amdgpu/lib/libGL.so.1.2.0
+
+    perl -pi -e "$expr2" \
+      $out/opt/amdgpu-pro/lib/libEGL.so.1 \
+      $out/opt/amdgpu-pro/lib/libGL.so.1.2 \
+      $out/opt/amdgpu-pro/lib/libGLX_amd.so.0
+
+    find $out -type f -exec perl -pi -e 's:/opt/amdgpu-pro/:/run/amdgpu-pro/:g' {} \;
+    find $out -type f -exec perl -pi -e 's:/opt/amdgpu/:/run/amdgpu/:g' {} \;
+
+    substituteInPlace $vulkan/share/vulkan/icd.d/*.json --replace /opt/amdgpu-pro/lib/${libArch} "$out/opt/amdgpu-pro/lib"
+  '';
+
+  # doing this in post because shrinking breaks things that dynamically load
+  postFixup = ''
+    libPath="$out/opt/amdgpu/lib:$out/opt/amdgpu-pro/lib:$depLibPath"
+    find "$out" -name '*.so*' -type f -exec patchelf --set-rpath "$libPath" {} \;
   '';
 
   buildInputs = [
+    libdrm
     patchelf
     perl
   ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "AMDGPU-PRO drivers";
-    homepage =  http://support.amd.com/en-us/kb-articles/Pages/AMDGPU-PRO-Beta-Driver-for-Vulkan-Release-Notes.aspx ;
+    homepage =  "https://www.amd.com/en/support";
     license = licenses.unfree;
     platforms = platforms.linux;
     maintainers = with maintainers; [ corngood ];
-    # Copied from the nvidia default.nix to prevent a store collision.
-    priority = 4;
   };
 }

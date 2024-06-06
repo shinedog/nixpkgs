@@ -1,29 +1,44 @@
-{ stdenv, fetchurl, openssl, ncurses, pkgconfig, glib, loudmouth, libotr
+{ lib, stdenv, fetchurl, fetchpatch, openssl, ncurses, pkg-config, glib, loudmouth, libotr
 , gpgme
 }:
 
 stdenv.mkDerivation rec {
-  name = "mcabber-${version}";
-  version = "1.0.4";
+  pname = "mcabber";
+  version = "1.1.2";
 
   src = fetchurl {
-    url = "http://mcabber.com/files/mcabber-${version}.tar.bz2";
-    sha256 = "02nfn5r7cjpnacym95l6bvczii232v3x2gi79gfa9syc7w0brdk3";
+    url = "https://mcabber.com/files/mcabber-${version}.tar.bz2";
+    sha256 = "0q1i5acyghsmzas88qswvki8kkk2nfpr8zapgnxbcd3lwcxl38f4";
   };
 
-  buildInputs = [ openssl ncurses pkgconfig glib loudmouth libotr gpgme ];
+  patches = [
+    # Pull upstream patch for ncurses-6.3.
+    (fetchpatch {
+      name = "ncurses-6.3.patch";
+      url = "https://github.com/McKael/mcabber/commit/5a0893d69023b77b7671731defbdca5d47731130.patch";
+      sha256 = "01bc23z0mva9l9jv587sq2r9w3diachgkmb9ad99hlzgj02fmq4v";
+      stripLen = 1;
+    })
+  ];
 
-  configureFlags = "--with-openssl=${openssl.dev} --enable-modules --enable-otr";
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ openssl ncurses glib loudmouth libotr gpgme ];
+
+  configureFlags = [
+    "--with-openssl=${openssl.dev}"
+    "--enable-modules"
+    "--enable-otr"
+  ];
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://mcabber.com/;
+  meta = with lib; {
+    homepage = "http://mcabber.com/";
     description = "Small Jabber console client";
+    mainProgram = "mcabber";
     license = licenses.gpl2;
     maintainers = with maintainers; [ pSub ];
     platforms = with platforms; linux;
-    updateWalker = true;
-    downloadURLRegexp = "mcabber-[0-9.]+[.]tar[.][a-z0-9]+$";
+    downloadPage = "http://mcabber.com/files/";
   };
 }

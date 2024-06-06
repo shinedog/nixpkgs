@@ -1,38 +1,46 @@
-{stdenv, fetchurl, tex}:
+{lib, stdenv, fetchurl, texliveMedium}:
 
-stdenv.mkDerivation rec{
+stdenv.mkDerivation rec {
 
-  name = "nuweb-${version}";
-  version = "1.58";
+  pname = "nuweb";
+  version = "1.62";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/nuweb/${name}.tar.gz";
-    sha256 = "0q51i3miy15fv4njjp82yws01qfjxvqx5ly3g3vh8z3h7iq9p47y";
+    url = "mirror://sourceforge/project/nuweb/${pname}-${version}.tar.gz";
+    sha256 = "sha256-JVqPYkYPXBT0xLNWuW4DV6N6ZlKuBYQGT46frhnpU64=";
   };
 
-  buildInputs = [ tex ];
+  buildInputs = [ texliveMedium ];
 
   patchPhase = ''
     sed -ie 's|nuweb -r|./nuweb -r|' Makefile
   '';
+
+  # Workaround build failure on -fno-common toolchains like upstream
+  # gcc-10. Otherwise build fails as:
+  #   ld: global.o:/build/nuweb-1.62/global.h:91: multiple definition of
+  #     `current_sector'; main.o:/build/nuweb-1.62/global.h:91: first defined here
+  env.NIX_CFLAGS_COMPILE = "-fcommon";
+
   buildPhase = ''
     make nuweb
     make nuweb.pdf nuwebdoc.pdf all
   '';
   installPhase = ''
-    install -d $out/bin $out/share/man/man1 $out/share/doc/${name} $out/share/emacs/site-lisp
+    install -d $out/bin $out/share/man/man1 $out/share/doc/${pname}-${version} $out/share/emacs/site-lisp
     cp nuweb $out/bin
     cp nuweb.el $out/share/emacs/site-lisp
     gzip -c nuweb.1 > $out/share/man/man1/nuweb.1.gz
-    cp htdocs/index.html nuweb.w nuweb.pdf nuwebdoc.pdf README $out/share/doc/${name}
+    cp htdocs/index.html nuweb.w nuweb.pdf nuwebdoc.pdf README $out/share/doc/${pname}-${version}
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A simple literate programming tool";
-    homepage = http://nuweb.sourceforge.net;
+    mainProgram = "nuweb";
+    homepage = "https://nuweb.sourceforge.net";
     license = licenses.free;
     maintainers = [ maintainers.AndersonTorres ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }
 # TODO: nuweb.el Emacs integration

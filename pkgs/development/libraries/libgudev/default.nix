@@ -1,21 +1,84 @@
-{ lib, stdenv, fetchurl, pkgconfig, udev, glib }:
+{ stdenv
+, lib
+, fetchurl
+, pkg-config
+, meson
+, ninja
+, udev
+, glib
+, glibcLocales
+, umockdev
+, gnome
+, vala
+, gobject-introspection
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+}:
 
-let version = "230"; in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libgudev";
+  version = "238";
 
-stdenv.mkDerivation rec {
-  name = "libgudev-${version}";
+  outputs = [ "out" "dev" ];
 
   src = fetchurl {
-    url = "https://download.gnome.org/sources/libgudev/${version}/${name}.tar.xz";
-    sha256 = "a2e77faced0c66d7498403adefcc0707105e03db71a2b2abd620025b86347c18";
+    url = "mirror://gnome/sources/libgudev/${lib.versions.majorMinor finalAttrs.version}/libgudev-${finalAttrs.version}.tar.xz";
+    hash = "sha256-YSZqsa/J1z28YKiyr3PpnS/f9H2ZVE0IV2Dk+mZ7XdE=";
   };
 
-  buildInputs = [ pkgconfig udev glib ];
+  patches = [
+    # Conditionally disable one test that requires a locale implementation
+    # https://gitlab.gnome.org/GNOME/libgudev/-/merge_requests/31
+    ./tests-skip-double-test-on-stub-locale-impls.patch
+  ];
 
-  meta = {
-    homepage = https://wiki.gnome.org/Projects/libgudev;
-    maintainers = [ lib.maintainers.eelco ];
-    platforms = lib.platforms.linux;
-    license = lib.licenses.lgpl2Plus;
+  postPatch = lib.optionalString finalAttrs.finalPackage.doCheck ''
+    # The relative location of LD_PRELOAD works for Glibc but not for other loaders (e.g. pkgsMusl)
+    substituteInPlace tests/meson.build \
+      --replace "LD_PRELOAD=libumockdev-preload.so.0" "LD_PRELOAD=${lib.getLib umockdev}/lib/libumockdev-preload.so.0"
+  '';
+
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    glib # for glib-mkenums needed during the build
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+    vala
+  ];
+
+  buildInputs = [
+    udev
+    glib
+  ];
+
+  checkInputs = [
+    glibcLocales
+    umockdev
+  ];
+
+  doCheck = withIntrospection;
+  mesonFlags = [
+    (lib.mesonEnable "introspection" withIntrospection)
+    (lib.mesonEnable "vapi" withIntrospection)
+    (lib.mesonEnable "tests" finalAttrs.finalPackage.doCheck)
+  ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = "libgudev";
+      versionPolicy = "none";
+    };
   };
-}
+
+  meta = with lib; {
+    description = "A library that provides GObject bindings for libudev";
+    homepage = "https://gitlab.gnome.org/GNOME/libgudev";
+    maintainers = [ maintainers.eelco ] ++ teams.gnome.members;
+    platforms = platforms.linux;
+    license = licenses.lgpl2Plus;
+  };
+})

@@ -1,99 +1,122 @@
-{ stdenv, writeText, elixir, erlang, hexRegistrySnapshot, hex, lib }:
+{ stdenv, writeText, elixir, erlang, hex, lib }:
 
 { name
 , version
 , src
-, setupHook ? null
-, buildInputs ? []
-, beamDeps ? []
+, buildInputs ? [ ]
+, nativeBuildInputs ? [ ]
+, erlangCompilerOptions ? [ ]
+  # Deterministic Erlang builds remove full system paths from debug information
+  # among other things to keep builds more reproducible. See their docs for more:
+  # https://www.erlang.org/doc/man/compile
+, erlangDeterministicBuilds ? true
+, beamDeps ? [ ]
+, propagatedBuildInputs ? [ ]
 , postPatch ? ""
 , compilePorts ? false
-, installPhase ? null
-, buildPhase ? null
-, configurePhase ? null
-, meta ? {}
+, meta ? { }
 , enableDebugInfo ? false
-, ... }@attrs:
-
-with stdenv.lib;
+, mixEnv ? "prod"
+# A config directory that is considered for all the dependencies of an app, typically in $src/config/
+# This was initially added, as some of Mobilizon's dependencies need to access the config at build time.
+, appConfigPath ? null
+, ...
+}@attrs:
 
 let
-
-  debugInfoFlag = lib.optionalString (enableDebugInfo || elixir.debugInfo) "--debug-info";
-
   shell = drv: stdenv.mkDerivation {
-          name = "interactive-shell-${drv.name}";
-          buildInputs = [ drv ];
-    };
+    name = "interactive-shell-${drv.name}";
+    buildInputs = [ drv ];
+  };
 
-  bootstrapper = ./mix-bootstrap;
-
-  pkg = self: stdenv.mkDerivation ( attrs // {
+  pkg = self: stdenv.mkDerivation (attrs // {
     name = "${name}-${version}";
-    inherit version;
+    inherit version src;
 
-    dontStrip = true;
+    MIX_ENV = mixEnv;
+    MIX_DEBUG = if enableDebugInfo then 1 else 0;
+    HEX_OFFLINE = 1;
 
-    inherit src;
+    ERL_COMPILER_OPTIONS =
+      let
+        options = erlangCompilerOptions ++ lib.optionals erlangDeterministicBuilds [ "deterministic" ];
+      in
+      "[${lib.concatStringsSep "," options}]";
 
-    setupHook = if setupHook == null
-    then writeText "setupHook.sh" ''
-       addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
-    ''
-    else setupHook;
+    LC_ALL = "C.UTF-8";
 
-    inherit buildInputs;
-    propagatedBuildInputs = [ hexRegistrySnapshot hex elixir ] ++ beamDeps;
+    # add to ERL_LIBS so other modules can find at runtime.
+    # http://erlang.org/doc/man/code.html#code-path
+    # Mix also searches the code path when compiling with the --no-deps-check flag
+    setupHook = attrs.setupHook or
+      writeText "setupHook.sh" ''
+      addToSearchPath ERL_LIBS "$1/lib/erlang/lib"
+    '';
 
-    configurePhase = if configurePhase == null
-    then ''
+    buildInputs = buildInputs ++ [ ];
+    nativeBuildInputs = nativeBuildInputs ++ [ elixir hex ];
+    propagatedBuildInputs = propagatedBuildInputs ++ beamDeps;
+
+    configurePhase = attrs.configurePhase or ''
       runHook preConfigure
-      ${erlang}/bin/escript ${bootstrapper}
+
+      ${./mix-configure-hook.sh}
+      ${lib.optionalString (!isNull appConfigPath)
+      # Due to https://hexdocs.pm/elixir/main/Config.html the config directory
+      # of a library seems to be not considered, as config is always
+      # application specific. So we can safely delete it.
+      ''
+        rm -rf config
+        cp -r ${appConfigPath} config
+      ''}
+
       runHook postConfigure
-    ''
-    else configurePhase ;
+    '';
 
+    buildPhase = attrs.buildPhase or ''
+      runHook preBuild
+      export HEX_HOME="$TEMPDIR/hex"
+      export MIX_HOME="$TEMPDIR/mix"
+      mix compile --no-deps-check
+      runHook postBuild
+    '';
 
-    buildPhase = if buildPhase == null
-    then ''
-        runHook preBuild
+    installPhase = attrs.installPhase or ''
+      runHook preInstall
 
-        export HEX_OFFLINE=1
-        export HEX_HOME=`pwd`
-        export MIX_ENV=prod
+      # This uses the install path convention established by nixpkgs maintainers
+      # for all beam packages. Changing this will break compatibility with other
+      # builder functions like buildRebar3 and buildErlangMk.
+      mkdir -p "$out/lib/erlang/lib/${name}-${version}"
 
-        MIX_ENV=prod mix compile ${debugInfoFlag} --no-deps-check
-
-        runHook postBuild
-    ''
-    else buildPhase;
-
-    installPhase = if installPhase == null
-    then ''
-        runHook preInstall
-
-        MIXENV=prod
-
-        if [ -d "_build/shared" ]; then
-          MIXENV=shared
+      # Some packages like db_connection will use _build/shared instead of
+      # honoring the $MIX_ENV variable.
+      for reldir in _build/{$MIX_ENV,shared}/lib/${name}/{src,ebin,priv,include} ; do
+        if test -d $reldir ; then
+          # Some builds produce symlinks (eg: phoenix priv dircetory). They must
+          # be followed with -H flag.
+          cp  -Hrt "$out/lib/erlang/lib/${name}-${version}" "$reldir"
         fi
+      done
 
-        mkdir -p "$out/lib/erlang/lib/${name}-${version}"
-        for reldir in src ebin priv include; do
-          fd="_build/$MIXENV/lib/${name}/$reldir"
-          [ -d "$fd" ] || continue
-          cp -Hrt "$out/lib/erlang/lib/${name}-${version}" "$fd"
-          success=1
-        done
+      # Copy the source so it can be used by dependent packages. For example,
+      # phoenix applications need the source of phoenix and phoenix_html to
+      # build javascript and css assets.
+      mkdir -p $out/src
+      cp -r $src/* "$out/src"
 
-        runHook postInstall
-    ''
-    else installPhase;
+      runHook postInstall
+    '';
+
+    # stripping does not have any effect on beam files
+    # it is however needed for dependencies with NIFs like bcrypt for example
+    dontStrip = false;
 
     passthru = {
       packageName = name;
       env = shell self;
       inherit beamDeps;
     };
-});
-in fix pkg
+  });
+in
+lib.fix pkg

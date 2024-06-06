@@ -1,12 +1,16 @@
-{ stdenv, fetchurl, pkgconfig, libtool, perl, bsdbuild, gettext, mandoc
-, libpng, libjpeg, xlibsWrapper, libXinerama, freetype, SDL, mesa
-, libsndfile, portaudio, mysql, fontconfig
+{ lib, stdenv, fetchurl, pkg-config, libtool, perl, bsdbuild, gettext, mandoc
+, libpng, libjpeg, libXinerama, freetype, SDL, libGLU, libGL
+, libsndfile, portaudio, libmysqlclient, fontconfig
 }:
 
-let srcs = import ./srcs.nix { inherit fetchurl; }; in
-stdenv.mkDerivation rec {
-  name = "libagar-${version}";
-  inherit (srcs) version src;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libagar";
+  version = "1.5.0";
+
+  src = fetchurl {
+    url = "http://stable.hypertriton.com/agar/agar-${finalAttrs.version}.tar.gz";
+    sha256 = "001wcqk5z67qg0raw9zlwmv62drxiwqykvsbk10q2mrc6knjsd42";
+  };
 
   preConfigure = ''
     substituteInPlace configure.in \
@@ -19,24 +23,25 @@ stdenv.mkDerivation rec {
     "--enable-nls=yes"
     "--with-gettext=${gettext}"
     "--with-jpeg=${libjpeg.dev}"
-    "--with-gl=${mesa}"
-    "--with-mysql=yes"
+    "--with-gl=${libGL}"
+    "--with-mysql=${libmysqlclient}"
     "--with-manpages=yes"
   ];
 
   outputs = [ "out" "devdoc" ];
 
-  nativeBuildInputs = [ pkgconfig libtool gettext ];
+  nativeBuildInputs = [ pkg-config libtool gettext ];
+
   buildInputs = [
-    bsdbuild perl xlibsWrapper libXinerama SDL mesa  mysql.client mandoc
+    bsdbuild perl libXinerama SDL libGL libmysqlclient mandoc
     freetype.dev libpng libjpeg.dev fontconfig portaudio libsndfile
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Cross-platform GUI toolkit";
-    homepage = http://libagar.org/index.html;
+    homepage = "http://libagar.org/index.html";
     license = with licenses; bsd3;
     maintainers = with maintainers; [ ramkromberg ];
     platforms = with platforms; linux;
   };
-}
+})

@@ -1,43 +1,83 @@
-{ stdenv, fetchurl
-, ncurses
-, texinfo
-, gettext ? null
-, enableNls ? true
-, enableTiny ? false
+{ lib, stdenv, fetchurl, fetchFromGitHub, ncurses, texinfo, writeScript
+, common-updater-scripts, git, nix, nixfmt-classic, coreutils, gnused
+, callPackage, file ? null, gettext ? null, enableNls ? true, enableTiny ? false
 }:
 
 assert enableNls -> (gettext != null);
 
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-  name = "nano-${version}";
-  version = "2.7.1";
-  src = fetchurl {
-    url = "mirror://gnu/nano/${name}.tar.xz";
-    sha256 = "1kapx0fyp0a0pvsdd1n59pm3acrimdrp7ciglg098wqxhdlvwp6z";
+let
+  nixSyntaxHighlight = fetchFromGitHub {
+    owner = "seitz";
+    repo = "nanonix";
+    rev = "bf8d898efaa10dce3f7972ff765b58c353b4b4ab";
+    sha256 = "0773s5iz8aw9npgyasb0r2ybp6gvy2s9sq51az8w7h52bzn5blnn";
   };
-  nativeBuildInputs = [ texinfo ] ++ optional enableNls gettext;
-  buildInputs = [ ncurses ];
+
+in stdenv.mkDerivation rec {
+  pname = "nano";
+  version = "8.0";
+
+  src = fetchurl {
+    url = "mirror://gnu/nano/${pname}-${version}.tar.xz";
+    sha256 = "wX9D/A43M2sz7lCiCccB1b64CK3C2fCJyoMbQFOcmsQ=";
+  };
+
+  nativeBuildInputs = [ texinfo ] ++ lib.optional enableNls gettext;
+  buildInputs = [ ncurses ] ++ lib.optional (!enableTiny) file;
+
   outputs = [ "out" "info" ];
-  configureFlags = ''
-    --sysconfdir=/etc
-    ${optionalString (!enableNls) "--disable-nls"}
-    ${optionalString enableTiny "--enable-tiny"}
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    (lib.enableFeature enableNls "nls")
+    (lib.enableFeature enableTiny "tiny")
+  ];
+
+  postInstall = if enableTiny then
+    null
+  else ''
+    cp ${nixSyntaxHighlight}/nix.nanorc $out/share/nano/
   '';
 
-  postPatch = stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace src/text.c --replace "__time_t" "time_t"
-  '';
+  enableParallelBuilding = true;
 
-  meta = {
-    homepage = http://www.nano-editor.org/;
+  passthru = {
+    tests = { expect = callPackage ./test-with-expect.nix { }; };
+
+    updateScript = writeScript "update.sh" ''
+      #!${stdenv.shell}
+      set -o errexit
+      PATH=${
+        lib.makeBinPath [
+          common-updater-scripts
+          git
+          nixfmt-classic
+          nix
+          coreutils
+          gnused
+        ]
+      }
+
+      oldVersion="$(nix-instantiate --eval -E "with import ./. {}; lib.getVersion ${pname}" | tr -d '"')"
+      latestTag="$(git -c 'versionsort.suffix=-' ls-remote --exit-code --refs --sort='version:refname' --tags git://git.savannah.gnu.org/nano.git '*' | tail --lines=1 | cut --delimiter='/' --fields=3 | sed 's|^v||g')"
+
+      if [ ! "$oldVersion" = "$latestTag" ]; then
+        update-source-version ${pname} "$latestTag" --version-key=version --print-changes
+        nixpkgs="$(git rev-parse --show-toplevel)"
+        default_nix="$nixpkgs/pkgs/applications/editors/nano/default.nix"
+        nixfmt "$default_nix"
+      else
+        echo "${pname} is already up-to-date"
+      fi
+    '';
+  };
+
+  meta = with lib; {
+    homepage = "https://www.nano-editor.org/";
     description = "A small, user-friendly console text editor";
     license = licenses.gpl3Plus;
-    maintainers = with maintainers; [
-      jgeerds
-      joachifm
-    ];
+    maintainers = with maintainers; [ joachifm nequissimus ];
     platforms = platforms.all;
+    mainProgram = "nano";
   };
 }

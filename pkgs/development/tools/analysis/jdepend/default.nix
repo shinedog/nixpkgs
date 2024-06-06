@@ -1,24 +1,58 @@
-{stdenv, fetchurl, unzip}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, ant
+, jdk
+, makeWrapper
+, stripJavaArchivesHook
+}:
 
-stdenv.mkDerivation {
-  name = "jdepend-2.9";
-  buildInputs = [unzip] ;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "jdepend";
+  version = "2.10";
 
-  src = fetchurl {
-    url = http://www.clarkware.com/software/jdepend-2.9.zip ;
-    sha256 = "1915fk9w9mjv9i6hlkn2grv2kjqcgn4xa8278v66f1ix5wpfcb90";
+  src = fetchFromGitHub {
+    owner = "clarkware";
+    repo = "jdepend";
+    rev = finalAttrs.version;
+    hash = "sha256-0/xGgAaJ7TTUHxShJbbcPzTODk4lDn+FOn5St5McrtM=";
   };
 
-  installPhase = ''
-    mkdir -p $out
-    cp -R * $out
+  nativeBuildInputs = [
+    ant
+    jdk
+    makeWrapper
+    stripJavaArchivesHook
+  ];
+
+  buildPhase = ''
+    runHook preBuild
+    ant jar
+    runHook postBuild
   '';
 
-  meta = {
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm644 dist/jdepend-*.jar -t $out/share/jdepend
+
+    makeWrapper ${jdk.jre}/bin/java $out/bin/jdepend \
+        --add-flags "-classpath $out/share/jdepend/jdepend-*.jar"
+
+    for type in "swingui" "textui" "xmlui"; do
+      makeWrapper $out/bin/jdepend $out/bin/jdepend-$type \
+          --add-flags "jdepend.$type.JDepend"
+    done
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    changelog = "https://github.com/clarkware/jdepend/blob/${finalAttrs.src.rev}/CHANGELOG.md";
     description = "Traverses Java class file directories and generates design quality metrics for each Java package";
-    homepage = http://www.clarkware.com/software/JDepend.html ;
+    homepage = "http://www.clarkware.com/software/JDepend.html";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ pSub ];
+    platforms = platforms.linux;
   };
-}
-
-
-
+})

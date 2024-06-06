@@ -1,22 +1,23 @@
-{stdenv, fetchurl, perl, readline, rsh, ssh, pam}:
+{ lib, stdenv, fetchurl, autoreconfHook, perl, readline, rsh, ssh, slurm, slurmSupport ? false }:
 
-let
-  name = "pdsh-2.29";
-in
-stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "pdsh";
+  version = "2.35";
 
   src = fetchurl {
-    url = "http://pdsh.googlecode.com/files/${name}.tar.bz2";
-    sha256 = "1kvzz01fyaxfqmbh53f4ljfsgvxdykh5jyr6fh4f1bw2ywxr1w2p";
+    url = "https://github.com/chaos/pdsh/releases/download/pdsh-${version}/pdsh-${version}.tar.gz";
+    sha256 = "sha256-de8VNHhI//Q/jW/5xEJP4Fx90s26ApE5kB+GGgUJPP4=";
   };
 
-  buildInputs = [perl readline ssh pam];
+  buildInputs = [ perl readline ssh ]
+    ++ (lib.optional slurmSupport slurm);
 
-  /* pdsh uses pthread_cancel(), which requires libgcc_s.so.1 to be
-     loadable at run-time. Adding the flag below ensures that the
-     library can be found. Obviously, though, this is a hack. */
-  NIX_LDFLAGS="-lgcc_s";
+  nativeBuildInputs = [ autoreconfHook ];
+
+  # Do not use git to derive a version.
+  postPatch = ''
+    sed -i 's/m4_esyscmd(\[git describe.*/[${version}])/' configure.ac
+  '';
 
   preConfigure = ''
     configureFlagsArray=(
@@ -25,18 +26,19 @@ stdenv.mkDerivation {
       "--with-machines=/etc/pdsh/machines"
       ${if readline == null then "--without-readline" else "--with-readline"}
       ${if ssh == null then "--without-ssh" else "--with-ssh"}
-      ${if pam == null then "--without-pam" else "--with-pam"}
       ${if rsh == false then "--without-rsh" else "--with-rsh"}
+      ${if slurmSupport then "--with-slurm" else "--without-slurm"}
       "--with-dshgroups"
       "--with-xcpu"
       "--disable-debug"
+      '--with-rcmd-rank-list=ssh,krb4,exec,xcpu,rsh'
     )
   '';
 
   meta = {
-    homepage = "http://code.google.com/p/pdsh/";
+    homepage = "https://github.com/chaos/pdsh";
     description = "High-performance, parallel remote shell utility";
-    license = stdenv.lib.licenses.gpl2;
+    license = lib.licenses.gpl2Plus;
 
     longDescription = ''
       Pdsh is a high-performance, parallel remote shell utility. It has
@@ -47,7 +49,6 @@ stdenv.mkDerivation {
       while timeouts occur on some connections.
     '';
 
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.peti ];
+    platforms = lib.platforms.unix;
   };
 }

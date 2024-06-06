@@ -1,15 +1,20 @@
-{ fetchurl, stdenv, libgcrypt, readline }:
+{ buildPackages, fetchurl, lib, stdenv, libgcrypt, readline, libgpg-error }:
 
 stdenv.mkDerivation rec {
-  version = "1.5.5";
-  name = "freeipmi-${version}";
+  version = "1.6.14";
+  pname = "freeipmi";
 
   src = fetchurl {
-    url = "mirror://gnu/freeipmi/${name}.tar.gz";
-    sha256 = "0lzzvhzbdl1cxin4xz3lirqxsjwmjr5ac0qr4g21cqsv2j6vj85f";
+    url = "mirror://gnu/freeipmi/${pname}-${version}.tar.gz";
+    sha256 = "sha256-Gj2sXHa3zMTU+GqhK475shK673SJvwXombiau34U7bU=";
   };
 
-  buildInputs = [ libgcrypt readline ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+
+  buildInputs = [ libgcrypt readline libgpg-error ];
+
+  configureFlags = lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform)
+    [ "ac_cv_file__dev_urandom=true" "ac_cv_file__dev_random=true" ];
 
   doCheck = true;
 
@@ -30,15 +35,12 @@ stdenv.mkDerivation rec {
          info.
       '';
 
-    homepage = http://www.gnu.org/software/freeipmi/;
-    downloadPage = "http://www.gnu.org/software/freeipmi/download.html";
+    homepage = "https://www.gnu.org/software/freeipmi/";
+    downloadPage = "https://www.gnu.org/software/freeipmi/download.html";
 
-    license = stdenv.lib.licenses.gpl3Plus;
+    license = lib.licenses.gpl3Plus;
 
-    maintainers = with stdenv.lib.maintainers; [ raskin ];
-    platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
-
-    updateWalker = true;
-    inherit version;
+    maintainers = with lib.maintainers; [ raskin ];
+    platforms = lib.platforms.gnu ++ lib.platforms.linux;  # arbitrary choice
   };
 }

@@ -1,33 +1,40 @@
-{ stdenv, fetchgit, coq, mathcomp }:
+{ coq, mkCoqDerivation, mathcomp, bignums, paramcoq, multinomials,
+  mathcomp-real-closed,
+  lib, version ? null }:
 
-stdenv.mkDerivation rec {
+(mkCoqDerivation {
 
-  name = "coq-coqeal-${coq.coq-version}-${version}";
-  version = "7522037d";
+  pname = "CoqEAL";
 
-  src = fetchgit {
-    url = git://github.com/CoqEAL/CoqEAL.git;
-    rev = "7522037d5e01e651e705d782f4f91fc68c46866e";
-    sha256 = "0kbnsrycd0hjni311i8xc5xinn4ia8rnqi328sdfqzvvyky37fgj";
+  inherit version;
+  defaultVersion = with lib.versions; lib.switch [ coq.version mathcomp.version ]  [
+      { cases = [ (range "8.16" "8.19") (isGe "2.0.0") ]; out = "2.0.1"; }
+      { cases = [ (range "8.16" "8.17") (isGe "2.0.0") ]; out = "2.0.0"; }
+      { cases = [ (range "8.15" "8.18") (range "1.15.0" "1.18.0") ]; out = "1.1.3"; }
+      { cases = [ (range "8.13" "8.17") (range "1.13.0" "1.18.0") ]; out = "1.1.1"; }
+      { cases = [ (range "8.10" "8.15") (range "1.12.0" "1.18.0") ]; out = "1.1.0"; }
+      { cases = [ (isGe "8.10") (range "1.11.0" "1.12.0") ]; out = "1.0.5"; }
+      { cases = [ (isGe "8.7") "1.11.0" ]; out = "1.0.4"; }
+      { cases = [ (isGe "8.7") "1.10.0" ]; out = "1.0.3"; }
+    ] null;
+
+  release."2.0.1".sha256 = "sha256-d/IQ4IdS2tpyPewcGobj2S6m2HU+iXQmlvR+ITNIcjI=";
+  release."2.0.0".sha256 = "sha256-SG/KVnRJz2P+ZxkWVp1dDOnc/JVgigoexKfRUh1Y0GM";
+  release."1.1.3".sha256 = "sha256-xhqWpg86xbU1GbDtXXInNCTArjjPnWZctWiiasq1ScU=";
+  release."1.1.1".sha256 = "sha256-ExAdC3WuArNxS+Sa1r4x5aT7ylbCvP/BZXfkdQNAvZ8=";
+  release."1.1.0".sha256 = "1vyhfna5frkkq2fl1fkg2mwzpg09k3sbzxxpyp14fjay81xajrxr";
+  release."1.0.6".sha256 = "0lqkyfj4qbq8wr3yk8qgn7mclw582n3fjl9l19yp8cnchspzywx0";
+  release."1.0.5".sha256 = "0cmvky8glb5z2dy3q62aln6qbav4lrf2q1589f6h1gn5bgjrbzkm";
+  release."1.0.4".sha256 = "1g5m26lr2lwxh6ld2gykailhay4d0ayql4bfh0aiwqpmmczmxipk";
+  release."1.0.3".sha256 = "0hc63ny7phzbihy8l7wxjvn3haxx8jfnhi91iw8hkq8n29i23v24";
+
+  propagatedBuildInputs = [ mathcomp.algebra bignums paramcoq multinomials ];
+
+  meta = {
+    description = "CoqEAL - The Coq Effective Algebra Library";
+    license = lib.licenses.mit;
   };
-
-  propagatedBuildInputs = [ mathcomp ];
-
-  preConfigure = ''
-    cd theory
-    patch ./Make <<EOF
-    0a1
-    > -R . CoqEAL
-    EOF
-  '';
-
-  installFlags = "COQLIB=$(out)/lib/coq/${coq.coq-version}/";
-
-  meta = with stdenv.lib; {
-    homepage = http://www.maximedenes.fr/content/coqeal-coq-effective-algebra-library;
-    description = "A Coq library for effective algebra, by which is meant formally verified computer algebra algorithms that can be run inside Coq on concrete inputs";
-    maintainers = with maintainers; [ jwiegley ];
-    platforms = coq.meta.platforms;
-  };
-
-}
+}).overrideAttrs (o: {
+  propagatedBuildInputs = o.propagatedBuildInputs
+  ++ lib.optional (lib.versions.isGe "1.1" o.version || o.version == "dev") mathcomp-real-closed;
+})

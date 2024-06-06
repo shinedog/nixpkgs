@@ -1,28 +1,25 @@
 {
-  kdeDerivation, kdeWrapper, fetchurl, lib,
-  ecm, kdoctools,
-  kconfig, kinit
+  mkDerivation, fetchurl, lib,
+  extra-cmake-modules, kdoctools,
+  kconfig, kcrash, kinit
 }:
 
-let
+mkDerivation rec {
   pname = "kronometer";
-  version = "2.1.0";
-  unwrapped = kdeDerivation rec {
-    name = "${pname}-${version}";
+  version = "2.3.0";
 
-    src = fetchurl {
-      url = "mirror://kde/stable/${pname}/${version}/src/${name}.tar.xz";
-      sha256 = "1nh7y4c13rscy55f5n8s2v8jij27b55rwkxh9g8r0p7mdwmw8vri";
-    };
-
-    meta = with lib; {
-      license = licenses.gpl2;
-      maintainers = with maintainers; [ peterhoeg ];
-    };
-    nativeBuildInputs = [ ecm kdoctools ];
-    propagatedBuildInputs = [ kconfig kinit ];
+  src = fetchurl {
+    url = "mirror://kde/stable/${pname}/${version}/src/${pname}-${version}.tar.xz";
+    sha256 = "sha256-dbnhom8PRo0Bay3DzS2P0xQSrJaMXD51UadQL3z6xHY=";
   };
-in
-kdeWrapper unwrapped {
-  targets = [ "bin/kronometer" ];
+
+  meta = with lib; {
+    homepage = "https://kde.org/applications/utilities/kronometer/";
+    description = "A stopwatch application";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "kronometer";
+  };
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
+  propagatedBuildInputs = [ kconfig kcrash kinit ];
 }

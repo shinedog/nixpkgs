@@ -1,19 +1,25 @@
-# Build one of the packages that come with idris
-# name: The name of the package
+# Build one of the packages that comes with idris
+# pname: The pname of the package
 # deps: The dependencies of the package
-{ idris, build-idris-package, lib }: name: deps: build-idris-package {
-  inherit name;
+{ idris, build-idris-package }: pname: deps:
+let
+  inherit (builtins.parseDrvName idris.name) version;
+in
+build-idris-package {
 
-  propagatedBuildInputs = deps;
-
+  inherit pname version;
   inherit (idris) src;
 
+  noPrelude = true;
+  noBase = true;
+
+  idrisDeps = deps;
+
   postUnpack = ''
-    mv $sourceRoot/libs/${name} $IDRIS_LIBRARY_PATH
-    sourceRoot=$IDRIS_LIBRARY_PATH/${name}
+    sourceRoot=$sourceRoot/libs/${pname}
   '';
 
   meta = idris.meta // {
-    description = "${name} builtin Idris library";
+    description = "${pname} builtin Idris library";
   };
 }

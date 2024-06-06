@@ -1,34 +1,35 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "terminus-font-ttf-${version}";
-  version = "4.40.1";
+stdenvNoCC.mkDerivation rec {
+  pname = "terminus-font-ttf";
+  version = "4.49.3";
 
-  src = fetchurl {
-    url = "http://files.ax86.net/terminus-ttf/files/${version}/terminus-ttf-${version}.zip";
-    sha256 = "c3cb690c2935123035a0b1f3bfdd9511c282dab489cd423e161a47c592edf188";
+  src = fetchzip {
+    url = "https://files.ax86.net/terminus-ttf/files/${version}/terminus-ttf-${version}.zip";
+    hash = "sha256-dK7MH4I1RhsIGzcnRA+7f3P5oi9B63RA+uASVDNtxNI=";
   };
 
-  buildInputs = [unzip];
-
   installPhase = ''
+    runHook preInstall
+
     for i in *.ttf; do
       local destname="$(echo "$i" | sed -E 's|-[[:digit:].]+\.ttf$|.ttf|')"
       install -Dm 644 "$i" "$out/share/fonts/truetype/$destname"
     done
 
-    install -Dm 644 COPYING "$out/share/doc/COPYING"
+    install -Dm 644 COPYING "$out/share/doc/terminus-font-ttf/COPYING"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A clean fixed width TTF font";
     longDescription = ''
       Monospaced bitmap font designed for long work with computers
       (TTF version, mainly for Java applications)
     '';
-    homepage = http://files.ax86.net/terminus-ttf;
+    homepage = "https://files.ax86.net/terminus-ttf";
     license = licenses.ofl;
-    maintainers = with maintainers; [ okasu ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
   };
 }

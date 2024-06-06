@@ -1,21 +1,40 @@
-{ stdenv, fetchurl, perl, zlib, bzip2, xz, makeWrapper }:
+{ lib
+, stdenv
+, fetchgit
+, perl
+, gnutar
+, zlib
+, bzip2
+, xz
+, zstd
+, libmd
+, makeWrapper
+, coreutils
+, autoreconfHook
+, pkg-config
+, diffutils
+, glibc ? !stdenv.isDarwin
+}:
 
 stdenv.mkDerivation rec {
-  name = "dpkg-${version}";
-  version = "1.18.15";
+  pname = "dpkg";
+  version = "1.22.5";
 
-  src = fetchurl {
-    url = "mirror://debian/pool/main/d/dpkg/dpkg_${version}.tar.xz";
-    sha256 = "0wd3rl1wi2d22jyavxg1ljzkymilg7p338y0c0ql0fcw7djkdsdf";
+  src = fetchgit {
+    url = "https://git.launchpad.net/ubuntu/+source/dpkg";
+    rev = "applied/${version}";
+    hash = "sha256-Rm3DacQF/0yAVtDaixPzE8IZ2Y+RZneCCVBCoYM64K4=";
   };
 
   configureFlags = [
     "--disable-dselect"
+    "--disable-start-stop-daemon"
     "--with-admindir=/var/lib/dpkg"
     "PERL_LIBDIR=$(out)/${perl.libPrefix}"
-    (stdenv.lib.optionalString stdenv.isDarwin "--disable-linker-optimisations")
-    (stdenv.lib.optionalString stdenv.isDarwin "--disable-start-stop-daemon")
-  ];
+    "TAR=${gnutar}/bin/tar"
+  ] ++ lib.optional stdenv.isDarwin "--disable-linker-optimisations";
+
+  enableParallelBuilding = true;
 
   preConfigure = ''
     # Nice: dpkg has a circular dependency on itself. Its configure
@@ -31,14 +50,36 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  buildInputs = [ perl zlib bzip2 xz ];
-  nativeBuildInputs = [ makeWrapper ];
+  postPatch = ''
+    patchShebangs .
+
+    # Dpkg commands sometimes calls out to shell commands
+    substituteInPlace lib/dpkg/dpkg.h \
+       --replace '"dpkg-deb"' \"$out/bin/dpkg-deb\" \
+       --replace '"dpkg-split"' \"$out/bin/dpkg-split\" \
+       --replace '"dpkg-query"' \"$out/bin/dpkg-query\" \
+       --replace '"dpkg-divert"' \"$out/bin/dpkg-divert\" \
+       --replace '"dpkg-statoverride"' \"$out/bin/dpkg-statoverride\" \
+       --replace '"dpkg-trigger"' \"$out/bin/dpkg-trigger\" \
+       --replace '"dpkg"' \"$out/bin/dpkg\" \
+       --replace '"debsig-verify"' \"$out/bin/debsig-verify\" \
+       --replace '"rm"' \"${coreutils}/bin/rm\" \
+       --replace '"cat"' \"${coreutils}/bin/cat\" \
+       --replace '"diff"' \"${diffutils}/bin/diff\"
+  '' + lib.optionalString (!stdenv.isDarwin) ''
+    substituteInPlace src/main/help.c \
+       --replace '"ldconfig"' \"${glibc.bin}/bin/ldconfig\"
+  '';
+
+  buildInputs = [ perl zlib bzip2 xz zstd libmd ];
+  nativeBuildInputs = [ makeWrapper perl autoreconfHook pkg-config ];
 
   postInstall =
     ''
       for i in $out/bin/*; do
         if head -n 1 $i | grep -q perl; then
-          wrapProgram $i --prefix PERL5LIB : $out/${perl.libPrefix}
+          substituteInPlace $i --replace \
+            "${perl}/bin/perl" "${perl}/bin/perl -I $out/${perl.libPrefix}"
         fi
       done
 
@@ -46,11 +87,13 @@ stdenv.mkDerivation rec {
       cp -r scripts/t/origins $out/etc/dpkg
     '';
 
-  meta = with stdenv.lib; {
+  setupHook = ./setup-hook.sh;
+
+  meta = with lib; {
     description = "The Debian package manager";
-    homepage = http://wiki.debian.org/Teams/Dpkg;
+    homepage = "https://wiki.debian.org/Teams/Dpkg";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ mornfall nckx ];
+    maintainers = with maintainers; [ siriobalmelli ];
   };
 }

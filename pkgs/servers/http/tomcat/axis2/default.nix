@@ -1,19 +1,25 @@
-{ stdenv, fetchurl, apacheAnt, jdk, unzip }:
+{ lib, stdenvNoCC, fetchurl, apacheAnt, jdk, unzip }:
 
-stdenv.mkDerivation rec {
-  name = "axis2-${version}";
-  version = "1.6.4";
+stdenvNoCC.mkDerivation rec {
+  pname = "axis2";
+  version = "1.8.2";
 
   src = fetchurl {
-    url = "http://apache.proserve.nl/axis/axis2/java/core/${version}/${name}-bin.zip";
-    sha256 = "12ir706dn95567j6lkxdwrh28vnp6292h59qwjyqjm7ckglkmgyr";
+    url = "mirror://apache/axis/axis2/java/core/${version}/${pname}-${version}-bin.zip";
+    hash = "sha256-oilPVFFpl3F61nVDxcYx/bc81FopS5fzoIdXzeP8brk=";
   };
 
-  buildInputs = [ unzip apacheAnt jdk ];
+  nativeBuildInputs = [ unzip ];
+  buildInputs = [ apacheAnt jdk ];
   builder = ./builder.sh;
 
   meta = {
     description = "Web Services / SOAP / WSDL engine, the successor to the widely used Apache Axis SOAP stack";
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://axis.apache.org/axis2/java/core/";
+    changelog = "https://axis.apache.org/axis2/java/core/release-notes/${version}.html";
+    maintainers = [ lib.maintainers.anthonyroussel ];
+    platforms = lib.platforms.unix;
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = lib.licenses.asl20;
   };
 }

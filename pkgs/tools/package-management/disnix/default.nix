@@ -1,21 +1,31 @@
-{ stdenv, fetchurl, pkgconfig, glib, libxml2, libxslt, getopt, nixUnstable, dysnomia, libintlOrEmpty, libiconv }:
+{ lib, stdenv, fetchurl, fetchpatch, pkg-config, glib, libxml2, libxslt, getopt, dysnomia, libintl, libiconv }:
 
-stdenv.mkDerivation {
-  name = "disnix-0.6.1";
-  
+stdenv.mkDerivation rec {
+  pname = "disnix";
+  version = "0.10.2";
+
   src = fetchurl {
-    url = http://hydra.nixos.org/build/40497264/download/4/disnix-0.6.1.tar.gz;
-    sha256 = "123y8vp31sl394rl7pg2xy13ng9i3pk4s7skyqhngjbqzjl72lhj";
+    url = "https://github.com/svanderburg/disnix/releases/download/${pname}-${version}/${pname}-${version}.tar.gz";
+    sha256 = "0mc0wy8fca60w0d56cljq2cw1xigbp2dklb43fxa5xph94j3i49a";
   };
-  
-  buildInputs = [ pkgconfig glib libxml2 libxslt getopt nixUnstable libintlOrEmpty libiconv dysnomia ];
 
-  dontStrip = true;
-  
+  patches = [
+    # https://github.com/svanderburg/disnix/pull/21
+    # fix implicit function declaration
+    (fetchpatch {
+      name = "add-stdlib.h.patch";
+      url = "https://github.com/svanderburg/disnix/commit/aa969f1d152acb35fc70c6c8db249b61f5a9eb41.patch";
+      hash = "sha256-RZNVVdZ7Rx8n7qzbJOw8BHL8f07mvh8IKpfsWexuVLU=";
+    })
+  ];
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ glib libxml2 libxslt getopt libintl libiconv dysnomia ];
+
   meta = {
     description = "A Nix-based distributed service deployment tool";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    maintainers = [ stdenv.lib.maintainers.sander ];
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.lgpl21Plus;
+    maintainers = with lib.maintainers; [ sander tomberek ];
+    platforms = lib.platforms.unix;
   };
 }

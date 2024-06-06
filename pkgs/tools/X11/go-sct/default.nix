@@ -1,26 +1,33 @@
-{ stdenv, lib, xorg, buildGoPackage, fetchgit, fetchhg, fetchbzr, fetchsvn }:
+{ lib, buildGoModule, fetchFromGitHub, xorg, wayland }:
 
-buildGoPackage rec {
-  name = "go-sct-${version}";
-  version = "20160529-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "1d6b5e05a0b63bfeac9df55003efec352e1bc19d";
+buildGoModule rec {
+  pname = "go-sct";
+  version = "unstable-2022-01-32";
 
-  goPackagePath = "github.com/d4l3k/go-sct";
-
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/d4l3k/go-sct";
-    sha256 = "1iqdagrq0j7sqxgsj31skgk73k2rbpbvj41v087af9103wf8h9z7";
+  src = fetchFromGitHub {
+    owner = "d4l3k";
+    repo = "go-sct";
+    rev = "4ae88a6bf50e0b917541ddbcec1ff10ab77a0b15";
+    hash = "sha256-/0ilM1g3CNaseqV9i+cKWyzxvWnj+TFqazt+aYDtNVs=";
   };
 
-  goDeps = ./deps.nix;
+  postPatch = ''
+    # Disable tests require network access
+    rm -f geoip/geoip_test.go
+  '';
 
-  buildInputs = [ xorg.libX11 xorg.libXrandr ];
+  vendorHash = "sha256-Rx5/oORink2QtRcD+JqbyFroWYhuYmuYDzZ391R4Jsw=";
 
-  meta = with stdenv.lib; {
+  buildInputs = [ xorg.libX11 xorg.libXrandr wayland.dev ];
+
+  ldflags = [ "-s" "-w" ];
+
+  meta = with lib; {
     description = "Color temperature setting library and CLI that operates in a similar way to f.lux and Redshift";
+    homepage = "https://github.com/d4l3k/go-sct";
     license = licenses.mit;
-    maintainers = with maintainers; [ cstrahan ];
-    platforms = platforms.unix;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
+    mainProgram = "sct";
   };
 }

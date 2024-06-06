@@ -1,27 +1,47 @@
-{ stdenv, fetchurl, pkgconfig, which, openssl, qt4, libtool, gcc, makeWrapper }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, wrapQtAppsHook
+, cmake
+, pkg-config
+, openssl
+, qtbase
+, qttools
+, sphinx
+}:
 
-stdenv.mkDerivation rec {
-  name = "xca-${version}";
-  version = "1.3.2";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "xca";
+  version = "2.6.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/xca/${name}.tar.gz";
-    sha256 = "1r2w9gpahjv221j963bd4vn0gj4cxmb9j42f3cd9qdn890hizw84";
+  src = fetchFromGitHub {
+    owner = "chris2511";
+    repo = "xca";
+    rev = "RELEASE.${finalAttrs.version}";
+    hash = "sha256-E0Ap+JDK/oYTG+uaRHsdOxyLIywlYJ01T4ANQhNH220=";
   };
 
-  postInstall = ''
-    wrapProgram "$out/bin/xca" \
-      --prefix LD_LIBRARY_PATH : \
-        "${gcc.cc.lib}/lib64:${stdenv.lib.makeLibraryPath [ qt4 gcc.cc openssl libtool ]}"
-  '';
+  buildInputs = [ openssl qtbase ];
 
-  buildInputs = [ openssl qt4 libtool gcc makeWrapper ];
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qttools
+    sphinx
+    wrapQtAppsHook
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Interface for managing asymetric keys like RSA or DSA";
-    homepage = http://xca.sourceforge.net/;
-    platforms = platforms.all;
+  # Needed for qcollectiongenerator (see https://github.com/NixOS/nixpkgs/pull/92710)
+  QT_PLUGIN_PATH = "${qtbase}/${qtbase.qtPluginPrefix}";
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    description = "An x509 certificate generation tool, handling RSA, DSA and EC keys, certificate signing requests (PKCS#10) and CRLs";
+    mainProgram = "xca";
+    homepage = "https://hohnstaedt.de/xca/";
     license = licenses.bsd3;
+    maintainers = with maintainers; [ offline peterhoeg ];
+    inherit (qtbase.meta) platforms;
   };
-}
+})

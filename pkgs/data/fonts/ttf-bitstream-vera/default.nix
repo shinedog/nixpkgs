@@ -1,22 +1,21 @@
-{stdenv, fetchurl}:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation {
-  name = "ttf-bitstream-vera-1.10";
+stdenvNoCC.mkDerivation rec {
+  pname = "ttf-bitstream-vera";
+  version = "1.10";
 
   src = fetchurl {
-    url = mirror://gnome/sources/ttf-bitstream-vera/1.10/ttf-bitstream-vera-1.10.tar.bz2;
-    sha256 = "1p3qs51x5327gnk71yq8cvmxc6wgx79sqxfvxcv80cdvgggjfnyv";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.bz2";
+    hash = "sha256-21sn33u7MYA269t1rNPpjxvW62YI+3CmfUeM0kPReNw=";
   };
-
-  dontBuild = true;
 
   installPhase = ''
-    fontDir=$out/share/fonts/truetype
-    mkdir -p $fontDir
-    cp *.ttf $fontDir
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/truetype *.ttf
+
+    runHook postInstall
   '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
-  };
+  meta = { };
 }

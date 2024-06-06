@@ -1,16 +1,17 @@
-{ stdenv, lib, bundlerEnv, gpgme, ruby, ncurses, writeText, zlib, xapian
-, pkgconfig, which }:
+{ lib, bundlerApp, bundlerUpdateScript }:
 
-bundlerEnv {
-  inherit ruby;
-
+bundlerApp {
   pname = "lolcat";
   gemdir = ./.;
+  exes = [ "lolcat" ];
+
+  passthru.updateScript = bundlerUpdateScript "lolcat";
 
   meta = with lib; {
     description = "A rainbow version of cat";
-    homepage    = https://github.com/busyloop/lolcat;
-    license     = licenses.wtfpl;
-    maintainers = with maintainers; [ pSub ];
+    homepage    = "https://github.com/busyloop/lolcat";
+    license     = licenses.bsd3;
+    maintainers = with maintainers; [ StillerHarpo manveru nicknovitski ];
+    mainProgram = "lolcat";
   };
 }

@@ -1,28 +1,59 @@
-{ stdenv
+{ lib
+, stdenv
+, python
 , fetchurl
-, pythonPackages
+, anki
 }:
-let
-  version = "2.3.2";
-in pythonPackages.buildPythonApplication rec {
-  name = "mnemosyne-${version}";
+
+python.pkgs.buildPythonApplication rec {
+  pname = "mnemosyne";
+  version = "2.10.1";
+
   src = fetchurl {
-    url    = "http://sourceforge.net/projects/mnemosyne-proj/files/mnemosyne/${name}/Mnemosyne-${version}.tar.gz";
-    sha256 = "0jkrw45i4v24p6xyq94z7rz5948h7f5dspgs5mcdaslnlp2accfp";
+    url    = "mirror://sourceforge/project/mnemosyne-proj/mnemosyne/mnemosyne-${version}/Mnemosyne-${version}.tar.gz";
+    sha256 = "sha256-zI79iuRXb5S0Y87KfdG+HKc0XVNQOAcBR7Zt/OdaBP4=";
   };
-  propagatedBuildInputs = with pythonPackages; [
-    pyqt4
-    matplotlib
+
+  nativeBuildInputs = with python.pkgs; [ pyqtwebengine.wrapQtAppsHook ];
+
+  buildInputs = [ anki ];
+
+  propagatedBuildInputs = with python.pkgs; [
+    cheroot
     cherrypy
+    googletrans
+    gtts
+    matplotlib
+    pyopengl
+    pyqt6
+    pyqt6-webengine
+    argon2-cffi
     webob
   ];
-  preConfigure = ''
-    substituteInPlace setup.py --replace /usr $out
-    find . -type f -exec grep -H sys.exec_prefix {} ';' | cut -d: -f1 | xargs sed -i s,sys.exec_prefix,\"$out\",
+
+  prePatch = ''
+    substituteInPlace setup.py \
+      --replace '("", ["/usr/local/bin/mplayer"])' ""
   '';
+
+  # No tests/ directory in tarball
+  doCheck = false;
+
+  postInstall = ''
+    mkdir -p $out/share/applications
+    mv mnemosyne.desktop $out/share/applications
+  '';
+
+  dontWrapQtApps = true;
+
+  makeWrapperArgs = [
+    "\${qtWrapperArgs[@]}"
+  ];
+
   meta = {
-    homepage = http://mnemosyne-proj.org/;
+    homepage = "https://mnemosyne-proj.org/";
     description = "Spaced-repetition software";
+    mainProgram = "mnemosyne";
     longDescription = ''
       The Mnemosyne Project has two aspects:
 

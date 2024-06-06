@@ -1,20 +1,39 @@
-{ stdenv, fetchurl, netcdf, hdf5, curl }:
+{ lib, stdenv, fetchFromGitHub, netcdf, hdf5, curl, cmake, ninja }:
 stdenv.mkDerivation rec {
-  name = "netcdf-cxx4-${version}";
-  version = "4.2.1";
+  pname = "netcdf-cxx4";
+  version = "4.3.1";
 
-  src = fetchurl {
-    url = "https://github.com/Unidata/netcdf-cxx4/archive/v${version}.tar.gz";
-    sha256 = "1g0fsmz59dnjib4a7r899lm99j3z6yxsw10c0wlihclzr6znmmds";
+  src = fetchFromGitHub {
+    owner = "Unidata";
+    repo = "netcdf-cxx4";
+    rev = "v${version}";
+    sha256 = "sha256-GZ6n7dW3l8Kqrk2Xp2mxRTUWWQj0XEd2LDTG9EtrfhY=";
   };
 
+  patches = [
+    # This fix is included upstream, remove with next upgrade
+    ./cmake-h5free.patch
+  ];
+
+  preConfigure = ''
+    cmakeFlags+="-Dabs_top_srcdir=$(readlink -f ./)"
+  '';
+
+  nativeBuildInputs = [ cmake ninja ];
   buildInputs = [ netcdf hdf5 curl ];
+
   doCheck = true;
+  enableParallelChecking = false;
+  preCheck = ''
+    export HDF5_PLUGIN_PATH=${netcdf}/lib/hdf5-plugins
+  '';
 
   meta = {
     description = "C++ API to manipulate netcdf files";
-    homepage = "http://www.unidata.ucar.edu/software/netcdf/";
-    license = stdenv.lib.licenses.free;
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "ncxx4-config";
+    homepage = "https://www.unidata.ucar.edu/software/netcdf/";
+    license = lib.licenses.free;
+    platforms = lib.platforms.unix;
+    broken = stdenv.isDarwin;
   };
 }

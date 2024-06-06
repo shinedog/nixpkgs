@@ -1,34 +1,73 @@
-{ stdenv, fetchurl, pkgconfig, gtk3, libglade, libgnomecanvas, fribidi
-, libpng, popt, libgsf, enchant, wv, librsvg, bzip2, libjpeg, perl
-, boost, libxslt, goffice, makeWrapper, iconTheme
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, pkg-config
+, gtk3
+, fribidi
+, libpng
+, popt
+, libgsf
+, enchant
+, wv
+, librsvg
+, bzip2
+, libjpeg
+, perl
+, boost
+, libxslt
+, goffice
+, wrapGAppsHook3
 }:
 
 stdenv.mkDerivation rec {
-  name = "abiword-${version}";
-  version = "3.0.1";
+  pname = "abiword";
+  version = "3.0.5";
 
   src = fetchurl {
-    url = "http://www.abisource.org/downloads/abiword/${version}/source/${name}.tar.gz";
-    sha256 = "1ik591rx15nn3n1297cwykl8wvrlgj78i528id9wbidgy3xzd570";
+    url = "https://www.abisource.com/downloads/abiword/${version}/source/${pname}-${version}.tar.gz";
+    hash = "sha256-ElckfplwUI1tFFbT4zDNGQnEtCsl4PChvDJSbW86IbQ=";
   };
 
+  patches = [
+    # Fix build with libxml2 2.12
+    (fetchpatch {
+      url = "https://gitlab.gnome.org/World/AbiWord/-/commit/2a06be6a10a0718f8a3d8e00c317f5042c99a467.patch";
+      hash = "sha256-vfh81tGXe9dgnjcAtoWHOK8CtW7MZ75FFjnfKTkiKkk=";
+    })
+  ];
+
+  nativeBuildInputs = [
+    pkg-config
+    wrapGAppsHook3
+    perl
+  ];
+
+  buildInputs = [
+    gtk3
+    librsvg
+    bzip2
+    fribidi
+    libpng
+    popt
+    libgsf
+    enchant
+    wv
+    libjpeg
+    boost
+    libxslt
+    goffice
+  ];
+
+  strictDeps = true;
   enableParallelBuilding = true;
 
-  buildInputs =
-    [ pkgconfig gtk3 libglade librsvg bzip2 libgnomecanvas fribidi libpng popt
-      libgsf enchant wv libjpeg perl boost libxslt goffice makeWrapper iconTheme
-    ];
-
-  postFixup = ''
-    wrapProgram "$out/bin/abiword" \
-      --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Word processing program, similar to Microsoft Word";
-    homepage = http://www.abisource.com/;
+    mainProgram = "abiword";
+    homepage = "https://www.abisource.com/";
     license = licenses.gpl3;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ pSub ];
+    maintainers = with maintainers; [ pSub ylwghst sna ];
   };
 }

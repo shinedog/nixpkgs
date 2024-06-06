@@ -1,38 +1,67 @@
-{ stdenv, fetchurl, openssl, trousers, automake, autoconf, libtool, bison, flex }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, bison
+, flex
+, openldap
+, openssl
+, trousers
+, libcap
+}:
 
 stdenv.mkDerivation rec {
-  version = "3.2";
-  name = "opencryptoki-${version}";
+  pname = "opencryptoki";
+  version = "3.23.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/opencryptoki/opencryptoki/v${version}/opencryptoki-v${version}.tgz";
-    sha256 = "06r6zp299vxdspl6k65myzgjv0bihg7kc500v7s4jd3mcrkngd6h";
+  src = fetchFromGitHub {
+    owner = "opencryptoki";
+    repo = "opencryptoki";
+    rev = "v${version}";
+    hash = "sha256-5FcvwGTzsL0lYrSYGlbSY89s6OKzg+2TRlwHlJjdzXo=";
   };
 
-  buildInputs = [ automake autoconf libtool openssl trousers bison flex ];
+  nativeBuildInputs = [
+    autoreconfHook
+    bison
+    flex
+  ];
 
-  preConfigure = ''
-    substituteInPlace configure.in --replace "chown" "true"
-    substituteInPlace configure.in --replace "chgrp" "true"
-    sh bootstrap.sh --prefix=$out
+  buildInputs = [
+    openldap
+    openssl
+    trousers
+    libcap
+  ];
+
+  postPatch = ''
+    substituteInPlace configure.ac \
+      --replace-fail "usermod" "true" \
+      --replace-fail "useradd" "true" \
+      --replace-fail "groupadd" "true" \
+      --replace-fail "chmod" "true" \
+      --replace-fail "chown" "true" \
+      --replace-fail "chgrp" "true"
   '';
 
-  configureFlags = [ "--disable-ccatok" "--disable-icatok" ];
+  configureFlags = [
+    "--prefix="
+    "--disable-ccatok"
+    "--disable-icatok"
+  ];
 
-  makeFlags = "DESTDIR=$(out)";
+  enableParallelBuilding = true;
 
-  # work around the build script of opencryptoki
-  postInstall = ''
-    cp -r $out/$out/* $out
-    rm -r $out/nix
-    '';
+  installFlags = [
+    "DESTDIR=${placeholder "out"}"
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    changelog   = "https://github.com/opencryptoki/opencryptoki/blob/${src.rev}/ChangeLog";
     description = "PKCS#11 implementation for Linux";
-    homepage    = http://opencryptoki.sourceforge.net/;
+    homepage    = "https://github.com/opencryptoki/opencryptoki";
     license     = licenses.cpl10;
-    maintainers = [ maintainers.tstrobel ];
+    maintainers = [ ];
     platforms   = platforms.unix;
   };
 }
-

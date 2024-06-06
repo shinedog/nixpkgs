@@ -1,33 +1,84 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, perl }:
+{ lib
+, stdenv
+, autoreconfHook
+, buildPackages
+, coreutils
+, fetchFromGitHub
+, jansson
+, libiconv
+, perl
+, pkg-config
+, python3
+, libseccomp
+, libyaml
+, pcre2
+, libxml2
+}:
 
-stdenv.mkDerivation rec {
-  name = "universal-ctags-${version}";
-  version = "2016-07-06";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "universal-ctags";
+  version = "6.1.0";
 
   src = fetchFromGitHub {
     owner = "universal-ctags";
     repo = "ctags";
-    rev = "44a325a9db23063b231f6f041af9aaf19320d9b9";
-    sha256 = "11vq901h121ckqgw52k9x7way3q38b7jd08vr1n2sjz7kxh0zdd0";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-f8+Ifjn7bhSYozOy7kn+zCLdHGrH3iFupHUZEGynz9Y=";
   };
 
-  buildInputs = [ autoreconfHook pkgconfig ];
+  depsBuildBuild = [
+    buildPackages.stdenv.cc
+  ];
 
-  autoreconfPhase = ''
-    ./autogen.sh --tmpdir
+  nativeBuildInputs = [
+    autoreconfHook
+    perl
+    pkg-config
+    (python3.withPackages (p: [ p.docutils ]))
+  ];
+
+  buildInputs = [
+    libyaml
+    pcre2
+    libxml2
+    jansson
+  ]
+  ++ lib.optional stdenv.isDarwin libiconv
+  ++ lib.optional stdenv.isLinux libseccomp;
+
+  configureFlags = [ "--enable-tmpdir=/tmp" ];
+
+  patches = [
+    ./000-nixos-specific.patch
+  ];
+
+  postPatch = ''
+    substituteInPlace Tmain/utils.sh \
+      --replace /bin/echo ${coreutils}/bin/echo
+    # fails on sandbox
+    rm -fr Tmain/ptag-proc-cwd.d/
+    patchShebangs misc/*
   '';
 
-  postConfigure = ''
-    sed -i 's|/usr/bin/env perl|${perl}/bin/perl|' misc/optlib2c
-  '';
+  doCheck = true;
 
-  meta = with stdenv.lib; {
+  checkFlags = [
+    "man-test" "tlib" "tmain" "tutil" "units"
+  ];
+
+  meta = with lib; {
+    homepage = "https://docs.ctags.io/en/latest/";
     description = "A maintained ctags implementation";
-    homepage = "https://ctags.io/";
+    longDescription = ''
+      Universal Ctags (abbreviated as u-ctags) is a maintained implementation of
+      ctags. ctags generates an index (or tag) file of language objects found in
+      source files for programming languages. This index makes it easy for text
+      editors and other tools to locate the indexed items.
+    '';
     license = licenses.gpl2Plus;
-    platforms = platforms.unix;
-    # universal-ctags is preferred over emacs's ctags
-    priority = 1;
-    maintainers = [ maintainers.mimadrid ];
+    maintainers = [ maintainers.AndersonTorres ];
+    platforms = platforms.all;
+    mainProgram = "ctags";
+    priority = 1; # over the emacs implementation
   };
-}
+})

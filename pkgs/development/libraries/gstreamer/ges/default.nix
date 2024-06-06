@@ -1,25 +1,74 @@
-{ stdenv, fetchurl, pkgconfig, python, gobjectIntrospection
-, gnonlin, libxml2, flex, perl
+{ lib, stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, python3
+, bash-completion
+, gst-plugins-base
+, gst-plugins-bad
+, gst-devtools
+, libxml2
+, flex
+, gettext
+, gobject-introspection
+# Checks meson.is_cross_build(), so even canExecute isn't enough.
+, enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform, hotdoc
 }:
 
 stdenv.mkDerivation rec {
-  name = "gstreamer-editing-services-1.10.1";
+  pname = "gst-editing-services";
+  version = "1.24.2";
 
-  meta = with stdenv.lib; {
-    description = "Library for creation of audio/video non-linear editors";
-    homepage    = "http://gstreamer.freedesktop.org";
-    license     = licenses.lgpl2Plus;
-    platforms   = platforms.unix;
-  };
+  outputs = [
+    "out"
+    "dev"
+  ];
 
   src = fetchurl {
-    url = "${meta.homepage}/src/gstreamer-editing-services/${name}.tar.xz";
-    sha256 = "048dxpbzmidbl1sb902nx8rkg8m0z69f3dn7vfhs1ai68x2hzip9";
+    url = "https://gstreamer.freedesktop.org/src/${pname}/${pname}-${version}.tar.xz";
+    hash = "sha256-cgF3jqXZN0QMU9dDndEqpaxoQGiK8fBJmFInUHS5kHM=";
   };
 
-  outputs = [ "out" "dev" ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    gobject-introspection
+    python3
+    flex
+  ] ++ lib.optionals enableDocumentation [
+    hotdoc
+  ];
 
-  nativeBuildInputs = [ pkgconfig python gobjectIntrospection flex perl ];
+  buildInputs = [
+    bash-completion
+    libxml2
+    gst-devtools
+    python3
+  ];
 
-  propagatedBuildInputs = [ gnonlin libxml2 ];
+  propagatedBuildInputs = [
+    gst-plugins-base
+    gst-plugins-bad
+  ];
+
+  mesonFlags = [
+    (lib.mesonEnable "doc" enableDocumentation)
+  ];
+
+  postPatch = ''
+    patchShebangs \
+      scripts/extract-release-date-from-doap-file.py
+  '';
+
+  meta = with lib; {
+    description = "Library for creation of audio/video non-linear editors";
+    mainProgram = "ges-launch-1.0";
+    homepage = "https://gstreamer.freedesktop.org";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ lilyinstarlight ];
+  };
 }

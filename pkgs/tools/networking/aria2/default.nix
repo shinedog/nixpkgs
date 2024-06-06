@@ -1,33 +1,49 @@
-{ stdenv, fetchFromGitHub, pkgconfig, autoreconfHook
-, openssl, c-ares, libxml2, sqlite, zlib, libssh2
+{ lib, stdenv, fetchFromGitHub, pkg-config, autoreconfHook
+, gnutls, c-ares, libxml2, sqlite, zlib, libssh2
+, cppunit, sphinx
 , Security
 }:
 
 stdenv.mkDerivation rec {
-  name = "aria2-${version}";
-  version = "1.29.0";
+  pname = "aria2";
+  version = "1.37.0";
 
   src = fetchFromGitHub {
     owner = "aria2";
     repo = "aria2";
     rev = "release-${version}";
-    sha256 = "1ivxz2ld4cl9z29kdicban9dir6s0si2jqn4g11gz587x7pagbim";
+    sha256 = "sha256-xbiNSg/Z+CA0x0DQfMNsWdA+TATyX6dCeW2Nf3L3Kfs=";
   };
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+  strictDeps = true;
+  nativeBuildInputs = [ pkg-config autoreconfHook sphinx ];
 
-  buildInputs = [ openssl c-ares libxml2 sqlite zlib libssh2 ] ++
-    stdenv.lib.optional stdenv.isDarwin Security;
+  buildInputs = [ gnutls c-ares libxml2 sqlite zlib libssh2 ] ++
+    lib.optional stdenv.isDarwin Security;
 
-  configureFlags = [ "--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt" ];
+  outputs = [ "bin" "dev" "out" "doc" "man" ];
+
+  configureFlags = [
+    "--with-ca-bundle=/etc/ssl/certs/ca-certificates.crt"
+    "--enable-libaria2"
+    "--with-bashcompletiondir=${placeholder "bin"}/share/bash-completion/completions"
+  ];
+
+  prePatch = ''
+    patchShebangs --build doc/manual-src/en/mkapiref.py
+  '';
+
+  nativeCheckInputs = [ cppunit ];
+  doCheck = false; # needs the net
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = https://aria2.github.io;
+  meta = with lib; {
+    homepage = "https://aria2.github.io";
     description = "A lightweight, multi-protocol, multi-source, command-line download utility";
+    mainProgram = "aria2c";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ koral jgeerds ];
+    maintainers = with maintainers; [ Br1ght0ne koral ];
   };
 }

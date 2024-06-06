@@ -1,12 +1,13 @@
-{ kdeFramework, lib
-, ecm
-, qtbase
-, qtx11extras
+{
+  mkDerivation,
+  extra-cmake-modules,
+  qtbase, qtx11extras,
+  wayland, wayland-protocols, plasma-wayland-protocols
 }:
 
-kdeFramework {
-  name = "kidletime";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ qtbase qtx11extras ];
+mkDerivation {
+  pname = "kidletime";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ qtx11extras wayland wayland-protocols plasma-wayland-protocols ];
+  propagatedBuildInputs = [ qtbase ];
 }

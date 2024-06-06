@@ -1,26 +1,47 @@
-{stdenv, fetchurl}:
+{ lib
+, stdenv
+, cmake
+, darwin
+, fetchFromGitHub
+, withBlas ? true, blas
+}:
 
 stdenv.mkDerivation rec {
-  name = "cminpack-1.3.4";
-  
-  src = fetchurl {
-    url = "http://devernay.free.fr/hacks/cminpack/${name}.tar.gz";
-    sha256 = "1jh3ymxfcy3ykh6gnvds5bbkf38aminvjgc8halck356vkvpnl9v";
+  pname = "cminpack";
+  version = "1.3.8";
+
+  src = fetchFromGitHub {
+    owner = "devernay";
+    repo = "cminpack";
+    rev = "v${version}";
+    hash = "sha256-eFJ43cHbSbWld+gPpMaNiBy1X5TIcN9aVxjh8PxvVDU=";
   };
 
-  patchPhase = ''
-    sed -i s,/usr/local,$out, Makefile
-  '';
+  strictDeps = true;
 
-  preInstall = ''
-    mkdir -p $out/lib $out/include
-  '';
+  nativeBuildInputs = [
+    cmake
+  ];
+
+  buildInputs = lib.optionals withBlas [
+    blas
+  ] ++ lib.optionals (withBlas && stdenv.isDarwin) [
+    darwin.apple_sdk.frameworks.Accelerate
+    darwin.apple_sdk.frameworks.CoreGraphics
+    darwin.apple_sdk.frameworks.CoreVideo
+  ];
+
+  cmakeFlags = [
+    "-DUSE_BLAS=${if withBlas then "ON" else "OFF"}"
+    "-DBUILD_SHARED_LIBS=${if stdenv.hostPlatform.isStatic then "OFF" else "ON"}"
+  ];
 
   meta = {
-    homepage = http://devernay.free.fr/hacks/cminpack/cminpack.html;
-    license = stdenv.lib.licenses.bsd3;
     description = "Software for solving nonlinear equations and nonlinear least squares problems";
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "http://devernay.free.fr/hacks/cminpack/";
+    changelog = "https://github.com/devernay/cminpack/blob/v${version}/README.md#history";
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.all;
+    maintainers = [ ];
   };
-
 }

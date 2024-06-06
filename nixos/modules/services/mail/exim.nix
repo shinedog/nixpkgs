@@ -1,8 +1,8 @@
 { config, lib, pkgs, ... }:
 
 let
-  inherit (lib) mkIf mkOption singleton types;
-  inherit (pkgs) coreutils exim;
+  inherit (lib) literalExpression mkIf mkOption singleton types mkPackageOption;
+  inherit (pkgs) coreutils;
   cfg = config.services.exim;
 in
 
@@ -21,7 +21,7 @@ in
       };
 
       config = mkOption {
-        type = types.string;
+        type = types.lines;
         default = "";
         description = ''
           Verbatim Exim configuration.  This should not contain exim_user,
@@ -30,7 +30,7 @@ in
       };
 
       user = mkOption {
-        type = types.string;
+        type = types.str;
         default = "exim";
         description = ''
           User to use when no root privileges are required.
@@ -42,7 +42,7 @@ in
       };
 
       group = mkOption {
-        type = types.string;
+        type = types.str;
         default = "exim";
         description = ''
           Group to use when no root privileges are required.
@@ -50,13 +50,26 @@ in
       };
 
       spoolDir = mkOption {
-        type = types.string;
+        type = types.path;
         default = "/var/spool/exim";
         description = ''
           Location of the spool directory of exim.
         '';
       };
 
+      package = mkPackageOption pkgs "exim" {
+        extraDescription = ''
+          This can be used to enable features such as LDAP or PAM support.
+        '';
+      };
+
+      queueRunnerInterval = mkOption {
+        type = types.str;
+        default = "5m";
+        description = ''
+          How often to spawn a new queue runner.
+        '';
+      };
     };
 
   };
@@ -70,33 +83,38 @@ in
       etc."exim.conf".text = ''
         exim_user = ${cfg.user}
         exim_group = ${cfg.group}
-        exim_path = /var/setuid-wrappers/exim
+        exim_path = /run/wrappers/bin/exim
         spool_directory = ${cfg.spoolDir}
         ${cfg.config}
       '';
-      systemPackages = [ exim ];
+      systemPackages = [ cfg.package ];
     };
 
-    users.extraUsers = singleton {
-      name = cfg.user;
+    users.users.${cfg.user} = {
       description = "Exim mail transfer agent user";
       uid = config.ids.uids.exim;
       group = cfg.group;
     };
 
-    users.extraGroups = singleton {
-      name = cfg.group;
+    users.groups.${cfg.group} = {
       gid = config.ids.gids.exim;
     };
 
-    security.setuidPrograms = [ "exim" ];
+    security.wrappers.exim =
+      { setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${cfg.package}/bin/exim";
+      };
 
     systemd.services.exim = {
       description = "Exim Mail Daemon";
       wantedBy = [ "multi-user.target" ];
+      restartTriggers = [ config.environment.etc."exim.conf".source ];
       serviceConfig = {
-        ExecStart   = "${exim}/bin/exim -bdf -q30m";
-        ExecReload  = "${coreutils}/bin/kill -HUP $MAINPID";
+        ExecStart   = "!${cfg.package}/bin/exim -bdf -q${cfg.queueRunnerInterval}";
+        ExecReload  = "!${coreutils}/bin/kill -HUP $MAINPID";
+        User        = cfg.user;
       };
       preStart = ''
         if ! test -d ${cfg.spoolDir}; then

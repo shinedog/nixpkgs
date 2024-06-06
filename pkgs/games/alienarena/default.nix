@@ -1,24 +1,51 @@
-{ stdenv, fetchurl, pkgconfig, libjpeg, libX11, libXxf86vm, curl, libogg
-, libvorbis, freetype, openal, mesa }:
+{ curl
+, fetchFromGitHub
+, freetype
+, lib
+, libGL
+, libjpeg
+, libogg
+, libvorbis
+, libX11
+, libXxf86vm
+, openal
+, pkg-config
+, stdenv
+}:
 
 stdenv.mkDerivation rec {
-  name = "alienarena-7.65";
+  pname = "alienarena";
+  version = "7.71.6";
 
-  src = fetchurl {
-    url = "http://icculus.org/alienarena/Files/alienarena-7.65-linux20130207.tar.gz";
-    sha256 = "03nnv4m2xmswr0020hssajncdb8sy95jp5yccsm53sgxga4r8igg";
+  src = fetchFromGitHub {
+    owner = "alienarena";
+    repo = "alienarena";
+    rev = version;
+    hash = "sha256-Dml0VY5VQiWLq8LjItBSzNwJB9L4biJ/nJWmEGtG2ZY=";
   };
 
-  buildInputs = [ pkgconfig libjpeg libX11 curl libogg libvorbis
-                  freetype openal mesa libXxf86vm ];
+  nativeBuildInputs = [ pkg-config ];
+
+  buildInputs = [
+    curl
+    freetype
+    libGL
+    libjpeg
+    libogg
+    libvorbis
+    libX11
+    libXxf86vm
+    openal
+  ];
 
   patchPhase = ''
     substituteInPlace ./configure \
       --replace libopenal.so.1 ${openal}/lib/libopenal.so.1 \
-      --replace libGL.so.1 ${mesa}/lib/libGL.so.1
+      --replace libGL.so.1 ${libGL}/lib/libGL.so.1
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    changelog = "https://github.com/alienarena/alienarena/releases/tag/${version}";
     description = "A free, stand-alone first-person shooter computer game";
     longDescription = ''
       Do you like old school deathmatch with modern features? How
@@ -29,7 +56,7 @@ stdenv.mkDerivation rec {
       with a retro alien theme, while adding tons of original ideas to
       make the game quite unique.
     '';
-    homepage = http://red.planetarena.org;
+    homepage = "https://alienarena.org";
     # Engine is under GPLv2, everything else is under
     license = licenses.unfreeRedistributable;
     maintainers = with maintainers; [ astsmtl ];

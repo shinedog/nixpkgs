@@ -4,7 +4,7 @@ with lib;
 
 let
   cfg = config.services.zookeeper;
-  
+
   zookeeperConfig = ''
     dataDir=${cfg.dataDir}
     clientPort=${toString cfg.port}
@@ -24,16 +24,12 @@ let
 in {
 
   options.services.zookeeper = {
-    enable = mkOption {
-      description = "Whether to enable Zookeeper.";
-      default = false;
-      type = types.bool;
-    };
+    enable = mkEnableOption "Zookeeper";
 
     port = mkOption {
       description = "Zookeeper Client port.";
       default = 2181;
-      type = types.int;
+      type = types.port;
     };
 
     id = mkOption {
@@ -49,7 +45,7 @@ in {
       default = 1;
       type = types.int;
     };
- 
+
     extraConf = mkOption {
       description = "Extra configuration for Zookeeper.";
       type = types.lines;
@@ -76,6 +72,7 @@ in {
       default = ''
         zookeeper.root.logger=INFO, CONSOLE
         log4j.rootLogger=INFO, CONSOLE
+        log4j.logger.org.apache.zookeeper.audit.Log4jAuditLogger=INFO, CONSOLE
         log4j.appender.CONSOLE=org.apache.log4j.ConsoleAppender
         log4j.appender.CONSOLE.layout=org.apache.log4j.PatternLayout
         log4j.appender.CONSOLE.layout.ConversionPattern=[myid:%X{myid}] - %-5p [%t:%C{1}@%L] - %m%n
@@ -106,40 +103,54 @@ in {
       '';
     };
 
+    package = mkPackageOption pkgs "zookeeper" { };
+
+    jre = mkOption {
+      description = "The JRE with which to run Zookeeper";
+      default = cfg.package.jre;
+      defaultText = literalExpression "pkgs.zookeeper.jre";
+      example = literalExpression "pkgs.jre";
+      type = types.package;
+    };
   };
 
 
   config = mkIf cfg.enable {
+    environment.systemPackages = [cfg.package];
+
+    systemd.tmpfiles.rules = [
+      "d '${cfg.dataDir}' 0700 zookeeper - - -"
+      "Z '${cfg.dataDir}' 0700 zookeeper - - -"
+    ];
+
     systemd.services.zookeeper = {
       description = "Zookeeper Daemon";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
-      environment = { ZOOCFGDIR = configDir; };
       serviceConfig = {
         ExecStart = ''
-          ${pkgs.jre}/bin/java \
-            -cp "${pkgs.zookeeper}/lib/*:${pkgs.zookeeper}/${pkgs.zookeeper.name}.jar:${configDir}" \
-            ${toString cfg.extraCmdLineOptions} \
+          ${cfg.jre}/bin/java \
+            -cp "${cfg.package}/lib/*:${configDir}" \
+            ${escapeShellArgs cfg.extraCmdLineOptions} \
             -Dzookeeper.datadir.autocreate=false \
             ${optionalString cfg.preferIPv4 "-Djava.net.preferIPv4Stack=true"} \
             org.apache.zookeeper.server.quorum.QuorumPeerMain \
             ${configDir}/zoo.cfg
         '';
         User = "zookeeper";
-        PermissionsStartOnly = true;
       };
       preStart = ''
-        mkdir -m 0700 -p ${cfg.dataDir}
-        if [ "$(id -u)" = 0 ]; then chown zookeeper ${cfg.dataDir}; fi
         echo "${toString cfg.id}" > ${cfg.dataDir}/myid
+        mkdir -p ${cfg.dataDir}/version-2
       '';
     };
 
-    users.extraUsers = singleton {
-      name = "zookeeper";
-      uid = config.ids.uids.zookeeper;
+    users.users.zookeeper = {
+      isSystemUser = true;
+      group = "zookeeper";
       description = "Zookeeper daemon user";
       home = cfg.dataDir;
     };
+    users.groups.zookeeper = {};
   };
 }

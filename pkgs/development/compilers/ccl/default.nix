@@ -1,11 +1,11 @@
-{ stdenv, fetchsvn, gcc, glibc, m4, coreutils }:
+{ lib, stdenv, fetchurl, bootstrap_cmds, coreutils, glibc, m4, runtimeShell }:
 
 let
   options = rec {
-    /* TODO: there are also MacOS, FreeBSD and Windows versions */
+    # TODO: there are also FreeBSD and Windows versions
     x86_64-linux = {
       arch = "linuxx86";
-      sha256 = "0g6mkl207ri3ib9w85i9w0sv7srz784pbxidz0d95p6qkvg6shba";
+      sha256 = "0mhmm8zbk42p2b9amy702365m687k5p0xnz010yqrki6mwyxlkx9";
       runtime = "lx86cl64";
       kernel = "linuxx8664";
     };
@@ -17,36 +17,45 @@ let
     };
     armv7l-linux = {
       arch = "linuxarm";
-      sha256 = "0k6wxwyg3pmbb5xdkwma0i3rvbjmy3p604g4minjjc1drzsn1i0q";
+      sha256 = "1a4y07cmmn1r88b4hl4msb0bvr2fxd2vw9lf7h4j9f7a5rpq7124";
       runtime = "armcl";
       kernel = "linuxarm";
     };
+    x86_64-darwin = {
+      arch = "darwinx86";
+      sha256 = "1xclnik6pqhkmr15cbqa2n1ddzdf0rs452lyiln3c42nmkf9jjb6";
+      runtime = "dx86cl64";
+      kernel = "darwinx8664";
+    };
     armv6l-linux = armv7l-linux;
   };
-  cfg = options.${stdenv.system};
-in
+  cfg = options.${stdenv.hostPlatform.system} or (throw "missing source url for platform ${stdenv.hostPlatform.system}");
 
-assert builtins.hasAttr stdenv.system options;
+in stdenv.mkDerivation rec {
+  pname = "ccl";
+  version = "1.12.2";
 
-stdenv.mkDerivation rec {
-  name     = "ccl-${version}";
-  version  = "1.11";
-  revision = "16313";
-
-  src = fetchsvn {
-    url = "http://svn.clozure.com/publicsvn/openmcl/release/${version}/${cfg.arch}/ccl";
-    rev = revision;
+  src = fetchurl {
+    url = "https://github.com/Clozure/ccl/releases/download/v${version}/ccl-${version}-${cfg.arch}.tar.gz";
     sha256 = cfg.sha256;
   };
 
-  buildInputs = [ gcc glibc m4 ];
+  buildInputs = if stdenv.isDarwin then [ bootstrap_cmds m4 ] else [ glibc m4 ];
 
   CCL_RUNTIME = cfg.runtime;
   CCL_KERNEL = cfg.kernel;
 
-  patchPhase = ''
+  postPatch = if stdenv.isDarwin then ''
     substituteInPlace lisp-kernel/${CCL_KERNEL}/Makefile \
-      --replace "svnversion" "echo ${revision}" \
+      --replace "M4 = gm4"   "M4 = m4" \
+      --replace "dtrace"     "/usr/sbin/dtrace" \
+      --replace "/bin/rm"    "${coreutils}/bin/rm" \
+      --replace "/bin/echo"  "${coreutils}/bin/echo"
+
+    substituteInPlace lisp-kernel/m4macros.m4 \
+      --replace "/bin/pwd" "${coreutils}/bin/pwd"
+  '' else ''
+    substituteInPlace lisp-kernel/${CCL_KERNEL}/Makefile \
       --replace "/bin/rm"    "${coreutils}/bin/rm" \
       --replace "/bin/echo"  "${coreutils}/bin/echo"
 
@@ -66,15 +75,20 @@ stdenv.mkDerivation rec {
     cp -r .  "$out/share/ccl-installation"
 
     mkdir -p "$out/bin"
-    echo -e '#!/bin/sh\n'"$out/share/ccl-installation/${CCL_RUNTIME}"' "$@"\n' > "$out"/bin/"${CCL_RUNTIME}"
+    echo -e '#!${runtimeShell}\n'"$out/share/ccl-installation/${CCL_RUNTIME}"' "$@"\n' > "$out"/bin/"${CCL_RUNTIME}"
     chmod a+x "$out"/bin/"${CCL_RUNTIME}"
+    ln -s "$out"/bin/"${CCL_RUNTIME}" "$out"/bin/ccl
   '';
 
-  meta = with stdenv.lib; {
+  hardeningDisable = [ "format" ];
+
+  meta = with lib; {
     description = "Clozure Common Lisp";
-    homepage    = http://ccl.clozure.com/;
-    maintainers = with maintainers; [ raskin muflax tohl ];
+    homepage    = "https://ccl.clozure.com/";
+    maintainers = lib.teams.lisp.members;
     platforms   = attrNames options;
-    license     = licenses.lgpl21;
+    # assembler failures during build, x86_64-darwin broken since 2020-10-14
+    broken      = (stdenv.isDarwin && stdenv.isx86_64);
+    license     = licenses.asl20;
   };
 }

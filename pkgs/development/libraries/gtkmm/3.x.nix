@@ -1,35 +1,46 @@
-{ stdenv, fetchurl, pkgconfig, gtk3, glibmm, cairomm, pangomm, atkmm, epoxy }:
+{ lib, stdenv, fetchurl, pkg-config, meson, ninja, python3, gtk3, glibmm, cairomm, pangomm, atkmm, libepoxy, gnome, glib, gdk-pixbuf }:
 
-let
-  ver_maj = "3.22";
-  ver_min = "0";
-in
 stdenv.mkDerivation rec {
-  name = "gtkmm-${ver_maj}.${ver_min}";
+  pname = "gtkmm";
+  version = "3.24.9";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/gtkmm/${ver_maj}/${name}.tar.xz";
-    sha256 = "05da4d4b628fb20c8384630ddf478a3b5562952b2d6181fe28d58f6cbc0514f5";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "MNW/5ARXHOVmqOk4yLrBdXZCDrUI8eJXg32mPxStRM4=";
   };
 
   outputs = [ "out" "dev" ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ epoxy ];
+  nativeBuildInputs = [
+    pkg-config
+    meson
+    ninja
+    python3
+    glib
+    gdk-pixbuf # for gdk-pixbuf-pixdata
+  ];
+  buildInputs = [ libepoxy ];
 
   propagatedBuildInputs = [ glibmm gtk3 atkmm cairomm pangomm ];
-
-  enableParallelBuilding = true;
 
   # https://bugzilla.gnome.org/show_bug.cgi?id=764521
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    description = "C++ interface to the GTK+ graphical user interface library";
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      attrPath = "${pname}3";
+      versionPolicy = "odd-unstable";
+      freeze = true;
+    };
+  };
+
+  meta = with lib; {
+    description = "C++ interface to the GTK graphical user interface library";
 
     longDescription = ''
       gtkmm is the official C++ interface for the popular GUI library
-      GTK+.  Highlights include typesafe callbacks, and a
+      GTK.  Highlights include typesafe callbacks, and a
       comprehensive set of widgets that are easily extensible via
       inheritance.  You can create user interfaces either in code or
       with the Glade User Interface designer, using libglademm.
@@ -37,11 +48,11 @@ stdenv.mkDerivation rec {
       tutorial.
     '';
 
-    homepage = http://gtkmm.org/;
+    homepage = "https://gtkmm.org/";
 
     license = licenses.lgpl2Plus;
 
-    maintainers = with maintainers; [ raskin vcunat ];
+    maintainers = with maintainers; [ raskin ];
     platforms = platforms.unix;
   };
 }

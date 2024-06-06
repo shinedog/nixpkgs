@@ -1,55 +1,61 @@
-{ stdenv, fetchurl, gettext, libidn, pkgconfig
-, perl, perlPackages, LWP, python3
-, libiconv, libpsl ? null, openssl ? null }:
+{ lib, stdenv, fetchurl, gettext, pkg-config, perlPackages
+, libidn2, zlib, pcre, libuuid, libiconv, libintl
+, python3, lzip
+, withLibpsl ? false, libpsl
+, withOpenssl ? true, openssl
+}:
 
 stdenv.mkDerivation rec {
-  name = "wget-1.18";
+  pname = "wget";
+  version = "1.21.4";
 
   src = fetchurl {
-    url = "mirror://gnu/wget/${name}.tar.xz";
-    sha256 = "1hcwx8ww3sxzdskkx3l7q70a7wd6569yrnjkw9pw013cf9smpddm";
+    url = "mirror://gnu/wget/${pname}-${version}.tar.lz";
+    hash = "sha256-NoNhml9Q7cvMsXIKeQBvo3v5uaJVqMW0gEi8PHqHS9k=";
   };
 
-  patches = [ ./remove-runtime-dep-on-openssl-headers.patch ];
+  patches = [
+    ./remove-runtime-dep-on-openssl-headers.patch
+  ];
 
   preConfigure = ''
     patchShebangs doc
 
-  '' + stdenv.lib.optionalString doCheck ''
+  '' + lib.optionalString doCheck ''
     # Work around lack of DNS resolution in chroots.
     for i in "tests/"*.pm "tests/"*.px
     do
       sed -i "$i" -e's/localhost/127.0.0.1/g'
     done
-  '' + stdenv.lib.optionalString stdenv.isDarwin ''
-    export LIBS="-liconv -lintl"
   '';
 
-  nativeBuildInputs = [ gettext pkgconfig perl ];
-  buildInputs = [ libidn libiconv libpsl ]
-    ++ stdenv.lib.optionals doCheck [ perlPackages.IOSocketSSL LWP python3 ]
-    ++ stdenv.lib.optional (openssl != null) openssl
-    ++ stdenv.lib.optional stdenv.isDarwin perl;
+  nativeBuildInputs = [ gettext pkg-config perlPackages.perl lzip libiconv libintl ];
+  buildInputs = [ libidn2 zlib pcre libuuid ]
+    ++ lib.optionals doCheck [ perlPackages.IOSocketSSL perlPackages.LWP python3 ]
+    ++ lib.optional withOpenssl openssl
+    ++ lib.optional withLibpsl libpsl
+    ++ lib.optional stdenv.isDarwin perlPackages.perl;
 
-  configureFlags =
-    if openssl != null then "--with-ssl=openssl" else "--without-ssl";
+  configureFlags = [
+    (lib.withFeatureAs withOpenssl "ssl" "openssl")
+  ] ++ lib.optionals stdenv.isDarwin [
+    # https://lists.gnu.org/archive/html/bug-wget/2021-01/msg00076.html
+    "--without-included-regex"
+  ];
 
   doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Tool for retrieving files using HTTP, HTTPS, and FTP";
-
+    homepage = "https://www.gnu.org/software/wget/";
+    license = licenses.gpl3Plus;
     longDescription =
       '' GNU Wget is a free software package for retrieving files using HTTP,
          HTTPS and FTP, the most widely-used Internet protocols.  It is a
          non-interactive commandline tool, so it may easily be called from
          scripts, cron jobs, terminals without X-Windows support, etc.
       '';
-
-    license = licenses.gpl3Plus;
-
-    homepage = http://www.gnu.org/software/wget/;
-
+    mainProgram = "wget";
     maintainers = with maintainers; [ fpletz ];
     platforms = platforms.all;
   };

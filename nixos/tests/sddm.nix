@@ -1,30 +1,67 @@
-import ./make-test.nix ({ pkgs, ...} : {
-  name = "sddm";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ ttuegel ];
-  };
+{ system ? builtins.currentSystem,
+  config ? {},
+  pkgs ? import ../.. { inherit system config; }
+}:
 
-  machine = { lib, ... }: {
-    imports = [ ./common/user-account.nix ];
-    services.xserver.enable = true;
-    services.xserver.displayManager.sddm = {
-      enable = true;
-      autoLogin = {
-        enable = true;
-        user = "alice";
+with import ../lib/testing-python.nix { inherit system pkgs; };
+
+let
+  inherit (pkgs) lib;
+
+  tests = {
+    default = {
+      name = "sddm";
+
+      nodes.machine = { ... }: {
+        imports = [ ./common/user-account.nix ];
+        services.xserver.enable = true;
+        services.displayManager.sddm.enable = true;
+        services.displayManager.defaultSession = "none+icewm";
+        services.xserver.windowManager.icewm.enable = true;
       };
+
+      enableOCR = true;
+
+      testScript = { nodes, ... }: let
+        user = nodes.machine.users.users.alice;
+      in ''
+        start_all()
+        machine.wait_for_text("(?i)select your user")
+        machine.screenshot("sddm")
+        machine.send_chars("${user.password}\n")
+        machine.wait_for_file("/tmp/xauth_*")
+        machine.succeed("xauth merge /tmp/xauth_*")
+        machine.wait_for_window("^IceWM ")
+      '';
     };
-    services.xserver.windowManager.default = "icewm";
-    services.xserver.windowManager.icewm.enable = true;
-    services.xserver.desktopManager.default = "none";
+
+    autoLogin = {
+      name = "sddm-autologin";
+      meta = with pkgs.lib.maintainers; {
+        maintainers = [ ttuegel ];
+      };
+
+      nodes.machine = { ... }: {
+        imports = [ ./common/user-account.nix ];
+        services.xserver.enable = true;
+        services.displayManager = {
+          sddm.enable = true;
+          autoLogin = {
+            enable = true;
+            user = "alice";
+          };
+        };
+        services.displayManager.defaultSession = "none+icewm";
+        services.xserver.windowManager.icewm.enable = true;
+      };
+
+      testScript = { nodes, ... }: ''
+        start_all()
+        machine.wait_for_file("/tmp/xauth_*")
+        machine.succeed("xauth merge /tmp/xauth_*")
+        machine.wait_for_window("^IceWM ")
+      '';
+    };
   };
-
-  enableOCR = true;
-
-  testScript = { nodes, ... }: ''
-    startAll;
-    $machine->waitForFile("/home/alice/.Xauthority");
-    $machine->succeed("xauth merge ~alice/.Xauthority");
-    $machine->waitForWindow("^IceWM ");
-  '';
-})
+in
+  lib.mapAttrs (lib.const makeTest) tests

@@ -1,38 +1,53 @@
-{stdenv, fetchurl, mesa, freeglut, glew, libXmu, libXext, libX11
-  }:
+{lib, stdenv, fetchurl, libGLU, libGL, freeglut, glew, libXmu, libXext, libX11
+, qmake, GLUT, fixDarwinDylibNames }:
 
 stdenv.mkDerivation rec {
-  version = "1.4.0";
-  name = "opencsg-${version}";
+  version = "1.6.0";
+  pname = "opencsg";
   src = fetchurl {
     url = "http://www.opencsg.org/OpenCSG-${version}.tar.gz";
-    sha256 = "13c73jxadm27h7spdh3qj1v6rnn81v4xwqlv5a6k72pv9kjnpd7c";
+    hash = "sha256-v4+4Dj4M4R2H3XjdFaDehy27iXLYf1+Jz/xGHvrUe+g=";
   };
 
-  buildInputs = [mesa freeglut glew libXmu libXext libX11];
+  nativeBuildInputs = [ qmake ]
+    ++ lib.optional stdenv.isDarwin fixDarwinDylibNames;
+
+  buildInputs = [ glew ]
+    ++ lib.optionals stdenv.isLinux [ libGLU libGL freeglut libXmu libXext libX11 ]
+    ++ lib.optional stdenv.isDarwin GLUT;
 
   doCheck = false;
 
   preConfigure = ''
-    sed -i 's/^\(LIBS *=.*\)$/\1 -lX11/' example/Makefile
+    rm example/Makefile src/Makefile
+    qmakeFlags=("''${qmakeFlags[@]}" "INSTALLDIR=$out")
   '';
 
-  installPhase = ''
-    mkdir -pv "$out/"{bin,share/doc/opencsg}
-
-    cp example/opencsgexample "$out/bin"
-    cp -r include lib "$out"
-
-    cp license.txt "$out/share/doc/opencsg"
+  postInstall = ''
+    install -D copying.txt "$out/share/doc/opencsg/copying.txt"
+  '' + lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/Applications
+    mv $out/bin/*.app $out/Applications
+    rmdir $out/bin || true
   '';
 
-  meta = {
+  dontWrapQtApps = true;
+
+  postFixup = lib.optionalString stdenv.isDarwin ''
+    app=$out/Applications/opencsgexample.app/Contents/MacOS/opencsgexample
+    install_name_tool -change \
+      $(otool -L $app | awk '/opencsg.+dylib/ { print $1 }') \
+      $(otool -D $out/lib/libopencsg.dylib | tail -n 1) \
+      $app
+  '';
+
+  meta = with lib; {
     description = "Constructive Solid Geometry library";
+    mainProgram = "opencsgexample";
     homepage = "http://www.opencsg.org/";
-    platforms = with stdenv.lib.platforms;
-      linux;
-    maintainers = with stdenv.lib.maintainers; 
-      [raskin];
+    platforms = platforms.unix;
+    maintainers = [ maintainers.raskin ];
+    license = licenses.gpl2Plus;
   };
 }
 

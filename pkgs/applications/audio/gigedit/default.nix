@@ -1,31 +1,47 @@
-{ stdenv, fetchsvn, autoconf, automake, docbook_xml_dtd_45
-, docbook_xsl, gtkmm2, intltool, libgig, libsndfile, libtool, libxslt
-, pkgconfig }:
+{ lib
+, stdenv
+, fetchurl
+, autoconf
+, automake
+, intltool
+, libtool
+, pkg-config
+, which
+, docbook_xml_dtd_45
+, docbook_xsl
+, gtkmm2
+, pangomm_2_42
+, libgig
+, libsndfile
+, libxslt
+}:
 
+let
+  gtkmm2_with_pango242 = gtkmm2.override { pangomm = pangomm_2_42; };
+in
 stdenv.mkDerivation rec {
-  name = "gigedit-svn-${version}";
-  version = "2342";
+  pname = "gigedit";
+  version = "1.1.1";
 
-  src = fetchsvn {
-    url = "https://svn.linuxsampler.org/svn/gigedit/trunk";
-    rev = "${version}";
-    sha256 = "0wi94gymj0ns5ck9lq1d970gb4gnzrq4b57j5j7k3d6185yg2gjs";
+  src = fetchurl {
+    url = "https://download.linuxsampler.org/packages/${pname}-${version}.tar.bz2";
+    sha256 = "08db12crwf0dy1dbyrmivqqpg5zicjikqkmf2kb1ywpq0a9hcxrb";
   };
 
-  patchPhase = "sed -e 's/which/type -P/g' -i Makefile.cvs";
+  preConfigure = "make -f Makefile.svn";
 
-  preConfigure = "make -f Makefile.cvs";
+  nativeBuildInputs = [ autoconf automake intltool libtool pkg-config which ];
 
-  buildInputs = [ 
-    autoconf automake docbook_xml_dtd_45 docbook_xsl gtkmm2 intltool
-    libgig libsndfile libtool libxslt pkgconfig 
-  ];
+  buildInputs = [ docbook_xml_dtd_45 docbook_xsl gtkmm2_with_pango242 libgig libsndfile libxslt ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.linuxsampler.org;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "http://www.linuxsampler.org";
     description = "Gigasampler file access library";
     license = licenses.gpl2;
     maintainers = [ maintainers.goibhniu ];
     platforms = platforms.linux;
+    mainProgram = "gigedit";
   };
 }

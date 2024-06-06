@@ -1,35 +1,42 @@
-{ stdenv, fetchFromGitHub, fetchpatch
+{ lib, stdenv, fetchFromGitHub, fetchpatch
 , ncurses, boehmgc, gettext, zlib
-, sslSupport ? true, openssl ? null
-, graphicsSupport ? true, imlib2 ? null
-, x11Support ? graphicsSupport, libX11 ? null
-, mouseSupport ? !stdenv.isDarwin, gpm-ncurses ? null
-, perl, man, pkgconfig
+, sslSupport ? true, openssl
+, graphicsSupport ? !stdenv.isDarwin, imlib2
+, x11Support ? graphicsSupport, libX11
+, mouseSupport ? !stdenv.isDarwin, gpm-ncurses
+, perl, man, pkg-config, buildPackages, w3m
+, testers
 }:
 
-assert sslSupport -> openssl != null;
-assert graphicsSupport -> imlib2 != null;
-assert x11Support -> graphicsSupport && libX11 != null;
-assert mouseSupport -> gpm-ncurses != null;
-
-with stdenv.lib;
-
-stdenv.mkDerivation rec {
-  name = "w3m-v0.5.3+git20161120";
+let
+  mktable = buildPackages.stdenv.mkDerivation {
+    name = "w3m-mktable";
+    inherit (w3m) src;
+    nativeBuildInputs = [ pkg-config boehmgc ];
+    makeFlags = [ "mktable" ];
+    installPhase = ''
+      install -D mktable $out/bin/mktable
+    '';
+  };
+in stdenv.mkDerivation rec {
+  pname = "w3m";
+  version = "0.5.3+git20230121";
 
   src = fetchFromGitHub {
     owner = "tats";
-    repo = "w3m";
-    rev = "v0.5.3+git20161120";
-    sha256 = "06n5a9jdyihkd4xdjmyci32dpqp1k2l5awia5g9ng0bn256bacdc";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-upb5lWqhC1jRegzTncIz5e21v4Pw912FyVn217HucFs=";
   };
 
-  NIX_LDFLAGS = optionalString stdenv.isSunOS "-lsocket -lnsl";
+  NIX_LDFLAGS = lib.optionalString stdenv.isSunOS "-lsocket -lnsl";
 
   # we must set these so that the generated files (e.g. w3mhelp.cgi) contain
   # the correct paths.
   PERL = "${perl}/bin/perl";
   MAN = "${man}/bin/man";
+
+  makeFlags = [ "AR=${stdenv.cc.bintools.targetPrefix}ar" ];
 
   patches = [
     ./RAND_egd.libressl.patch
@@ -38,23 +45,34 @@ stdenv.mkDerivation rec {
       url = "https://aur.archlinux.org/cgit/aur.git/plain/https.patch?h=w3m-mouse&id=5b5f0fbb59f674575e87dd368fed834641c35f03";
       sha256 = "08skvaha1hjyapsh8zw5dgfy433mw2hk7qy9yy9avn8rjqj7kjxk";
     })
-  ] ++ optional (graphicsSupport && !x11Support) [ ./no-x11.patch ]
-    ++ optional stdenv.isCygwin ./cygwin.patch;
+  ];
 
-  buildInputs = [ pkgconfig ncurses boehmgc gettext zlib ]
-    ++ optional sslSupport openssl
-    ++ optional mouseSupport gpm-ncurses
-    ++ optional graphicsSupport imlib2
-    ++ optional x11Support libX11;
+  postPatch = lib.optionalString (stdenv.hostPlatform != stdenv.buildPlatform) ''
+    ln -s ${mktable}/bin/mktable mktable
+    # stop make from recompiling mktable
+    sed -ie 's!mktable.*:.*!mktable:!' Makefile.in
+  '';
 
-  postInstall = optionalString graphicsSupport ''
+  nativeBuildInputs = [ pkg-config gettext ];
+  buildInputs = [ ncurses boehmgc zlib ]
+    ++ lib.optional sslSupport openssl
+    ++ lib.optional mouseSupport gpm-ncurses
+    ++ lib.optional graphicsSupport imlib2
+    ++ lib.optional x11Support libX11;
+
+  postInstall = lib.optionalString graphicsSupport ''
     ln -s $out/libexec/w3m/w3mimgdisplay $out/bin
   '';
 
   hardeningDisable = [ "format" ];
 
-  configureFlags = "--with-ssl=${openssl.dev} --with-gc=${boehmgc.dev}"
-    + optionalString graphicsSupport " --enable-image=${optionalString x11Support "x11,"}fb";
+  configureFlags =
+    [ "--with-ssl=${openssl.dev}" "--with-gc=${boehmgc.dev}" ]
+    ++ lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [
+      "ac_cv_func_setpgrp_void=yes"
+    ]
+    ++ lib.optional graphicsSupport "--enable-image=${lib.optionalString x11Support "x11,"}fb"
+    ++ lib.optional (graphicsSupport && !x11Support) "--without-x";
 
   preConfigure = ''
     substituteInPlace ./configure --replace "/lib /usr/lib /usr/local/lib /usr/ucblib /usr/ccslib /usr/ccs/lib /lib64 /usr/lib64" /no-such-path
@@ -65,12 +83,21 @@ stdenv.mkDerivation rec {
 
   # for w3mimgdisplay
   # see: https://bbs.archlinux.org/viewtopic.php?id=196093
-  LIBS = optionalString x11Support "-lX11";
+  LIBS = lib.optionalString x11Support "-lX11";
 
-  meta = {
-    homepage = http://w3m.sourceforge.net/;
+  passthru.tests.version = testers.testVersion {
+    inherit version;
+    package = w3m;
+    command = "w3m -version";
+  };
+
+  meta = with lib; {
+    homepage = "https://w3m.sourceforge.net/";
+    changelog = "https://github.com/tats/w3m/blob/v${version}/ChangeLog";
     description = "A text-mode web browser";
-    maintainers = [ maintainers.mornfall maintainers.cstrahan ];
-    platforms = stdenv.lib.platforms.unix;
+    maintainers = with maintainers; [ anthonyroussel ];
+    platforms = platforms.unix;
+    license = licenses.mit;
+    mainProgram = "w3m";
   };
 }

@@ -1,19 +1,20 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "libmaxminddb-${version}";
-  version = "1.2.0";
+  pname = "libmaxminddb";
+  version = "1.9.1";
 
   src = fetchurl {
-    url = meta.homepage + "/releases/download/${version}/${name}.tar.gz";
-    sha256 = "0dxdyw6sxxmpzk2a96qp323r5kdmw7vm6m0l5a8gr52gf7nmks0z";
+    url = meta.homepage + "/releases/download/${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-qAaCqJ2RX99gs10xYjL7BOvzb/8n/am9Of6KONPNPxI=";
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "C library for working with MaxMind geolocation DB files";
     homepage = "https://github.com/maxmind/libmaxminddb";
-    license = licenses.apsl20;
+    license = licenses.asl20;
+    maintainers = teams.helsinki-systems.members;
+    mainProgram = "mmdblookup";
     platforms = platforms.all;
-    maintainers = [ maintainers.vcunat ];
   };
 }

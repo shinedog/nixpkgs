@@ -1,26 +1,30 @@
-{ stdenv, openssl, fetchFromGitHub }:
+{ lib, stdenv, openssl, fetchFromGitHub }:
+
 stdenv.mkDerivation rec {
-  name = "open-isns-${version}";
-  version = "0.95";
+  pname = "open-isns";
+  version = "0.102";
 
   src = fetchFromGitHub {
-    owner = "gonzoleeman";
+    owner = "open-iscsi";
     repo = "open-isns";
     rev = "v${version}";
-    sha256 = "1c2x3yf9806gbjsw4xi805rfhyxk353a3whqvpccz8dwas6jajwh";
+    sha256 = "sha256-Vz6VqqvEr0f8AdN9NcVnruapswmoOgvAXxXSfrM3yRA=";
   };
 
   propagatedBuildInputs = [ openssl ];
-  outputs = ["out" "lib" ];
+  outputs = [ "out" "lib" ];
   outputInclude = "lib";
 
-  installFlags = "etcdir=$(out)/etc vardir=$(out)/var/lib/isns";
-  installTargets = "install install_hdrs install_lib";
+  configureFlags = [ "--enable-shared" ];
 
-  meta = {
+  installFlags = [ "etcdir=$(out)/etc" "vardir=$(out)/var/lib/isns" ];
+  installTargets = [ "install" "install_hdrs" "install_lib" ];
+
+  meta = with lib; {
     description = "iSNS server and client for Linux";
-    license = stdenv.lib.licenses.lgpl21;
-    homepage = https://github.com/gonzoleeman/open-isns;
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.lgpl21Only;
+    homepage = "https://github.com/open-iscsi/open-isns";
+    platforms = platforms.linux;
+    maintainers = [ maintainers.markuskowa ];
   };
 }

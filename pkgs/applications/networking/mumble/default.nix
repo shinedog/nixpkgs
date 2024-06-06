@@ -1,67 +1,57 @@
-{ stdenv, fetchurl, fetchgit, pkgconfig
-, qt4, qmake4Hook, qt5, avahi, boost, libopus, libsndfile, protobuf, speex, libcap
-, alsaLib
-, jackSupport ? false, libjack2 ? null
-, speechdSupport ? false, speechd ? null
-, pulseSupport ? false, libpulseaudio ? null
-, iceSupport ? false, zeroc_ice ? null
+{ lib, stdenv, fetchFromGitHub, fetchpatch, pkg-config, qt5, cmake
+, avahi, boost, libopus, libsndfile, protobuf, speex, libcap
+, alsa-lib, python3
+, rnnoise
+, nixosTests
+, poco
+, flac
+, libogg
+, libvorbis
+, iceSupport ? true, zeroc-ice
+, jackSupport ? false, libjack2
+, pipewireSupport ? true, pipewire
+, pulseSupport ? true, libpulseaudio
+, speechdSupport ? false, speechd
 }:
 
-assert jackSupport -> libjack2 != null;
-assert speechdSupport -> speechd != null;
-assert pulseSupport -> libpulseaudio != null;
-assert iceSupport -> zeroc_ice != null;
-
-with stdenv.lib;
 let
   generic = overrides: source: stdenv.mkDerivation (source // overrides // {
-    name = "${overrides.type}-${source.version}";
+    pname = overrides.type;
+    version = source.version;
 
-    patches = optional jackSupport ./mumble-jack-support.patch;
+    patches = [
+      ./0001-BUILD-crypto-Migrate-to-OpenSSL-3.0-compatible-API.patch
+      # fix crash caused by openssl3 thread unsafe evp implementation
+      # see https://github.com/mumble-voip/mumble/issues/5361#issuecomment-1173001440
+      (fetchpatch {
+        url = "https://github.com/mumble-voip/mumble/commit/f8d47db318f302f5a7d343f15c9936c7030c49c4.patch";
+        hash = "sha256-xk8vBrPwvQxHCY8I6WQJAyaBGHmlH9NCixweP6FyakU=";
+      })
+      ./0002-FIX-positional-audio-Force-8-bytes-alignment-for-CCa.patch
+    ];
 
-    nativeBuildInputs = [ pkgconfig ]
-      ++ { qt4 = [ qmake4Hook ]; qt5 = [ qt5.qmakeHook ]; }."qt${toString source.qtVersion}"
+    nativeBuildInputs = [ cmake pkg-config python3 qt5.wrapQtAppsHook qt5.qttools ]
       ++ (overrides.nativeBuildInputs or [ ]);
-    buildInputs = [ boost protobuf avahi ]
-      ++ { qt4 = [ qt4 ]; qt5 = [ qt5.qtbase ]; }."qt${toString source.qtVersion}"
+
+    buildInputs = [ avahi boost poco protobuf ]
       ++ (overrides.buildInputs or [ ]);
 
-    qmakeFlags = [
-      "CONFIG+=shared"
-      "CONFIG+=no-g15"
-      "CONFIG+=packaged"
-      "CONFIG+=no-update"
-      "CONFIG+=no-embed-qt-translations"
-      "CONFIG+=bundled-celt"
-      "CONFIG+=no-bundled-opus"
-      "CONFIG+=no-bundled-speex"
-    ] ++ optional (!speechdSupport) "CONFIG+=no-speechd"
-      ++ optional jackSupport "CONFIG+=no-oss CONFIG+=no-alsa CONFIG+=jackaudio"
-      ++ optional (!iceSupport) "CONFIG+=no-ice"
-      ++ (overrides.configureFlags or [ ]);
+    cmakeFlags = [
+      "-D g15=OFF"
+    ] ++ (overrides.configureFlags or [ ]);
 
     preConfigure = ''
-       qmakeFlags="$qmakeFlags DEFINES+=PLUGIN_PATH=$out/lib"
+       patchShebangs scripts
     '';
 
-    makeFlags = [ "release" ];
+    passthru.tests.connectivity = nixosTests.mumble;
 
-    installPhase = ''
-      mkdir -p $out/{lib,bin}
-      find release -type f -not -name \*.\* -exec cp {} $out/bin \;
-      find release -type f -name \*.\* -exec cp {} $out/lib \;
-
-      mkdir -p $out/share/man/man1
-      cp man/mum* $out/share/man/man1
-    '' + (overrides.installPhase or "");
-
-    enableParallelBuilding = true;
-
-    meta = {
+    meta = with lib; {
       description = "Low-latency, high quality voice chat software";
-      homepage = "http://mumble.sourceforge.net/";
+      mainProgram = "mumble-server";
+      homepage = "https://mumble.info";
       license = licenses.bsd3;
-      maintainers = with maintainers; [ viric jgeerds wkennington ];
+      maintainers = with maintainers; [ felixsinger lilacious ];
       platforms = platforms.linux;
     };
   });
@@ -69,68 +59,77 @@ let
   client = source: generic {
     type = "mumble";
 
-    nativeBuildInputs = optional (source.qtVersion == 5) qt5.qttools;
-    buildInputs = [ libopus libsndfile speex ]
-      ++ optional (source.qtVersion == 5) qt5.qtsvg
-      ++ optional stdenv.isLinux alsaLib
-      ++ optional jackSupport libjack2
-      ++ optional speechdSupport speechd
-      ++ optional pulseSupport libpulseaudio;
+    nativeBuildInputs = [ qt5.qttools ];
+    buildInputs = [ flac libogg libopus libsndfile libvorbis qt5.qtsvg rnnoise speex ]
+      ++ lib.optional (!jackSupport) alsa-lib
+      ++ lib.optional jackSupport libjack2
+      ++ lib.optional speechdSupport speechd
+      ++ lib.optional pulseSupport libpulseaudio
+      ++ lib.optional pipewireSupport pipewire;
 
     configureFlags = [
-      "CONFIG+=no-server"
-    ];
+      "-D server=OFF"
+      "-D bundled-celt=ON"
+      "-D bundled-opus=OFF"
+      "-D bundled-speex=OFF"
+      "-D bundled-rnnoise=OFF"
+      "-D bundle-qt-translations=OFF"
+      "-D update=OFF"
+      "-D overlay-xcompile=OFF"
+      "-D oss=OFF"
+    ] ++ lib.optional (!speechdSupport) "-D speechd=OFF"
+      ++ lib.optional (!pulseSupport) "-D pulseaudio=OFF"
+      ++ lib.optional (!pipewireSupport) "-D pipewire=OFF"
+      ++ lib.optional jackSupport "-D alsa=OFF -D jackaudio=ON";
 
-    NIX_CFLAGS_COMPILE = optional speechdSupport "-I${speechd}/include/speech-dispatcher";
+    env.NIX_CFLAGS_COMPILE = lib.optionalString speechdSupport "-I${speechd}/include/speech-dispatcher";
 
-    installPhase = ''
-      mkdir -p $out/share/applications
-      cp scripts/mumble.desktop $out/share/applications
-
-      mkdir -p $out/share/icons{,/hicolor/scalable/apps}
-      cp icons/mumble.svg $out/share/icons
-      ln -s $out/share/icon/mumble.svg $out/share/icons/hicolor/scalable/apps
+    postFixup = ''
+      wrapProgram $out/bin/mumble \
+        --prefix LD_LIBRARY_PATH : "${lib.makeLibraryPath (lib.optional pulseSupport libpulseaudio ++ lib.optional pipewireSupport pipewire)}"
     '';
   } source;
 
-  server = generic {
+  server = source: generic {
     type = "murmur";
 
-    postPatch = optional iceSupport ''
-      grep -Rl '/usr/share/Ice' . | xargs sed -i 's,/usr/share/Ice/,${zeroc_ice}/,g'
-    '';
-
     configureFlags = [
-      "CONFIG+=no-client"
-    ];
+      "-D client=OFF"
+    ] ++ lib.optional (!iceSupport) "-D ice=OFF"
+      ++ lib.optionals iceSupport [
+        "-D Ice_HOME=${lib.getDev zeroc-ice};${lib.getLib zeroc-ice}"
+        "-D CMAKE_PREFIX_PATH=${lib.getDev zeroc-ice};${lib.getLib zeroc-ice}"
+        "-D Ice_SLICE_DIR=${lib.getDev zeroc-ice}/share/ice/slice"
+      ];
 
-    buildInputs = [ libcap ] ++ optional iceSupport zeroc_ice;
-  };
+    buildInputs = [ libcap ]
+      ++ lib.optional iceSupport zeroc-ice;
+  } source;
 
-  stableSource = rec {
-    version = "1.2.17";
-    qtVersion = 4;
-
-    src = fetchurl {
-      url = "https://github.com/mumble-voip/mumble/releases/download/${version}/mumble-${version}.tar.gz";
-      sha256 = "176br3b0pv5sz3zvgzsz9rxr3n79irlm902h7n1wh4f6vbph2dhw";
-    };
-  };
-
-  gitSource = rec {
-    version = "1.3.0-git-2016-04-10";
-    qtVersion = 5;
+  source = rec {
+    version = "1.4.287";
 
     # Needs submodules
-    src = fetchgit {
-      url = "https://github.com/mumble-voip/mumble";
-      rev = "0502fa67b036bae9f07a586d9f05a8bf74c24291";
-      sha256 = "07c1r26i0b5z7i787nr4mc60799skdzsh764ckk3gdi76agp2r2z";
+    src = fetchFromGitHub {
+      owner = "mumble-voip";
+      repo = "mumble";
+      rev = "5d808e287e99b402b724e411a7a0848e00956a24";
+      sha256 = "sha256-SYsGCuj3HeyAQRUecGLaRdJR9Rm7lbaM54spY/zx0jU=";
+      fetchSubmodules = true;
     };
+
+    patches = [
+      # fixes 'static assertion failed: static_assert(sizeof(CCameraAngles) == 0x408, "");'
+      # when compiling pkgsi686Linux.mumble, which is a dependency of x64 mumble_overlay
+      # https://github.com/mumble-voip/mumble/pull/5850
+      # Remove with next version update
+      (fetchpatch {
+        url = "https://github.com/mumble-voip/mumble/commit/13c051b36b387356815cff5d685bc628b74ba136.patch";
+        hash = "sha256-Rq8fb6NFd4DCNWm6OOMYIP7tBllufmQcB5CSxPU4qqg=";
+      })
+    ];
   };
 in {
-  mumble     = client stableSource;
-  mumble_git = client gitSource;
-  murmur     = server stableSource;
-  murmur_git = server gitSource;
+  mumble  = client source;
+  murmur  = server source;
 }

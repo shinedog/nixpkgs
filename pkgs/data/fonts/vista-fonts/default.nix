@@ -1,26 +1,25 @@
-{stdenv, fetchurl, cabextract}:
+{ lib, stdenvNoCC, fetchurl, cabextract }:
 
-stdenv.mkDerivation {
-  name = "vista-fonts-1";
+stdenvNoCC.mkDerivation {
+  pname = "vista-fonts";
+  version = "1";
 
   src = fetchurl {
-    url = http://download.microsoft.com/download/f/5/a/f5a3df76-d856-4a61-a6bd-722f52a5be26/PowerPointViewer.exe;
+    url = "mirror://sourceforge/mscorefonts2/cabs/PowerPointViewer.exe";
     sha256 = "07vhjdw8iip7gxk6wvp4myhvbn9619g10j9qvpbzz4ihima57ry4";
   };
 
-  buildInputs = [cabextract];
+  nativeBuildInputs = [ cabextract ];
 
   unpackPhase = ''
     cabextract --lowercase --filter ppviewer.cab $src
     cabextract --lowercase --filter '*.TTF' ppviewer.cab
-    sourceRoot=.
+    cabextract --lowercase --filter '*.TTC' ppviewer.cab
   '';
-
-  dontBuild = true;
 
   installPhase = ''
     mkdir -p $out/share/fonts/truetype
-    cp *.ttf $out/share/fonts/truetype
+    cp *.ttf *.ttc $out/share/fonts/truetype
 
     # Set up no-op font configs to override any aliases set up by
     # other packages.
@@ -33,12 +32,11 @@ stdenv.mkDerivation {
 
   meta = {
     description = "Some TrueType fonts from Microsoft Windows Vista (Calibri, Cambria, Candara, Consolas, Constantia, Corbel)";
-    homepage = http://www.microsoft.com/typography/ClearTypeFonts.mspx;
-    binaryDistribution = false; # haven't read the EULA, but we probably can't redistribute these files, so...
+    homepage = "http://www.microsoft.com/typography/ClearTypeFonts.mspx";
+    license = lib.licenses.unfree; # haven't read the EULA, but we probably can't redistribute these files, so...
 
     # Set a non-zero priority to allow easy overriding of the
     # fontconfig configuration files.
     priority = 5;
-    platforms = stdenv.lib.platforms.unix;
   };
 }

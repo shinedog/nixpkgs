@@ -40,7 +40,7 @@ in {
       port = mkOption {
         description = "Ripple data api port";
         default = 5993;
-        type = types.int;
+        type = types.port;
       };
 
       importMode = mkOption {
@@ -77,7 +77,7 @@ in {
         port = mkOption {
           description = "Ripple data api redis port.";
           default = 5984;
-          type = types.int;
+          type = types.port;
         };
       };
 
@@ -91,7 +91,7 @@ in {
         port = mkOption {
           description = "Ripple data api couchdb port.";
           default = 5984;
-          type = types.int;
+          type = types.port;
         };
 
         db = mkOption {
@@ -185,10 +185,11 @@ in {
       ];
     };
 
-    users.extraUsers = singleton
-      { name = "ripple-data-api";
-        description = "Ripple data api user";
-        uid = config.ids.uids.ripple-data-api;
+    users.users.ripple-data-api =
+      { description = "Ripple data api user";
+        isSystemUser = true;
+        group = "ripple-data-api";
       };
+    users.groups.ripple-data-api = {};
   };
 }

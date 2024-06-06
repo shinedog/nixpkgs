@@ -1,67 +1,46 @@
 { config, lib, pkgs, ... }:
 
-with lib;
-
 let
+  inherit (lib) mkEnableOption mkIf mkOption optionalString types;
 
-  uid = config.ids.uids.squeezelite;
+  dataDir = "/var/lib/squeezelite";
   cfg = config.services.squeezelite;
+  pkg = if cfg.pulseAudio then pkgs.squeezelite-pulse else pkgs.squeezelite;
+  bin = "${pkg}/bin/${pkg.pname}";
 
-in {
+in
+{
 
   ###### interface
 
-  options = {
+  options.services.squeezelite = {
+    enable = mkEnableOption "Squeezelite, a software Squeezebox emulator";
 
-    services.squeezelite= {
+    pulseAudio = mkEnableOption "pulseaudio support";
 
-      enable = mkEnableOption "Squeezelite, a software Squeezebox emulator";
-
-      dataDir = mkOption {
-        default = "/var/lib/squeezelite";
-        type = types.str;
-        description = ''
-          The directory where Squeezelite stores its name file.
-        '';
-      };
-
-      extraArguments = mkOption {
-        default = "";
-        type = types.str;
-        description = ''
-          Additional command line arguments to pass to Squeezelite.
-        '';
-      };
-
+    extraArguments = mkOption {
+      default = "";
+      type = types.str;
+      description = ''
+        Additional command line arguments to pass to Squeezelite.
+      '';
     };
-
   };
 
 
   ###### implementation
 
   config = mkIf cfg.enable {
-
-    systemd.services.squeezelite= {
+    systemd.services.squeezelite = {
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" "sound.target" ];
       description = "Software Squeezebox emulator";
-      preStart = "mkdir -p ${cfg.dataDir} && chown -R squeezelite ${cfg.dataDir}";
       serviceConfig = {
-        ExecStart = "${pkgs.squeezelite}/bin/squeezelite -N ${cfg.dataDir}/player-name ${cfg.extraArguments}";
-        User = "squeezelite";
-        PermissionsStartOnly = true;
+        DynamicUser = true;
+        ExecStart = "${bin} -N ${dataDir}/player-name ${cfg.extraArguments}";
+        StateDirectory = builtins.baseNameOf dataDir;
+        SupplementaryGroups = "audio";
       };
     };
-
-    users.extraUsers.squeezelite= {
-      inherit uid;
-      group = "nogroup";
-      extraGroups = [ "audio" ];
-      description = "Squeezelite user";
-      home = "${cfg.dataDir}";
-    };
-
   };
-
 }

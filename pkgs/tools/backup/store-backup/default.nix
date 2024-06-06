@@ -1,4 +1,4 @@
-{stdenv, which, coreutils, perl, fetchurl, perlPackages, makeWrapper, diffutils , writeScriptBin, bzip2}:
+{lib, stdenv, which, coreutils, perl, fetchurl, makeWrapper, diffutils , writeScriptBin, bzip2}:
 
 # quick usage:
 # storeBackup.pl --sourceDir /home/user --backupDir /tmp/my_backup_destination
@@ -9,23 +9,29 @@
 
 # known impurity: test cases seem to bu using /tmp/storeBackup.lock ..
 
-let dummyMount = writeScriptBin "mount" "#!/bin/sh";
+let dummyMount = writeScriptBin "mount" "#!${stdenv.shell}";
 in
 
 stdenv.mkDerivation rec {
 
-  version = "3.5";
+  version = "3.5.2";
 
-  name = "store-backup-${version}";
+  pname = "store-backup";
 
   enableParallelBuilding = true;
 
-  buildInputs = [ perl makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ perl ];
 
   src = fetchurl {
-    url = "http://download.savannah.gnu.org/releases/storebackup/storeBackup-${version}.tar.bz2";
-    sha256 = "0y4gzssc93x6y93mjsxm5b5cdh68d7ffa43jf6np7s7c99xxxz78";
+    url = "https://download.savannah.gnu.org/releases/storebackup/storeBackup-${version}.tar.bz2";
+    hash = "sha256-Ki1DT2zypFFiiMVd9Y8eSX7T+yr8moWMoALmAexjqWU=";
   };
+
+  patches = [
+    # https://www.openwall.com/lists/oss-security/2020/01/20/3
+    ./CVE-2020-7040.patch
+  ];
 
   installPhase = ''
     mkdir -p $out/scripts
@@ -36,12 +42,10 @@ stdenv.mkDerivation rec {
     find $out -name "*.pl" | xargs sed -i \
       -e 's@/bin/pwd@${coreutils}/bin/pwd@' \
       -e 's@/bin/sync@${coreutils}/bin/sync@' \
-      -e '1 s@/usr/bin/env perl@${perl}/bin/perl@'
+      -e '1 s@/usr/bin/env perl@${perl.withPackages (p: [ p.DBFile ])}/bin/perl@'
 
     for p in $out/bin/*
-      do wrapProgram "$p" \
-      --prefix PERL5LIB ":" "${perlPackages.DBFile}/lib/perl5/site_perl" \
-      --prefix PATH ":" "${stdenv.lib.makeBinPath [ which bzip2 ]}"
+      do wrapProgram "$p" --prefix PATH ":" "${lib.makeBinPath [ which bzip2 ]}"
     done
 
     patchShebangs $out
@@ -49,7 +53,8 @@ stdenv.mkDerivation rec {
 
     PATH=$PATH:${dummyMount}/bin
 
-
+    export USER=test
+    export HOME=$(mktemp -d)
     { # simple sanity test, test backup/restore of simple store paths
 
       mkdir backup
@@ -103,9 +108,9 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "A backup suite that stores files on other disks";
-    homepage = http://savannah.nongnu.org/projects/storebackup;
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = [stdenv.lib.maintainers.marcweber];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://savannah.nongnu.org/projects/storebackup";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [lib.maintainers.marcweber];
+    platforms = lib.platforms.linux;
   };
 }

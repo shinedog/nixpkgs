@@ -1,40 +1,58 @@
-{ stdenv, fetchgit, zlib
-, gnutlsSupport ? false, gnutls ? null, nettle ? null
-, opensslSupport ? true, openssl ? null
+{ lib
+, stdenv
+, fetchgit
+, fetchpatch
+, zlib
+, gnutlsSupport ? false
+, gnutls
+, nettle
+, opensslSupport ? true
+, openssl
 }:
 
-# Must have an ssl library enabled
 assert (gnutlsSupport || opensslSupport);
-assert gnutlsSupport -> gnutlsSupport != null && nettle != null && !opensslSupport;
-assert opensslSupport -> openssl != null && !gnutlsSupport;
 
-with stdenv.lib;
-stdenv.mkDerivation rec {
-  name = "rtmpdump-${version}";
-  version = "2015-01-15";
+stdenv.mkDerivation {
+  pname = "rtmpdump";
+  version = "unstable-2021-02-19";
 
   src = fetchgit {
-    url = git://git.ffmpeg.org/rtmpdump;
+    url = "git://git.ffmpeg.org/rtmpdump";
     # Currently the latest commit is used (a release has not been made since 2011, i.e. '2.4')
-    rev = "a107cef9b392616dff54fabfd37f985ee2190a6f";
-    sha256 = "03x7dy111dk8b23cq2wb5h8ljcv58fzhp0xm0d1myfvzhr9amqqs";
+    rev = "f1b83c10d8beb43fcc70a6e88cf4325499f25857";
+    sha256 = "0vchr0f0d5fi0zaa16jywva5db3x9dyws7clqaq32gwh5drbkvs0";
   };
 
-  makeFlags = [ ''prefix=$(out)'' ]
-    ++ optional gnutlsSupport "CRYPTO=GNUTLS"
-    ++ optional opensslSupport "CRYPTO=OPENSSL"
-    ++ optional stdenv.isDarwin "SYS=darwin"
-    ++ optional stdenv.cc.isClang "CC=clang";
+  patches = [
+    # Fix build with OpenSSL 1.1
+    (fetchpatch {
+      url = "https://gitweb.gentoo.org/repo/gentoo.git/plain/media-video/rtmpdump/files/rtmpdump-openssl-1.1.patch?id=1e7bef484f96e7647f5f0911d3c8caa48131c33b";
+      sha256 = "1wds98pk8qr7shkfl8k49iirxiwd972h18w84bamiqln29wv6ql1";
+    })
+  ];
+
+  makeFlags = [
+    "prefix=$(out)"
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ]
+    ++ lib.optional gnutlsSupport "CRYPTO=GNUTLS"
+    ++ lib.optional opensslSupport "CRYPTO=OPENSSL"
+    ++ lib.optional stdenv.isDarwin "SYS=darwin"
+    ++ lib.optional stdenv.cc.isClang "CC=clang";
 
   propagatedBuildInputs = [ zlib ]
-    ++ optionals gnutlsSupport [ gnutls nettle ]
-    ++ optional opensslSupport openssl;
+    ++ lib.optionals gnutlsSupport [ gnutls nettle ]
+    ++ lib.optional opensslSupport openssl;
 
-  meta = {
+  outputs = [ "out" "dev" ];
+
+  separateDebugInfo = true;
+
+  meta = with lib; {
     description = "Toolkit for RTMP streams";
-    homepage    = http://rtmpdump.mplayerhq.hu/;
-    license     = licenses.gpl2;
-    platforms   = platforms.unix;
-    maintainers = with maintainers; [ codyopel viric ];
+    homepage = "https://rtmpdump.mplayerhq.hu/";
+    license = licenses.gpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ codyopel ];
   };
 }

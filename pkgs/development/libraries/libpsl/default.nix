@@ -1,58 +1,73 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, docbook_xsl, gtk_doc, icu
-, libxslt, pkgconfig, python }:
+{ lib, stdenv
+, fetchurl
+, autoreconfHook
+, docbook_xsl
+, docbook_xml_dtd_43
+, gtk-doc
+, lzip
+, libidn2
+, libunistring
+, libxslt
+, pkg-config
+, python3
+, valgrind
+, publicsuffix-list
+}:
 
-let
+stdenv.mkDerivation rec {
+  pname = "libpsl";
+  version = "0.21.5";
 
-  listVersion = "2016-06-30";
-  listSources = fetchFromGitHub {
-    sha256 = "1fx7g36dcckckz860f0ady8lsg3m6a5c9pgb39a3dn28xfvd21jw";
-    rev = "aa87d27940595ed4a61e726c7dd06860d87fabb6";
-    repo = "list";
-    owner = "publicsuffix";
+  src = fetchurl {
+    url = "https://github.com/rockdaboot/libpsl/releases/download/${version}/libpsl-${version}.tar.lz";
+    hash = "sha256-mp9qjG7bplDPnqVUdc0XLdKEhzFoBOnHMgLZdXLNOi0=";
   };
 
-  libVersion = "0.15.0";
+  # bin/psl-make-dafsa brings a large runtime closure through python3
+  outputs = [ "bin" "out" "dev" ];
 
-in stdenv.mkDerivation rec {
-  name = "libpsl-${version}";
-  version = "${libVersion}-list-${listVersion}";
+  nativeBuildInputs = [
+    autoreconfHook
+    docbook_xsl
+    docbook_xml_dtd_43
+    gtk-doc
+    lzip
+    pkg-config
+    python3
+    libxslt
+  ];
 
-  src = fetchFromGitHub {
-    sha256 = "1n8vg8pslpgin84ygb0s0nqfljml32l5bv5fyc8ysnpbdsj6gxkb";
-    rev = "libpsl-${libVersion}";
-    repo = "libpsl";
-    owner = "rockdaboot";
-  };
+  buildInputs = [
+    libidn2
+    libunistring
+    libxslt
+  ];
 
-  buildInputs = [ icu libxslt ];
-  nativeBuildInputs = [ autoreconfHook docbook_xsl gtk_doc pkgconfig python ];
+  propagatedBuildInputs = [
+    publicsuffix-list
+  ];
 
   postPatch = ''
-    substituteInPlace src/psl.c --replace bits/stat.h sys/stat.h
     patchShebangs src/psl-make-dafsa
   '';
 
   preAutoreconf = ''
-    mkdir m4
     gtkdocize
   '';
 
-  preConfigure = ''
-    # The libpsl check phase requires the list's test scripts (tests/) as well
-    cp -Rv "${listSources}"/* list
-  '';
   configureFlags = [
-    "--disable-builtin"
-    "--disable-static"
-    "--enable-gtk-doc"
+    # "--enable-gtk-doc"
     "--enable-man"
+    "--with-psl-distfile=${publicsuffix-list}/share/publicsuffix/public_suffix_list.dat"
+    "--with-psl-file=${publicsuffix-list}/share/publicsuffix/public_suffix_list.dat"
+    "--with-psl-testfile=${publicsuffix-list}/share/publicsuffix/test_psl.txt"
   ];
 
   enableParallelBuilding = true;
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "C library for the Publix Suffix List";
     longDescription = ''
       libpsl is a C library for the Publix Suffix List (PSL). A "public suffix"
@@ -61,9 +76,12 @@ in stdenv.mkDerivation rec {
       "supercookies" and "super domain" certificates, for highlighting parts of
       the domain in a user interface or sorting domain lists by site.
     '';
-    homepage = http://rockdaboot.github.io/libpsl/;
+    homepage = "https://rockdaboot.github.io/libpsl/";
+    changelog = "https://raw.githubusercontent.com/rockdaboot/${pname}/${pname}-${version}/NEWS";
     license = licenses.mit;
-    platforms = with platforms; linux ++ darwin;
-    maintainers = with maintainers; [ nckx ];
+    maintainers = [ maintainers.c0bw3b ];
+    mainProgram = "psl";
+    platforms = platforms.unix ++ platforms.windows;
+    pkgConfigModules = [ "libpsl" ];
   };
 }

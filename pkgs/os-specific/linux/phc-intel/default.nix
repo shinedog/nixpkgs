@@ -1,25 +1,22 @@
-{ stdenv, fetchurl, kernel, which }:
+{ lib, stdenv, fetchurl, kernel, which }:
 
-assert stdenv.isLinux;
 # Don't bother with older versions, though some might even work:
-assert stdenv.lib.versionAtLeast kernel.version "4.3";
-# Disable on grsecurity kernels, which break module building:
-assert !kernel.features ? grsecurity;
+assert lib.versionAtLeast kernel.version "4.10";
 
 let
   release = "0.4.0";
-  revbump = "rev22"; # don't forget to change forum download id...
+  revbump = "rev25"; # don't forget to change forum download id...
 in stdenv.mkDerivation rec {
   name = "linux-phc-intel-${version}-${kernel.version}";
   version = "${release}-${revbump}";
 
   src = fetchurl {
-    sha256 = "f80285a8cd2ebb1753841e493af0c091d55c33823777b26a93d25ed7264a385d";
-    url = "http://www.linux-phc.org/forum/download/file.php?id=172";
+    sha256 = "1w91hpphd8i0br7g5qra26jdydqar45zqwq6jq8yyz6l0vb10zlz";
+    url = "http://www.linux-phc.org/forum/download/file.php?id=194";
     name = "phc-intel-pack-${revbump}.tar.bz2";
   };
 
-  buildInputs = [ which ];
+  nativeBuildInputs = [ which ] ++ kernel.moduleBuildDependencies;
 
   hardeningDisable = [ "pic" ];
 
@@ -39,7 +36,7 @@ in stdenv.mkDerivation rec {
     install -m 644 *.ko $out/lib/modules/${kernel.modDirVersion}/extra/
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Undervolting kernel driver for Intel processors";
     longDescription = ''
       PHC is a Linux kernel patch to undervolt processors. This can divide the
@@ -47,10 +44,9 @@ in stdenv.mkDerivation rec {
       while noticably reducing fan noise. This driver works only on supported
       Intel architectures.
     '';
-    homepage = http://www.linux-phc.org/;
-    downloadPage = "http://www.linux-phc.org/forum/viewtopic.php?f=7&t=267";
+    homepage = "https://github.com/danielw86dev/phc-intel-dkms";
     license = licenses.gpl2;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    broken = lib.versionAtLeast kernel.version "4.18";
   };
 }

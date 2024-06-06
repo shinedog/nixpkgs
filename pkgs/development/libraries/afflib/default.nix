@@ -1,37 +1,29 @@
-{ stdenv, fetchgit, zlib, curl, expat, fuse, openssl
-, autoconf, automake, libtool, python
+{ lib, stdenv, fetchFromGitHub, zlib, curl, expat, fuse, openssl
+, autoreconfHook, python3, libiconv
 }:
 
 stdenv.mkDerivation rec {
-  version = "3.7.6";
-  name = "afflib-${version}";
+  version = "3.7.20";
+  pname = "afflib";
 
-  src = fetchgit {
-    url = "https://github.com/sshock/AFFLIBv3/";
-    rev = "refs/tags/v${version}";
-    sha256 = "08www22njllqz1j3jkmgn1p36sifxrjd6qlsa7ch4kqy4jaaka1k";
-    name = "afflib-${version}-checkout";
+  src = fetchFromGitHub {
+    owner = "sshock";
+    repo = "AFFLIBv3";
+    rev = "v${version}";
+    sha256 = "sha256-xkqBfTftzn+rgeuoaKfHP7vQmy4VZuaCq8VFlfZTUE4=";
   };
 
-  buildInputs = [ zlib curl expat fuse openssl 
-    libtool autoconf automake python
-    ];
-
-  preConfigure = ''
-    libtoolize -f
-    autoheader -f
-    aclocal
-    automake --add-missing -c 
-    autoconf -f
-  '';
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ zlib curl expat openssl python3 ]
+    ++ lib.optionals (with stdenv; isLinux || isDarwin) [ fuse ]
+    ++ lib.optionals stdenv.isDarwin [ libiconv ];
 
   meta = {
-    homepage = http://afflib.sourceforge.net/;
+    homepage = "http://afflib.sourceforge.net/";
     description = "Advanced forensic format library";
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.bsdOriginal;
-    maintainers = [ stdenv.lib.maintainers.raskin ];
-    inherit version;
+    platforms = lib.platforms.unix;
+    license = lib.licenses.bsdOriginal;
+    maintainers = [ lib.maintainers.raskin ];
     downloadPage = "https://github.com/sshock/AFFLIBv3/tags";
   };
 }

@@ -1,54 +1,63 @@
-{ stdenv, fetchurl, makeWrapper
-, coreutils, jdk, rlwrap, gnupg1compat }:
+{ lib, stdenv, fetchurl, makeWrapper
+, coreutils, jdk, rlwrap, gnupg }:
 
 stdenv.mkDerivation rec {
   pname = "leiningen";
-  version = "2.6.1";
-  name = "${pname}-${version}";
+  version = "2.10.0";
 
   src = fetchurl {
-    url = "https://raw.github.com/technomancy/leiningen/${version}/bin/lein-pkg";
-    sha256 = "1ndirl36gbba12cs5vw22k2zrbpqdmnpi1gciwqb1zbib2s1akg8";
+    url = "https://codeberg.org/leiningen/leiningen/raw/tag/${version}/bin/lein-pkg";
+    hash = "sha256-sXV86UHky/Fcv2Sbe09BM2XmEtqJLSKEHsFyg5G7Zq8=";
   };
 
+  # Check https://codeberg.org/leiningen/leiningen/releases to get the URL for the new version
   jarsrc = fetchurl {
-    # NOTE: This is actually a .jar, Github has issues
-    url = "https://github.com/technomancy/leiningen/releases/download/${version}/${name}-standalone.zip";
-    sha256 = "1533msarx6gb3xc2sp2nmspllnqy7anpnv9a0ifl0psxm3xph06p";
+    url = "https://codeberg.org/attachments/43cebda5-a7c2-405b-b641-5143a00051b5";
+    hash = "sha256-0nKZutNAdawoZNC9BVn4NcbixHbAsKKDvL21dP2tuzQ=";
   };
 
-  JARNAME = "${name}-standalone.jar";
+  JARNAME = "${pname}-${version}-standalone.jar";
 
-  unpackPhase = "true";
+  dontUnpack = true;
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
   propagatedBuildInputs = [ jdk ];
 
-  installPhase = ''
-    mkdir -p $out/bin $out/share/java
+  # the jar is not in share/java, because it's a standalone jar and should
+  # never be picked up by set-java-classpath.sh
 
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/bin $out/share
     cp -v $src $out/bin/lein
-    cp -v $jarsrc $out/share/java/$JARNAME
+    cp -v $jarsrc $out/share/$JARNAME
+
+    runHook postInstall
   '';
 
   fixupPhase = ''
+    runHook preFixup
+
     chmod +x $out/bin/lein
     patchShebangs $out/bin/lein
-
     substituteInPlace $out/bin/lein \
-      --replace 'LEIN_JAR=/usr/share/java/leiningen-$LEIN_VERSION-standalone.jar' "LEIN_JAR=$out/share/java/$JARNAME"
-
+      --replace 'LEIN_JAR=/usr/share/java/leiningen-$LEIN_VERSION-standalone.jar' "LEIN_JAR=$out/share/$JARNAME"
     wrapProgram $out/bin/lein \
-      --prefix PATH ":" "${stdenv.lib.makeBinPath [ rlwrap coreutils ]}" \
-      --set LEIN_GPG ${gnupg1compat}/bin/gpg \
+      --prefix PATH ":" "${lib.makeBinPath [ rlwrap coreutils ]}" \
+      --set LEIN_GPG ${gnupg}/bin/gpg \
       --set JAVA_CMD ${jdk}/bin/java
+
+    runHook postFixup
   '';
 
   meta = {
-    homepage = http://leiningen.org/;
+    homepage = "https://leiningen.org/";
     description = "Project automation for Clojure";
-    license = stdenv.lib.licenses.epl10;
-    platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = lib.licenses.epl10;
+    platforms = jdk.meta.platforms;
+    maintainers = with lib.maintainers; [ ];
+    mainProgram = "lein";
   };
 }

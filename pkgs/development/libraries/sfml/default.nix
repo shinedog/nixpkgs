@@ -1,23 +1,63 @@
-{ stdenv, fetchurl, cmake, libX11, freetype, libjpeg, openal, flac, libvorbis
-, glew, libXrandr, libXrender, udev, xcbutilimage
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, libX11
+, freetype
+, libjpeg
+, openal
+, flac
+, libvorbis
+, glew
+, libXrandr
+, libXrender
+, udev
+, xcbutilimage
+, IOKit
+, Foundation
+, AppKit
+, OpenAL
 }:
 
-let
-  version = "2.3";
-in
-
 stdenv.mkDerivation rec {
-  name = "sfml-${version}";
-  src = fetchurl {
-    url = "https://github.com/LaurentGomila/SFML/archive/${version}.tar.gz";
-    sha256 = "12588hfs0pfsv20x3zhq0gdmxv9m7g27i5lfz88303kpglp9yzn2";
+  pname = "sfml";
+  version = "2.5.1";
+
+  src = fetchFromGitHub {
+    owner = "SFML";
+    repo = "SFML";
+    rev = version;
+    sha256 = "sha256-Xt2Ct4vV459AsSvJxQfwMsNs6iA5y3epT95pLWJGeSk=";
   };
-  buildInputs = [ cmake libX11 freetype libjpeg openal flac libvorbis glew
-                  libXrandr libXrender udev xcbutilimage
-                ];
-  cmakeFlags = [ "-DSFML_INSTALL_PKGCONFIG_FILES=yes" ];
-  meta = with stdenv.lib; {
-    homepage = http://www.sfml-dev.org/;
+
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/macports/macports-ports/raw/4df1fc235a708ff28200ffc0a39120974ed4b6e1/multimedia/sfml/files/patch-apple-silicon.diff";
+      extraPrefix = "";
+      sha256 = "sha256-9dNawJaYtkugR+2NvhQOhgsf6w9ZXHkBgsDRh8yAJc0=";
+    })
+    (fetchpatch {
+      url = "https://github.com/SFML/SFML/commit/bf92efe9a4035fee0258386173d53556aa196e49.patch";
+      hash = "sha256-1htwPfpn7Z6s/3b+/i1tQ+btjr/tWv5m6IyDVMBNqQA=";
+    })
+  ];
+
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ freetype libjpeg openal flac libvorbis glew ]
+    ++ lib.optional stdenv.isLinux udev
+    ++ lib.optionals (!stdenv.isDarwin) [ libX11 libXrandr libXrender xcbutilimage ]
+    ++ lib.optionals stdenv.isDarwin [ IOKit Foundation AppKit OpenAL ];
+
+  cmakeFlags = [
+    "-DSFML_INSTALL_PKGCONFIG_FILES=yes"
+    "-DSFML_MISC_INSTALL_PREFIX=share/SFML"
+    "-DSFML_BUILD_FRAMEWORKS=no"
+    "-DSFML_USE_SYSTEM_DEPS=yes"
+  ];
+
+  meta = with lib; {
+    homepage = "https://www.sfml-dev.org/";
     description = "Simple and fast multimedia library";
     longDescription = ''
       SFML is a simple, fast, cross-platform and object-oriented multimedia API.
@@ -26,6 +66,6 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.zlib;
     maintainers = [ maintainers.astsmtl ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

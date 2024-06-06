@@ -1,38 +1,73 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool, pkgconfig, dbus_libs, dbus_glib, libxml2 }:
+{ autoconf
+, autoconf-archive
+, automake
+, dbus
+, dbus-glib
+, docbook_xml_dtd_412
+, docbook-xsl-nons
+, fetchFromGitHub
+, gtk-doc
+, libevdev
+, libtool
+, libxml2
+, pkg-config
+, lib, stdenv
+, upower
+}:
 
 stdenv.mkDerivation rec {
-  name = "thermald-${version}";
-  version = "1.5.4";
+  pname = "thermald";
+  version = "2.5.7";
+
+  outputs = [ "out" "devdoc" ];
 
   src = fetchFromGitHub {
-    owner = "01org";
+    owner = "intel";
     repo = "thermal_daemon";
     rev = "v${version}";
-    sha256 = "0yrlnm1blfxi97af4dbx6xm5w1p8r20raiim1ng08gbqbgnjg56g";
+    sha256 = "sha256-FU9nPuyCWMEmx2i3YTT/Y3BYinYU0MBCOjH5Pm3LENA=";
   };
 
-  buildInputs = [ autoconf automake libtool pkgconfig dbus_libs dbus_glib libxml2 ];
+  nativeBuildInputs = [
+    autoconf
+    autoconf-archive
+    automake
+    docbook-xsl-nons
+    docbook_xml_dtd_412
+    gtk-doc
+    libtool
+    pkg-config
+  ];
 
-  patchPhase = ''sed -e 's/upstartconfdir = \/etc\/init/upstartconfdir = $(out)\/etc\/init/' -i data/Makefile.am'';
-
-  preConfigure = ''
-                   export PKG_CONFIG_PATH="${dbus_libs.dev}/lib/pkgconfig:$PKG_CONFIG_PATH"
-                   ./autogen.sh #--prefix="$out"
-                 '';
+  buildInputs = [
+    dbus
+    dbus-glib
+    libevdev
+    libxml2
+    upower
+  ];
 
   configureFlags = [
-    "--sysconfdir=$(out)/etc" "--localstatedir=/var"
-    "--with-dbus-sys-dir=$(out)/etc/dbus-1/system.d"
-    "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
-    ];
+    "--sysconfdir=${placeholder "out"}/etc"
+    "--localstatedir=/var"
+    "--enable-gtk-doc"
+    "--with-dbus-sys-dir=${placeholder "out"}/share/dbus-1/system.d"
+    "--with-systemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
+  ];
 
-  preInstall = "sysconfdir=$out/etc";
+  preConfigure = "NO_CONFIGURE=1 ./autogen.sh";
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    cp ./data/thermal-conf.xml $out/etc/thermald/
+  '';
+
+  meta = with lib; {
     description = "Thermal Daemon";
-    homepage = "https://01.org/linux-thermal-daemon";
-    license = licenses.gpl2;
-    platforms = platforms.linux;
+    homepage = "https://github.com/intel/thermal_daemon";
+    changelog = "https://github.com/intel/thermal_daemon/blob/master/README.txt";
+    license = licenses.gpl2Plus;
+    platforms = [ "x86_64-linux" "i686-linux" ];
     maintainers = with maintainers; [ abbradar ];
+    mainProgram = "thermald";
   };
 }

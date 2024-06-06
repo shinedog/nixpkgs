@@ -1,26 +1,79 @@
-{ stdenv, lib, buildGoPackage, fetchFromGitHub, gpgme }:
+{ lib
+, stdenv
+, buildGoModule
+, fetchFromGitHub
+, gpgme
+, lvm2
+, btrfs-progs
+, pkg-config
+, go-md2man
+, installShellFiles
+, makeWrapper
+, fuse-overlayfs
+, dockerTools
+, runCommand
+, testers
+, skopeo
+}:
 
-buildGoPackage rec {
-  name = "skopeo-${version}";
-  version = "0.1.16";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/projectatomic/skopeo";
-  excludedPackages = "integration";
-
-  buildInputs = [ gpgme ];
+buildGoModule rec {
+  pname = "skopeo";
+  version = "1.15.1";
 
   src = fetchFromGitHub {
-    inherit rev;
-    owner = "projectatomic";
+    rev = "v${version}";
+    owner = "containers";
     repo = "skopeo";
-    sha256 = "11na7imx6yc1zijb010hx6fjh6v0m3wm5r4sa2nkclm5lkjq259b";
+    hash = "sha256-Zv36vSPfXcpBmxyEA8b3Xoo9HhSWtxnWPP/SubIcHDo=";
   };
 
-  meta = {
+  outputs = [ "out" "man" ];
+
+  vendorHash = null;
+
+  doCheck = false;
+
+  nativeBuildInputs = [ pkg-config go-md2man installShellFiles makeWrapper ];
+
+  buildInputs = [ gpgme ]
+    ++ lib.optionals stdenv.isLinux [ lvm2 btrfs-progs ];
+
+  buildPhase = ''
+    runHook preBuild
+    patchShebangs .
+    make bin/skopeo completions docs
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+    PREFIX=${placeholder "out"} make install-binary install-completions install-docs
+    install ${passthru.policy}/default-policy.json -Dt $out/etc/containers
+  '' + lib.optionalString stdenv.isLinux ''
+    wrapProgram $out/bin/skopeo \
+      --prefix PATH : ${lib.makeBinPath [ fuse-overlayfs ]}
+  '' + ''
+    runHook postInstall
+  '';
+
+  passthru = {
+    policy = runCommand "policy" { } ''
+      install ${src}/default-policy.json -Dt $out
+    '';
+    tests = {
+      version = testers.testVersion {
+        package = skopeo;
+      };
+      inherit (dockerTools.examples) testNixFromDockerHub;
+    };
+  };
+
+  meta = with lib; {
+    changelog = "https://github.com/containers/skopeo/releases/tag/${src.rev}";
     description = "A command line utility for various operations on container images and image repositories";
-    homepage = "https://github.com/projectatomic/skopeo";
-    maintainers = with stdenv.lib.maintainers; [ vdemeester ];
-    license = stdenv.lib.licenses.asl20;
+    mainProgram = "skopeo";
+    homepage = "https://github.com/containers/skopeo";
+    maintainers = with maintainers; [ lewo developer-guy ] ++ teams.podman.members;
+    license = licenses.asl20;
   };
 }

@@ -1,26 +1,32 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, udev, systemd, glib, readline }:
+{ lib, stdenv, fetchFromGitHub, meson, ninja, pkg-config
+, glib, readline, pcre, systemd, udev, iproute2 }:
 
-with stdenv.lib;
-stdenv.mkDerivation rec {
-  name = "miraclecast-0.0-git-20151002";
+stdenv.mkDerivation {
+  pname = "miraclecast";
+  version = "1.0-20231112";
 
   src = fetchFromGitHub {
-    owner = "albfan";
-    repo = "miraclecast";
-    rev = "30b8c2d22391423f76ba582aaaa1e0936869103a";
-    sha256 = "0i076n76kq64fayc7v06gr1853pk5r6ms86m57vd1xsjd0r9wyxd";
+    owner  = "albfan";
+    repo   = "miraclecast";
+    rev    = "af6ab257eae83bb0270a776a8fe00c0148bc53c4";
+    hash   = "sha256-3ZIAvA3w/ZhoJtVmUD444nch0PGD58PdBRke7zd9IuQ=";
   };
 
-  # INFO: It is important to list 'systemd' first as for now miraclecast
-  # links against a customized systemd. Otherwise, a systemd package from
-  # a propagatedBuildInput could take precedence.
-  buildInputs = [ systemd autoreconfHook pkgconfig udev glib readline ];
+  nativeBuildInputs = [ meson ninja pkg-config ];
 
-  meta = {
-    homepage = https://github.com/albfan/miraclecast;
+  buildInputs = [ glib pcre readline systemd udev iproute2 ];
+
+  mesonFlags = [
+    "-Drely-udev=true"
+    "-Dbuild-tests=true"
+    "-Dip-binary=${iproute2}/bin/ip"
+  ];
+
+  meta = with lib; {
     description = "Connect external monitors via Wi-Fi";
-    license = licenses.lgpl21Plus;
-    maintainers = with maintainers; [ tstrobel ];
-    platforms = platforms.linux;
+    homepage    = "https://github.com/albfan/miraclecast";
+    license     = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ ];
+    platforms   = platforms.linux;
   };
 }

@@ -1,28 +1,31 @@
-{ fetchurl, stdenv, which, pkgconfig, libxcb, xcbutilkeysyms, xcbutilimage,
-  pam, libX11, libev, cairo, libxkbcommon, libxkbfile }:
+{ stdenv, lib, fetchFromGitHub, meson, ninja, pkg-config, libxcb, xcbutilkeysyms, xcbutilimage,
+  xcbutilxrm, pam, libX11, libev, cairo, libxkbcommon, libxkbfile, xorg }:
 
 stdenv.mkDerivation rec {
-  name = "i3lock-2.8";
+  pname = "i3lock";
+  version = "2.15";
 
-  src = fetchurl {
-    url = "http://i3wm.org/i3lock/${name}.tar.bz2";
-    sha256 = "028fc0f74df10826514d5a4ed38f6895935d1f5d47ca9fcffc64b076aaf6e2f4";
+  src = fetchFromGitHub {
+    owner = "i3";
+    repo = "i3lock";
+    rev = version;
+    sha256 = "sha256-OyV6GSLnNV3GUqrfs3OBnIaBvicH2PXgeY4acOk5dR4=";
   };
 
-  buildInputs = [ which pkgconfig libxcb xcbutilkeysyms xcbutilimage pam libX11
-    libev cairo libxkbcommon libxkbfile ];
+  nativeBuildInputs = [ meson ninja pkg-config ];
+  buildInputs = [ libxcb xcbutilkeysyms xcbutilimage xcbutilxrm
+    pam libX11 libev cairo libxkbcommon libxkbfile xorg.xcbutil ];
 
-  makeFlags = "all";
-  installFlags = "PREFIX=\${out} SYSCONFDIR=\${out}/etc";
-  postInstall = ''
-    mkdir -p $out/share/man/man1
-    cp *.1 $out/share/man/man1
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A simple screen locker like slock";
-    homepage = http://i3wm.org/i3lock/;
-    maintainers = with maintainers; [ garbas malyn domenkozar ];
+    longDescription = ''
+      Simple screen locker. After locking, a colored background (default: white) or
+      a configurable image is shown, and a ring-shaped unlock-indicator gives feedback
+      for every keystroke. After entering your password, the screen is unlocked again.
+    '';
+    homepage = "https://i3wm.org/i3lock/";
+    maintainers = with maintainers; [ malyn domenkozar ];
+    mainProgram = "i3lock";
     license = licenses.bsd3;
     platforms = platforms.all;
   };

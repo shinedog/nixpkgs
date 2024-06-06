@@ -1,13 +1,22 @@
 {
-  kdeFramework, lib, ecm,
-  kconfig, kcoreaddons, kcrash, kdbusaddons, kdoctools, kinit, kservice
+  mkDerivation, lib, propagate, wrapGAppsHook3,
+  extra-cmake-modules, kdoctools,
+  gsettings-desktop-schemas, kconfig, kcoreaddons, kcrash, kdbusaddons,
+  kservice, qtbase,
 }:
 
-kdeFramework {
-  name = "kded";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm kdoctools ];
-  propagatedBuildInputs = [
-    kconfig kcoreaddons kcrash kdbusaddons kinit kservice
+mkDerivation {
+  pname = "kded";
+  nativeBuildInputs = [ extra-cmake-modules kdoctools wrapGAppsHook3 ];
+  buildInputs = [
+    gsettings-desktop-schemas kconfig kcoreaddons kcrash kdbusaddons
+    kservice qtbase
   ];
+  outputs = [ "out" "dev" ];
+  setupHook = propagate "out";
+  dontWrapGApps = true;
+  preFixup = ''
+    qtWrapperArgs+=("''${gappsWrapperArgs[@]}")
+  '';
+  meta.platforms = lib.platforms.linux ++ lib.platforms.freebsd;
 }

@@ -11,7 +11,7 @@ in
       enable = mkEnableOption "nix-serve, the standalone Nix binary cache server";
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 5000;
         description = ''
           Port number where nix-serve will listen on.
@@ -19,11 +19,19 @@ in
       };
 
       bindAddress = mkOption {
-        type = types.string;
+        type = types.str;
         default = "0.0.0.0";
         description = ''
           IP address where nix-serve will bind its listening socket.
         '';
+      };
+
+      package = mkPackageOption pkgs "nix-serve" { };
+
+      openFirewall = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Open ports in the firewall for nix-serve.";
       };
 
       secretKeyFile = mkOption {
@@ -31,11 +39,18 @@ in
         default = null;
         description = ''
           The path to the file used for signing derivation data.
+          Generate with:
+
+          ```
+          nix-store --generate-binary-cache-key key-name secret-key-file public-key-file
+          ```
+
+          For more details see {manpage}`nix-store(1)`.
         '';
       };
 
       extraParams = mkOption {
-        type = types.string;
+        type = types.separatedString " ";
         default = "";
         description = ''
           Extra command line parameters for nix-serve.
@@ -45,6 +60,10 @@ in
   };
 
   config = mkIf cfg.enable {
+    nix.settings = lib.optionalAttrs (lib.versionAtLeast config.nix.package.version "2.4") {
+      extra-allowed-users = [ "nix-serve" ];
+    };
+
     systemd.services.nix-serve = {
       description = "nix-serve binary cache server";
       after = [ "network.target" ];
@@ -52,19 +71,27 @@ in
 
       path = [ config.nix.package.out pkgs.bzip2.bin ];
       environment.NIX_REMOTE = "daemon";
-      environment.NIX_SECRET_KEY_FILE = cfg.secretKeyFile;
+
+      script = ''
+        ${lib.optionalString (cfg.secretKeyFile != null) ''
+          export NIX_SECRET_KEY_FILE="$CREDENTIALS_DIRECTORY/NIX_SECRET_KEY_FILE"
+        ''}
+        exec ${cfg.package}/bin/nix-serve --listen ${cfg.bindAddress}:${toString cfg.port} ${cfg.extraParams}
+      '';
 
       serviceConfig = {
-        ExecStart = "${pkgs.nix-serve}/bin/nix-serve " +
-          "--listen ${cfg.bindAddress}:${toString cfg.port} ${cfg.extraParams}";
+        Restart = "always";
+        RestartSec = "5s";
         User = "nix-serve";
-        Group = "nogroup";
+        Group = "nix-serve";
+        DynamicUser = true;
+        LoadCredential = lib.optionalString (cfg.secretKeyFile != null)
+          "NIX_SECRET_KEY_FILE:${cfg.secretKeyFile}";
       };
     };
 
-    users.extraUsers.nix-serve = {
-      description = "Nix-serve user";
-      uid = config.ids.uids.nix-serve;
+    networking.firewall = mkIf cfg.openFirewall {
+      allowedTCPPorts = [ cfg.port ];
     };
   };
 }

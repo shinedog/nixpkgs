@@ -1,15 +1,9 @@
-{stdenv, version ? "7.2", xcodeBaseDir ? "/Applications/Xcode.app"}:
+{ callPackage }:
 
 rec {
-  xcodewrapper = import ./xcodewrapper.nix {
-    inherit stdenv version xcodeBaseDir;
-  };
+  composeXcodeWrapper = callPackage ./compose-xcodewrapper.nix { };
 
-  buildApp = import ./build-app.nix {
-    inherit stdenv xcodewrapper;
-  };
+  buildApp = callPackage ./build-app.nix { inherit composeXcodeWrapper; };
 
-  simulateApp = import ./simulate-app.nix {
-    inherit stdenv xcodewrapper;
-  };
+  simulateApp = callPackage ./simulate-app.nix { inherit composeXcodeWrapper; };
 }

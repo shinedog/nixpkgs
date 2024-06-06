@@ -1,22 +1,24 @@
-{ stdenv, fetchFromGitHub, popt, avahi, pkgconfig, python, gtk2, runCommand
+{ lib, stdenv, fetchFromGitHub, popt, avahi, pkg-config, python3, gtk3, runCommand
 , gcc, autoconf, automake, which, procps, libiberty_static
+, runtimeShell
 , sysconfDir ? ""   # set this parameter to override the default value $out/etc
 , static ? false
 }:
 
 let
-  name    = "distcc";
-  version = "2016-02-24";
+  pname = "distcc";
+  version = "2021-03-11";
   distcc = stdenv.mkDerivation {
-    name = "${name}-${version}";
+    inherit pname version;
     src = fetchFromGitHub {
       owner = "distcc";
       repo = "distcc";
-      rev = "b2fa4e21b4029e13e2c33f7b03ca43346f2cecb8";
-      sha256 = "1vj31wcdas8wy52hy6749mlrca9v6ynycdiigx5ay8pnya9z73c6";
+      rev = "de21b1a43737fbcf47967a706dab4c60521dbbb1";
+      sha256 = "0zjba1090awxkmgifr9jnjkxf41zhzc4f6mrnbayn3v6s77ca9x4";
     };
 
-    buildInputs = [popt avahi pkgconfig python gtk2 autoconf automake pkgconfig which procps libiberty_static];
+    nativeBuildInputs = [ pkg-config autoconf automake ];
+    buildInputs = [popt avahi python3 gtk3 which procps libiberty_static];
     preConfigure =
     ''
       export CPATH=$(ls -d ${gcc.cc}/lib/gcc/*/${gcc.cc.version}/plugin/include)
@@ -24,11 +26,11 @@ let
       configureFlagsArray=( CFLAGS="-O2 -fno-strict-aliasing"
                             CXXFLAGS="-O2 -fno-strict-aliasing"
           --mandir=$out/share/man
-                            ${if sysconfDir == "" then "" else "--sysconfdir=${sysconfDir}"}
-                            ${if static then "LDFLAGS=-static" else ""}
-                            --with${if static == true || popt == null then "" else "out"}-included-popt
-                            --with${if avahi != null then "" else "out"}-avahi
-                            --with${if gtk2 != null then "" else "out"}-gtk
+                            ${lib.optionalString (sysconfDir != "") "--sysconfdir=${sysconfDir}"}
+                            ${lib.optionalString static "LDFLAGS=-static"}
+                            ${lib.withFeature (static == true || popt == null) "included-popt"}
+                            ${lib.withFeature (avahi != null) "avahi"}
+                            ${lib.withFeature (gtk3 != null) "gtk"}
                             --without-gnome
                             --enable-rfc2553
                             --disable-Werror   # a must on gcc 4.6
@@ -52,7 +54,7 @@ let
           mkdir -p $out/bin
           if [ -x "${gcc.cc}/bin/gcc" ]; then
             cat > $out/bin/gcc << EOF
-            #!/bin/sh
+            #!${runtimeShell}
             ${extraConfig}
             exec ${distcc}/bin/distcc gcc "\$@"
           EOF
@@ -60,7 +62,7 @@ let
           fi
           if [ -x "${gcc.cc}/bin/g++" ]; then
             cat > $out/bin/g++ << EOF
-            #!/bin/sh
+            #!${runtimeShell}
             ${extraConfig}
             exec ${distcc}/bin/distcc g++ "\$@"
           EOF
@@ -74,8 +76,8 @@ let
       homepage = "http://distcc.org";
       license = "GPL";
 
-      platforms = stdenv.lib.platforms.linux;
-      maintainers = with stdenv.lib.maintainers; [ anderspapitto ];
+      platforms = lib.platforms.linux;
+      maintainers = with lib.maintainers; [ anderspapitto ];
     };
   };
 in

@@ -1,25 +1,68 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, bison, flex, pkgconfig }:
+{ stdenv
+, file
+, lib
+, fetchFromGitHub
+, autoreconfHook
+, bison
+, flex
+, pkg-config
+, doxygen
+, graphviz
+, mscgen
+, asciidoc
+, sourceHighlight
+, pythonSupport ? false
+, swig ? null
+, python ? null
+}:
 
-let version = "3.2.28"; in
-stdenv.mkDerivation {
-  name = "libnl-${version}";
+stdenv.mkDerivation rec {
+  pname = "libnl";
+  version = "3.8.0";
 
   src = fetchFromGitHub {
-    sha256 = "02cm57z4h7rhjlxza07zhk02924acfz6m5gbmm5lbkkp6qh81328";
-    rev = "libnl3_2_28";
     repo = "libnl";
     owner = "thom311";
+    rev = "libnl${lib.replaceStrings ["."] ["_"] version}";
+    hash = "sha256-zVpoRlB5xDfo6wJkCJGGptuCXkNkriudtZF2Job9YD4=";
   };
 
-  outputs = [ "bin" "dev" "out" "man" ];
+  outputs = [ "bin" "dev" "out" "man" ] ++ lib.optional pythonSupport "py";
 
-  nativeBuildInputs = [ autoreconfHook bison flex pkgconfig ];
+  enableParallelBuilding = true;
 
-  meta = {
-    inherit version;
+  nativeBuildInputs = [
+    autoreconfHook
+    bison
+    flex
+    pkg-config
+    file
+    doxygen
+    graphviz
+    mscgen
+    asciidoc
+    sourceHighlight
+  ] ++ lib.optional pythonSupport swig;
+
+  postBuild = lib.optionalString (pythonSupport) ''
+      cd python
+      ${python.pythonOnBuildForHost.interpreter} setup.py install --prefix=../pythonlib
+      cd -
+  '';
+
+  postFixup = lib.optionalString pythonSupport ''
+    mv "pythonlib/" "$py"
+  '';
+
+  passthru = {
+    inherit pythonSupport;
+  };
+
+  meta = with lib; {
     homepage = "http://www.infradead.org/~tgr/libnl/";
-    description = "Linux NetLink interface library";
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    platforms = stdenv.lib.platforms.linux;
+    description = "Linux Netlink interface library suite";
+    license = licenses.lgpl21;
+    maintainers = with maintainers; [ fpletz ];
+    platforms = platforms.linux;
   };
 }

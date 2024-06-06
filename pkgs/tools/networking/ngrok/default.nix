@@ -1,31 +1,47 @@
-{ stdenv, lib, pkgconfig, buildGoPackage, go-bindata, fetchFromGitHub }:
+{ lib, stdenv, fetchurl }:
 
-buildGoPackage rec {
-  name = "ngrok-${version}";
-  version = "1.7.1";
-  rev = "${version}";
+let versions = lib.importJSON ./versions.json;
+    arch = if stdenv.isi686 then "386"
+           else if stdenv.isx86_64 then "amd64"
+           else if stdenv.isAarch32 then "arm"
+           else if stdenv.isAarch64 then "arm64"
+           else throw "Unsupported architecture";
+    os = if stdenv.isLinux then "linux"
+         else if stdenv.isDarwin then "darwin"
+         else throw "Unsupported os";
+    versionInfo = versions."${os}-${arch}";
+    inherit (versionInfo) version sha256 url;
 
-  goPackagePath = "ngrok";
+in
+stdenv.mkDerivation {
+  pname = "ngrok";
+  inherit version;
 
-  src = fetchFromGitHub {
-    inherit rev;
-    owner = "inconshreveable";
-    repo = "ngrok";
-    sha256 = "1r4nc9knp0nxg4vglg7v7jbyd1nh1j2590l720ahll8a4fbsx5a4";
-  };
+  # run ./update
+  src = fetchurl { inherit sha256 url; };
 
-  goDeps = ./deps.nix;
+  sourceRoot = ".";
 
-  buildInputs = [ go-bindata ];
+  unpackPhase = "cp $src ngrok";
 
-  preConfigure = ''
-    sed -e '/jteeuwen\/go-bindata/d' \
-        -e '/export GOPATH/d' \
-        -e 's/go get/#go get/' \
-        -e 's|bin/go-bindata|go-bindata|' -i Makefile
-    make assets BUILDTAGS=release
-    export sourceRoot=$sourceRoot/src/ngrok
+  buildPhase = "chmod a+x ngrok";
+
+  installPhase = ''
+    install -D ngrok $out/bin/ngrok
   '';
 
-  buildFlags = [ "-tags release" ];
+  passthru.updateScript = ./update.sh;
+
+  # Stripping causes SEGFAULT on x86_64-darwin
+  dontStrip = true;
+
+  meta = with lib; {
+    description = "Allows you to expose a web server running on your local machine to the internet";
+    homepage = "https://ngrok.com/";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = licenses.unfree;
+    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+    maintainers = with maintainers; [ bobvanderlinden brodes ];
+    mainProgram = "ngrok";
+  };
 }

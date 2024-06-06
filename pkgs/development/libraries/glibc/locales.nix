@@ -3,41 +3,49 @@
    locales are included; otherwise, just the locales listed in
    `locales'.  See localedata/SUPPORTED in the Glibc source tree for
    the list of all supported locales:
-   http://sourceware.org/cgi-bin/cvsweb.cgi/libc/localedata/SUPPORTED?cvsroot=glibc
+   https://sourceware.org/git/?p=glibc.git;a=blob;f=localedata/SUPPORTED
 */
 
-{ lib, stdenv, fetchurl, writeText, allLocales ? true, locales ? ["en_US.UTF-8/UTF-8"] }:
+{ lib, stdenv, buildPackages, callPackage, writeText, glibc
+, allLocales ? true, locales ? [ "en_US.UTF-8/UTF-8" ]
+}:
 
-let build = import ./common.nix; in
-
-build null {
-  name = "glibc-locales";
-
-  inherit fetchurl stdenv lib;
-  installLocales = true;
+(callPackage ./common.nix { inherit stdenv; } {
+  pname = "glibc-locales";
+  extraNativeBuildInputs = [ glibc ];
+}).overrideAttrs(finalAttrs: previousAttrs: {
 
   builder = ./locales-builder.sh;
 
   outputs = [ "out" ];
 
-  # Awful hack: `localedef' doesn't allow the path to `locale-archive'
-  # to be overriden, but you *can* specify a prefix, i.e. it will use
-  # <prefix>/<path-to-glibc>/lib/locale/locale-archive.  So we use
-  # $TMPDIR as a prefix, meaning that the locale-archive is placed in
-  # $TMPDIR/nix/store/...-glibc-.../lib/locale/locale-archive.
-  buildPhase =
-    ''
-      mkdir -p $TMPDIR/"${stdenv.cc.libc.out}/lib/locale"
+  LOCALEDEF_FLAGS = [
+    (if stdenv.hostPlatform.isLittleEndian
+    then "--little-endian"
+    else "--big-endian")
+  ];
+
+  preBuild = (previousAttrs.preBuild or "") + ''
+      # Awful hack: `localedef' doesn't allow the path to `locale-archive'
+      # to be overriden, but you *can* specify a prefix, i.e. it will use
+      # <prefix>/<path-to-glibc>/lib/locale/locale-archive.  So we use
+      # $TMPDIR as a prefix, meaning that the locale-archive is placed in
+      # $TMPDIR/nix/store/...-glibc-.../lib/locale/locale-archive.
+      LOCALEDEF_FLAGS+=" --prefix=$TMPDIR"
+
+      mkdir -p $TMPDIR/"${buildPackages.glibc.out}/lib/locale"
+
+      echo 'C.UTF-8/UTF-8 \' >> ../glibc-2*/localedata/SUPPORTED
 
       # Hack to allow building of the locales (needed since glibc-2.12)
-      sed -i -e 's,^$(rtld-prefix) $(common-objpfx)locale/localedef,localedef --prefix='$TMPDIR',' ../glibc-2*/localedata/Makefile
+      sed -i -e 's,^$(rtld-prefix) $(common-objpfx)locale/localedef,localedef $(LOCALEDEF_FLAGS),' ../glibc-2*/localedata/Makefile
     ''
-      + stdenv.lib.optionalString (!allLocales) ''
+      + lib.optionalString (!allLocales) ''
       # Check that all locales to be built are supported
-      echo -n '${stdenv.lib.concatMapStrings (s: s + " \\\n") locales}' \
-        | sort > locales-to-build.txt
+      echo -n '${lib.concatMapStrings (s: s + " \\\n") locales}' \
+        | sort -u > locales-to-build.txt
       cat ../glibc-2*/localedata/SUPPORTED | grep ' \\' \
-        | sort > locales-supported.txt
+        | sort -u > locales-supported.txt
       comm -13 locales-supported.txt locales-to-build.txt \
         > locales-unsupported.txt
       if [[ $(wc -c locales-unsupported.txt) != "0 locales-unsupported.txt" ]]; then
@@ -49,15 +57,24 @@ build null {
       fi
 
       echo SUPPORTED-LOCALES='${toString locales}' > ../glibc-2*/localedata/SUPPORTED
-    '' + ''
-      make localedata/install-locales \
-          localedir=$out/lib/locale \
     '';
+
+  # Current `nixpkgs` way of building locales is not compatible with
+  # parallel install. `locale-archive` is updated in parallel with
+  # multiple `localedef` processes and causes non-deterministic result:
+  #   https://github.com/NixOS/nixpkgs/issues/245360
+  enableParallelBuilding = false;
+
+  makeFlags = (previousAttrs.makeFlags or []) ++ [
+    "localedata/install-locales"
+    "localedir=${builtins.placeholder "out"}/lib/locale"
+  ];
 
   installPhase =
     ''
-      mkdir -p "$out/lib/locale"
+      mkdir -p "$out/lib/locale" "$out/share/i18n"
       cp -v "$TMPDIR/$NIX_STORE/"*"/lib/locale/locale-archive" "$out/lib/locale"
+      cp -v ../glibc-2*/localedata/SUPPORTED "$out/share/i18n/SUPPORTED"
     '';
 
   setupHook = writeText "locales-setup-hook.sh"
@@ -66,4 +83,4 @@ build null {
     '';
 
   meta.description = "Locale information for the GNU C Library";
-}
+})

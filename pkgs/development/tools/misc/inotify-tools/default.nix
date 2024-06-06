@@ -1,18 +1,30 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, autoreconfHook, fetchFromGitHub, nix-update-script, fanotifySupport ? true }:
 
-stdenv.mkDerivation rec {
-  name = "inotify-tools-${version}";
-  version = "3.14";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "inotify-tools";
+  version = "4.23.9.0";
 
-  src = fetchurl {
-    url = "http://github.com/downloads/rvoicilas/inotify-tools/inotify-tools-${version}.tar.gz";
-    sha256 = "0by9frv1k59f76cx08sn06sk6lmdxsfb6zr0rshzhyrxi6lcqar2";
+  src = fetchFromGitHub {
+    repo = "inotify-tools";
+    owner = "inotify-tools";
+    rev = finalAttrs.version;
+    hash = "sha256-6kM2JzxRcwUjUmbUWGnQ+gAvZcn7C32/enRwiYiuQGU=";
   };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/rvoicilas/inotify-tools/wiki;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ marcweber pSub ];
+  configureFlags = [
+    (lib.enableFeature fanotifySupport "fanotify")
+  ];
+
+  nativeBuildInputs = [ autoreconfHook ];
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/inotify-tools/inotify-tools/wiki";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ marcweber pSub shamilton ];
     platforms = platforms.linux;
   };
-}
+})

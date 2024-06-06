@@ -1,49 +1,132 @@
-{ stdenv, lib, fetchurl, buildPythonPackage, python, smpeg, libX11
-, SDL, SDL_image, SDL_mixer, SDL_ttf, libpng, libjpeg, portmidi, isPy3k,
+{
+  stdenv,
+  lib,
+  substituteAll,
+  fetchpatch,
+  fetchFromGitHub,
+  buildPythonPackage,
+  pythonOlder,
+
+  # build-system
+  cython,
+  setuptools,
+  pkg-config,
+
+  # native dependencies
+  AppKit,
+  fontconfig,
+  freetype,
+  libjpeg,
+  libpng,
+  libX11,
+  portmidi,
+  SDL2,
+  SDL2_image,
+  SDL2_mixer,
+  SDL2_ttf,
+
+  # tests
+  python,
 }:
 
 buildPythonPackage rec {
-  name = "pygame-${version}";
-  version = "1.9.1";
+  pname = "pygame";
+  version = "2.5.2";
+  pyproject = true;
 
-  src = fetchurl {
-    url = "http://www.pygame.org/ftp/pygame-1.9.1release.tar.gz";
-    sha256 = "0cyl0ww4fjlf289pjxa53q4klyn55ajvkgymw0qrdgp4593raq52";
+  disabled = pythonOlder "3.6";
+
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "refs/tags/${version}";
+    # Unicode file names lead to different checksums on HFS+ vs. other
+    # filesystems because of unicode normalisation. The documentation
+    # has such files and will be removed.
+    hash = "sha256-+gRv3Rim+2aL2uhPPGfVD0QDgB013lTf6wPx8rOwgXg=";
+    postFetch = "rm -rf $out/docs/reST";
   };
 
-  buildInputs = [
-    SDL SDL_image SDL_mixer SDL_ttf libpng libjpeg
-    smpeg portmidi libX11
+  patches = [
+    # Patch pygame's dependency resolution to let it find build inputs
+    (substituteAll {
+      src = ./fix-dependency-finding.patch;
+      buildinputs_include = builtins.toJSON (
+        builtins.concatMap (dep: [
+          "${lib.getDev dep}/"
+          "${lib.getDev dep}/include"
+          "${lib.getDev dep}/include/SDL2"
+        ]) buildInputs
+      );
+      buildinputs_lib = builtins.toJSON (
+        builtins.concatMap (dep: [
+          "${lib.getLib dep}/"
+          "${lib.getLib dep}/lib"
+        ]) buildInputs
+      );
+    })
+    # Skip tests that should be disabled without video driver
+    ./skip-surface-tests.patch
+
+    # removes distutils unbreaking py312, part of https://github.com/pygame/pygame/pull/4211
+    (fetchpatch {
+      name = "remove-distutils.patch";
+      url = "https://github.com/pygame/pygame/commit/6038e7d6583a7a25fcc6e15387cf6240e427e5a7.patch";
+      hash = "sha256-HxcYjjhsu/Y9HiK9xDvY4X5dgWPP4XFLxdYGXC6tdWM=";
+    })
   ];
 
-  # http://ubuntuforums.org/showthread.php?t=1960262
-  disabled = isPy3k;
-
-  # Tests fail because of no audio device and display.
-  doCheck = false;
-
-  patches = [ ./pygame-v4l.patch ];
-
-  preConfigure = ''
-    sed \
-      -e "s/^origincdirs = .*/origincdirs = []/" \
-      -e "s/^origlibdirs = .*/origlibdirs = []/" \
-      -e "/\/include\/smpeg/d" \
-      -i config_unix.py
-    ${lib.concatMapStrings (dep: ''
-      sed \
-        -e "/^origincdirs =/aorigincdirs += ['${lib.getDev dep}/include']" \
-        -e "/^origlibdirs =/aoriglibdirs += ['${lib.getLib dep}/lib']" \
-        -i config_unix.py
-      '') buildInputs
-    }
-    LOCALBASE=/ ${python.interpreter} config.py
+  postPatch = ''
+    substituteInPlace src_py/sysfont.py \
+      --replace-fail 'path="fc-list"' 'path="${fontconfig}/bin/fc-list"' \
+      --replace-fail /usr/X11/bin/fc-list ${fontconfig}/bin/fc-list
   '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    cython
+    pkg-config
+    SDL2
+    setuptools
+  ];
+
+  buildInputs = [
+    freetype
+    libjpeg
+    libpng
+    libX11
+    portmidi
+    SDL2
+    SDL2_image
+    SDL2_mixer
+    SDL2_ttf
+  ] ++ lib.optionals stdenv.isDarwin [ AppKit ];
+
+  preConfigure = ''
+    ${python.pythonOnBuildForHost.interpreter} buildconfig/config.py
+  '';
+
+  env = lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = "-Wno-error=incompatible-function-pointer-types";
+  };
+
+  checkPhase = ''
+    runHook preCheck
+
+    # No audio or video device in test environment
+    export SDL_VIDEODRIVER=dummy
+    export SDL_AUDIODRIVER=disk
+
+    ${python.interpreter} -m pygame.tests -v --exclude opengl,timing --time_out 300
+
+    runHook postCheck
+  '';
+  pythonImportsCheck = [ "pygame" ];
+
+  meta = with lib; {
     description = "Python library for games";
-    homepage = "http://www.pygame.org/";
+    homepage = "https://www.pygame.org/";
     license = licenses.lgpl21Plus;
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ emilytrau ];
+    platforms = platforms.unix;
   };
 }

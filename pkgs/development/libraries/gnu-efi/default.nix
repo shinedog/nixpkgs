@@ -1,12 +1,13 @@
-{ stdenv, fetchurl, pciutils }:
+{ lib, stdenv, buildPackages, fetchurl, pciutils
+, gitUpdater }:
 
 stdenv.mkDerivation rec {
-  name = "gnu-efi-${version}";
-  version = "3.0.4";
+  pname = "gnu-efi";
+  version = "3.0.15";
 
   src = fetchurl {
-    url = "mirror://sourceforge/gnu-efi/${name}.tar.bz2";
-    sha256 = "1bzq5czw5dxlvpgs9ij2iz7q6krwhja87vc982r6vffcqcl0982i";
+    url = "mirror://sourceforge/gnu-efi/${pname}-${version}.tar.bz2";
+    hash = "sha256-kxole5xcG6Zf9Rnxg3PEOKJoJfLbeGaxY+ltGxaPIOo=";
   };
 
   buildInputs = [ pciutils ];
@@ -15,18 +16,25 @@ stdenv.mkDerivation rec {
 
   makeFlags = [
     "PREFIX=\${out}"
-    "CC=gcc"
-    "AS=as"
-    "LD=ld"
-    "AR=ar"
-    "RANLIB=ranlib"
-    "OBJCOPY=objcopy"
-  ] ++ stdenv.lib.optional stdenv.isArm "ARCH=arm";
+    "HOSTCC=${buildPackages.stdenv.cc.targetPrefix}cc"
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ];
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    substituteInPlace Make.defaults \
+      --replace "-Werror" ""
+  '';
+
+  passthru.updateScript = gitUpdater {
+    # No nicer place to find latest release.
+    url = "https://git.code.sf.net/p/gnu-efi/code";
+  };
+
+  meta = with lib; {
     description = "GNU EFI development toolchain";
-    homepage = http://sourceforge.net/projects/gnu-efi/;
+    homepage = "https://sourceforge.net/projects/gnu-efi/";
     license = licenses.bsd3;
     platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
   };
 }

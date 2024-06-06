@@ -1,46 +1,45 @@
-{ stdenv
-, coreutils
+{ lib
 , patchelf
 , requireFile
-, alsaLib
+, stdenv
+# arguments from default.nix
+, lang
+, meta
+, name
+, src
+, version
+# dependencies
+, alsa-lib
+, coreutils
+, cudaPackages
 , fontconfig
 , freetype
 , gcc
 , glib
-, libpng
 , ncurses
-, opencv
+, opencv2
 , openssl
 , unixODBC
 , xorg
-, zlib
+# options
+, cudaSupport
 }:
 
 let
   platform =
-    if stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux" then
+    if stdenv.hostPlatform.system == "i686-linux" || stdenv.hostPlatform.system == "x86_64-linux" then
       "Linux"
     else
       throw "Mathematica requires i686-linux or x86_64 linux";
 in
 stdenv.mkDerivation rec {
-
-  name = "mathematica-9.0.0";
-
-  src = requireFile rec {
-    name = "Mathematica_9.0.0_LINUX.sh";
-    message = '' 
-      This nix expression requires that Mathematica_9.0.0_LINUX.sh is
-      already part of the store. Find the file on your Mathematica CD
-      and add it to the nix store with nix-store --add-fixed sha256 <FILE>.
-    '';
-    sha256 = "106zfaplhwcfdl9rdgs25x83xra9zcny94gb22wncbfxvrsk3a4q";
-  };
+  inherit meta src version;
+  pname = "mathematica";
 
   buildInputs = [
     coreutils
     patchelf
-    alsaLib
+    alsa-lib
     coreutils
     fontconfig
     freetype
@@ -48,7 +47,7 @@ stdenv.mkDerivation rec {
     gcc.libc
     glib
     ncurses
-    opencv
+    opencv2
     openssl
     unixODBC
   ] ++ (with xorg; [
@@ -61,11 +60,12 @@ stdenv.mkDerivation rec {
     libxcb
   ]);
 
-  ldpath = stdenv.lib.makeLibraryPath buildInputs
-    + stdenv.lib.optionalString (stdenv.system == "x86_64-linux")
-      (":" + stdenv.lib.makeSearchPathOutput "lib" "lib64" buildInputs);
+  ldpath = lib.makeLibraryPath buildInputs
+    + lib.optionalString (stdenv.hostPlatform.system == "x86_64-linux")
+    (":" + lib.makeSearchPathOutput "lib" "lib64" buildInputs);
 
-  phases = "unpackPhase installPhase fixupPhase";
+  dontConfigure = true;
+  dontBuild = true;
 
   unpackPhase = ''
     echo "=== Extracting makeself archive ==="
@@ -115,10 +115,4 @@ stdenv.mkDerivation rec {
 
   # we did this in prefixup already
   dontPatchELF = true;
-
-  meta = {
-    description = "Wolfram Mathematica computational software system";
-    homepage = "http://www.wolfram.com/mathematica/";
-    license = stdenv.lib.licenses.unfree;
-  };
 }

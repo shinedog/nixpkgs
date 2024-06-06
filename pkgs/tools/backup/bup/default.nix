@@ -1,34 +1,32 @@
-{ stdenv, fetchFromGitHub, fetchurl, makeWrapper
-, perl, pandoc, python2Packages, git
-, par2cmdline ? null, par2Support ? false
+{ lib, stdenv, fetchFromGitHub, makeWrapper
+, perl, pandoc, python3, git
+, par2cmdline ? null, par2Support ? true
 }:
 
 assert par2Support -> par2cmdline != null;
 
-let version = "0.28.1"; in
+let
+  version = "0.33.3";
 
-with stdenv.lib;
+  pythonDeps = with python3.pkgs; [ setuptools tornado ]
+    ++ lib.optionals (!stdenv.isDarwin) [ pyxattr pylibacl fuse ];
+in
 
-stdenv.mkDerivation rec {
-  name = "bup-${version}";
+stdenv.mkDerivation {
+  pname = "bup";
+  inherit version;
 
   src = fetchFromGitHub {
     repo = "bup";
     owner = "bup";
     rev = version;
-    sha256 = "1hsxzrjvqa3pd74vmz8agiiwynrzynp1i726h0fzdsakc4adya4l";
+    hash = "sha256-w7yPs7hG4v0Kd9i2tYhWH7vW95MAMfI/8g61MB6bfps=";
   };
 
-  buildInputs = [ git python2Packages.python ];
+  buildInputs = [ git python3 ];
   nativeBuildInputs = [ pandoc perl makeWrapper ];
 
-  postPatch = ''
-    patchShebangs .
-    substituteInPlace Makefile --replace "-Werror" ""
-    substituteInPlace Makefile --replace "./format-subst.pl" "${perl}/bin/perl ./format-subst.pl"
-  '' + optionalString par2Support ''
-    substituteInPlace cmd/fsck-cmd.py --replace "['par2'" "['${par2cmdline}/bin/par2'"
-  '';
+  postPatch = "patchShebangs .";
 
   dontAddPrefix = true;
 
@@ -39,18 +37,18 @@ stdenv.mkDerivation rec {
     "LIBDIR=$(out)/lib/bup"
   ];
 
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isClang "-Wno-error=implicit-function-declaration -Wno-error=implicit-int";
+
   postInstall = ''
     wrapProgram $out/bin/bup \
-      --prefix PATH : ${git}/bin \
-      --prefix PYTHONPATH : ${concatStringsSep ":" (map (x: "$(toPythonPath ${x})")
-        (with python2Packages;
-         [ setuptools tornado ]
-         ++ stdenv.lib.optionals (!stdenv.isDarwin) [ pyxattr pylibacl fuse ]))}
+      --prefix PATH : ${lib.makeBinPath [ git par2cmdline ]} \
+      --prefix NIX_PYTHONPATH : ${lib.makeSearchPathOutput "lib" python3.sitePackages pythonDeps}
   '';
 
-  meta = {
+  meta = with lib; {
     homepage = "https://github.com/bup/bup";
     description = "Efficient file backup system based on the git packfile format";
+    mainProgram = "bup";
     license = licenses.gpl2Plus;
 
     longDescription = ''
@@ -58,7 +56,7 @@ stdenv.mkDerivation rec {
       Capable of doing *fast* incremental backups of virtual machine images.
     '';
 
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ muflax ];
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ rnhmjoj ];
   };
 }

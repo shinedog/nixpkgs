@@ -1,14 +1,22 @@
-{ stdenv, fetchurl, libpng }:
+{ lib, stdenv, fetchurl, fetchpatch2, libpng }:
 
 stdenv.mkDerivation rec {
-  name = "pngcrush-1.8.1";
+  pname = "pngcrush";
+  version = "1.8.13";
 
   src = fetchurl {
-    url = "mirror://sourceforge/pmt/${name}-nolib.tar.xz";
-    sha256 = "1h3sibmmiq4ynvf8hrpksfrbcmszxh4bqpkqy5c0m8828c7drpr9";
+    url = "mirror://sourceforge/pmt/pngcrush-${version}-nolib.tar.xz";
+    sha256 = "0l43c59d6v9l0g07z3q3ywhb8xb3vz74llv3mna0izk9bj6aqkiv";
   };
 
-  makeFlags = [ "CC=cc" "LD=cc" ];      # gcc and/or clang compat
+  patches = [
+    (fetchpatch2 {
+      url = "https://salsa.debian.org/debian/pngcrush/-/raw/b4856b56fbc28252103cc14d156baddd564ca880/debian/patches/ignore_PNG_IGNORE_ADLER32.patch";
+      hash = "sha256-pFON/NUJiXMe9GETptgNltWa0izlby6P/fLsG1abz3g=";
+    })
+  ];
+
+  makeFlags = [ "CC=${stdenv.cc.targetPrefix}cc" "LD=${stdenv.cc.targetPrefix}cc" ];      # gcc and/or clang compat
 
   configurePhase = ''
     sed -i s,/usr,$out, Makefile
@@ -17,10 +25,10 @@ stdenv.mkDerivation rec {
   buildInputs = [ libpng ];
 
   meta = {
-    homepage = http://pmt.sourceforge.net/pngcrush;
+    homepage = "http://pmt.sourceforge.net/pngcrush";
     description = "A PNG optimizer";
-    license = stdenv.lib.licenses.free;
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    license = lib.licenses.free;
+    platforms = with lib.platforms; linux ++ darwin;
+    mainProgram = "pngcrush";
   };
 }

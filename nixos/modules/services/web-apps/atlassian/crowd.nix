@@ -6,7 +6,28 @@ let
 
   cfg = config.services.crowd;
 
-  pkg = pkgs.atlassian-crowd;
+  pkg = cfg.package.override {
+    home = cfg.home;
+    port = cfg.listenPort;
+    openidPassword = cfg.openidPassword;
+  } // (optionalAttrs cfg.proxy.enable {
+    proxyUrl = "${cfg.proxy.scheme}://${cfg.proxy.name}:${toString cfg.proxy.port}";
+  });
+
+  crowdPropertiesFile = pkgs.writeText "crowd.properties" ''
+    application.name                        crowd-openid-server
+    application.password @NIXOS_CROWD_OPENID_PW@
+    application.base.url                    http://localhost:${toString cfg.listenPort}/openidserver
+    application.login.url                   http://localhost:${toString cfg.listenPort}/openidserver
+    application.login.url.template          http://localhost:${toString cfg.listenPort}/openidserver?returnToUrl=''${RETURN_TO_URL}
+
+    crowd.server.url                        http://localhost:${toString cfg.listenPort}/crowd/services/
+
+    session.isauthenticated                 session.isauthenticated
+    session.tokenkey                        session.tokenkey
+    session.validationinterval              0
+    session.lastvalidation                  session.lastvalidation
+  '';
 
 in
 
@@ -40,9 +61,21 @@ in
       };
 
       listenPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8092;
         description = "Port to listen on.";
+      };
+
+      openidPassword = mkOption {
+        type = types.str;
+        default = "WILL_NEVER_BE_SET";
+        description = "Application password for OpenID server.";
+      };
+
+      openidPasswordFile = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Path to the file containing the application password for OpenID server.";
       };
 
       catalinaOptions = mkOption {
@@ -62,7 +95,7 @@ in
         };
 
         port = mkOption {
-          type = types.int;
+          type = types.port;
           default = 443;
           example = 80;
           description = "Port used at the proxy";
@@ -78,30 +111,39 @@ in
         secure = mkOption {
           type = types.bool;
           default = true;
-          example = false;
           description = "Whether the connections to the proxy should be considered secure.";
         };
       };
 
-      jrePackage = let
-        jreSwitch = unfree: free: if config.nixpkgs.config.allowUnfree or false then unfree else free;
-      in mkOption {
-        type = types.package;
-        default = jreSwitch pkgs.oraclejre8 pkgs.openjdk8.jre;
-        defaultText = jreSwitch "pkgs.oraclejre8" "pkgs.openjdk8.jre";
-        example = literalExample "pkgs.openjdk8.jre";
-        description = "Java Runtime to use for Crowd. Note that Atlassian recommends the Oracle JRE.";
+      package = mkPackageOption pkgs "atlassian-crowd" { };
+
+      jrePackage = mkPackageOption pkgs "oraclejre8" {
+        extraDescription = ''
+        ::: {.note }
+        Atlassian only supports the Oracle JRE (JRASERVER-46152).
+        :::
+        '';
       };
     };
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers."${cfg.user}" = {
+    users.users.${cfg.user} = {
       isSystemUser = true;
       group = cfg.group;
     };
 
-    users.extraGroups."${cfg.group}" = {};
+    users.groups.${cfg.group} = {};
+
+    systemd.tmpfiles.rules = [
+      "d '${cfg.home}' - ${cfg.user} ${cfg.group} - -"
+      "d /run/atlassian-crowd - - - - -"
+
+      "L+ /run/atlassian-crowd/database - - - - ${cfg.home}/database"
+      "L+ /run/atlassian-crowd/logs - - - - ${cfg.home}/logs"
+      "L+ /run/atlassian-crowd/work - - - - ${cfg.home}/work"
+      "L+ /run/atlassian-crowd/server.xml - - - - ${cfg.home}/server.xml"
+    ];
 
     systemd.services.atlassian-crowd = {
       description = "Atlassian Crowd";
@@ -116,31 +158,35 @@ in
         JAVA_HOME = "${cfg.jrePackage}";
         CATALINA_OPTS = concatStringsSep " " cfg.catalinaOptions;
         CATALINA_TMPDIR = "/tmp";
+        JAVA_OPTS = mkIf (cfg.openidPasswordFile != null) "-Dcrowd.properties=${cfg.home}/crowd.properties";
       };
 
       preStart = ''
-        mkdir -p ${cfg.home}/{logs,work}
-
-        mkdir -p /run/atlassian-crowd
-        ln -sf ${cfg.home}/{work,server.xml} /run/atlassian-crowd
-
-        chown -R ${cfg.user} ${cfg.home}
+        rm -rf ${cfg.home}/work
+        mkdir -p ${cfg.home}/{logs,database,work}
 
         sed -e 's,port="8095",port="${toString cfg.listenPort}" address="${cfg.listenAddress}",' \
         '' + (lib.optionalString cfg.proxy.enable ''
-          -e 's,compression="on",compression="off" protocol="HTTP/1.1" proxyName="${cfg.proxy.name}" proxyPort="${toString cfg.proxy.port}" scheme="${cfg.proxy.scheme}" secure="${toString cfg.proxy.secure}",' \
+          -e 's,compression="on",compression="off" protocol="HTTP/1.1" proxyName="${cfg.proxy.name}" proxyPort="${toString cfg.proxy.port}" scheme="${cfg.proxy.scheme}" secure="${boolToString cfg.proxy.secure}",' \
         '') + ''
           ${pkg}/apache-tomcat/conf/server.xml.dist > ${cfg.home}/server.xml
-      '';
 
-      script = "${pkg}/start_crowd.sh";
-      #stopScript  = "${pkg}/bin/stop_crowd.sh";
+        ${optionalString (cfg.openidPasswordFile != null) ''
+          install -m660 ${crowdPropertiesFile} ${cfg.home}/crowd.properties
+          ${pkgs.replace-secret}/bin/replace-secret \
+            '@NIXOS_CROWD_OPENID_PW@' \
+            ${cfg.openidPasswordFile} \
+            ${cfg.home}/crowd.properties
+        ''}
+      '';
 
       serviceConfig = {
         User = cfg.user;
         Group = cfg.group;
         PrivateTmp = true;
-        PermissionsStartOnly = true;
+        Restart = "on-failure";
+        RestartSec = "10";
+        ExecStart = "${pkg}/start_crowd.sh -fg";
       };
     };
   };

@@ -1,21 +1,30 @@
-{ stdenv, fetchurl, pam, yacc, flex }:
+{ lib, stdenv, fetchFromGitHub, pam, bison, flex, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name    = "libcgroup-${version}";
-  version = "0.41";
+  pname = "libcgroup";
+  version = "3.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/libcg/${name}.tar.bz2";
-    sha256 = "0lgvyq37gq84sk30sg18admxaj0j0p5dq3bl6g74a1ppgvf8pqz4";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "v${version}";
+    fetchSubmodules = true;
+    hash = "sha256-x2yBqpr3LedtWmpZ4K1ipZxIualNJuDtC4FVGzzcQn8=";
   };
 
-  buildInputs = [ pam yacc flex ];
+  nativeBuildInputs = [ autoreconfHook bison flex ];
+  buildInputs = [ pam ];
+
+  postPatch = ''
+    substituteInPlace src/tools/Makefile.am \
+      --replace 'chmod u+s' 'chmod +x'
+  '';
 
   meta = {
     description = "Library and tools to manage Linux cgroups";
-    homepage    = "http://libcg.sourceforge.net/";
-    license     = stdenv.lib.licenses.lgpl2;
-    platforms   = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    homepage    = "https://github.com/libcgroup/libcgroup";
+    license     = lib.licenses.lgpl2;
+    platforms   = lib.platforms.linux;
+    maintainers = [ lib.maintainers.thoughtpolice ];
   };
 }

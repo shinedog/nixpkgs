@@ -1,17 +1,21 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "log4cpp-1.1.1";
-  
+  pname = "log4cpp";
+  version = "1.1.4";
+
   src = fetchurl {
-    url = "mirror://sourceforge/log4cpp/${name}.tar.gz";
-    sha256 = "1l5yz5rfzzv6g3ynrj14mxfsk08cp5h1ssr7d74hjs0accrg7arm";
+    url = "mirror://sourceforge/log4cpp/${pname}-${version}.tar.gz";
+    sha256 = "sha256-aWETZZ5CZUBiUnSoslEFLMBDBtjuXEKgx2OfOcqQydY=";
   };
 
-  meta = {
-    homepage = http://log4cpp.sourceforge.net/;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage    = "https://log4cpp.sourceforge.net/";
     description = "A logging framework for C++ patterned after Apache log4j";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "log4cpp-config";
+    license     = licenses.lgpl21Plus;
+    platforms   = platforms.unix;
   };
 }

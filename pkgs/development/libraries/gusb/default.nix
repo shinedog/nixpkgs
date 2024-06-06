@@ -1,30 +1,91 @@
-{stdenv, fetchurl
-, automake, autoconf, libtool, which, gtkdoc, gettext, pkgconfig, gobjectIntrospection, libxslt
-, glib, systemd, libusb1, vala_0_23
+{ lib
+, stdenv
+, fetchFromGitHub
+, substituteAll
+, meson
+, ninja
+, pkg-config
+, gobject-introspection
+, gi-docgen
+, python3
+, glib
+, libusb1
+, json-glib
+, vala
+, hwdata
+, umockdev
 }:
-stdenv.mkDerivation rec {
-  name = "gusb-${version}";
-  version = "0.2.4";
-  enableParallelBuilding = true;
 
-  src = fetchurl {
-    url = "http://people.freedesktop.org/~hughsient/releases/libgusb-${version}.tar.xz";
-    sha256 = "10w0sdq7505iwd8y305aylmx4zafbnphs81cgdsqw2z38pxncya3";
+let
+  pythonEnv = python3.pythonOnBuildForHost.withPackages (ps: with ps; [
+    setuptools
+  ]);
+in
+stdenv.mkDerivation rec {
+  pname = "gusb";
+  version = "0.4.9";
+
+  outputs = [ "bin" "out" "dev" "devdoc" ];
+
+  src = fetchFromGitHub {
+    owner = "hughsie";
+    repo = "libgusb";
+    rev = "refs/tags/${version}";
+    hash = "sha256-piIPNLc3deToyQaajXFvM+CKh9ni8mb0P3kb+2RoJOs=";
   };
 
-  preConfigure = "./autogen.sh";
-
-  buildInputs = [
-    pkgconfig autoconf automake libtool which gtkdoc gettext gobjectIntrospection libxslt
-    systemd libusb1 vala_0_23
-    glib
+  patches = [
+    (substituteAll {
+      src = ./fix-python-path.patch;
+      python = "${pythonEnv}/bin/python3";
+    })
   ];
 
-  meta = {
+  strictDeps = true;
+
+  depsBuildBuild = [
+    pkg-config
+  ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gobject-introspection
+    gi-docgen
+    vala
+  ];
+
+  # all required in gusb.pc
+  propagatedBuildInputs = [
+    glib
+    libusb1
+    json-glib
+  ];
+
+  mesonFlags = [
+    (lib.mesonBool "tests" doCheck)
+    (lib.mesonOption "usb_ids" "${hwdata}/share/hwdata/usb.ids")
+  ];
+
+  checkInputs = [
+    umockdev
+  ];
+
+  doCheck = false; # tests try to access USB
+
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    ls -la "$out/share/doc"
+    moveToOutput "share/doc" "$devdoc"
+  '';
+
+  meta = with lib; {
     description = "GLib libusb wrapper";
-    homepage = http://people.freedesktop.org/~hughsient/releases/;
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = [stdenv.lib.maintainers.marcweber];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "gusbcmd";
+    homepage = "https://github.com/hughsie/libgusb";
+    license = licenses.lgpl21;
+    maintainers = [ maintainers.marcweber ];
+    platforms = platforms.unix;
   };
 }

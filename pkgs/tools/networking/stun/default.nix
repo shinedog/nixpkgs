@@ -1,7 +1,6 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name    = "${pname}-${version}";
   pname   = "stun";
   version = "0.97";
 
@@ -20,8 +19,8 @@ stdenv.mkDerivation rec {
 
   preBuild = ''
     tar Jxvf ${srcManpages} debian/manpages
-    gzip -9 debian/manpages/stun.1
-    gzip -9 debian/manpages/stund.8
+    gzip -9n debian/manpages/stun.1
+    gzip -9n debian/manpages/stund.8
   '';
 
   installPhase = ''
@@ -32,11 +31,12 @@ stdenv.mkDerivation rec {
     cp -v debian/manpages/stund.8.gz $server/man/man8
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Stun server and test client";
-    homepage    = http://sourceforge.net/projects/stun/;
+    homepage    = "https://sourceforge.net/projects/stun/";
     license     = licenses.vsl10;
     maintainers = with maintainers; [ marcweber obadz ];
     platforms   = platforms.linux;
+    mainProgram = "stun";
   };
 }

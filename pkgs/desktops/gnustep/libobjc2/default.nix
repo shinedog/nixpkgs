@@ -1,28 +1,31 @@
-{ stdenv, lib, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+}:
 
-let
-  version = "1.8.1";
-in
-
-stdenv.mkDerivation rec {
-  name = "libobjc2-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libobjc2";
+  version = "2.1";
 
   src = fetchFromGitHub {
     owner = "gnustep";
     repo = "libobjc2";
-    rev = "v${version}";
-    sha256 = "12v9pjg97h56mb114cqd22q1pdwhmxrgdw5hal74ddlrhiq1nzvi";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-iDOVEDnTAfg9r3/kdHp7hzX2oIjO1ovaqgrlIV7V68M=";
+    fetchSubmodules = true;
   };
 
-  buildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ];
 
   cmakeFlags = [ "-DCMAKE_INSTALL_LIBDIR=lib" ];
 
   meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "Objective-C runtime for use with GNUstep";
-    homepage = http://gnustep.org/;
+    homepage = "https://gnustep.github.io/";
     license = licenses.mit;
-    maintainers = with maintainers; [ ashalkhakov matthewbauer ];
+    maintainers = with lib.maintainers; [ ashalkhakov matthewbauer dblsaiko ];
     platforms = platforms.unix;
   };
-}
+})

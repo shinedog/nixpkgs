@@ -1,29 +1,35 @@
-{ fetchurl, stdenv, jre, ctags, makeWrapper, coreutils, git }:
+{ lib, stdenv, fetchurl, jre, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "opengrok-0.12.1";
+  pname = "opengrok";
+  version = "1.13.7";
 
+  # binary distribution
   src = fetchurl {
-    url = "http://java.net/projects/opengrok/downloads/download/${name}.tar.gz";
-    sha256 = "0ihaqgf1z2gsjmy2q96m0s07dpnh92j3ss3myiqjdsh9957fwg79";
+    url = "https://github.com/oracle/opengrok/releases/download/${version}/${pname}-${version}.tar.gz";
+    hash = "sha256-vGzwXs4i9NiIz5M4JfoweJdpP5vbPKCdeUlE5xueYc4=";
   };
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out
     cp -a * $out/
-    substituteInPlace $out/bin/OpenGrok --replace /bin/uname ${coreutils}/bin/uname
-    wrapProgram $out/bin/OpenGrok \
-      --prefix PATH : "${stdenv.lib.makeBinPath [ ctags git ]}" \
-      --set JAVA_HOME "${jre}" \
-      --set OPENGROK_TOMCAT_BASE "/var/tomcat"
+    makeWrapper ${jre}/bin/java $out/bin/opengrok \
+      --add-flags "-jar $out/lib/opengrok.jar"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Source code search and cross reference engine";
-    homepage = http://opengrok.github.io/OpenGrok/;
+    mainProgram = "opengrok";
+    homepage = "https://opengrok.github.io/OpenGrok/";
+    changelog = "https://github.com/oracle/opengrok/releases/tag/${version}";
     license = licenses.cddl;
-    maintainers = [ maintainers.lethalman ];
+    maintainers = [ ];
+    platforms = platforms.all;
   };
 }

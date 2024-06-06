@@ -1,29 +1,41 @@
-{ stdenv, fetchzip, which, openssl, ocaml, findlib }:
+{ alcotest
+, buildDunePackage
+, dune-configurator
+, fetchFromGitHub
+, lib
+, ocaml
+, openssl
+, pkg-config
+}:
 
-stdenv.mkDerivation rec {
-  name = "ocaml${ocaml.version}-ssl-${version}";
-  version = "0.5.3";
+buildDunePackage rec {
+  pname = "ssl";
+  version = "0.7.0";
 
-  src = fetchzip {
-    url = "https://github.com/savonet/ocaml-ssl/releases/download/0.5.3/ocaml-ssl-${version}.tar.gz";
-    sha256 = "0h2k19zpdvq1gqwrmmgkibw4j48l71vv6ajzxs0wi71y80c1vhwm";
+  duneVersion = "3";
+
+  src = fetchFromGitHub {
+    owner = "savonet";
+    repo = "ocaml-ssl";
+    rev = "v${version}";
+    hash = "sha256-gi80iwlKaI4TdAVnCyPG03qRWFa19DHdTrA0KMFBAc4=";
   };
 
-  buildInputs = [which ocaml findlib];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ dune-configurator ];
+  propagatedBuildInputs = [ openssl ];
 
-  propagatedBuildInputs = [openssl];
-
-  dontAddPrefix = true;
-
-  createFindlibDestdir = true;
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
+  checkInputs = [ alcotest ];
+  preCheck = ''
+    mkdir -p _build/default/tests/
+    cp tests/digicert_certificate.pem _build/default/tests/
+  '';
 
   meta = {
-    homepage = http://savonet.rastageeks.org/;
+    homepage = "http://savonet.rastageeks.org/";
     description = "OCaml bindings for libssl ";
     license = "LGPL+link exception";
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.z77z
-    ];
+    maintainers = with lib.maintainers; [ anmonteiro dandellion maggesi ];
   };
 }

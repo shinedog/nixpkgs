@@ -1,28 +1,38 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, elementary-icon-theme }:
+{ lib, stdenvNoCC, fetchFromGitHub, meson, ninja, python3, gtk3, pantheon, gnome-icon-theme, hicolor-icon-theme }:
 
-stdenv.mkDerivation rec {
-  name = "${package-name}-${version}";
-  package-name = "faba-icon-theme";
-  version = "2016-09-13";
+stdenvNoCC.mkDerivation rec {
+  pname = "faba-icon-theme";
+  version = "4.3";
 
   src = fetchFromGitHub {
     owner = "moka-project";
-    repo = package-name;
-    rev = "00431894bce5fb1b8caccaee064788996be228a7";
-    sha256 = "0hif030pd4w3s851k0s65w0mf2pik10ha25ycpsv91gpbgarqcns";
+    repo = "faba-icon-theme";
+    rev = "v${version}";
+    sha256 = "0xh6ppr73p76z60ym49b4d0liwdc96w41cc5p07d48hxjsa6qd6n";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    python3
+    gtk3
+  ];
 
-  buildInputs = [ elementary-icon-theme ];
+  propagatedBuildInputs = [
+    pantheon.elementary-icon-theme
+    gnome-icon-theme
+    hicolor-icon-theme
+  ];
+
+  dontDropIconThemeCache = true;
 
   postPatch = ''
-    substituteInPlace Makefile.am --replace '$(DESTDIR)'/usr $out
+    patchShebangs meson/post_install.py
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A sexy and modern icon theme with Tango influences";
-    homepage = https://snwh.org/moka;
+    homepage = "https://snwh.org/moka";
     license = with licenses; [ cc-by-sa-40 gpl3 ];
     platforms = platforms.all;
     maintainers = with maintainers; [ romildo ];

@@ -1,36 +1,37 @@
-{ stdenv, fetchurl, binutilsCross ? null, gccCross ? null
-, onlyHeaders ? false
-, onlyPthreads ? false
+{ lib
+, stdenv
+, windows
+, fetchurl
+, autoreconfHook
 }:
 
 let
-  version = "4.0.6";
-  name = "mingw-w64-${version}";
-in
-stdenv.mkDerivation ({
-  inherit name;
+  version = "11.0.1";
+in stdenv.mkDerivation {
+  pname = "mingw-w64";
+  inherit version;
 
   src = fetchurl {
     url = "mirror://sourceforge/mingw-w64/mingw-w64-v${version}.tar.bz2";
-    sha256 = "0p01vm5kx1ixc08402z94g1alip4vx66gjpvyi9maqyqn2a76h0c";
+    hash = "sha256-P2a84Gnui+10OaGhPafLkaXmfqYXDyExesf1eUYl7hA=";
   };
-} //
-(if onlyHeaders then {
-  name = name + "-headers";
-  preConfigure = ''
-    cd mingw-w64-headers
-  '';
-  configureFlags = "--without-crt";
-} else if onlyPthreads then {
-  name = name + "-pthreads";
-  preConfigure = ''
-    cd mingw-w64-libraries/winpthreads
-  '';
-} else {
-  buildInputs = [ gccCross binutilsCross ];
 
-  crossConfig = gccCross.crossConfig;
+  outputs = [ "out" "dev" ];
 
-  dontStrip = true;
-})
-)
+  configureFlags = [
+    "--enable-idl"
+    "--enable-secure-api"
+  ] ++ lib.optionals (stdenv.targetPlatform.libc == "ucrt") [
+    "--with-default-msvcrt=ucrt"
+  ];
+
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ windows.mingw_w64_headers ];
+  hardeningDisable = [ "stackprotector" "fortify" ];
+
+  meta = {
+    platforms = lib.platforms.windows;
+  };
+}

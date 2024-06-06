@@ -1,29 +1,36 @@
-{ stdenv, fetchurl }:
-let
-  version = "15.04.6";
-in
-stdenv.mkDerivation {
-  name = "curaengine-${version}";
+{ lib, stdenv, fetchFromGitHub, cmake, libarcus, stb, protobuf, fetchpatch }:
 
-  src = fetchurl {
-    url = "https://github.com/Ultimaker/CuraEngine/archive/${version}.tar.gz";
-    sha256 = "1cd4dikzvqyj5g80rqwymvh4nwm76vsf78clb37kj6q0fig3qbjg";
+stdenv.mkDerivation rec {
+  pname = "curaengine";
+  version = "4.13.1";
+
+  src = fetchFromGitHub {
+    owner = "Ultimaker";
+    repo = "CuraEngine";
+    rev = version;
+    sha256 = "sha256-dx0Q6cuA66lG4nwR7quW5Tvs9sdxjdV4gtpxXirI4nY=";
   };
 
-  postPatch = ''
-    sed -i 's,--static,,g' Makefile
-  '';
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ libarcus stb protobuf ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp build/CuraEngine $out/bin/
-  '';
+  cmakeFlags = [ "-DCURA_ENGINE_VERSION=${version}" ];
 
-  meta = with stdenv.lib; {
-    description = "Engine for processing 3D models into 3D printing instructions";
-    homepage = https://github.com/Ultimaker/CuraEngine;
-    license = licenses.agpl3;
+  # TODO already fixed in master, remove in next release
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/Ultimaker/CuraEngine/commit/de60e86a6ea11cb7d121471b5dd192e5deac0f3d.patch";
+      hash = "sha256-/gT9yErIDDYAXvZ6vX5TGlwljy31K563+sqkm1UGljQ=";
+      includes = [ "src/utils/math.h" ];
+    })
+  ];
+
+  meta = with lib; {
+    description = "A powerful, fast and robust engine for processing 3D models into 3D printing instruction";
+    homepage = "https://github.com/Ultimaker/CuraEngine";
+    license = licenses.agpl3Only;
     platforms = platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
+    maintainers = with maintainers; [ abbradar gebner ];
+    mainProgram = "CuraEngine";
   };
 }

@@ -1,24 +1,51 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip, texlive, callPackage }:
 
-stdenv.mkDerivation {
-  name = "junicode-0.7.8";
+stdenvNoCC.mkDerivation rec {
+  pname = "junicode";
+  version = "2.207";
 
-  src = fetchurl {
-    url = mirror://sourceforge/junicode/junicode/junicode-0-7-8/junicode-0-7-8.zip;
-    sha256 = "1lgkhj52s351ya7lp9z3xba7kaivgdvg80njhpj1rpc3jcmc69vl";
+  src = fetchzip {
+    url = "https://github.com/psb1558/Junicode-font/releases/download/v${version}/Junicode_${version}.zip";
+    hash = "sha256-R+EQdVklxL8VW9omvADeIdYwr868R19o/1MZYKBIfSA=";
   };
 
-  buildInputs = [ unzip ];
+  outputs = [ "out" "doc" "tex" ];
 
-  installPhase =
-    ''
-      mkdir -p $out/share/fonts/junicode-ttf
-      cp fonts/*.ttf $out/share/fonts/junicode-ttf
-    '';
+  patches = [ ./tex-font-path.patch ];
+
+  postPatch = ''
+    substituteInPlace TeX/junicode.sty \
+      --replace '@@@opentype_path@@@' "$out/share/fonts/opentype/" \
+      --replace '@@@truetype_path@@@' "$out/share/fonts/truetype/"
+    substituteInPlace TeX/junicodevf.sty \
+      --replace '@@@truetype_path@@@' "$out/share/fonts/truetype/"
+  '';
+
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm 444 -t $out/share/fonts/truetype TTF/*.ttf VAR/*.ttf
+    install -Dm 444 -t $out/share/fonts/opentype OTF/*.otf
+    install -Dm 444 -t $out/share/fonts/woff2 WOFF2/*.woff2
+
+    install -Dm 444 -t $doc/share/doc/${pname}-${version} docs/*.pdf
+
+    install -Dm 444 -t $tex/tex/latex/junicode TeX/junicode.sty
+    install -Dm 444 -t $tex/tex/latex/junicodevf TeX/junicodevf.{sty,lua}
+
+    runHook postInstall
+  '';
+
+  passthru = {
+    tlDeps = with texlive; [ xkeyval fontspec ];
+
+    tests = callPackage ./tests.nix { };
+  };
 
   meta = {
-    homepage = http://junicode.sourceforge.net/;
-    description = "A Unicode font";
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://github.com/psb1558/Junicode-font";
+    description = "A Unicode font for medievalists";
+    maintainers = with lib.maintainers; [ ivan-timokhin ];
+    license = lib.licenses.ofl;
   };
 }

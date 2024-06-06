@@ -1,34 +1,41 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, bzip2, expat, glib, curl, libxml2, python2, rpm, openssl, sqlite, file, xz, pcre, bash-completion }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, bzip2, expat, glib, curl, libxml2, python3, rpm
+, openssl, sqlite, file, xz, pcre, bash-completion, zstd, zchunk, libmodulemd
+}:
 
 stdenv.mkDerivation rec {
-  rev  = "0.10.0";
-  name = "createrepo_c-${rev}";
+  pname = "createrepo_c";
+  version = "0.17.2";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner  = "rpm-software-management";
     repo   = "createrepo_c";
-    sha256 = "1sqzdkj9vigkvxsjlih1i0gylv53na2yic5if9w1s2sgxhqqz5zv";
+    rev    = version;
+    sha256 = "sha256-rcrJjcWj+cTAE3k11Ynr7CQCOWD+rb60lcar0G2w06A=";
   };
 
-  # FIXME: ugh, there has to be a better way to do this...
-  prePatch = ''
-    substituteInPlace CMakeLists.txt \
-      --replace 'execute_process(COMMAND ''${PKG_CONFIG_EXECUTABLE} --variable=completionsdir bash-completion OUTPUT_VARIABLE BASHCOMP_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)' \
-                "set (BASHCOMP_DIR "$out/share/bash-completion/completions")"
+  patches = [
+    # Use the output directory to install the bash completions.
+    ./fix-bash-completion-path.patch
+    # Use the output directory to install the python modules.
+    ./fix-python-install-path.patch
+  ];
 
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace '@BASHCOMP_DIR@' "$out/share/bash-completion/completions"
     substituteInPlace src/python/CMakeLists.txt \
-      --replace 'EXECUTE_PROCESS(COMMAND ''${PYTHON_EXECUTABLE} -c "from sys import stdout; from distutils import sysconfig; stdout.write(sysconfig.get_python2_lib(True))" OUTPUT_VARIABLE PYTHON_INSTALL_DIR)' \
-                "set (PYTHON_INSTALL_DIR "$out/${python2.sitePackages}")"
+      --replace "@PYTHON_INSTALL_DIR@" "$out/${python3.sitePackages}"
   '';
 
-  buildInputs = [ cmake pkgconfig bzip2 expat glib curl libxml2 python2 rpm openssl sqlite file xz pcre bash-completion ];
+  nativeBuildInputs = [ cmake pkg-config rpm ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ bzip2 expat glib curl libxml2 python3 openssl sqlite file xz pcre bash-completion zstd zchunk libmodulemd ];
+
+  meta = with lib; {
     description = "C implementation of createrepo";
-    homepage    = "http://rpm-software-management.github.io/createrepo_c/";
-    license     = licenses.gpl2;
-    platforms   = platforms.linux;
+    homepage    = "https://rpm-software-management.github.io/createrepo_c/";
+    license     = licenses.gpl2Plus;
+    platforms   = platforms.unix;
     maintainers = with maintainers; [ copumpkin ];
   };
 }

@@ -1,24 +1,24 @@
-{ stdenv, gx, gx-go, go, cacert }:
+{ stdenvNoCC, gx, gx-go, go, cacert }:
 
 { name, src, sha256 }:
 
-stdenv.mkDerivation {
+stdenvNoCC.mkDerivation {
   name = "${name}-gxdeps";
   inherit src;
 
-  buildInputs = [ go gx gx-go ];
+  nativeBuildInputs = [ cacert go gx gx-go ];
 
   outputHashAlgo = "sha256";
   outputHashMode = "recursive";
   outputHash = sha256;
 
-  phases = [ "unpackPhase" "buildPhase" "installPhase" ];
-
-  SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
+  dontConfigure = true;
+  doCheck = false;
+  doInstallCheck = false;
 
   buildPhase = ''
     export GOPATH=$(pwd)/vendor
-    mkdir vendor
+    mkdir -p vendor
     gx install
   '';
 

@@ -1,33 +1,89 @@
-{ stdenv, fetchurl, pkgconfig, freetype, lcms, libtiff, libxml2
-, libart_lgpl, qt4, python2, cups, fontconfig, libjpeg
-, zlib, libpng, xorg, cairo, podofo, aspell, boost, cmake }:
+{ boost
+, cairo
+, cmake
+, cups
+, fetchurl
+, fontconfig
+, freetype
+, harfbuzzFull
+, hunspell
+, lcms2
+, libjpeg
+, libtiff
+, libxml2
+, pixman
+, pkg-config
+, podofo
+, poppler
+, poppler_data
+, python3
+, lib
+, stdenv
+, qt5
+}:
 
 let
-  pythonEnv = python2.withPackages(ps: [ps.tkinter]);
-in stdenv.mkDerivation rec {
-  name = "scribus-1.4.6";
+  pythonEnv = python3.withPackages (
+    ps: [
+      ps.pillow
+      ps.tkinter
+    ]
+  );
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "scribus";
+
+  version = "1.6.1";
 
   src = fetchurl {
-    url = "mirror://sourceforge/scribus/scribus/${name}.tar.xz";
-    sha256 = "16m1g38dig37ag0zxjx3wk1rxx9xxzjqfc7prj89rp4y1m83dqr1";
+    url = "mirror://sourceforge/scribus/scribus-devel/scribus-${finalAttrs.version}.tar.xz";
+    hash = "sha256-4J3Xjm22HQG5MhEI/t7bzNbsCrNS3Vuv24sEHw73npk=";
   };
 
-  enableParallelBuilding = true;
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qt5.wrapQtAppsHook
+  ];
 
-  buildInputs = with xorg;
-    [ pkgconfig cmake freetype lcms libtiff libxml2 libart_lgpl qt4
-      pythonEnv cups fontconfig
-      libjpeg zlib libpng podofo aspell cairo
-      boost # for internal 2geom library
-      libXaw libXext libX11 libXtst libXi libXinerama
-      libpthreadstubs libXau libXdmcp
+  buildInputs = [
+    boost
+    cairo
+    cups
+    fontconfig
+    freetype
+    harfbuzzFull
+    hunspell
+    lcms2
+    libjpeg
+    libtiff
+    libxml2
+    pixman
+    podofo
+    poppler
+    poppler_data
+    pythonEnv
+    qt5.qtbase
+    qt5.qtimageformats
+    qt5.qttools
+  ];
+
+  meta = with lib; {
+    maintainers = with maintainers; [
+      kiwi
+      arthsmn
     ];
-
-  meta = {
-    maintainers = [ stdenv.lib.maintainers.marcweber ];
-    platforms = stdenv.lib.platforms.linux;
-    description = "Desktop Publishing (DTP) and Layout program for Linux";
-    homepage = http://www.scribus.net;
-    license = stdenv.lib.licenses.gpl2;
+    description = "Desktop Publishing (DTP) and Layout program";
+    mainProgram = "scribus";
+    homepage = "https://www.scribus.net";
+    # There are a lot of licenses...
+    # https://github.com/scribusproject/scribus/blob/20508d69ca4fc7030477db8dee79fd1e012b52d2/COPYING#L15-L19
+    license = with licenses; [
+      bsd3
+      gpl2Plus
+      mit
+      publicDomain
+    ];
+    broken = stdenv.isDarwin;
   };
-}
+})

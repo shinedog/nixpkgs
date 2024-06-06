@@ -1,28 +1,39 @@
-{ stdenv, fetchurl, makeWrapper
-, dpkg, patchelf
-, gtk2, glib, gdk_pixbuf, alsaLib, nss, nspr, GConf, cups, libgcrypt, dbus, systemd }:
+{ stdenv, lib, fetchurl
+, dpkg, wrapGAppsHook3
+, hicolor-icon-theme
+, gtk3, glib, systemd
+, xorg, nss, nspr
+, atk, at-spi2-atk, dbus
+, gdk-pixbuf, pango, cairo
+, expat, libdrm, mesa
+, alsa-lib, at-spi2-core, cups
+, libxkbcommon }:
 
 let
-  inherit (stdenv) lib;
-  LD_LIBRARY_PATH = lib.makeLibraryPath
-    [ glib gtk2 gdk_pixbuf alsaLib nss nspr GConf cups libgcrypt dbus ];
+  LD_LIBRARY_PATH = lib.makeLibraryPath [
+    glib gtk3 xorg.libXdamage
+    xorg.libX11 xorg.libxcb xorg.libXcomposite
+    xorg.libXcursor xorg.libXext xorg.libXfixes
+    xorg.libXi xorg.libXrender xorg.libXtst
+    xorg.libxshmfence libxkbcommon nss
+    nspr atk at-spi2-atk
+    dbus gdk-pixbuf pango cairo
+    xorg.libXrandr expat libdrm
+    mesa alsa-lib at-spi2-core
+    cups
+  ];
 in
-stdenv.mkDerivation rec {
-  version = "2.6.0";
-  name = "staruml-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  version = "6.1.0";
+  pname = "staruml";
 
-  src =
-    if stdenv.system == "i686-linux" then fetchurl {
-      url = "http://staruml.io/download/release/v${version}/StarUML-v${version}-32-bit.deb";
-      sha256 = "684d7ce7827a98af5bf17bf68d18f934fd970f13a2112a121b1f1f76d6387849";
-    } else fetchurl {
-      url = "http://staruml.io/download/release/v${version}/StarUML-v${version}-64-bit.deb";
-      sha256 = "36e0bdc1bb57b7d808a007a3fafb1b38662d5b0793424d5ad4f51a3a6a9a636d";
+  src = fetchurl {
+      url = "https://files.staruml.io/releases-v6/StarUML_${finalAttrs.version}_amd64.deb";
+      sha256 = "sha256-ULdrAQCiQlTN+aRhETj+ASMKkKctFgC2AfvUHGc6stU=";
     };
 
-  buildInputs = [ dpkg ];
-
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ wrapGAppsHook3 dpkg ];
+  buildInputs = [ glib hicolor-icon-theme ];
 
   unpackPhase = ''
     mkdir pkg
@@ -31,26 +42,39 @@ stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
-    mkdir $out
-    mv opt/staruml $out/bin
+    mkdir -p $out/bin
+    mv opt $out
 
-    ${patchelf}/bin/patchelf \
-      --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      $out/bin/StarUML
+    mv usr/share $out
+    rm -rf $out/share/doc
+
+    substituteInPlace $out/share/applications/staruml.desktop \
+      --replace "/opt/StarUML/staruml" "$out/bin/staruml"
 
     mkdir -p $out/lib
-
     ln -s ${stdenv.cc.cc.lib}/lib/libstdc++.so.6 $out/lib/
-    ln -s ${systemd.lib}/lib/libudev.so.1 $out/lib/libudev.so.0
+    ln -s ${lib.getLib systemd}/lib/libudev.so.1 $out/lib/libudev.so.0
 
-    wrapProgram $out/bin/StarUML \
-      --prefix LD_LIBRARY_PATH : $out/lib:${LD_LIBRARY_PATH}
+    patchelf \
+      --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
+      $out/opt/StarUML/staruml
+
+    ln -s $out/opt/StarUML/staruml $out/bin/staruml
   '';
 
-  meta = with stdenv.lib; {
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix LD_LIBRARY_PATH ':' $out/lib:${LD_LIBRARY_PATH}
+    )
+  '';
+
+  meta = with lib; {
     description = "A sophisticated software modeler";
-    homepage = http://staruml.io/;
+    homepage = "https://staruml.io/";
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
     license = licenses.unfree;
-    platforms = [ "i686-linux" "x86_64-linux" ];
+    maintainers = with maintainers; [ kashw2 ];
+    platforms = [ "x86_64-linux" ];
+    mainProgram = "staruml";
   };
-}
+})

@@ -1,53 +1,68 @@
-{stdenv, fetchurl, zlib, ocaml, findlib}:
+{lib, stdenv, fetchurl, zlib, ocaml, findlib}:
 
 let
+  common = {
+      patches = [];
+      postPatchInit = ''
+        cp META-zip META-camlzip
+        echo 'directory="../zip"' >> META-camlzip
+      '';
+  };
   param =
-    if stdenv.lib.versionAtLeast ocaml.version "4.02"
-    then {
-      version = "1.06";
-      url = "1616";
-      sha256 = "0m6gyjw46w3qnhxfsyqyag42znl5lwargks7w7rfchr9jzwpff68";
-      patch = ./makefile_1_06.patch;
-      installTargets = "install-findlib";
+    if lib.versionAtLeast ocaml.version "4.07"
+    then common // {
+      version = "1.11";
+      url = "https://github.com/xavierleroy/camlzip/archive/rel111.tar.gz";
+      sha256 = "sha256-/7vF3j4cE9wOWScjdtIy0u3pGzJ1UQY9R/3bdPHV7Tc=";
+    } else if lib.versionAtLeast ocaml.version "4.02"
+    then common // {
+      version = "1.10";
+      url = "https://github.com/xavierleroy/camlzip/archive/rel110.tar.gz";
+      sha256 = "X0YcczaQ3lFeJEiTIgjSSZ1zi32KFMtmZsP0FFpyfbI=";
     } else {
       version = "1.05";
-      url = "1037";
+      download_id = "1037";
+      url = "http://forge.ocamlcore.org/frs/download.php/${param.download_id}/camlzip-${param.version}.tar.gz";
       sha256 = "930b70c736ab5a7ed1b05220102310a0a2241564786657abe418e834a538d06b";
-      patch = ./makefile_1_05.patch;
-      installTargets = "install";
+      patches = [./makefile_1_05.patch];
+      postPatchInit = ''
+        substitute ${./META} META --subst-var-by VERSION "${param.version}"
+      '';
     };
 in
 
 stdenv.mkDerivation {
-  name = "camlzip-${param.version}";
+  pname = "ocaml${ocaml.version}-camlzip";
+  version = param.version;
 
   src = fetchurl {
-    url = "http://forge.ocamlcore.org/frs/download.php/${param.url}/camlzip-${param.version}.tar.gz";
+    inherit (param) url;
     inherit (param) sha256;
   };
 
-  buildInputs = [zlib ocaml findlib];
+  nativeBuildInputs = [ ocaml findlib ];
 
-  patches = [ param.patch ];
+  propagatedBuildInputs = [zlib];
+
+  strictDeps = true;
+
+  inherit (param) patches;
 
   createFindlibDestdir = true;
 
-  postPatch = ''
-    substitute ${./META} META --subst-var-by VERSION "${param.version}"
+  postPatch = param.postPatchInit + ''
     substituteInPlace Makefile \
       --subst-var-by ZLIB_LIBDIR "${zlib.out}/lib" \
       --subst-var-by ZLIB_INCLUDE "${zlib.dev}/include"
   '';
 
-  buildFlags = "all allopt";
-
-  inherit (param) installTargets;
+  buildFlags = [ "all" "allopt" ];
 
   postInstall = ''
     ln -s $out/lib/ocaml/${ocaml.version}/site-lib/{,caml}zip
   '';
 
-  meta = {
+  meta = with lib; {
     homepage = "http://cristal.inria.fr/~xleroy/software.html#camlzip";
     description = "A library for handling ZIP and GZIP files in OCaml";
     longDescription = ''
@@ -56,9 +71,7 @@ stdenv.mkDerivation {
       for reading from and writing to compressed files in these formats.
     '';
     license = "LGPL+linking exceptions";
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.z77z
-    ];
+    inherit (ocaml.meta) platforms;
+    maintainers = with maintainers; [ maggesi ];
   };
 }

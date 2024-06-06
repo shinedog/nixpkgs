@@ -1,29 +1,63 @@
 { spellChecking ? true
-, stdenv, fetchurl, pkgconfig, gtk2, gtkspell2 ? null
-, perl, pcre, gmime, gettext, intltool, dbus_glib, libnotify
+, lib
+, stdenv
+, fetchFromGitLab
+, autoreconfHook
+, pkg-config
+, gtk3
+, gtkspell3
+, gmime3
+, gettext
+, intltool
+, itstool
+, libxml2
+, libnotify
+, gnutls
+, makeWrapper
+, gnupg
+, gnomeSupport ? true
+, libsecret
+, gcr
 }:
 
-assert spellChecking -> gtkspell2 != null;
+stdenv.mkDerivation rec {
+  pname = "pan";
+  version = "0.158";
 
-let version = "0.139"; in
-
-stdenv.mkDerivation {
-  name = "pan-${version}";
-
-  src = fetchurl {
-    url = "http://pan.rebelbase.com/download/releases/${version}/source/pan-${version}.tar.bz2";
-    sha1 = "01ea0361a6d81489888e6abb075fd552999c3c60";
+  src = fetchFromGitLab {
+    domain = "gitlab.gnome.org";
+    owner = "GNOME";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-gcs3TsUzZAW8PhNPMzyOfwu+2SNynjRgfxdGIfAHrpA=";
   };
 
-  buildInputs = [ pkgconfig gtk2 perl gmime gettext intltool dbus_glib libnotify ]
-    ++ stdenv.lib.optional spellChecking gtkspell2;
+  nativeBuildInputs = [ autoreconfHook pkg-config gettext intltool itstool libxml2 makeWrapper ];
+
+  buildInputs = [ gtk3 gmime3 libnotify gnutls ]
+    ++ lib.optional spellChecking gtkspell3
+    ++ lib.optionals gnomeSupport [ libsecret gcr ];
+
+  configureFlags = [
+    "--with-dbus"
+    "--with-gtk3"
+    "--with-gnutls"
+    "--enable-libnotify"
+  ] ++ lib.optional spellChecking "--with-gtkspell"
+  ++ lib.optional gnomeSupport "--enable-gkr";
+
+  postInstall = ''
+    wrapProgram $out/bin/pan --suffix PATH : ${gnupg}/bin
+  '';
 
   enableParallelBuilding = true;
 
-  meta = {
-    description = "A GTK+-based Usenet newsreader good at both text and binaries";
-    homepage = http://pan.rebelbase.com/;
-    maintainers = [ stdenv.lib.maintainers.eelco ];
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    description = "A GTK-based Usenet newsreader good at both text and binaries";
+    mainProgram = "pan";
+    homepage = "http://pan.rebelbase.com/";
+    maintainers = [ maintainers.eelco ];
+    platforms = platforms.linux;
+    license = with licenses; [ gpl2Only fdl11Only ];
   };
 }

@@ -1,19 +1,82 @@
-{ stdenv, fetchurl, intltool, gobjectIntrospection, pkgconfig }:
+{ lib, stdenv
+, fetchurl
+, gettext
+, gobject-introspection
+, gtk-doc
+, docbook_xsl
+, docbook_xml_dtd_43
+, pkg-config
+, meson
+, ninja
+, vala
+, glib
+, zlib
+, gnome
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "gcab-${version}";
-  version = "0.7";
+  pname = "gcab";
+  version = "1.6";
+
+  outputs = [ "bin" "out" "dev" "devdoc" "installedTests" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/gcab/${version}/${name}.tar.xz";
-    sha256 = "1vxdsiky3492zlyrym02sdwf09y19rl2z5h5iin7qm0wizw5wvm1";
+    url = "mirror://gnome/sources/gcab/${lib.versions.majorMinor version}/gcab-${version}.tar.xz";
+    hash = "sha256-LwyWFVd8QSaQniUfneBibD7noVI3bBW1VE3xD8h+Vgs=";
   };
 
-  buildInputs = [ intltool gobjectIntrospection pkgconfig ];
+  patches = [
+    # allow installing installed tests to a separate output
+    ./installed-tests-path.patch
+  ];
 
-  meta = with stdenv.lib; {
-    platforms = platforms.linux;
-    maintainers = [ maintainers.lethalman ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    vala
+    gettext
+    gobject-introspection
+    gtk-doc
+    docbook_xsl
+    docbook_xml_dtd_43
+  ];
+
+  buildInputs = [
+    glib
+    zlib
+  ];
+
+  # required by libgcab-1.0.pc
+  propagatedBuildInputs = [
+    glib
+  ];
+
+  mesonFlags = [
+    "-Dinstalled_tests=true"
+    "-Dinstalled_test_prefix=${placeholder "installedTests"}"
+  ];
+
+  doCheck = true;
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+
+    tests = {
+      installedTests = nixosTests.installed-tests.gcab;
+    };
   };
 
+  meta = with lib; {
+    description = "GObject library to create cabinet files";
+    mainProgram = "gcab";
+    homepage = "https://gitlab.gnome.org/GNOME/gcab";
+    license = licenses.lgpl21Plus;
+    maintainers = teams.gnome.members;
+    platforms = platforms.unix;
+  };
 }

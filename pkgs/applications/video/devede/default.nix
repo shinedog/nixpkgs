@@ -1,30 +1,44 @@
-{ pkgs, stdenv, fetchurl, pythonPackages, ffmpeg, mplayer, vcdimager, cdrkit, dvdauthor }:
+{ lib, fetchFromGitLab, python3Packages, ffmpeg, mplayer, vcdimager, cdrkit, dvdauthor
+, gtk3, gettext, wrapGAppsHook3, gdk-pixbuf, gobject-introspection }:
 
 let
-  inherit (pythonPackages) dbus-python buildPythonApplication pygtk;
-
+  inherit (python3Packages) dbus-python buildPythonApplication pygobject3 urllib3 setuptools;
 in buildPythonApplication rec {
-  name = "devede-3.23.0";
+  pname = "devede";
+  version = "4.17.0";
   namePrefix = "";
 
-  src = fetchurl {
-    url = "http://www.rastersoft.com/descargas/${name}.tar.bz2";
-    sha256 = "9e217ca46f5f275cb0c3cadbe8c830fa1fde774c004bd95a343d1255be6f25e1";
+  src = fetchFromGitLab {
+    owner = "rastersoft";
+    repo = "devedeng";
+    rev = version;
+    sha256 = "sha256-CdntdD5DRA/eXTBRBRszkbYFeFxj+0odb8XHkAFdobU=";
   };
 
-  buildInputs = [ ffmpeg ];
+  nativeBuildInputs = [
+    gettext wrapGAppsHook3
+    gobject-introspection
+  ];
 
-  propagatedBuildInputs = [ pygtk dbus-python ffmpeg mplayer dvdauthor vcdimager cdrkit ];
+  buildInputs = [
+    ffmpeg
+  ];
+
+  propagatedBuildInputs = [
+    gtk3 pygobject3 gdk-pixbuf dbus-python ffmpeg mplayer dvdauthor vcdimager cdrkit urllib3 setuptools
+  ];
 
   postPatch = ''
-    substituteInPlace devede --replace "/usr/share/devede" "$out/share/devede"
+    substituteInPlace setup.py --replace "'/usr'," ""
+    substituteInPlace src/devedeng/configuration_data.py \
+      --replace "/usr/share" "$out/share" \
+      --replace "/usr/local/share" "$out/share"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "DVD Creator for Linux";
-    homepage = http://www.rastersoft.com/programas/devede.html;
+    homepage = "http://www.rastersoft.com/programas/devede.html";
     license = licenses.gpl3;
     maintainers = [ maintainers.bdimcheff ];
-    broken = true;  # tarball is gone
   };
 }

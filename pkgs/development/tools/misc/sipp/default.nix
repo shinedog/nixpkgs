@@ -1,28 +1,38 @@
-{stdenv, fetchurl, ncurses, libpcap }:
+{ lib, stdenv, fetchurl, ncurses, libpcap, cmake, openssl, git, lksctp-tools }:
 
 stdenv.mkDerivation rec {
-
-  version = "3.4-beta2";
-
-  name = "sipp-${version}";
+  version = "3.6.1";
+  pname = "sipp";
 
   src = fetchurl {
-    url = "https://github.com/SIPp/sipp/archive/${version}.tar.gz";
-    sha256 = "0rr3slarh5dhpinif5aqji9c9krnpvl7z49w7qahvsww1niawwdv";
+    url = "https://github.com/SIPp/${pname}/releases/download/v${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-alYOg6/5gvMx3byt+zvVMMWJbNW3V91utoITPMhg7LE=";
   };
 
-  configurePhase = ''
-    export ac_cv_lib_curses_initscr=yes
-    export ac_cv_lib_pthread_pthread_mutex_init=yes
-    sed -i "s@pcap/\(.*\).pcap@$out/share/pcap/\1.pcap@g" src/scenario.cpp
-    ./configure --prefix=$out --with-pcap
+  postPatch = ''
+    cp version.h src/version.h
   '';
 
-  postInstall = ''
-    mkdir -pv $out/share/pcap
-    cp pcap/* $out/share/pcap
-  '';
+  cmakeFlags = [
+    "-DUSE_GSL=1"
+    "-DUSE_PCAP=1"
+    "-DUSE_SSL=1"
+    "-DUSE_SCTP=${if stdenv.isLinux then "1" else "0"}"
 
-  buildInputs = [ncurses libpcap];
+    # file RPATH_CHANGE could not write new RPATH
+    "-DCMAKE_SKIP_BUILD_RPATH=ON"
+  ];
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [ cmake git ];
+  buildInputs = [ ncurses libpcap openssl ]
+    ++ lib.optional (stdenv.isLinux) lksctp-tools;
+
+  meta = with lib; {
+    homepage = "http://sipp.sf.net";
+    description = "The SIPp testing tool";
+    mainProgram = "sipp";
+    license = licenses.gpl3;
+    platforms = platforms.unix;
+  };
 }
-

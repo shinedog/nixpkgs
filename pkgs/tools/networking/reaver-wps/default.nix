@@ -1,27 +1,47 @@
-{ stdenv, fetchurl, libpcap, sqlite }:
+{ lib, stdenv, fetchurl, libpcap, sqlite, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "reaver-wps-1.4";
+  version = "1.4";
+  pname = "reaver-wps";
+  confdir = "/var/db/${pname}-${version}"; # the sqlite database is at "${confdir}/reaver/reaver.db"
 
   src = fetchurl {
-    url = http://reaver-wps.googlecode.com/files/reaver-1.4.tar.gz;
+    url = "https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/reaver-wps/reaver-${version}.tar.gz";
     sha256 = "0bdjai4p8xbsw8zdkkk43rgsif79x0nyx4djpyv0mzh59850blxd";
   };
 
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ libpcap sqlite ];
 
-  prePatch = ''
-    cd src
+  # Workaround build failure on -fno-common toolchains:
+  #   ld: crypto/dh_groups.o:src/crypto/../globule.h:141: multiple definition of
+  #     `globule'; /build/ccrzO6vA.o:src/globule.h:141: first defined here
+  env.NIX_CFLAGS_COMPILE = "-fcommon";
+
+  setSourceRoot = ''
+    sourceRoot=$(echo */src)
   '';
 
-  preInstall = ''
-    mkdir -p $out/bin
+  configureFlags = [ "--sysconfdir=${confdir}" ];
+
+  installPhase = ''
+    mkdir -p $out/{bin,etc}
+    cp reaver.db $out/etc/
+    cp reaver wash $out/bin/
+
+    wrapProgram $out/bin/reaver --run "[ -s ${confdir}/reaver/reaver.db ] || install -D $out/etc/reaver.db ${confdir}/reaver/reaver.db"
+    wrapProgram $out/bin/wash   --run "[ -s ${confdir}/reaver/reaver.db ] || install -D $out/etc/reaver.db ${confdir}/reaver/reaver.db"
   '';
 
-  meta = {
+  enableParallelBuilding = true;
+
+  patches = [ ./parallel-build.patch ];
+
+  meta = with lib; {
     description = "Brute force attack against Wifi Protected Setup";
-    homepage = http://code.google.com/p/reaver-wps;
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://code.google.com/archive/p/reaver-wps/";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ nico202 ];
   };
 }

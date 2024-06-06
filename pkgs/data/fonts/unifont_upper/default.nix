@@ -1,28 +1,30 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "unifont_upper-${version}";
-  version = "9.0.03";
+stdenvNoCC.mkDerivation rec {
+  pname = "unifont_upper";
+  version = "15.1.05";
 
-  ttf = fetchurl {
-    url = "http://unifoundry.com/pub/unifont-${version}/font-builds/${name}.ttf";
-    sha256 = "015v39y6nnyz4ld006349jzk9isyaqp4cnvmz005ylfnicl4zwhi";
+  src = fetchurl {
+    url = "mirror://gnu/unifont/unifont-${version}/${pname}-${version}.otf";
+    hash = "sha256-A/Z/+IMNUH/3Ir3ewf/U2xqkkpZDUDKO+dlnRYt+7U0=";
   };
 
-  phases = "installPhase";
+  dontUnpack = true;
 
-  installPhase =
-    ''
-      mkdir -p $out/share/fonts/truetype
-      cp -v ${ttf} $out/share/fonts/truetype/unifont_upper.ttf
-    '';
+  installPhase = ''
+    runHook preInstall
 
-  meta = with stdenv.lib; {
+    install -Dm644 $src $out/share/fonts/opentype/unifont_upper.otf
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
     description = "Unicode font for glyphs above the Unicode Basic Multilingual Plane";
-    homepage = http://unifoundry.com/unifont.html;
+    homepage = "https://unifoundry.com/unifont/";
 
     # Basically GPL2+ with font exception.
-    license = http://unifoundry.com/LICENSE.txt;
+    license = "https://unifoundry.com/LICENSE.txt";
     maintainers = [ maintainers.mathnerd314 maintainers.vrthra ];
     platforms = platforms.all;
   };

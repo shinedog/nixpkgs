@@ -1,14 +1,18 @@
-{ kdeFramework, lib, ecm, kconfig, kconfigwidgets
-, kcoreaddons , kdbusaddons, kdoctools, ki18n, kiconthemes
-, knotifications , kservice, kwidgetsaddons, kwindowsystem, libgcrypt
+{
+  mkDerivation,
+  extra-cmake-modules, kdoctools,
+  kconfig, kconfigwidgets, kcoreaddons , kdbusaddons, ki18n,
+  kiconthemes, knotifications, kservice, kwidgetsaddons, kwindowsystem,
+  libgcrypt, qgpgme, qtbase, qca-qt5
 }:
 
-kdeFramework {
-  name = "kwallet";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm kdoctools ];
-  propagatedBuildInputs = [
+mkDerivation {
+  pname = "kwallet";
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
+  buildInputs = [
     kconfig kconfigwidgets kcoreaddons kdbusaddons ki18n kiconthemes
-    knotifications kservice kwidgetsaddons kwindowsystem libgcrypt
+    knotifications kservice kwidgetsaddons kwindowsystem
+    libgcrypt qgpgme qca-qt5
   ];
+  propagatedBuildInputs = [ qtbase ];
 }

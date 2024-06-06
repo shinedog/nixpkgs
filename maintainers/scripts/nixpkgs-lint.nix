@@ -1,23 +1,29 @@
-{ stdenv, makeWrapper, perl, perlPackages }:
+{ stdenv, lib, makeWrapper, perl, perlPackages }:
 
 stdenv.mkDerivation {
-  name = "nixpkgs-lint-1";
+  pname = "nixpkgs-lint";
+  version = "1";
 
-  buildInputs = [ makeWrapper perl perlPackages.XMLSimple ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ perl perlPackages.XMLSimple ];
 
-  unpackPhase = "true";
-  buildPhase = "true";
+  dontUnpack = true;
+  dontBuild = true;
 
   installPhase =
     ''
       mkdir -p $out/bin
       cp ${./nixpkgs-lint.pl} $out/bin/nixpkgs-lint
+      # make the built version hermetic
+      substituteInPlace  $out/bin/nixpkgs-lint \
+        --replace-fail "#! /usr/bin/env nix-shell" "#! ${lib.getExe perl}"
       wrapProgram $out/bin/nixpkgs-lint --set PERL5LIB $PERL5LIB
     '';
 
-  meta = {
-    maintainers = [ stdenv.lib.maintainers.eelco ];
+  meta = with lib; {
+    maintainers = [ maintainers.eelco ];
     description = "A utility for Nixpkgs contributors to check Nixpkgs for common errors";
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "nixpkgs-lint";
+    platforms = platforms.unix;
   };
 }

@@ -9,12 +9,17 @@ hashType=$NIX_HASH_ALGO
 deepClone=$NIX_PREFETCH_GIT_DEEP_CLONE
 leaveDotGit=$NIX_PREFETCH_GIT_LEAVE_DOT_GIT
 fetchSubmodules=
+fetchLFS=
 builder=
 branchName=$NIX_PREFETCH_GIT_BRANCH_NAME
 
 # ENV params
 out=${out:-}
 http_proxy=${http_proxy:-}
+
+# allow overwriting cacert's ca-bundle.crt with a custom one
+# this can be done by setting NIX_GIT_SSL_CAINFO and NIX_SSL_CERT_FILE environment variables for the nix-daemon
+GIT_SSL_CAINFO=${NIX_GIT_SSL_CAINFO:-$GIT_SSL_CAINFO}
 
 # populated by clone_user_rev()
 fullRev=
@@ -25,7 +30,7 @@ commitDateStrict8601=
 if test -n "$deepClone"; then
     deepClone=true
 else
-    deepClone=false
+    deepClone=
 fi
 
 if test "$leaveDotGit" != 1; then
@@ -39,16 +44,26 @@ usage(){
 
 Options:
       --out path      Path where the output would be stored.
-      --url url       Any url understand by 'git clone'.
+      --url url       Any url understood by 'git clone'.
       --rev ref       Any sha1 or references (such as refs/heads/master)
       --hash h        Expected hash.
+      --branch-name   Branch name to check out into
+      --sparse-checkout Only fetch and checkout part of the repository.
+      --non-cone-mode Use non-cone mode for sparse checkouts.
       --deepClone     Clone the entire repository.
       --no-deepClone  Make a shallow clone of just the required ref.
       --leave-dotGit  Keep the .git directories.
+      --fetch-lfs     Fetch git Large File Storage (LFS) files.
       --fetch-submodules Fetch submodules.
       --builder       Clone as fetchgit does, but url, rev, and out option are mandatory.
+      --quiet         Only print the final json summary.
 "
     exit 1
+}
+
+# some git commands print to stdout, which would contaminate our JSON output
+clean_git(){
+    git "$@" >&2
 }
 
 argi=0
@@ -62,12 +77,15 @@ for arg; do
             --hash) argfun=set_hashType;;
             --branch-name) argfun=set_branchName;;
             --deepClone) deepClone=true;;
+            --sparse-checkout) argfun=set_sparseCheckout;;
+            --non-cone-mode) nonConeMode=true;;
             --quiet) QUIET=true;;
-            --no-deepClone) deepClone=false;;
+            --no-deepClone) deepClone=;;
             --leave-dotGit) leaveDotGit=true;;
+            --fetch-lfs) fetchLFS=true;;
             --fetch-submodules) fetchSubmodules=true;;
             --builder) builder=true;;
-            --help) usage; exit;;
+            -h|--help) usage; exit;;
             *)
                 : $((++argi))
                 case $argi in
@@ -82,7 +100,7 @@ for arg; do
         case $argfun in
             set_*)
                 var=${argfun#set_}
-                eval $var=$arg
+                eval "$var=$(printf %q "$arg")"
                 ;;
         esac
         argfun=""
@@ -96,9 +114,13 @@ fi
 
 init_remote(){
     local url=$1
-    git init
-    git remote add origin "$url"
-    ( [ -n "$http_proxy" ] && git config http.proxy "$http_proxy" ) || true
+    clean_git init --initial-branch=master
+    clean_git remote add origin "$url"
+    if [ -n "$sparseCheckout" ]; then
+        git config remote.origin.partialclonefilter "blob:none"
+        echo "$sparseCheckout" | git sparse-checkout set --stdin ${nonConeMode:+--no-cone}
+    fi
+    ( [ -n "$http_proxy" ] && clean_git config --global http.proxy "$http_proxy" ) || true
 }
 
 # Return the reference of an hash if it exists on the remote repository.
@@ -120,9 +142,8 @@ hash_from_ref(){
 url_to_name(){
     local url=$1
     local ref=$2
-    # basename removes the / and .git suffixes
     local base
-    base=$(basename "$url" .git)
+    base=$(basename "$url" .git | cut -d: -f2)
 
     if [[ $ref =~ ^[a-z0-9]+$ ]]; then
         echo "$base-${ref:0:7}"
@@ -131,7 +152,7 @@ url_to_name(){
     fi
 }
 
-# Fetch everything and checkout the right sha1
+# Fetch and checkout the right sha1
 checkout_hash(){
     local hash="$1"
     local ref="$2"
@@ -140,8 +161,22 @@ checkout_hash(){
         hash=$(hash_from_ref "$ref")
     fi
 
-    git fetch -t ${builder:+--progress} origin || return 1
-    git checkout -b "$branchName" "$hash" || return 1
+    [[ -z "$deepClone" ]] && \
+    clean_git fetch ${builder:+--progress} --depth=1 origin "$hash" || \
+    clean_git fetch -t ${builder:+--progress} origin || return 1
+
+    local object_type=$(git cat-file -t "$hash")
+    if [[ "$object_type" == "commit" || "$object_type" == "tag" ]]; then
+        clean_git checkout -b "$branchName" "$hash" || return 1
+    elif [[ "$object_type" == "tree" ]]; then
+        clean_git config user.email "nix-prefetch-git@localhost"
+        clean_git config user.name "nix-prefetch-git"
+        local commit_id=$(git commit-tree "$hash" -m "Commit created from tree hash $hash")
+        clean_git checkout -b "$branchName" "$commit_id" || return 1
+    else
+        echo "Unrecognized git object type: $object_type"
+        return 1
+    fi
 }
 
 # Fetch only a branch/tag and checkout it.
@@ -149,10 +184,10 @@ checkout_ref(){
     local hash="$1"
     local ref="$2"
 
-    if "$deepClone"; then
+    if [[ -n "$deepClone" ]]; then
         # The caller explicitly asked for a deep clone.  Deep clones
         # allow "git describe" and similar tools to work.  See
-        # http://thread.gmane.org/gmane.linux.distributions.nixos/3569
+        # https://marc.info/?l=nix-dev&m=139641582514772
         # for a discussion.
         return 1
     fi
@@ -163,8 +198,8 @@ checkout_ref(){
 
     if test -n "$ref"; then
         # --depth option is ignored on http repository.
-        git fetch ${builder:+--progress} --depth 1 origin +"$ref" || return 1
-        git checkout -b "$branchName" FETCH_HEAD || return 1
+        clean_git fetch ${builder:+--progress} --depth 1 origin +"$ref" || return 1
+        clean_git checkout -b "$branchName" FETCH_HEAD || return 1
     else
         return 1
     fi
@@ -172,27 +207,10 @@ checkout_ref(){
 
 # Update submodules
 init_submodules(){
-    # Add urls into .git/config file
-    git submodule init
-
-    # list submodule directories and their hashes
-    git submodule status |
-    while read -r l; do
-        local hash
-        local dir
-        local name
-        local url
-
-        # checkout each submodule
-        hash=$(echo "$l" | awk '{print substr($1,2)}')
-        dir=$(echo "$l" | awk '{print $2}')
-        name=$(
-            git config -f .gitmodules --get-regexp submodule\..*\.path |
-            sed -n "s,^\(.*\)\.path $dir\$,\\1,p")
-        url=$(git config --get "${name}.url")
-
-        clone "$dir" "$url" "$hash" ""
-    done
+    # shallow with leaveDotGit will change hashes
+    [[ -z "$deepClone" ]] && [[ -z "$leaveDotGit" ]] && \
+    clean_git submodule update --init --recursive -j ${NIX_BUILD_CORES:-1} --progress --depth 1 || \
+    clean_git submodule update --init --recursive -j ${NIX_BUILD_CORES:-1} --progress
 }
 
 clone(){
@@ -242,12 +260,18 @@ make_deterministic_repo(){
     cd "$repo"
     # Remove files that contain timestamps or otherwise have non-deterministic
     # properties.
-    rm -rf .git/logs/ .git/hooks/ .git/index .git/FETCH_HEAD .git/ORIG_HEAD \
-        .git/refs/remotes/origin/HEAD .git/config
-
+    if [ -f .git ]; then
+        local dotgit_content=$(<.git)
+        local dotgit_dir="${dotgit_content#gitdir: }"
+    else
+        local dotgit_dir=".git"
+    fi
+    pushd "$dotgit_dir" >/dev/null
+        rm -rf logs/ hooks/ index FETCH_HEAD ORIG_HEAD refs/remotes/origin/HEAD config
+    popd >/dev/null
     # Remove all remote branches.
     git branch -r | while read -r branch; do
-        git branch -rD "$branch" >&2
+        clean_git branch -rD "$branch"
     done
 
     # Remove tags not reachable from HEAD. If we're exactly on a tag, don't
@@ -255,25 +279,31 @@ make_deterministic_repo(){
     maybe_tag=$(git tag --points-at HEAD)
     git tag --contains HEAD | while read -r tag; do
         if [ "$tag" != "$maybe_tag" ]; then
-            git tag -d "$tag" >&2
+            clean_git tag -d "$tag"
         fi
     done
 
     # Do a full repack. Must run single-threaded, or else we lose determinism.
-    git config pack.threads 1
-    git repack -A -d -f
-    rm -f .git/config
+    clean_git config pack.threads 1
+    clean_git repack -A -d -f
+    rm -f "$dotgit_dir/config"
 
     # Garbage collect unreferenced objects.
-    git gc --prune=all
+    # Note: --keep-largest-pack prevents non-deterministic ordering of packs
+    #   listed in .git/objects/info/packs by only using a single pack
+    clean_git gc --prune=all --keep-largest-pack
     )
 }
 
 
-_clone_user_rev() {
+clone_user_rev() {
     local dir="$1"
     local url="$2"
     local rev="${3:-HEAD}"
+
+    if [ -n "$fetchLFS" ]; then
+        clean_git lfs install
+    fi
 
     # Perform the checkout.
     case "$rev" in
@@ -283,16 +313,16 @@ _clone_user_rev() {
             if test -z "$(echo "$rev" | tr -d 0123456789abcdef)"; then
                 clone "$dir" "$url" "$rev" "" 1>&2
             else
-                echo 1>&2 "Bad commit hash or bad reference."
-                exit 1
+                # if revision is not hexadecimal it might be a tag
+                clone "$dir" "$url" "" "refs/tags/$rev" 1>&2
             fi;;
     esac
 
     pushd "$dir" >/dev/null
     fullRev=$( (git rev-parse "$rev" 2>/dev/null || git rev-parse "refs/heads/$branchName") | tail -n1)
     humanReadableRev=$(git describe "$fullRev" 2> /dev/null || git describe --tags "$fullRev" 2> /dev/null || echo -- none --)
-    commitDate=$(git show --no-patch --pretty=%ci "$fullRev")
-    commitDateStrict8601=$(git show --no-patch --pretty=%cI "$fullRev")
+    commitDate=$(git show -1 --no-patch --pretty=%ci "$fullRev")
+    commitDateStrict8601=$(git show -1 --no-patch --pretty=%cI "$fullRev")
     popd >/dev/null
 
     # Allow doing additional processing before .git removal
@@ -302,26 +332,48 @@ _clone_user_rev() {
         find "$dir" -name .git -print0 | xargs -0 rm -rf
     else
         find "$dir" -name .git | while read -r gitdir; do
-            make_deterministic_repo "$(readlink -f "$gitdir/..")"
+            make_deterministic_repo "$(readlink -f "$(dirname "$gitdir")")"
         done
     fi
 }
 
-clone_user_rev() {
-    if ! test -n "$QUIET"; then
-        _clone_user_rev "$@"
-    else
-        errfile="$(mktemp "${TMPDIR:-/tmp}/git-checkout-err-XXXXXXXX")"
-        # shellcheck disable=SC2064
-        trap "rm -rf \"$errfile\"" EXIT
-        _clone_user_rev "$@" 2> "$errfile" || (
-            status="$?"
-            cat "$errfile" >&2
-            exit "$status"
-        )
-    fi
+exit_handlers=()
+
+run_exit_handlers() {
+    exit_status=$?
+    for handler in "${exit_handlers[@]}"; do
+        eval "$handler $exit_status"
+    done
 }
 
+trap run_exit_handlers EXIT
+
+quiet_exit_handler() {
+    exec 2>&3 3>&-
+    if [ $1 -ne 0 ]; then
+        cat "$errfile" >&2
+    fi
+    rm -f "$errfile"
+}
+
+quiet_mode() {
+    errfile="$(mktemp "${TMPDIR:-/tmp}/git-checkout-err-XXXXXXXX")"
+    exit_handlers+=(quiet_exit_handler)
+    exec 3>&2 2>"$errfile"
+}
+
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}" # \
+    s="${s//\"/\\\"}" # "
+    s="${s//^H/\\\b}" # \b (backspace)
+    s="${s//^L/\\\f}" # \f (form feed)
+    s="${s//
+/\\\n}" # \n (newline)
+    s="${s//^M/\\\r}" # \r (carriage return)
+    s="${s//   /\\t}" # \t (tab)
+    echo "$s"
+}
 
 print_results() {
     hash="$1"
@@ -338,23 +390,45 @@ print_results() {
         fi
     fi
     if test -n "$hash"; then
-        echo "{"
-        echo "  \"url\": \"$url\","
-        echo "  \"rev\": \"$fullRev\","
-        echo "  \"date\": \"$commitDateStrict8601\","
-        echo -n "  \"$hashType\": \"$hash\""
-        if test -n "$fetchSubmodules"; then
-            echo ","
-            echo -n "  \"fetchSubmodules\": true"
-        fi
-        echo ""
-        echo "}"
+        cat <<EOF
+{
+  "url": "$(json_escape "$url")",
+  "rev": "$(json_escape "$fullRev")",
+  "date": "$(json_escape "$commitDateStrict8601")",
+  "path": "$(json_escape "$finalPath")",
+  "$(json_escape "$hashType")": "$(json_escape "$hash")",
+  "hash": "$(nix-hash --to-sri --type $hashType $hash)",
+  "fetchLFS": $([[ -n "$fetchLFS" ]] && echo true || echo false),
+  "fetchSubmodules": $([[ -n "$fetchSubmodules" ]] && echo true || echo false),
+  "deepClone": $([[ -n "$deepClone" ]] && echo true || echo false),
+  "leaveDotGit": $([[ -n "$leaveDotGit" ]] && echo true || echo false)
+}
+EOF
     fi
 }
+
+remove_tmpPath() {
+    rm -rf "$tmpPath"
+}
+
+remove_tmpHomePath() {
+    rm -rf "$tmpHomePath"
+}
+
+if test -n "$QUIET"; then
+    quiet_mode
+fi
 
 if test -z "$branchName"; then
     branchName=fetchgit
 fi
+
+tmpHomePath="$(mktemp -d "${TMPDIR:-/tmp}/nix-prefetch-git-tmp-home-XXXXXXXXXX")"
+exit_handlers+=(remove_tmpHomePath)
+ln -s "${NETRC:-$HOME/.netrc}" "$tmpHomePath/.netrc"
+HOME="$tmpHomePath"
+unset XDG_CONFIG_HOME
+export GIT_CONFIG_NOSYSTEM=1
 
 if test -n "$builder"; then
     test -n "$out" -a -n "$url" -a -n "$rev" || usage
@@ -380,8 +454,7 @@ else
     if test -z "$finalPath"; then
 
         tmpPath="$(mktemp -d "${TMPDIR:-/tmp}/git-checkout-tmp-XXXXXXXX")"
-        # shellcheck disable=SC2064
-        trap "rm -rf \"$tmpPath\"" EXIT
+        exit_handlers+=(remove_tmpPath)
 
         tmpFile="$tmpPath/$(url_to_name "$url" "$rev")"
         mkdir -p "$tmpFile"
@@ -396,8 +469,7 @@ else
         finalPath=$(nix-store --add-fixed --recursive "$hashType" "$tmpFile")
 
         if test -n "$expHash" -a "$expHash" != "$hash"; then
-            print_metadata
-            echo "hash mismatch for URL \`$url'" >&2
+            echo "hash mismatch for URL \`$url'. Got \`$hash'; expected \`$expHash'." >&2
             exit 1
         fi
     fi

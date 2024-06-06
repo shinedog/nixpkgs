@@ -1,31 +1,61 @@
-{ stdenv, fetchFromGitHub, cmake, qt4 ? null
-, withQt5 ? false, qtbase ? null, qttools ? null
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, qtbase
+, qttools
+, CoreFoundation
+, Security
+, libsecret
 }:
 
-assert withQt5 -> qtbase != null;
-assert withQt5 -> qttools != null;
-
 stdenv.mkDerivation rec {
-  name = "qtkeychain-${if withQt5 then "qt5" else "qt4"}-${version}";
-  version = "0.7.0";
+  pname = "qtkeychain";
+  version = "0.14.3";
 
   src = fetchFromGitHub {
     owner = "frankosterfeld";
     repo = "qtkeychain";
-    rev = "v${version}";
-    sha256 = "04v6ymkw7qd1pf9lwijgqrl89w2hhsnqgz7dm4cdrh8i8dffpn52";
+    rev = version;
+    sha256 = "sha256-+1WX3ARH+jWeDiaJnX+ZlRMj+l3qvgBwcGKjB9QEJNI=";
   };
 
-  cmakeFlags = [ "-DQT_TRANSLATIONS_DIR=share/qt/translations" ];
+  dontWrapQtApps = true;
 
-  nativeBuildInputs = [ cmake ];
+  cmakeFlags = [
+    "-DBUILD_WITH_QT6=${if lib.versions.major qtbase.version == "6" then "ON" else "OFF"}"
+    "-DQT_TRANSLATIONS_DIR=share/qt/translations"
+  ];
 
-  buildInputs = if withQt5 then [ qtbase qttools ] else [ qt4 ];
+  nativeBuildInputs = [ cmake ]
+    ++ lib.optionals (!stdenv.isDarwin) [ pkg-config ] # for finding libsecret
+  ;
+
+  buildInputs = lib.optionals (!stdenv.isDarwin) [ libsecret ]
+    ++ [ qtbase qttools ]
+    ++ lib.optionals stdenv.isDarwin [
+    CoreFoundation
+    Security
+  ];
+
+  doInstallCheck = true;
+
+  # we previously had a note in here saying to run this check manually, so we might as
+  # well do it automatically. It seems like a perfectly valid sanity check, but I
+  # have no idea *why* we might need it
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    grep --quiet -R 'set(PACKAGE_VERSION "${version}"' .
+
+    runHook postInstallCheck
+  '';
 
   meta = {
     description = "Platform-independent Qt API for storing passwords securely";
     homepage = "https://github.com/frankosterfeld/qtkeychain";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.unix;
   };
 }

@@ -1,28 +1,44 @@
-{ stdenv, fetchurl, python2, libxml2Python }:
-# We need the same Python as is used to build libxml2Python
+{ stdenv
+, lib
+, fetchurl
+, python3
+}:
 
 stdenv.mkDerivation rec {
-  name = "itstool-2.0.2";
+  pname = "itstool";
+  version = "2.0.7";
 
   src = fetchurl {
-    url = "http://files.itstool.org/itstool/${name}.tar.bz2";
-    sha256 = "bf909fb59b11a646681a8534d5700fec99be83bb2c57badf8c1844512227033a";
+    url = "http://files.itstool.org/${pname}/${pname}-${version}.tar.bz2";
+    hash = "sha256-a5p80poSu5VZj1dQ6HY87niDahogf4W3TYsydbJ+h8o=";
   };
 
-  buildInputs = [ python2 libxml2Python ];
+  strictDeps = true;
 
-  patchPhase =
-    ''
-      sed -e '/import libxml2/i import sys\
-      sys.path.append("${libxml2Python}/lib/${python2.libPrefix}/site-packages")' \
-      -i itstool.in
-    '';
+  nativeBuildInputs = [
+    python3
+    python3.pkgs.wrapPython
+  ];
+
+  buildInputs = [
+    python3
+    python3.pkgs.libxml2
+  ];
+
+  pythonPath = [
+    python3.pkgs.libxml2
+  ];
+
+  postFixup = ''
+    wrapPythonPrograms
+  '';
 
   meta = {
-    homepage = http://itstool.org/;
+    homepage = "https://itstool.org/";
     description = "XML to PO and back again";
-    license = stdenv.lib.licenses.gpl3Plus;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    mainProgram = "itstool";
+    license = lib.licenses.gpl3Plus;
+    platforms = lib.platforms.all;
+    maintainers = [ ];
   };
 }

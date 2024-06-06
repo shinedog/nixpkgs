@@ -1,28 +1,23 @@
-{ stdenv, fetchurl, fetchgit, autoreconfHook, libtool }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, getconf }:
 
 stdenv.mkDerivation rec {
-  name="libfixposix-${version}";
-  version="git-${src.rev}";
+  pname = "libfixposix";
+  version="0.5.1";
 
-  src = fetchgit {
-    url = "https://github.com/sionescu/libfixposix";
-    rev = "30b75609d858588ea00b427015940351896867e9";
-    sha256 = "17spjz9vbgqllzlkws2abvqi0a71smhi4vgq3913aw0kq206mfxz";
+  src = fetchFromGitHub {
+    owner = "sionescu";
+    repo = "libfixposix";
+    rev = "v${version}";
+    sha256 = "sha256-5qA6ytbqE+/05XQGxP9/4vEs9gFcuI3k7eJJYucW7fM=";
   };
 
-  buildInputs = [ autoreconfHook libtool ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ] ++ lib.optionals stdenv.isDarwin [ getconf ];
 
-  meta = with stdenv.lib; {
-    description = "A set of workarounds for places in POSIX that get implemented differently";
-    maintainers = with maintainers;
-    [
-      raskin
-    ];
-    platforms = platforms.linux;
-  };
-  passthru = {
-    updateInfo = {
-      downloadPage = "http://gitorious.org/libfixposix/libfixposix";
-    };
+  meta = with lib; {
+    homepage = "https://github.com/sionescu/libfixposix";
+    description = "Thin wrapper over POSIX syscalls and some replacement functionality";
+    license = licenses.boost;
+    maintainers = with maintainers; [ orivej raskin ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

@@ -1,35 +1,43 @@
-{ stdenv, fetchurl
-
-# Optional Dependencies
-, shishi ? null
+{ lib
+, stdenv
+, fetchurl
+, withShishi ? !stdenv.isDarwin
+, shishi
 }:
 
 stdenv.mkDerivation rec {
-  name = "gss-1.0.3";
+  pname = "gss";
+  version = "1.0.4";
 
   src = fetchurl {
-    url = "mirror://gnu/gss/${name}.tar.gz";
-    sha256 = "1syyvh3k659xf1hdv9pilnnhbbhs6vfapayp4xgdcc8mfgf9v4gz";
+    url = "mirror://gnu/gss/gss-${version}.tar.gz";
+    hash = "sha256-7M6r3vTK4/znIYsuy4PrQifbpEtTthuMKy6IrgJBnHM=";
   };
 
-  buildInputs = [ shishi ];
+  buildInputs = lib.optional withShishi shishi;
+
+  # ./stdint.h:89:5: error: expected value in expression
+  preConfigure = lib.optionalString stdenv.isDarwin ''
+    export GNULIBHEADERS_OVERRIDE_WINT_T=0
+  '';
 
   configureFlags = [
-    "--${if shishi != null then "enable" else "disable"}-kereberos5"
+    "--${if withShishi then "enable" else "disable"}-kerberos5"
   ];
 
   doCheck = true;
 
   # Fixup .la files
-  postInstall = stdenv.lib.optionalString (!stdenv.isDarwin && shishi != null) ''
+  postInstall = lib.optionalString withShishi ''
     sed -i 's,\(-lshishi\),-L${shishi}/lib \1,' $out/lib/libgss.la
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.gnu.org/software/gss/;
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/gss/";
     description = "Generic Security Service";
+    mainProgram = "gss";
     license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ bjg wkennington ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.all;
   };
 }

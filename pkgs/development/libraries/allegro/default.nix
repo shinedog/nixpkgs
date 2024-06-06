@@ -1,31 +1,37 @@
-{ stdenv, fetchurl, texinfo, libXext, xextproto, libX11, xproto
-, libXpm, libXt, libXcursor, alsaLib, cmake, zlib, libpng, libvorbis
-, libXxf86dga, libXxf86misc, xf86dgaproto, xf86miscproto
-, xf86vidmodeproto, libXxf86vm, openal, mesa }:
+{ lib, stdenv, fetchurl, texinfo6_5, libXext, xorgproto, libX11
+, libXpm, libXt, libXcursor, alsa-lib, cmake, zlib, libpng, libvorbis
+, libXxf86dga, libXxf86misc
+, libXxf86vm, openal, libGLU, libGL }:
 
 stdenv.mkDerivation rec {
-  name = "allegro-${version}";
-  version="4.4.2";
+  pname = "allegro";
+  version="4.4.3.1";
 
   src = fetchurl {
-    url = "http://download.gna.org/allegro/allegro/${version}/${name}.tar.gz";
-    sha256 = "1p0ghkmpc4kwij1z9rzxfv7adnpy4ayi0ifahlns1bdzgmbyf88v";
+    url = "https://github.com/liballeg/allegro5/releases/download/${version}/${pname}-${version}.tar.gz";
+    sha256 = "1m6lz35nk07dli26kkwz3wa50jsrxs1kb6w1nj14a911l34xn6gc";
   };
 
+  patches = [
+    ./nix-unstable-sandbox-fix.patch
+    ./encoding.patch
+  ];
+
+  nativeBuildInputs = [ cmake ];
   buildInputs = [
-    texinfo libXext xextproto libX11 xproto libXpm libXt libXcursor
-    alsaLib cmake zlib libpng libvorbis libXxf86dga libXxf86misc
-    xf86dgaproto xf86miscproto xf86vidmodeproto libXxf86vm openal mesa
+    texinfo6_5 libXext xorgproto libX11 libXpm libXt libXcursor
+    alsa-lib zlib libpng libvorbis libXxf86dga libXxf86misc
+    libXxf86vm openal libGLU libGL
   ];
 
   hardeningDisable = [ "format" ];
 
   cmakeFlags = [ "-DCMAKE_SKIP_RPATH=ON" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A game programming library";
-    homepage = http://liballeg.org/;
-    license = licenses.free; # giftware
+    homepage = "https://liballeg.org/";
+    license = licenses.giftware;
     maintainers = [ maintainers.raskin ];
     platforms = platforms.linux;
   };

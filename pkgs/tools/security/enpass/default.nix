@@ -1,23 +1,25 @@
-{stdenv, system, fetchurl, dpkg, openssl, xorg
-, glib, mesa, libpulseaudio, zlib, dbus, fontconfig, freetype
-, gtk2, pango, atk, cairo, gdk_pixbuf, jasper, xkeyboardconfig
-, makeWrapper , makeDesktopItem, python, pythonPackages, lib}:
-assert system == "i686-linux" || system == "x86_64-linux";
+{ stdenv, fetchurl, dpkg, xorg
+, glib, libGLU, libGL, libpulseaudio, zlib, dbus, fontconfig, freetype
+, gtk3, pango
+, makeWrapper , python3Packages, lib, libcap
+, lsof, curl, libuuid, cups, mesa, xz, libxkbcommon
+}:
+
 let
-  all_data = (with builtins; fromJSON (readFile ./data.json));
+  all_data = lib.importJSON ./data.json;
   system_map = {
-    i686-linux = "i386";
+    # i686-linux = "i386"; Uncomment if enpass 6 becomes available on i386
     x86_64-linux = "amd64";
   };
 
-  data = (with builtins; getAttr (getAttr system system_map) all_data);
+  data = all_data.${system_map.${stdenv.hostPlatform.system} or (throw "Unsupported system: ${stdenv.hostPlatform.system}")};
 
-  baseUrl = http://repo.sinew.in;
-  
+  baseUrl = "https://apt.enpass.io";
+
   # used of both wrappers and libpath
   libPath = lib.makeLibraryPath (with xorg; [
-    openssl
-    mesa
+    mesa.drivers
+    libGLU libGL
     fontconfig
     freetype
     libpulseaudio
@@ -27,80 +29,77 @@ let
     libXi
     libSM
     libICE
-    libXext
     libXrender
     libXScrnSaver
+    libxcb
+    libcap
     glib
-    gtk2
+    gtk3
     pango
-    cairo
-    atk
-    gdk_pixbuf
-    jasper
-    stdenv.cc.cc
+    curl
+    libuuid
+    cups
+    xcbutilwm         # libxcb-icccm.so.4
+    xcbutilimage      # libxcb-image.so.0
+    xcbutilkeysyms    # libxcb-keysyms.so.1
+    xcbutilrenderutil # libxcb-render-util.so.0
+    xz
+    libxkbcommon
   ]);
-  package = stdenv.mkDerivation rec {
+  package = stdenv.mkDerivation {
 
     inherit (data) version;
-    name = "enpass-${version}";
-
-    desktopItem = makeDesktopItem {
-      name = "Enpass";
-      exec = "$out/bin/Enpass";
-      #icon = "Enpass";
-      desktopName = "Enpass";
-      genericName = "Password manager";
-      categories = "Application;Security;";
-    };
-
+    pname = "enpass";
 
     src = fetchurl {
       inherit (data) sha256;
       url = "${baseUrl}/${data.path}";
     };
 
-    meta = {
-      description = "a well known password manager";
-      homepage = https://www.enpass.io/;
-      maintainer = lib.maintainers.ronny;
-      license = lib.licenses.unfree;
-      platforms = lib.platforms.linux;
+    meta = with lib; {
+      description = "A well known password manager";
+      homepage = "https://www.enpass.io/";
+      sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+      license = licenses.unfree;
+      platforms = [ "x86_64-linux" "i686-linux"];
+      maintainers = with maintainers; [ ewok dritter ];
     };
 
-    buildInputs = [makeWrapper dpkg];
-    phases = [ "unpackPhase" "installPhase" ];
+    nativeBuildInputs = [ makeWrapper ];
+    buildInputs = [dpkg];
 
     unpackPhase = "dpkg -X $src .";
     installPhase=''
-      mkdir $out
-      cp -r opt/Enpass/*  $out
+      mkdir -p $out/bin
+      cp -r opt/enpass/*  $out/bin
+      cp -r usr/* $out
 
-      # Make desktop item
-      mkdir -p "$out"/share/applications
-      cp "$desktopItem"/share/applications/* "$out"/share/applications/
-      mkdir -p "$out"/share/icons
+      sed \
+        -i s@/opt/enpass/Enpass@$out/bin/Enpass@ \
+        $out/share/applications/enpass.desktop
 
-      patchelf  \
-        --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) \
-        $out/bin/Enpass
+      for i in $out/bin/{Enpass,importer_enpass}; do
+        patchelf --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) $i
+      done
 
+      # lsof must be in PATH for proper operation
       wrapProgram $out/bin/Enpass \
-        --set LD_LIBRARY_PATH "${libPath}:$out/lib:$out/plugins/sqldrivers" \
-        --set QT_PLUGIN_PATH "$out/plugins" \
-        --set QT_QPA_PLATFORM_PLUGIN_PATH "$out/plugins/platforms" \
-        --set QT_XKB_CONFIG_ROOT "${xkeyboardconfig}/share/X11/xkb"
+        --set LD_LIBRARY_PATH "${libPath}" \
+        --prefix PATH : ${lsof}/bin \
+        --unset QML2_IMPORT_PATH \
+        --unset QT_PLUGIN_PATH
     '';
   };
   updater = {
-    update = stdenv.mkDerivation rec {
+    update = stdenv.mkDerivation {
       name = "enpass-update-script";
       SCRIPT =./update_script.py;
-      
-      buildInputs = with pythonPackages; [python requests pathlib2 six attrs ];
+
+      buildInputs = with python3Packages; [python requests pathlib2 six attrs ];
       shellHook = ''
-      exec python $SCRIPT --target pkgs/tools/security/enpass/data.json --repo ${baseUrl}
+        exec python $SCRIPT --target pkgs/tools/security/enpass/data.json --repo ${baseUrl}
       '';
 
     };
   };
-in (package // {refresh = updater;}) 
+in (package // {refresh = updater;})

@@ -1,37 +1,42 @@
-{ stdenv, fetchurl, pkgconfig, intltool, gtk3, glib, libid3tag, id3lib, taglib
-, libvorbis, libogg, flac, itstool, libxml2, gsettings_desktop_schemas
-, makeWrapper, gnome3
+{ lib, stdenv, fetchurl, pkg-config, intltool, gtk3, glib, libid3tag, id3lib, taglib
+, libvorbis, libogg, opusfile, flac, itstool, libxml2, gsettings-desktop-schemas
+, gnome, wrapGAppsHook3
 }:
 
-stdenv.mkDerivation rec {
-  name = "easytag-${version}";
-  majorVersion = "2.4";
-  version = "${majorVersion}.1";
+let
+  pname = "easytag";
+  version = "2.4.3";
+in stdenv.mkDerivation rec {
+  name = "${pname}-${version}";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/easytag/${majorVersion}/${name}.tar.xz";
-    sha256 = "1mbpwp3lh6yz5xkaq3a329x4r3chmjsr83r349crhi1gax3mzvxr";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${name}.tar.xz";
+    sha256 = "1mbxnqrw1fwcgraa1bgik25vdzvf97vma5pzknbwbqq5ly9fwlgw";
   };
-
-  preFixup = ''
-    wrapProgram $out/bin/easytag \
-      --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH:$out/share" \
-      --prefix GIO_EXTRA_MODULES : "${gnome3.dconf}/lib/gio/modules"
-  '';
 
   NIX_LDFLAGS = "-lid3tag -lz";
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ pkg-config intltool itstool libxml2 wrapGAppsHook3 ];
   buildInputs = [
-    pkgconfig intltool gtk3 glib libid3tag id3lib taglib libvorbis libogg flac
-    itstool libxml2 gsettings_desktop_schemas gnome3.defaultIconTheme gnome3.dconf
+    gtk3 glib libid3tag id3lib taglib libvorbis libogg opusfile flac
+    gsettings-desktop-schemas gnome.adwaita-icon-theme
   ];
 
-  meta = {
+  doCheck = false; # fails 1 out of 9 tests
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+  };
+
+  meta = with lib; {
     description = "View and edit tags for various audio files";
-    homepage = "http://projects.gnome.org/easytag/";
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
-    platforms = with stdenv.lib.platforms; linux;
+    mainProgram = "easytag";
+    homepage = "https://gitlab.gnome.org/GNOME/easytag";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
   };
 }

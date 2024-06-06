@@ -1,36 +1,83 @@
-{ stdenv, fetchurl, pkgconfig, pcre, libxml2, zlib, attr, bzip2, which, file
-, openssl, enableMagnet ? false, lua5_1 ? null
-, enableMysql ? false, mysql ? null
+{ lib, stdenv, buildPackages, fetchurl, pkg-config, pcre2, libxml2, zlib, bzip2, which, file
+, openssl
+, enableDbi ? false, libdbi
+, enableMagnet ? false, lua5_1
+, enableMysql ? false, libmysqlclient
+, enableLdap ? false, openldap
+, enablePam ? false, linux-pam
+, enableSasl ? false, cyrus_sasl
+, enableWebDAV ? false, sqlite, libuuid
+, enableExtendedAttrs ? false
+, perl
+, nixosTests
 }:
 
-assert enableMagnet -> lua5_1 != null;
-assert enableMysql -> mysql != null;
-
 stdenv.mkDerivation rec {
-  name = "lighttpd-1.4.41";
+  pname = "lighttpd";
+  version = "1.4.75";
 
   src = fetchurl {
-    url = "http://download.lighttpd.net/lighttpd/releases-1.4.x/${name}.tar.xz";
-    sha256 = "0v3b6hp8hfwg7kmmxs64hdn9iqkql5qjv2389wl7pp6nyqz3ik2b";
+    url = "https://download.lighttpd.net/lighttpd/releases-${lib.versions.majorMinor version}.x/${pname}-${version}.tar.xz";
+    sha256 = "sha256-i3IcqTnTEq+qbvMdy9avtRYe04Wsgo5vzNTFt2vhidY=";
   };
 
-  buildInputs = [ pkgconfig pcre libxml2 zlib attr bzip2 which file openssl ]
-             ++ stdenv.lib.optional enableMagnet lua5_1
-             ++ stdenv.lib.optional enableMysql mysql.lib;
+  separateDebugInfo = true;
+
+  postPatch = ''
+    patchShebangs tests
+  '';
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ pcre2 pcre2.dev libxml2 zlib bzip2 which file openssl ]
+             ++ lib.optional enableDbi libdbi
+             ++ lib.optional enableMagnet lua5_1
+             ++ lib.optional enableMysql libmysqlclient
+             ++ lib.optional enableLdap openldap
+             ++ lib.optional enablePam linux-pam
+             ++ lib.optional enableSasl cyrus_sasl
+             ++ lib.optional enableWebDAV sqlite
+             ++ lib.optional enableWebDAV libuuid;
 
   configureFlags = [ "--with-openssl" ]
-                ++ stdenv.lib.optional enableMagnet "--with-lua"
-                ++ stdenv.lib.optional enableMysql "--with-mysql";
+                ++ lib.optional enableDbi "--with-dbi"
+                ++ lib.optional enableMagnet "--with-lua"
+                ++ lib.optional enableMysql "--with-mysql"
+                ++ lib.optional enableLdap "--with-ldap"
+                ++ lib.optional enablePam "--with-pam"
+                ++ lib.optional enableSasl "--with-sasl"
+                ++ lib.optional enableWebDAV "--with-webdav-props"
+                ++ lib.optional enableWebDAV "--with-webdav-locks"
+                ++ lib.optional enableExtendedAttrs "--with-attr";
 
   preConfigure = ''
+    export PATH=$PATH:${pcre2.dev}/bin
     sed -i "s:/usr/bin/file:${file}/bin/file:g" configure
   '';
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ perl ];
+  doCheck = true;
+
+  postInstall = ''
+    mkdir -p "$out/share/lighttpd/doc/config"
+    cp -vr doc/config "$out/share/lighttpd/doc/"
+    # Remove files that references needless store paths (dependency bloat)
+    rm "$out/share/lighttpd/doc/config/Makefile"*
+    rm "$out/share/lighttpd/doc/config/conf.d/Makefile"*
+    rm "$out/share/lighttpd/doc/config/vhosts.d/Makefile"*
+  '';
+
+  passthru.tests = {
+    inherit (nixosTests) lighttpd;
+  };
+
+  meta = with lib; {
     description = "Lightweight high-performance web server";
-    homepage = http://www.lighttpd.net/;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.bjornfor ];
+    homepage = "http://www.lighttpd.net/";
+    license = lib.licenses.bsd3;
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ bjornfor brecht ];
+    mainProgram = "lighttpd";
   };
 }

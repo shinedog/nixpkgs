@@ -6,7 +6,23 @@ let
 
   cfg = config.services.confluence;
 
-  pkg = pkgs.atlassian-confluence;
+  pkg = cfg.package.override (optionalAttrs cfg.sso.enable {
+    enableSSO = cfg.sso.enable;
+  });
+
+  crowdProperties = pkgs.writeText "crowd.properties" ''
+    application.name                        ${cfg.sso.applicationName}
+    application.password                    ${if cfg.sso.applicationPassword != null then cfg.sso.applicationPassword else "@NIXOS_CONFLUENCE_CROWD_SSO_PWD@"}
+    application.login.url                   ${cfg.sso.crowd}/console/
+
+    crowd.server.url                        ${cfg.sso.crowd}/services/
+    crowd.base.url                          ${cfg.sso.crowd}/
+
+    session.isauthenticated                 session.isauthenticated
+    session.tokenkey                        session.tokenkey
+    session.validationinterval              ${toString cfg.sso.validationInterval}
+    session.lastvalidation                  session.lastvalidation
+  '';
 
 in
 
@@ -40,7 +56,7 @@ in
       };
 
       listenPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 8090;
         description = "Port to listen on.";
       };
@@ -62,7 +78,7 @@ in
         };
 
         port = mkOption {
-          type = types.int;
+          type = types.port;
           default = 443;
           example = 80;
           description = "Port used at the proxy";
@@ -76,25 +92,87 @@ in
         };
       };
 
-      jrePackage = let
-        jreSwitch = unfree: free: if config.nixpkgs.config.allowUnfree or false then unfree else free;
-      in mkOption {
-        type = types.package;
-        default = jreSwitch pkgs.oraclejre8 pkgs.openjdk8.jre;
-        defaultText = jreSwitch "pkgs.oraclejre8" "pkgs.openjdk8.jre";
-        example = literalExample "pkgs.openjdk8.jre";
-        description = "Java Runtime to use for Confluence. Note that Atlassian recommends the Oracle JRE.";
+      sso = {
+        enable = mkEnableOption "SSO with Atlassian Crowd";
+
+        crowd = mkOption {
+          type = types.str;
+          example = "http://localhost:8095/crowd";
+          description = "Crowd Base URL without trailing slash";
+        };
+
+        applicationName = mkOption {
+          type = types.str;
+          example = "jira";
+          description = "Exact name of this Confluence instance in Crowd";
+        };
+
+        applicationPassword = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Application password of this Confluence instance in Crowd";
+        };
+
+        applicationPasswordFile = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = "Path to the application password for Crowd of Confluence.";
+        };
+
+        validationInterval = mkOption {
+          type = types.int;
+          default = 2;
+          example = 0;
+          description = ''
+            Set to 0, if you want authentication checks to occur on each
+            request. Otherwise set to the number of minutes between request
+            to validate if the user is logged in or out of the Crowd SSO
+            server. Setting this value to 1 or higher will increase the
+            performance of Crowd's integration.
+          '';
+        };
+      };
+
+      package = mkPackageOption pkgs "atlassian-confluence" { };
+
+      jrePackage = mkPackageOption pkgs "oraclejre8" {
+        extraDescription = ''
+        ::: {.note }
+        Atlassian only supports the Oracle JRE (JRASERVER-46152).
+        :::
+        '';
       };
     };
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers."${cfg.user}" = {
+    users.users.${cfg.user} = {
       isSystemUser = true;
       group = cfg.group;
     };
 
-    users.extraGroups."${cfg.group}" = {};
+    assertions = [
+      { assertion = cfg.sso.enable -> ((cfg.sso.applicationPassword == null) != (cfg.sso.applicationPasswordFile));
+        message = "Please set either applicationPassword or applicationPasswordFile";
+      }
+    ];
+
+    warnings = mkIf (cfg.sso.enable && cfg.sso.applicationPassword != null) [
+      "Using `services.confluence.sso.applicationPassword` is deprecated! Use `applicationPasswordFile` instead!"
+    ];
+
+    users.groups.${cfg.group} = {};
+
+    systemd.tmpfiles.rules = [
+      "d '${cfg.home}' - ${cfg.user} - - -"
+      "d /run/confluence - - - - -"
+
+      "L+ /run/confluence/home - - - - ${cfg.home}"
+      "L+ /run/confluence/logs - - - - ${cfg.home}/logs"
+      "L+ /run/confluence/temp - - - - ${cfg.home}/temp"
+      "L+ /run/confluence/work - - - - ${cfg.home}/work"
+      "L+ /run/confluence/server.xml - - - - ${cfg.home}/server.xml"
+    ];
 
     systemd.services.confluence = {
       description = "Atlassian Confluence";
@@ -103,38 +181,43 @@ in
       requires = [ "postgresql.service" ];
       after = [ "postgresql.service" ];
 
-      path = [ cfg.jrePackage ];
+      path = [ cfg.jrePackage pkgs.bash ];
 
       environment = {
         CONF_USER = cfg.user;
         JAVA_HOME = "${cfg.jrePackage}";
         CATALINA_OPTS = concatStringsSep " " cfg.catalinaOptions;
+        JAVA_OPTS = mkIf cfg.sso.enable "-Dcrowd.properties=${cfg.home}/crowd.properties";
       };
 
       preStart = ''
         mkdir -p ${cfg.home}/{logs,work,temp,deploy}
-
-        mkdir -p /run/confluence
-        ln -sf ${cfg.home}/{logs,work,temp,server.xml} /run/confluence
-        ln -sf ${cfg.home} /run/confluence/home
-
-        chown -R ${cfg.user} ${cfg.home}
 
         sed -e 's,port="8090",port="${toString cfg.listenPort}" address="${cfg.listenAddress}",' \
         '' + (lib.optionalString cfg.proxy.enable ''
           -e 's,protocol="org.apache.coyote.http11.Http11NioProtocol",protocol="org.apache.coyote.http11.Http11NioProtocol" proxyName="${cfg.proxy.name}" proxyPort="${toString cfg.proxy.port}" scheme="${cfg.proxy.scheme}",' \
         '') + ''
           ${pkg}/conf/server.xml.dist > ${cfg.home}/server.xml
-      '';
 
-      script = "${pkg}/bin/start-confluence.sh -fg";
-      stopScript  = "${pkg}/bin/stop-confluence.sh";
+        ${optionalString cfg.sso.enable ''
+          install -m660 ${crowdProperties} ${cfg.home}/crowd.properties
+          ${optionalString (cfg.sso.applicationPasswordFile != null) ''
+            ${pkgs.replace-secret}/bin/replace-secret \
+              '@NIXOS_CONFLUENCE_CROWD_SSO_PWD@' \
+              ${cfg.sso.applicationPasswordFile} \
+              ${cfg.home}/crowd.properties
+          ''}
+        ''}
+      '';
 
       serviceConfig = {
         User = cfg.user;
         Group = cfg.group;
         PrivateTmp = true;
-        PermissionsStartOnly = true;
+        Restart = "on-failure";
+        RestartSec = "10";
+        ExecStart = "${pkg}/bin/start-confluence.sh -fg";
+        ExecStop = "${pkg}/bin/stop-confluence.sh";
       };
     };
   };

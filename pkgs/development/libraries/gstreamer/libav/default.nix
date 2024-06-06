@@ -1,39 +1,62 @@
-{ stdenv, fetchurl, pkgconfig, python, yasm
-, gst-plugins-base, orc, bzip2
-, withSystemLibav ? true, libav ? null
+{ stdenv
+, lib
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, python3
+, gstreamer
+, gst-plugins-base
+, gettext
+, libav
+# Checks meson.is_cross_build(), so even canExecute isn't enough.
+, enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform, hotdoc
 }:
 
 # Note that since gst-libav-1.6, libav is actually ffmpeg. See
-# http://gstreamer.freedesktop.org/releases/1.6/ for more info.
-
-assert withSystemLibav -> libav != null;
+# https://gstreamer.freedesktop.org/releases/1.6/ for more info.
 
 stdenv.mkDerivation rec {
-  name = "gst-libav-1.10.1";
-
-  meta = {
-    homepage = "http://gstreamer.freedesktop.org";
-    license = stdenv.lib.licenses.lgpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-  };
+  pname = "gst-libav";
+  version = "1.24.2";
 
   src = fetchurl {
-    url = "${meta.homepage}/src/gst-libav/${name}.tar.xz";
-    sha256 = "1ivjbh5g0l5ykfpc16kq5x2jz8d4ignyha14jpiz3pz6w26qpci7";
+    url = "https://gstreamer.freedesktop.org/src/${pname}/${pname}-${version}.tar.xz";
+    hash = "sha256-lig4ZI4Uzop4Miqxb4TH2E2Gpte+u2V0rAXeqEp8fJs=";
   };
 
   outputs = [ "out" "dev" ];
 
-  configureFlags = stdenv.lib.optionalString withSystemLibav
-    "--with-system-libav";
+  nativeBuildInputs = [
+    meson
+    ninja
+    gettext
+    pkg-config
+    python3
+  ] ++ lib.optionals enableDocumentation [
+    hotdoc
+  ];
 
-  nativeBuildInputs = with stdenv.lib;
-    [ pkgconfig python ]
-    ++ optional (!withSystemLibav) yasm
-    ;
+  buildInputs = [
+    gstreamer
+    gst-plugins-base
+    libav
+  ];
 
-  buildInputs = with stdenv.lib;
-    [ gst-plugins-base orc bzip2 ]
-    ++ optional withSystemLibav libav
-    ;
+  mesonFlags = [
+    (lib.mesonEnable "doc" enableDocumentation)
+  ];
+
+  postPatch = ''
+    patchShebangs \
+      scripts/extract-release-date-from-doap-file.py
+  '';
+
+  meta = with lib; {
+    description = "FFmpeg/libav plugin for GStreamer";
+    homepage = "https://gstreamer.freedesktop.org";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ lilyinstarlight ];
+  };
 }

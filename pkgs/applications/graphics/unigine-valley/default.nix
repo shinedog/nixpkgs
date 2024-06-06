@@ -1,10 +1,15 @@
-{ stdenv, fetchurl
+{ lib
+, stdenv
+, fetchurl
 
-# Build-time dependencies
+  # Build-time dependencies
 , makeWrapper
 , file
+, makeDesktopItem
+, imagemagick
+, copyDesktopItems
 
-# Runtime dependencies
+  # Runtime dependencies
 , fontconfig
 , freetype
 , libX11
@@ -12,93 +17,122 @@
 , libXinerama
 , libXrandr
 , libXrender
-, openal}:
+, libglvnd
+, openal
+}:
 
 let
   version = "1.0";
-  pkgversion = "1";
 
-  arch = if stdenv.system == "x86_64-linux" then
-    "x64"
-  else if stdenv.system == "i686-linux" then
-    "x86"
-  else
-    abort "Unsupported platform";
-
+  arch =
+    if stdenv.hostPlatform.system == "x86_64-linux" then
+      "x64"
+    else if stdenv.hostPlatform.system == "i686-linux" then
+      "x86"
+    else
+      throw "Unsupported platform ${stdenv.hostPlatform.system}";
 in
-  stdenv.mkDerivation {
-    name = "unigine-valley-${version}-${pkgversion}";
 
-    src = fetchurl {
-      url = "http://assets.unigine.com/d/Unigine_Valley-${version}.run";
-      sha256 = "5f0c8bd2431118551182babbf5f1c20fb14e7a40789697240dcaf546443660f4";
-    };
+stdenv.mkDerivation rec {
+  pname = "unigine-valley";
+  inherit version;
 
-    sourceRoot = "Unigine_Valley-${version}";
+  src = fetchurl {
+    url = "https://assets.unigine.com/d/Unigine_Valley-${version}.run";
+    sha256 = "sha256-XwyL0kMRGFURgrq79fHCD7FOekB4lpckDcr1RkQ2YPQ=";
+  };
 
-    buildInputs = [file makeWrapper];
+  sourceRoot = "Unigine_Valley-${version}";
+  instPath = "lib/unigine/valley";
 
-    libPath = stdenv.lib.makeLibraryPath [
-      stdenv.cc.cc  # libstdc++.so.6
-      fontconfig
-      freetype
-      libX11
-      libXext
-      libXinerama
-      libXrandr
-      libXrender
-      openal
-    ];
+  nativeBuildInputs = [ file makeWrapper imagemagick copyDesktopItems ];
 
-    unpackPhase = ''
-      cp $src extractor.run
-      chmod +x extractor.run
-      ./extractor.run --target $sourceRoot
-    '';
+  libPath = lib.makeLibraryPath [
+    stdenv.cc.cc # libstdc++.so.6
+    fontconfig
+    freetype
+    libX11
+    libXext
+    libXinerama
+    libXrandr
+    libXrender
+    libglvnd
+    openal
+  ];
 
-    # The executable loads libGPUMonitor_${arch}.so "manually" (i.e. not through the ELF interpreter).
-    # However, it still uses the RPATH to look for it.
-    patchPhase = ''
-      # Patch ELF files.
-      elfs=$(find bin -type f | xargs file | grep ELF | cut -d ':' -f 1)
-      for elf in $elfs; do
-        echo "Patching $elf"
-        patchelf --set-interpreter ${stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $elf || true
-      done
-    '';
+  unpackPhase = ''
+    runHook preUnpack
 
-    configurePhase = "";
-    buildPhase = "";
+    cp $src extractor.run
+    chmod +x extractor.run
+    ./extractor.run --target $sourceRoot
 
-    installPhase = ''
-      instdir=$out/opt/unigine/valley
+    runHook postUnpack
+  '';
 
-      # Install executables and libraries
-      mkdir -p $instdir/bin
-      install -m 0755 bin/browser_${arch} $instdir/bin
-      install -m 0755 bin/libApp{Stereo,Surround,Wall}_${arch}.so $instdir/bin
-      install -m 0755 bin/libGPUMonitor_${arch}.so $instdir/bin
-      install -m 0755 bin/libQt{Core,Gui,Network,WebKit,Xml}Unigine_${arch}.so.4 $instdir/bin
-      install -m 0755 bin/libUnigine_${arch}.so $instdir/bin
-      install -m 0755 bin/valley_${arch} $instdir/bin
-      install -m 0755 valley $instdir
+  postPatch = ''
+    # Patch ELF files.
+    elfs=$(find bin -type f | xargs file | grep ELF | cut -d ':' -f 1)
+    for elf in $elfs; do
+      patchelf --set-interpreter ${stdenv.cc.libc}/lib/ld-linux-x86-64.so.2 $elf || true
+    done
+  '';
 
-      # Install other files
-      cp -R data documentation $instdir
+  installPhase = ''
+    runHook preInstall
 
-      # Install and wrap executable
-      mkdir -p $out/bin
-      install -m 0755 valley $out/bin/valley
-      wrapProgram $out/bin/valley \
-        --run "cd $instdir" \
-        --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib:$instdir/bin:$libPath
-    '';
+    instdir=$out/${instPath}
+    mkdir -p $out/share/icons/hicolor $out/share/applications $out/bin $instdir/bin
 
-    meta = {
-      description = "The Unigine Valley GPU benchmarking tool";
-      homepage = "http://unigine.com/products/benchmarks/valley/";
-      license = stdenv.lib.licenses.unfree; # see also: /nix/store/*-unigine-valley-1.0/opt/unigine/valley/documentation/License.pdf
-      maintainers = [ stdenv.lib.maintainers.kierdavis ];
-      platforms = ["x86_64-linux" "i686-linux"];
-    };
-  }
+    # Install executables and libraries
+    install -m 0755 bin/browser_${arch} $instdir/bin
+    install -m 0755 bin/libApp{Stereo,Surround,Wall}_${arch}.so $instdir/bin
+    install -m 0755 bin/libGPUMonitor_${arch}.so $instdir/bin
+    install -m 0755 bin/libQt{Core,Gui,Network,WebKit,Xml}Unigine_${arch}.so.4 $instdir/bin
+    install -m 0755 bin/libUnigine_${arch}.so $instdir/bin
+    install -m 0755 bin/valley_${arch} $instdir/bin
+    install -m 0755 valley $instdir
+    install -m 0755 valley $out/bin/valley
+
+    # Install other files
+    cp -R data documentation $instdir
+
+    # Install and wrap executable
+    wrapProgram $out/bin/valley \
+      --chdir "$instdir" \
+      --prefix LD_LIBRARY_PATH : /run/opengl-driver/lib:$instdir/bin:$libPath
+
+    # Make desktop Icon
+    convert $out/lib/unigine/valley/data/launcher/icon.png -resize 128x128 $out/share/icons/Valley.png
+    for RES in 16 24 32 48 64 128 256
+    do
+        mkdir -p $out/share/icons/hicolor/"$RES"x"$RES"/apps
+        convert $out/lib/unigine/valley/data/launcher/icon.png -resize "$RES"x"$RES" $out/share/icons/hicolor/"$RES"x"$RES"/apps/Valley.png
+    done
+
+    runHook postInstall
+  '';
+
+  desktopItems = [
+    (makeDesktopItem {
+      name = "Valley";
+      exec = "valley";
+      genericName = "A GPU Stress test tool from the UNIGINE";
+      icon = "Valley";
+      desktopName = "Valley Benchmark";
+    })
+  ];
+
+  stripDebugList = [ "${instPath}/bin" ];
+
+  meta = {
+    description = "The Unigine Valley GPU benchmarking tool";
+    homepage = "https://unigine.com/products/benchmarks/valley/";
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    license = lib.licenses.unfree; # see also: $out/$instPath/documentation/License.pdf
+    maintainers = [ lib.maintainers.kierdavis ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    mainProgram = "valley";
+  };
+}
+

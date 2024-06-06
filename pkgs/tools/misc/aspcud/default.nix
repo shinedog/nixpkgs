@@ -1,43 +1,42 @@
-{ stdenv, fetchurl,
-  boost, clasp, cmake, gringo, re2c
+{ lib
+, stdenv
+, fetchFromGitHub
+, boost
+, catch2
+, cmake
+, clingo
+, re2c
 }:
 
-let
-  version = "1.9.0";
-in
-
 stdenv.mkDerivation rec {
-  name = "aspcud-${version}";
+  version = "1.9.6";
+  pname = "aspcud";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/project/potassco/aspcud/${version}/aspcud-${version}-source.tar.gz";
-    sha256 = "029035vcdk527ssf126i8ipi5zs73gqpbrg019pvm9r24rf0m373";
+  src = fetchFromGitHub {
+    owner = "potassco";
+    repo = "aspcud";
+    rev = "v${version}";
+    hash = "sha256-PdRfpmH7zF5dn+feoijtzdSUjaYhjHwyAUfuYoWCL9E=";
   };
 
-  buildInputs = [ boost clasp cmake gringo re2c ];
-
-  buildPhase = ''
-    cmake -DCMAKE_BUILD_TYPE=Release \
-      -DGRINGO_LOC=${gringo}/bin/gringo \
-      -DCLASP_LOC=${clasp}/bin/clasp \
-      -DENCODING_LOC=$out/share/aspcud/specification.lp \
-      .
-
-    make
+  postPatch = ''
+    cp ${catch2}/include/catch2/catch.hpp libcudf/tests/catch.hpp
   '';
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp bin/{aspcud,cudf2lp,lemon} $out/bin
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ boost clingo re2c ];
 
-    mkdir -p $out/share/aspcud
-    cp ../share/aspcud/specification.lp $out/share/aspcud
-  '';
+  cmakeFlags = [
+    "-DASPCUD_GRINGO_PATH=${clingo}/bin/gringo"
+    "-DASPCUD_CLASP_PATH=${clingo}/bin/clasp"
+  ];
 
-  meta = with stdenv.lib; {
+  doCheck = true;
+
+  meta = with lib; {
     description = "Solver for package problems in CUDF format using ASP";
-    homepage = http://potasssco.sourceforge.net/;
-    platforms = platforms.linux;
+    homepage = "https://potassco.org/aspcud/";
+    platforms = platforms.all;
     maintainers = [ maintainers.hakuch ];
     license = licenses.gpl3Plus;
   };

@@ -1,25 +1,22 @@
-{stdenv, atd, yojson, menhir, easy-format, biniou, cppo, buildOcaml, fetchurl, which}:
+{ buildDunePackage, alcotest, atd, atdgen-codec-runtime, atdgen-runtime, biniou, re, yojson
+, python3
+}:
 
-buildOcaml rec {
-  name = "atdgen";
-  version = "1.6.0";
+buildDunePackage {
+  pname = "atdgen";
+  inherit (atdgen-codec-runtime) version src;
 
-  src = fetchurl {
-    url = "https://github.com/mjambon/atdgen/archive/v${version}.tar.gz";
-    sha256 = "1icdxgb7qqq1pcbfqi0ikryiwaljd594z3acyci8g3bnlq0yc7zn";
-  };
+  duneVersion = "3";
 
-  installPhase = ''
-    mkdir -p $out/bin
-    make PREFIX=$out install
-  '';
+  buildInputs = [ atd re ];
 
-  buildInputs = [ which atd biniou yojson ];
+  propagatedBuildInputs = [ atdgen-runtime ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mjambon/atdgen;
-    description = "Generates optimized boilerplate OCaml code for JSON and Biniou IO from type definitions";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.jwilberding ];
+  doCheck = true;
+  nativeCheckInputs = [ atd (python3.withPackages (ps: [ ps.jsonschema ]))];
+  checkInputs = [ alcotest atdgen-codec-runtime ];
+
+  meta = (builtins.removeAttrs atd.meta [ "mainProgram" ]) // {
+    description = "Generates efficient JSON serializers, deserializers and validators";
   };
 }

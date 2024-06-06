@@ -1,52 +1,73 @@
-{ stdenv, fetchurl, coreutils, bash, btrfs-progs, perl, perlPackages, makeWrapper }:
+{ lib
+, stdenv
+, fetchurl
+, bash
+, btrfs-progs
+, openssh
+, perl
+, perlPackages
+, util-linux
+, asciidoctor
+, mbuffer
+, makeWrapper
+, genericUpdater
+, curl
+, writeShellScript
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "btrbk-${version}";
-  version = "0.22.2";
+  pname = "btrbk";
+  version = "0.32.6";
 
   src = fetchurl {
-    url = "http://digint.ch/download/btrbk/releases/${name}.tar.xz";
-    sha256 = "1gbgi0dp62wlw7y72pgxjs6byxkrk73g35kqxzw0gjf32r5i4sb8";
+    url = "https://digint.ch/download/btrbk/releases/${pname}-${version}.tar.xz";
+    sha256 = "AuKsZHyRhGMgLL5ge7lVV6T3/SNwaRJDM8VNpbK7t2s=";
   };
 
-  patches = [
-    # https://github.com/digint/btrbk/pull/74
-    ./btrbk-Prefix-PATH-instead-of-resetting-it.patch
-    # https://github.com/digint/btrbk/pull/73
-    ./btrbk-mail-Use-btrbk-instead-of-unbound-variable-btr.patch
-  ];
+  nativeBuildInputs = [ asciidoctor makeWrapper ];
 
-  buildInputs = with perlPackages; [ makeWrapper perl DateCalc ];
+  buildInputs = with perlPackages; [ perl DateCalc ];
 
   preInstall = ''
-    substituteInPlace Makefile \
-      --replace "/usr" "$out" \
-      --replace "/etc" "$out/etc"
+    for f in $(find . -name Makefile); do
+      substituteInPlace "$f" \
+        --replace "/usr" "$out" \
+        --replace "/etc" "$out/etc"
+    done
 
     # Tainted Mode disables PERL5LIB
-    substituteInPlace btrbk --replace "perl -T" "perl"
+    substituteInPlace btrbk \
+      --replace "perl -T" "perl" \
+      --replace "\$0" "\$ENV{'program_name'}"
 
-    # Fix btrbk-mail
-    substituteInPlace contrib/cron/btrbk-mail \
-      --replace "/bin/date" "${coreutils}/bin/date" \
-      --replace "/bin/echo" "${coreutils}/bin/echo" \
-      --replace '$btrbk' 'btrbk'
+    # Fix SSH filter script
+    sed -i '/^export PATH/d' ssh_filter_btrbk.sh
+    substituteInPlace ssh_filter_btrbk.sh --replace logger ${util-linux}/bin/logger
   '';
 
-  fixupPhase = ''
-    patchShebangs $out/
-
-    wrapProgram $out/sbin/btrbk \
+  preFixup = ''
+    wrapProgram $out/bin/btrbk \
       --set PERL5LIB $PERL5LIB \
-      --prefix PATH ':' "${stdenv.lib.makeBinPath [ btrfs-progs bash ]}"
+      --run 'export program_name=$0' \
+      --prefix PATH ':' "${lib.makeBinPath [ btrfs-progs bash mbuffer openssh ]}"
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    inherit (nixosTests) btrbk btrbk-no-timer btrbk-section-order btrbk-doas;
+  };
+
+  passthru.updateScript = genericUpdater {
+    versionLister = writeShellScript "btrbk-versionLister" ''
+      ${curl}/bin/curl -s https://digint.ch/download/btrbk/releases/ | ${perl}/bin/perl -lne 'print $1 if /btrbk-([0-9.]*)\.tar/'
+    '';
+  };
+
+  meta = with lib; {
     description = "A backup tool for btrfs subvolumes";
-    homepage = http://digint.ch/btrbk;
-    license = licenses.gpl3;
+    homepage = "https://digint.ch/btrbk";
+    license = licenses.gpl3Only;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ the-kenny ];
-    inherit version;
+    maintainers = with maintainers; [ asymmetric ];
   };
 }

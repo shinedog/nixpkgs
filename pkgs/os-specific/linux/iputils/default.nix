@@ -1,48 +1,84 @@
-{ stdenv, fetchurl, libsysfs, gnutls, openssl, libcap, sp, docbook_sgml_dtd_31
-, SGMLSpm, libgcrypt }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, gettext
+, libxslt
+, docbook_xsl_ns
+, libcap
+, libidn2
+, iproute2
+, apparmorRulesFromClosure
+}:
 
-assert stdenv ? glibc;
-
-let
-  time = "20151218";
-in
 stdenv.mkDerivation rec {
-  name = "iputils-${time}";
+  pname = "iputils";
+  version = "20240117";
 
-  src = fetchurl {
-    url = "http://www.skbuff.net/iputils/iputils-s${time}.tar.bz2";
-    sha256 = "189592jlkhxdgy8jc07m4bsl41ik9r6i6aaqb532prai37bmi7sl";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = version;
+    hash = "sha256-sERY8ZKuXiY85cXdNWOm4byiNU7mOVIeA55dgQJHdoE=";
   };
 
-  prePatch = ''
-    sed -i s/sgmlspl/sgmlspl.pl/ doc/Makefile
+  outputs = [ "out" "apparmor" ];
+
+  # We don't have the required permissions inside the build sandbox:
+  # /build/source/build/ping/ping: socket: Operation not permitted
+  doCheck = false;
+
+  mesonFlags = [
+    "-DNO_SETCAP_OR_SUID=true"
+    "-Dsystemdunitdir=etc/systemd/system"
+    "-DINSTALL_SYSTEMD_UNITS=true"
+    "-DSKIP_TESTS=${lib.boolToString (!doCheck)}"
+  ]
+  # Disable idn usage w/musl (https://github.com/iputils/iputils/pull/111):
+  ++ lib.optional stdenv.hostPlatform.isMusl "-DUSE_IDN=false";
+
+  nativeBuildInputs = [ meson ninja pkg-config gettext libxslt.bin docbook_xsl_ns ];
+  buildInputs = [ libcap ]
+    ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2;
+  nativeCheckInputs = [ iproute2 ];
+
+  postInstall = ''
+    mkdir $apparmor
+    cat >$apparmor/bin.ping <<EOF
+    include <tunables/global>
+    $out/bin/ping {
+      include <abstractions/base>
+      include <abstractions/consoles>
+      include <abstractions/nameservice>
+      include "${apparmorRulesFromClosure { name = "ping"; }
+       ([libcap] ++ lib.optional (!stdenv.hostPlatform.isMusl) libidn2)}"
+      include <local/bin.ping>
+      capability net_raw,
+      network inet raw,
+      network inet6 raw,
+      mr $out/bin/ping,
+      r $out/share/locale/**,
+      r @{PROC}/@{pid}/environ,
+    }
+    EOF
   '';
 
-  makeFlags = "USE_GNUTLS=no";
-
-  buildInputs = [
-    libsysfs openssl libcap sp docbook_sgml_dtd_31 SGMLSpm libgcrypt
-  ];
-
-  buildFlags = "man all ninfod";
-
-  installPhase =
-    ''
-      mkdir -p $out/sbin $out/bin
-      cp -p ping ping6 tracepath tracepath6 traceroute6 $out/bin/
-      cp -p clockdiff arping rdisc ninfod/ninfod $out/sbin/
-
-      mkdir -p $out/share/man/man8
-      cp -p doc/clockdiff.8 doc/arping.8 doc/ping.8 doc/rdisc.8 \
-        doc/tracepath.8 doc/ninfod.8 doc/traceroute6.8 \
-        $out/share/man/man8
-      ln -s $out/share/man/man8/{ping,ping6}.8
-      ln -s $out/share/man/man8/{tracepath,tracepath6}.8
-    '';
-
-  meta = {
-    homepage = http://www.skbuff.net/iputils/;
+  meta = with lib; {
+    homepage = "https://github.com/iputils/iputils";
+    changelog = "https://github.com/iputils/iputils/releases/tag/${version}";
     description = "A set of small useful utilities for Linux networking";
-    platforms = stdenv.lib.platforms.linux;
+    longDescription = ''
+      A set of small useful utilities for Linux networking including:
+
+      - arping: send ARP REQUEST to a neighbour host
+      - clockdiff: measure clock difference between hosts
+      - ping: send ICMP ECHO_REQUEST to network hosts
+      - tracepath: traces path to a network host discovering MTU along this path
+    '';
+    license = with licenses; [ gpl2Plus bsd3 ];
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ primeos lheckemann ];
   };
 }

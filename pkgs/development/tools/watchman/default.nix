@@ -1,40 +1,106 @@
-{ stdenv, lib, config, fetchFromGitHub, autoconf, automake, pcre
-, confFile ? config.watchman.confFile or null
+{ boost
+, cargo
+, cmake
+, CoreServices
+, cpptoml
+, double-conversion
+, edencommon
+, ensureNewerSourcesForZipFilesHook
+, fb303
+, fbthrift
+, fetchFromGitHub
+, fizz
+, fmt_8
+, folly
+, glog
+, gtest
+, lib
+, libevent
+, libiconv
+, libsodium
+, libunwind
+, lz4
+, openssl
+, pcre2
+, pkg-config
+, rustPlatform
+, rustc
+, stateDir ? "/tmp"
+, stdenv
+, wangle
+, zlib
+, zstd
 }:
 
 stdenv.mkDerivation rec {
-  name = "watchman-${version}";
-
-  version = "4.5.0";
+  pname = "watchman";
+  version = "2024.03.11.00";
 
   src = fetchFromGitHub {
     owner = "facebook";
     repo = "watchman";
     rev = "v${version}";
-    sha256 = "0hyj7nbsm5mv8zq2fldd06f92a3wamavha20311518qv7q5jj72v";
+    hash = "sha256-cD8mIYCc+8Z2p3rwKVRFcW9sOBbpb5KHU5VpbXHMpeg=";
   };
 
-  buildInputs = [ autoconf automake pcre ];
-
-  configureFlags = [
-      "--enable-lenient"
-      "--enable-conffile=${if confFile == null then "no" else confFile}"
-      "--with-pcre=yes"
-
-      # For security considerations re: --disable-statedir, see:
-      # https://github.com/facebook/watchman/issues/178
-      "--disable-statedir"
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=ON"
+    "-DENABLE_EDEN_SUPPORT=NO" # requires sapling (formerly known as eden), which is not packaged in nixpkgs
+    "-DWATCHMAN_STATE_DIR=${stateDir}"
+    "-DWATCHMAN_VERSION_OVERRIDE=${version}"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.14" # For aligned allocation
   ];
 
-  preConfigure = ''
-    ./autogen.sh
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    ensureNewerSourcesForZipFilesHook
+    rustPlatform.cargoSetupHook
+    cargo
+    rustc
+  ];
+
+  buildInputs = [
+    pcre2
+    openssl
+    gtest
+    glog
+    boost
+    libevent
+    fmt_8
+    libsodium
+    zlib
+    folly
+    fizz
+    wangle
+    fbthrift
+    fb303
+    cpptoml
+    edencommon
+    libunwind
+    double-conversion
+    lz4
+    zstd
+    libiconv
+  ] ++ lib.optionals stdenv.isDarwin [ CoreServices ];
+
+  cargoRoot = "watchman/cli";
+
+  cargoDeps = rustPlatform.importCargoLock {
+    lockFile = ./Cargo.lock;
+  };
+
+  postPatch = ''
+    patchShebangs .
+    cp ${./Cargo.lock} ${cargoRoot}/Cargo.lock
   '';
 
   meta = with lib; {
     description = "Watches files and takes action when they change";
-    homepage    = https://facebook.github.io/watchman;
-    maintainers = with maintainers; [ cstrahan ];
-    platforms   = with platforms; linux ++ darwin;
-    license     = licenses.asl20;
+    homepage = "https://facebook.github.io/watchman";
+    maintainers = with maintainers; [ kylesferrazza ];
+    platforms = platforms.unix;
+    license = licenses.mit;
   };
 }

@@ -1,22 +1,42 @@
-{ stdenv, fetchurl, automoc4, cmake, perl, pkgconfig
-, kdelibs, gettext
+{ stdenv
+, lib
+, fetchurl
+, extra-cmake-modules
+, kdoctools
+, wrapQtAppsHook
+, boost
+, kcrash
+, kconfig
+, kinit
+, kparts
+, kiconthemes
 }:
 
-stdenv.mkDerivation rec {
-  name = "kdiff3-0.9.98";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "kdiff3";
+  version = "1.11.1";
+
   src = fetchurl {
-    url = "mirror://sourceforge/kdiff3/${name}.tar.gz";
-    sha256 = "0s6n1whkf5ck2r8782a9l8b736cj2p05and1vjjh7d02pax1lb40";
+    url = "mirror://kde/stable/kdiff3/kdiff3-${finalAttrs.version}.tar.xz";
+    hash = "sha256-MPFKWrbg1VEWgpF42CdlTDDoQhwE/pcA085npTCEYpg=";
   };
 
-  buildInputs = [ kdelibs ];
-  nativeBuildInputs = [ automoc4 cmake gettext perl pkgconfig ];
+  nativeBuildInputs = [ extra-cmake-modules kdoctools wrapQtAppsHook ];
 
-  meta = {
-    homepage = http://kdiff3.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl2Plus;
+  buildInputs = [ boost kconfig kcrash kinit kparts kiconthemes ];
+
+  cmakeFlags = [ "-Wno-dev" ];
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    ln -s "$out/Applications/KDE/kdiff3.app/Contents/MacOS" "$out/bin"
+  '';
+
+  meta = with lib; {
     description = "Compares and merges 2 or 3 files or directories";
-    maintainers = with stdenv.lib.maintainers; [viric urkud];
-    platforms = with stdenv.lib.platforms; linux;
+    mainProgram = "kdiff3";
+    homepage = "https://invent.kde.org/sdk/kdiff3";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = with platforms; linux ++ darwin;
   };
-}
+})

@@ -1,8 +1,4 @@
-preConfigurePhases+=" autoreconfPhase"
-
-for i in @autoconf@ @automake@ @libtool@ @gettext@; do
-    findInputs $i nativePkgs propagated-native-build-inputs
-done
+preConfigurePhases="${preConfigurePhases:-} autoreconfPhase"
 
 autoreconfPhase() {
     runHook preAutoreconf

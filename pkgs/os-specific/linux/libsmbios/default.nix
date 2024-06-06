@@ -1,32 +1,50 @@
-{ stdenv, fetchurl, pkgconfig, libxml2, perl }:
+{ lib, stdenv, fetchFromGitHub, fetchurl
+, pkg-config, autoreconfHook, help2man, gettext, libxml2, perl, python3, doxygen
+}:
 
-let
-  name = "libsmbios-2.2.28";
-in
-stdenv.mkDerivation {
-  inherit name;
+stdenv.mkDerivation rec {
+  pname = "libsmbios";
+  version = "2.4.3";
 
-  src = fetchurl {
-    url = "http://linux.dell.com/libsmbios/download/libsmbios/${name}/${name}.tar.gz";
-    sha256 = "03m0n834w49acwbf5cf9ync1ksnn2jkwaysvy7584y60qpmngb91";
+  src = fetchFromGitHub {
+    owner = "dell";
+    repo = "libsmbios";
+    rev = "v${version}";
+    sha256 = "0krwwydyvb9224r884y1mlmzyxhlfrcqw73vi1j8787rl0gl5a2i";
   };
 
-  buildInputs = [ pkgconfig libxml2 perl ];
+  patches = [
+    (fetchurl {
+      name = "musl.patch";
+      url = "https://git.alpinelinux.org/aports/plain/community/libsmbios/fixes.patch?id=bdc4f67889c958c1266fa5d0cab71c3cd639122f";
+      sha256 = "aVVc52OovDYvqWRyKcRAi62daa9AalkKvnVOGvrTmRk=";
+    })
+  ];
 
-  # It tries to install some Python stuff even when Python is disabled.
-  installFlags = "pkgpythondir=$(TMPDIR)/python";
+  nativeBuildInputs = [ autoreconfHook doxygen gettext libxml2 help2man perl pkg-config ];
 
-  # It forgets to install headers.
-  postInstall =
-    ''
-      cp -va "src/include/"* "$out/include/"
-      cp -va "out/public-include/"* "$out/include/"
-    '';
+  buildInputs = [ python3 ];
 
-  meta = {
-    homepage = "http://linux.dell.com/libsmbios/main";
+  configureFlags = [ "--disable-graphviz" ];
+
+  enableParallelBuilding = true;
+
+  postInstall = ''
+    mkdir -p $out/include
+    cp -a src/include/smbios_c $out/include/
+    cp -a out/public-include/smbios_c $out/include/
+  '';
+
+  # remove forbidden reference to $TMPDIR
+  preFixup = ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out/sbin/smbios-sys-info-lite"
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/dell/libsmbios";
     description = "A library to obtain BIOS information";
-    license = stdenv.lib.licenses.gpl2Plus; # alternatively, under the Open Software License version 2.1
-    platforms = stdenv.lib.platforms.linux;
+    license = with licenses; [ osl21 gpl2Plus ];
+    maintainers = with maintainers; [ ];
+    platforms = [ "i686-linux" "x86_64-linux" ];
   };
 }

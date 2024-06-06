@@ -1,12 +1,12 @@
-{ stdenv, fetchurl, perl }:
+{ lib, stdenv, fetchurl, perl }:
 
 stdenv.mkDerivation rec {
-  name = "asn1c-${version}";
-  version = "0.9.27";
+  pname = "asn1c";
+  version = "0.9.28";
 
   src = fetchurl {
-    url = "http://lionet.info/soft/asn1c-${version}.tar.gz";
-    sha256 = "17nvn2kzvlryasr9dzqg6gs27b9lvqpval0k31pb64bjqbhn8pq2";
+    url = "https://lionet.info/soft/asn1c-${version}.tar.gz";
+    sha256 = "1fc64g45ykmv73kdndr4zdm4wxhimhrir4rxnygxvwkych5l81w0";
   };
 
   outputs = [ "out" "doc" "man" ];
@@ -23,11 +23,11 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://lionet.info/asn1c/compiler.html;
+  meta = with lib; {
+    homepage = "http://lionet.info/asn1c/compiler.html";
     description = "Open Source ASN.1 Compiler";
     license = licenses.bsd2;
-    platforms = platforms.all;
-    maintainers = [ maintainers.montag451 ];
+    platforms = platforms.unix;
+    maintainers = [ maintainers.numinit ];
   };
 }

@@ -1,26 +1,30 @@
-{stdenv, fetchurl}:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "pecita-${version}";
+stdenvNoCC.mkDerivation {
+  pname = "pecita";
   version = "5.4";
 
   src = fetchurl {
-    url = "http://archive.rycee.net/pecita/${name}.tar.xz";
-    sha256 = "1cqzj558ldzzsbfbvlwp5fjh2gxa03l16dki0n8z5lmrdq8hrkws";
+    url = "http://pecita.eu/b/Pecita.otf";
+    hash = "sha256-D9IZ+p4UFHUNt9me7D4vv0x6rMK9IaViKPliCEyX6t4=";
   };
 
-  phases = ["unpackPhase" "installPhase"];
+  dontUnpack = true;
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/opentype
-    cp -v Pecita.otf $out/share/fonts/opentype/Pecita.otf
+    cp -v $src $out/share/fonts/opentype/Pecita.otf
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://pecita.eu/police-en.php;
+  meta = with lib; {
+    homepage = "http://pecita.eu/police-en.php";
     description = "Handwritten font with connected glyphs";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

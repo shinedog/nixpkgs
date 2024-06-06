@@ -4,80 +4,115 @@ with lib;
 let
   cfg = config.services.tt-rss;
 
+  inherit (cfg) phpPackage;
+
   configVersion = 26;
-
-  boolToString = b: if b then "true" else "false";
-
-  cacheDir = "cache";
-  lockDir = "lock";
-  feedIconsDir = "feed-icons";
 
   dbPort = if cfg.database.port == null
     then (if cfg.database.type == "pgsql" then 5432 else 3306)
     else cfg.database.port;
 
   poolName = "tt-rss";
-  phpfpmSocketName = "/var/run/phpfpm/${poolName}.sock";
 
-  tt-rss-config = pkgs.writeText "config.php" ''
+  mysqlLocal = cfg.database.createLocally && cfg.database.type == "mysql";
+  pgsqlLocal = cfg.database.createLocally && cfg.database.type == "pgsql";
+
+  tt-rss-config = let
+    password =
+      if (cfg.database.password != null) then
+        "'${(escape ["'" "\\"] cfg.database.password)}'"
+      else if (cfg.database.passwordFile != null) then
+        "file_get_contents('${cfg.database.passwordFile}')"
+      else
+        null
+      ;
+  in pkgs.writeText "config.php" ''
     <?php
+      putenv('TTRSS_PHP_EXECUTABLE=${phpPackage}/bin/php');
 
-      define('PHP_EXECUTABLE', '${pkgs.php}/bin/php');
+      putenv('TTRSS_LOCK_DIRECTORY=${cfg.root}/lock');
+      putenv('TTRSS_CACHE_DIR=${cfg.root}/cache');
+      putenv('TTRSS_ICONS_DIR=${cfg.root}/feed-icons');
+      putenv('TTRSS_ICONS_URL=feed-icons');
+      putenv('TTRSS_SELF_URL_PATH=${cfg.selfUrlPath}');
 
-      define('LOCK_DIRECTORY', '${lockDir}');
-      define('CACHE_DIR', '${cacheDir}');
-      define('ICONS_DIR', '${feedIconsDir}');
-      define('ICONS_URL', '${feedIconsDir}');
-      define('SELF_URL_PATH', '${cfg.selfUrlPath}');
+      putenv('TTRSS_MYSQL_CHARSET=UTF8');
 
-      define('MYSQL_CHARSET', 'UTF8');
+      putenv('TTRSS_DB_TYPE=${cfg.database.type}');
+      putenv('TTRSS_DB_HOST=${optionalString (cfg.database.host != null) cfg.database.host}');
+      putenv('TTRSS_DB_USER=${cfg.database.user}');
+      putenv('TTRSS_DB_NAME=${cfg.database.name}');
+      putenv('TTRSS_DB_PASS=' ${optionalString (password != null) ". ${password}"});
+      putenv('TTRSS_DB_PORT=${toString dbPort}');
 
-      define('DB_TYPE', '${cfg.database.type}');
-      define('DB_HOST', '${optionalString (cfg.database.host != null) cfg.database.host}');
-      define('DB_USER', '${cfg.database.user}');
-      define('DB_NAME', '${cfg.database.name}');
-      define('DB_PASS', '${optionalString (cfg.database.password != null) (escape ["'" "\\"] cfg.database.password)}');
-      define('DB_PORT', '${toString dbPort}');
+      putenv('TTRSS_AUTH_AUTO_CREATE=${boolToString cfg.auth.autoCreate}');
+      putenv('TTRSS_AUTH_AUTO_LOGIN=${boolToString cfg.auth.autoLogin}');
 
-      define('AUTH_AUTO_CREATE', ${boolToString cfg.auth.autoCreate});
-      define('AUTH_AUTO_LOGIN', ${boolToString cfg.auth.autoLogin});
-
-      define('FEED_CRYPT_KEY', '${escape ["'" "\\"] cfg.feedCryptKey}');
-
-
-      define('SINGLE_USER_MODE', ${boolToString cfg.singleUserMode});
-
-      define('SIMPLE_UPDATE_MODE', ${boolToString cfg.simpleUpdateMode});
-      define('CHECK_FOR_UPDATES', ${boolToString cfg.checkForUpdates});
-
-      define('FORCE_ARTICLE_PURGE', ${toString cfg.forceArticlePurge});
-      define('SESSION_COOKIE_LIFETIME', ${toString cfg.sessionCookieLifetime});
-      define('ENABLE_GZIP_OUTPUT', ${boolToString cfg.enableGZipOutput});
-
-      define('PLUGINS', '${builtins.concatStringsSep "," cfg.plugins}');
-
-      define('LOG_DESTINATION', '${cfg.logDestination}');
-      define('CONFIG_VERSION', ${toString configVersion});
+      putenv('TTRSS_FEED_CRYPT_KEY=${escape ["'" "\\"] cfg.feedCryptKey}');
 
 
-      define('PUBSUBHUBBUB_ENABLED', ${boolToString cfg.pubSubHubbub.enable});
-      define('PUBSUBHUBBUB_HUB', '${cfg.pubSubHubbub.hub}');
+      putenv('TTRSS_SINGLE_USER_MODE=${boolToString cfg.singleUserMode}');
 
-      define('SPHINX_SERVER', '${cfg.sphinx.server}');
-      define('SPHINX_INDEX', '${builtins.concatStringsSep "," cfg.sphinx.index}');
+      putenv('TTRSS_SIMPLE_UPDATE_MODE=${boolToString cfg.simpleUpdateMode}');
 
-      define('ENABLE_REGISTRATION', ${boolToString cfg.registration.enable});
-      define('REG_NOTIFY_ADDRESS', '${cfg.registration.notifyAddress}');
-      define('REG_MAX_USERS', ${toString cfg.registration.maxUsers});
+      # Never check for updates - the running version of the code should
+      # be controlled entirely by the version of TT-RSS active in the
+      # current Nix profile. If TT-RSS updates itself to a version
+      # requiring a database schema upgrade, and then the SystemD
+      # tt-rss.service is restarted, the old code copied from the Nix
+      # store will overwrite the updated version, causing the code to
+      # detect the need for a schema "upgrade" (since the schema version
+      # in the database is different than in the code), but the update
+      # schema operation in TT-RSS will do nothing because the schema
+      # version in the database is newer than that in the code.
+      putenv('TTRSS_CHECK_FOR_UPDATES=false');
 
-      define('SMTP_SERVER', '${cfg.email.server}');
-      define('SMTP_LOGIN', '${cfg.email.login}');
-      define('SMTP_PASSWORD', '${escape ["'" "\\"] cfg.email.password}');
-      define('SMTP_SECURE', '${cfg.email.security}');
+      putenv('TTRSS_FORCE_ARTICLE_PURGE=${toString cfg.forceArticlePurge}');
+      putenv('TTRSS_SESSION_COOKIE_LIFETIME=${toString cfg.sessionCookieLifetime}');
+      putenv('TTRSS_ENABLE_GZIP_OUTPUT=${boolToString cfg.enableGZipOutput}');
 
-      define('SMTP_FROM_NAME', '${escape ["'" "\\"] cfg.email.fromName}');
-      define('SMTP_FROM_ADDRESS', '${escape ["'" "\\"] cfg.email.fromAddress}');
-      define('DIGEST_SUBJECT', '${escape ["'" "\\"] cfg.email.digestSubject}');
+      putenv('TTRSS_PLUGINS=${builtins.concatStringsSep "," cfg.plugins}');
+
+      putenv('TTRSS_LOG_DESTINATION=${cfg.logDestination}');
+      putenv('TTRSS_CONFIG_VERSION=${toString configVersion}');
+
+
+      putenv('TTRSS_PUBSUBHUBBUB_ENABLED=${boolToString cfg.pubSubHubbub.enable}');
+      putenv('TTRSS_PUBSUBHUBBUB_HUB=${cfg.pubSubHubbub.hub}');
+
+      putenv('TTRSS_SPHINX_SERVER=${cfg.sphinx.server}');
+      putenv('TTRSS_SPHINX_INDEX=${builtins.concatStringsSep "," cfg.sphinx.index}');
+
+      putenv('TTRSS_ENABLE_REGISTRATION=${boolToString cfg.registration.enable}');
+      putenv('TTRSS_REG_NOTIFY_ADDRESS=${cfg.registration.notifyAddress}');
+      putenv('TTRSS_REG_MAX_USERS=${toString cfg.registration.maxUsers}');
+
+      putenv('TTRSS_SMTP_SERVER=${cfg.email.server}');
+      putenv('TTRSS_SMTP_LOGIN=${cfg.email.login}');
+      putenv('TTRSS_SMTP_PASSWORD=${escape ["'" "\\"] cfg.email.password}');
+      putenv('TTRSS_SMTP_SECURE=${cfg.email.security}');
+
+      putenv('TTRSS_SMTP_FROM_NAME=${escape ["'" "\\"] cfg.email.fromName}');
+      putenv('TTRSS_SMTP_FROM_ADDRESS=${escape ["'" "\\"] cfg.email.fromAddress}');
+      putenv('TTRSS_DIGEST_SUBJECT=${escape ["'" "\\"] cfg.email.digestSubject}');
+
+      ${cfg.extraConfig}
+  '';
+
+  # tt-rss and plugins and themes and config.php
+  servedRoot = pkgs.runCommand "tt-rss-served-root" {} ''
+    cp --no-preserve=mode -r ${pkgs.tt-rss} $out
+    cp ${tt-rss-config} $out/config.php
+    ${optionalString (cfg.pluginPackages != []) ''
+    for plugin in ${concatStringsSep " " cfg.pluginPackages}; do
+    cp -r "$plugin"/* "$out/plugins.local/"
+    done
+    ''}
+    ${optionalString (cfg.themePackages != []) ''
+    for theme in ${concatStringsSep " " cfg.themePackages}; do
+    cp -r "$theme"/* "$out/themes.local/"
+    done
+    ''}
   '';
 
  in {
@@ -93,7 +128,6 @@ let
       root = mkOption {
         type = types.path;
         default = "/var/lib/tt-rss";
-        example = "/var/lib/tt-rss";
         description = ''
           Root of the application.
         '';
@@ -101,8 +135,7 @@ let
 
       user = mkOption {
         type = types.str;
-        default = "nginx";
-        example = "nginx";
+        default = "tt_rss";
         description = ''
           User account under which both the update daemon and the web-application run.
         '';
@@ -168,13 +201,27 @@ let
           '';
         };
 
+        passwordFile = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          description = ''
+            The database user's password.
+          '';
+        };
+
         port = mkOption {
-          type = types.nullOr types.int;
+          type = types.nullOr types.port;
           default = null;
           description = ''
             The database's port. If not set, the default ports will be provided (5432
             and 3306 for pgsql and mysql respectively).
           '';
+        };
+
+        createLocally = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Create the database and database user locally.";
         };
       };
 
@@ -385,7 +432,7 @@ let
           background processes while not running tt-rss, this method is generally
           viable to keep your feeds up to date.
           Still, there are more robust (and recommended) updating methods
-          available, you can read about them here: http://tt-rss.org/wiki/UpdatingFeeds
+          available, you can read about them here: <https://tt-rss.org/wiki/UpdatingFeeds>
         '';
       };
 
@@ -399,14 +446,6 @@ let
         '';
       };
 
-      checkForUpdates = mkOption {
-        type = types.bool;
-        default = true;
-        description = ''
-          Check for updates automatically if running Git version
-        '';
-      };
-
       enableGZipOutput = mkOption {
         type = types.bool;
         default = true;
@@ -416,6 +455,15 @@ let
           Enabling this can break tt-rss in several httpd/php configurations,
           if you experience weird errors and tt-rss failing to start, blank pages
           after login, or content encoding errors, disable it.
+        '';
+      };
+
+      phpPackage = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.php;
+        defaultText = "pkgs.php";
+        description = ''
+          php package to use for php fpm and update daemon.
         '';
       };
 
@@ -433,6 +481,26 @@ let
         '';
       };
 
+      pluginPackages = mkOption {
+        type = types.listOf types.package;
+        default = [];
+        description = ''
+          List of plugins to install. The list elements are expected to
+          be derivations. All elements in this derivation are automatically
+          copied to the `plugins.local` directory.
+        '';
+      };
+
+      themePackages = mkOption {
+        type = types.listOf types.package;
+        default = [];
+        description = ''
+          List of themes to install. The list elements are expected to
+          be derivations. All elements in this derivation are automatically
+          copied to the `themes.local` directory.
+        '';
+      };
+
       logDestination = mkOption {
         type = types.enum ["" "sql" "syslog"];
         default = "sql";
@@ -443,118 +511,159 @@ let
           error.log).
         '';
       };
+
+      extraConfig = mkOption {
+        type = types.lines;
+        default = "";
+        description = ''
+          Additional lines to append to `config.php`.
+        '';
+      };
     };
   };
 
+  imports = [
+    (mkRemovedOptionModule ["services" "tt-rss" "checkForUpdates"] ''
+      This option was removed because setting this to true will cause TT-RSS
+      to be unable to start if an automatic update of the code in
+      services.tt-rss.root leads to a database schema upgrade that is not
+      supported by the code active in the Nix store.
+    '')
+  ];
 
   ###### implementation
 
   config = mkIf cfg.enable {
 
-    services.phpfpm.poolConfigs = mkIf (cfg.pool == "${poolName}") {
-      "${poolName}" = ''
-        listen = "${phpfpmSocketName}";
-        listen.owner = nginx
-        listen.group = nginx
-        listen.mode = 0600
-        user = ${cfg.user}
-        pm = dynamic
-        pm.max_children = 75
-        pm.start_servers = 10
-        pm.min_spare_servers = 5
-        pm.max_spare_servers = 20
-        pm.max_requests = 500
-        catch_workers_output = 1
-      '';
-    };
+    assertions = [
+      {
+        assertion = cfg.database.password != null -> cfg.database.passwordFile == null;
+        message = "Cannot set both password and passwordFile";
+      }
+      {
+        assertion = cfg.database.createLocally -> cfg.database.name == cfg.user && cfg.database.user == cfg.user;
+        message = ''
+          When creating a database via NixOS, the db user and db name must be equal!
+          If you already have an existing DB+user and this assertion is new, you can safely set
+          `services.tt-rss.database.createLocally` to `false` because removal of `ensureUsers`
+          and `ensureDatabases` doesn't have any effect.
+        '';
+      }
+    ];
 
-    services.nginx.virtualHosts = mkIf (cfg.virtualHost != null) {
-      "${cfg.virtualHost}" = {
-        root = "${cfg.root}";
-
-        locations."/" = {
-          index = "index.php";
-        };
-
-        locations."~ \.php$" = {
-          extraConfig = ''
-            fastcgi_split_path_info ^(.+\.php)(/.+)$;
-            fastcgi_pass unix:${phpfpmSocketName};
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME ${cfg.root}/$fastcgi_script_name;
-          '';
+    services.phpfpm.pools = mkIf (cfg.pool == "${poolName}") {
+      ${poolName} = {
+        inherit (cfg) user;
+        inherit phpPackage;
+        settings = mapAttrs (name: mkDefault) {
+          "listen.owner" = "nginx";
+          "listen.group" = "nginx";
+          "listen.mode" = "0600";
+          "pm" = "dynamic";
+          "pm.max_children" = 75;
+          "pm.start_servers" = 10;
+          "pm.min_spare_servers" = 5;
+          "pm.max_spare_servers" = 20;
+          "pm.max_requests" = 500;
+          "catch_workers_output" = 1;
         };
       };
     };
 
+    # NOTE: No configuration is done if not using virtual host
+    services.nginx = mkIf (cfg.virtualHost != null) {
+      enable = true;
+      virtualHosts = {
+        ${cfg.virtualHost} = {
+          root = "${cfg.root}/www";
 
-    systemd.services.tt-rss = let
-      dbService = if cfg.database.type == "pgsql" then "postgresql.service" else "mysql.service";
-    in {
+          locations."/" = {
+            index = "index.php";
+          };
 
+          locations."^~ /feed-icons" = {
+            root = "${cfg.root}";
+          };
+
+          locations."~ \\.php$" = {
+            extraConfig = ''
+              fastcgi_split_path_info ^(.+\.php)(/.+)$;
+              fastcgi_pass unix:${config.services.phpfpm.pools.${cfg.pool}.socket};
+              fastcgi_index index.php;
+            '';
+          };
+        };
+      };
+    };
+
+    systemd.tmpfiles.rules = [
+      "d '${cfg.root}' 0555 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/lock' 0755 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/cache' 0755 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/cache/upload' 0755 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/cache/images' 0755 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/cache/export' 0755 ${cfg.user} tt_rss - -"
+      "d '${cfg.root}/feed-icons' 0755 ${cfg.user} tt_rss - -"
+      "L+ '${cfg.root}/www' - - - - ${servedRoot}"
+    ];
+
+    systemd.services = {
+      phpfpm-tt-rss = mkIf (cfg.pool == "${poolName}") {
+        restartTriggers = [ servedRoot ];
+      };
+
+      tt-rss = {
         description = "Tiny Tiny RSS feeds update daemon";
 
-        preStart = let
-          callSql = e:
-              if cfg.database.type == "pgsql" then ''
-                  ${optionalString (cfg.database.password != null) "PGPASSWORD=${cfg.database.password}"} \
-                  ${pkgs.postgresql95}/bin/psql \
-                    -U ${cfg.database.user} \
-                    ${optionalString (cfg.database.host != null) "-h ${cfg.database.host} --port ${toString dbPort}"} \
-                    -c '${e}' \
-                    ${cfg.database.name}''
-
-              else if cfg.database.type == "mysql" then ''
-                  echo '${e}' | ${pkgs.mysql}/bin/mysql \
-                    -u ${cfg.database.user} \
-                    ${optionalString (cfg.database.password != null) "-p${cfg.database.password}"} \
-                    ${optionalString (cfg.database.host != null) "-h ${cfg.database.host} -P ${toString dbPort}"} \
-                    ${cfg.database.name}''
-
-              else "";
-
-        in ''
-          rm -rf "${cfg.root}/*"
-          mkdir -m 755 -p "${cfg.root}"
-          cp -r "${pkgs.tt-rss}/"* "${cfg.root}"
-          ln -sf "${tt-rss-config}" "${cfg.root}/config.php"
-          chown -R "${cfg.user}" "${cfg.root}"
-          chmod -R 755 "${cfg.root}"
-        ''
-
-        + (optionalString (cfg.database.type == "pgsql") ''
-          exists=$(${callSql "select count(*) > 0 from pg_tables where tableowner = user"} \
-          | tail -n+3 | head -n-2 | sed -e 's/[ \n\t]*//')
-
-          if [ "$exists" == 'f' ]; then
-            ${callSql "\\i ${pkgs.tt-rss}/schema/ttrss_schema_${cfg.database.type}.sql"}
-          else
-            echo 'The database contains some data. Leaving it as it is.'
-          fi;
-        '')
-
-        + (optionalString (cfg.database.type == "mysql") ''
-          exists=$(${callSql "select count(*) > 0 from information_schema.tables where table_schema = schema()"} \
-          | tail -n+2 | sed -e 's/[ \n\t]*//')
-
-          if [ "$exists" == '0' ]; then
-            ${callSql "\\. ${pkgs.tt-rss}/schema/ttrss_schema_${cfg.database.type}.sql"}
-          else
-            echo 'The database contains some data. Leaving it as it is.'
-          fi;
-        '');
+        preStart = ''
+          ${phpPackage}/bin/php ${cfg.root}/www/update.php --update-schema --force-yes
+        '';
 
         serviceConfig = {
           User = "${cfg.user}";
-          ExecStart = "${pkgs.php}/bin/php ${cfg.root}/update.php --daemon";
-          StandardOutput = "syslog";
-          StandardError = "syslog";
-          PermissionsStartOnly = true;
+          Group = "tt_rss";
+          ExecStart = "${phpPackage}/bin/php ${cfg.root}/www/update.php --daemon --quiet";
+          Restart = "on-failure";
+          RestartSec = "60";
+          SyslogIdentifier = "tt-rss";
         };
 
         wantedBy = [ "multi-user.target" ];
-        requires = ["${dbService}"];
-        after = ["network.target" "${dbService}"];
+        requires = optional mysqlLocal "mysql.service" ++ optional pgsqlLocal "postgresql.service";
+        after = [ "network.target" ] ++ optional mysqlLocal "mysql.service" ++ optional pgsqlLocal "postgresql.service";
+      };
     };
+
+    services.mysql = mkIf mysqlLocal {
+      enable = true;
+      package = mkDefault pkgs.mariadb;
+      ensureDatabases = [ cfg.database.name ];
+      ensureUsers = [
+        {
+          name = cfg.user;
+          ensurePermissions = {
+            "${cfg.database.name}.*" = "ALL PRIVILEGES";
+          };
+        }
+      ];
+    };
+
+    services.postgresql = mkIf pgsqlLocal {
+      enable = mkDefault true;
+      ensureDatabases = [ cfg.database.name ];
+      ensureUsers = [
+        { name = cfg.database.user;
+          ensureDBOwnership = true;
+        }
+      ];
+    };
+
+    users.users.tt_rss = optionalAttrs (cfg.user == "tt_rss") {
+      description = "tt-rss service user";
+      isSystemUser = true;
+      group = "tt_rss";
+    };
+
+    users.groups.tt_rss = {};
   };
 }

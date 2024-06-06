@@ -1,27 +1,55 @@
-{ stdenv, fetchurl, makeWrapper, gawk, gnused, utillinux }:
+{ lib, stdenv, fetchurl, makeWrapper
+, gawk, gnused, util-linux, file
+, wget, python3, qemu-utils
+, e2fsprogs, cdrkit
+, gptfdisk }:
 
-stdenv.mkDerivation {
+let
+  # according to https://packages.debian.org/sid/cloud-image-utils + https://packages.debian.org/sid/admin/cloud-guest-utils
+  guestDeps = [
+    e2fsprogs gptfdisk gawk gnused util-linux
+  ];
+  binDeps = guestDeps ++ [
+    wget file qemu-utils cdrkit
+  ];
+in stdenv.mkDerivation rec {
   # NOTICE: if you bump this, make sure to run
   # $ nix-build nixos/release-combined.nix -A nixos.tests.ec2-nixops
-  name = "cloud-utils-0.29";
+  # growpart is needed in initrd in nixos/system/boot/grow-partition.nix
+  pname = "cloud-utils";
+  version = "0.32";
   src = fetchurl {
-    url = "https://launchpad.net/cloud-utils/trunk/0.29/+download/cloud-utils-0.29.tar.gz";
-    sha256 = "0z15gs8gmpy5gqxl7yiyjj7a6s8iw44djj6axvbci627b9pvd8cy";
+    url = "https://launchpad.net/cloud-utils/trunk/${version}/+download/cloud-utils-${version}.tar.gz";
+    sha256 = "0xxdi55lzw7j91zfajw7jhd2ilsqj2dy04i9brlk8j3pvb5ma8hk";
   };
-  buildInputs = [ makeWrapper ];
-  buildPhase = ''
-    mkdir -p $out/bin
-    cp bin/growpart $out/bin/growpart
-    sed -i 's|awk|gawk|' $out/bin/growpart
-    sed -i 's|sed|gnused|' $out/bin/growpart
-    ln -s sed $out/bin/gnused
-    wrapProgram $out/bin/growpart --prefix PATH : "${stdenv.lib.makeBinPath [ gnused gawk utillinux ]}:$out/bin"
-  '';
-  dontInstall = true;
-  dontPatchShebangs = true;
-  dontStrip = true;
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ python3 ];
+  installFlags = [ "LIBDIR=$(out)/lib" "BINDIR=$(out)/bin" "MANDIR=$(out)/man/man1" "DOCDIR=$(out)/doc" ];
 
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
+  # $guest output contains all executables needed for cloud-init and $out the rest + $guest
+  # This is similar to debian's package split into cloud-image-utils and cloud-guest-utils
+  # The reason is to reduce the closure size
+  outputs = [ "out" "guest"];
+
+  postFixup = ''
+    moveToOutput bin/ec2metadata $guest
+    moveToOutput bin/growpart $guest
+    moveToOutput bin/vcs-run $guest
+
+    for i in $out/bin/*; do
+      wrapProgram $i --prefix PATH : "${lib.makeBinPath binDeps}:$out/bin"
+    done
+
+    for i in $guest/bin/*; do
+      wrapProgram $i --prefix PATH : "${lib.makeBinPath guestDeps}:$guest/bin"
+      ln -s $i $out/bin
+    done
+  '';
+
+  dontBuild = true;
+
+  meta = with lib; {
+    platforms = platforms.unix;
+    license = licenses.gpl3;
   };
 }

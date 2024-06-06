@@ -1,32 +1,42 @@
-{ stdenv, fetchurl, boost, libwpd, libwpg, pkgconfig, zlib, gperf
-, librevenge, libxml2, icu, perl
+{ lib
+, stdenv
+, fetchurl
+, boost
+, libwpd
+, libwpg
+, pkg-config
+, zlib
+, gperf
+, librevenge
+, libxml2
+, icu
+, perl
+, cppunit
+, doxygen
 }:
 
 stdenv.mkDerivation rec {
-  name = "libvisio-0.1.3";
+  pname = "libvisio";
+  version = "0.1.7";
+
+  outputs = [ "out" "bin" "dev" "doc" ];
 
   src = fetchurl {
-    url = "http://dev-www.libreoffice.org/src/${name}.tar.bz2";
-    sha256 = "1blgdwxprqkasm2175imcvy647sqv6xyf3k09p0b1i7hlq889wvy";
+    url = "https://dev-www.libreoffice.org/src/libvisio/${pname}-${version}.tar.xz";
+    sha256 = "0k7adcbbf27l7n453cca1m6s9yj6qvb5j6bsg2db09ybf3w8vbwg";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ boost libwpd libwpg zlib gperf librevenge libxml2 icu perl ];
+  strictDeps = true;
+  nativeBuildInputs = [ pkg-config doxygen perl gperf ];
+  buildInputs = [ boost libwpd libwpg zlib librevenge libxml2 icu cppunit ];
 
-  # Boost 1.59 compatability fix
-  # Attempt removing when updating
-  postPatch = ''
-    sed -i 's,^CPPFLAGS.*,\0 -DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED,' src/lib/Makefile.in
-  '';
+  doCheck = true;
 
-  configureFlags = [
-    "--disable-werror"
-    "--disable-tests"
-  ];
-
-  meta = {
+  meta = with lib; {
     description = "A library providing ability to interpret and import visio diagrams into various applications";
-    homepage = http://www.freedesktop.org/wiki/Software/libvisio;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://wiki.documentfoundation.org/DLP/Libraries/libvisio";
+    license = licenses.mpl20;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ nickcao ];
   };
 }

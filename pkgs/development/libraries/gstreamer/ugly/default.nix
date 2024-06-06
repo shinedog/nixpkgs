@@ -1,39 +1,96 @@
-{ stdenv, fetchurl, pkgconfig, python
-, gst-plugins-base, orc
-, a52dec, libcdio, libdvdread
-, lame, libmad, libmpeg2, x264, libintlOrEmpty
+{ stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, python3
+, gst-plugins-base
+, orc
+, gettext
+, a52dec
+, libcdio
+, libdvdread
+, libmad
+, libmpeg2
+, x264
+, libintl
+, lib
+, IOKit
+, CoreFoundation
+, DiskArbitration
+, enableGplPlugins ? true
+# Checks meson.is_cross_build(), so even canExecute isn't enough.
+, enableDocumentation ? stdenv.hostPlatform == stdenv.buildPlatform, hotdoc
 }:
 
 stdenv.mkDerivation rec {
-  name = "gst-plugins-ugly-1.10.1";
+  pname = "gst-plugins-ugly";
+  version = "1.24.2";
 
-  meta = with stdenv.lib; {
+  outputs = [ "out" "dev" ];
+
+  src = fetchurl {
+    url = "https://gstreamer.freedesktop.org/src/${pname}/${pname}-${version}.tar.xz";
+    hash = "sha256-RdqYvxBAyUcv1Z9icSgt4lo3IauFt4qq+BBJSVUPvvU=";
+  };
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    gettext
+    pkg-config
+    python3
+  ] ++ lib.optionals enableDocumentation [
+    hotdoc
+  ];
+
+  buildInputs = [
+    gst-plugins-base
+    orc
+    libintl
+  ] ++ lib.optionals enableGplPlugins [
+    a52dec
+    libcdio
+    libdvdread
+    libmad
+    libmpeg2
+    x264
+  ] ++ lib.optionals stdenv.isDarwin [
+    IOKit
+    CoreFoundation
+    DiskArbitration
+  ];
+
+  mesonFlags = [
+    "-Dsidplay=disabled" # sidplay / sidplay/player.h isn't packaged in nixpkgs as of writing
+    (lib.mesonEnable "doc" enableDocumentation)
+  ] ++ (if enableGplPlugins then [
+    "-Dgpl=enabled"
+  ] else [
+    "-Da52dec=disabled"
+    "-Dcdio=disabled"
+    "-Ddvdread=disabled"
+    "-Dmpeg2dec=disabled"
+    "-Dsidplay=disabled"
+    "-Dx264=disabled"
+  ]);
+
+  postPatch = ''
+    patchShebangs \
+      scripts/extract-release-date-from-doap-file.py
+  '';
+
+  meta = with lib; {
     description = "Gstreamer Ugly Plugins";
-    homepage    = "http://gstreamer.freedesktop.org";
+    homepage = "https://gstreamer.freedesktop.org";
     longDescription = ''
       a set of plug-ins that have good quality and correct functionality,
       but distributing them might pose problems.  The license on either
       the plug-ins or the supporting libraries might not be how we'd
       like. The code might be widely known to present patent problems.
     '';
-    license     = licenses.lgpl2Plus;
-    platforms   = platforms.unix;
+    license = if enableGplPlugins then licenses.gpl2Plus else licenses.lgpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ matthewbauer lilyinstarlight ];
   };
-
-  src = fetchurl {
-    url = "${meta.homepage}/src/gst-plugins-ugly/${name}.tar.xz";
-    sha256 = "1hl385fys7hfx5ffipavvhciq6hwm731rs4d6r9fn7h9qagxbv55";
-  };
-
-  outputs = [ "out" "dev" ];
-
-  nativeBuildInputs = [ pkgconfig python ];
-
-  buildInputs = [
-    gst-plugins-base orc
-    a52dec libcdio libdvdread
-    lame libmad libmpeg2 x264
-  ] ++ libintlOrEmpty;
-
-  NIX_LDFLAGS = if stdenv.isDarwin then "-lintl" else null;
 }

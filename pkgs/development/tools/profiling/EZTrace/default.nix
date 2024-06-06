@@ -1,24 +1,35 @@
-{ stdenv, fetchurl, autoconf, libelf, gfortran, zlib, binutils }:
+{ lib,
+  stdenv,
+  fetchFromGitLab,
+  gfortran,
+  libelf,
+  libiberty,
+  zlib,
+  # Once https://gitlab.com/eztrace/eztrace/-/issues/41
+  # is released we can switch to latest binutils.
+  libbfd_2_38,
+  libopcodes_2_38,
+  buildPackages,
+  autoreconfHook
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.0.6";
-  name = "EZTrace-${version}";
+  pname = "EZTrace";
+  version = "1.1-11";
 
-  src = fetchurl {
-    url = "http://gforge.inria.fr/frs/download.php/file/34082/eztrace-${version}.tar.gz";
-    sha256 = "06q5y9qmdn1h0wjmy28z6gwswskmph49j7simfqcqwv05gvd9svr";
+  src = fetchFromGitLab {
+    owner = "eztrace";
+    repo = "eztrace";
+    rev = "eztrace-${version}";
+    sha256 = "sha256-A6HMr4ib5Ka1lTbbTQOdq3kIdCoN/CwAKRdXdv9wpfU=";
   };
 
-  # Goes past the rpl_malloc linking failure
-  preConfigure = ''
-    export ac_cv_func_malloc_0_nonnull=yes
-  '';
+  nativeBuildInputs = [ gfortran autoreconfHook ];
+  buildInputs = [ libelf libiberty zlib libbfd_2_38 libopcodes_2_38 ];
 
-  buildInputs = [ autoconf libelf gfortran zlib binutils ];
-
-  meta = {
+  meta = with lib; {
     description = "Tool that aims at generating automatically execution trace from HPC programs";
-    license = stdenv.lib.licenses.cecill-b;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
+    license = licenses.cecill-b;
+    maintainers = with maintainers; [ ];
   };
 }

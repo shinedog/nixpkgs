@@ -1,22 +1,34 @@
-{ stdenv, fetchurl, autoreconfHook, file, openssl, perl, unzip }:
+{ lib, stdenv, fetchurl
+, file, openssl, perl, nettools
+, withPerlTools ? false }: let
 
-stdenv.mkDerivation rec {
-  name = "net-snmp-5.7.3";
+  perlWithPkgs = perl.withPackages (ps: with ps; [
+    JSON
+    TermReadKey
+    Tk
+  ]);
+
+in stdenv.mkDerivation rec {
+  pname = "net-snmp";
+  version = "5.9.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/net-snmp/${name}.zip";
-    sha256 = "0gkss3zclm23zwpqfhddca8278id7pk6qx1mydpimdrrcndwgpz8";
+    url = "mirror://sourceforge/net-snmp/${pname}-${version}.tar.gz";
+    sha256 = "sha256-i03gE5HnTjxwFL60OWGi1tb6A6zDQoC5WF9JMHRbBUQ=";
   };
 
-  preConfigure =
-    ''
-      perlversion=$(perl -e 'use Config; print $Config{version};')
-      perlarchname=$(perl -e 'use Config; print $Config{archname};')
-      installFlags="INSTALLSITEARCH=$out/lib/perl5/site_perl/$perlversion/$perlarchname INSTALLSITEMAN3DIR=$out/share/man/man3"
+  patches =
+    let fetchAlpinePatch = name: sha256: fetchurl {
+      url = "https://git.alpinelinux.org/aports/plain/main/net-snmp/${name}?id=ebb21045c31f4d5993238bcdb654f21d8faf8123";
+      inherit name sha256;
+    };
+  in [
+    (fetchAlpinePatch "fix-includes.patch" "0zpkbb6k366qpq4dax5wknwprhwnhighcp402mlm7950d39zfa3m")
+    (fetchAlpinePatch "netsnmp-swinst-crash.patch" "0gh164wy6zfiwiszh58fsvr25k0ns14r3099664qykgpmickkqid")
+    (fetchAlpinePatch "fix-fd_mask.patch" "/i9ve61HjDzqZt+u1wajNtSQoizl+KePvhcAt24HKd0=")
+  ];
 
-      # http://comments.gmane.org/gmane.network.net-snmp.user/32434
-      substituteInPlace "man/Makefile.in" --replace 'grep -vE' '@EGREP@ -v'
-    '';
+  outputs = [ "bin" "out" "dev" "lib" ];
 
   configureFlags =
     [ "--with-default-snmp-version=3"
@@ -25,23 +37,43 @@ stdenv.mkDerivation rec {
       "--with-logfile=/var/log/net-snmpd.log"
       "--with-persistent-directory=/var/lib/net-snmp"
       "--with-openssl=${openssl.dev}"
-    ] ++ stdenv.lib.optional stdenv.isLinux "--with-mnttab=/proc/mounts";
+      "--disable-embedded-perl"
+      "--without-perl-modules"
+    ] ++ lib.optional stdenv.isLinux "--with-mnttab=/proc/mounts";
 
-  buildInputs = [ autoreconfHook file perl unzip openssl ];
-
-  enableParallelBuilding = true;
-
-  postInstall = ''
-    for f in "$out/lib/"*.la $out/bin/net-snmp-config $out/bin/net-snmp-create-v3-user; do
-      sed 's|-L${openssl.dev}|-L${openssl.out}|g' -i $f
-    done
+  postPatch = ''
+    substituteInPlace testing/fulltests/support/simple_TESTCONF.sh --replace "/bin/netstat" "${nettools}/bin/netstat"
   '';
 
-  meta = with stdenv.lib; {
+  postConfigure = ''
+    # libraries contain configure options. Mangle store paths out from
+    # ./configure-generated file.
+    sed -i include/net-snmp/net-snmp-config.h \
+      -e "/NETSNMP_CONFIGURE_OPTIONS/ s|$NIX_STORE/[a-z0-9]\{32\}-|$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-|g"
+  '';
+
+  nativeBuildInputs = [ nettools file ];
+  buildInputs = [ openssl ]
+    ++ lib.optional withPerlTools perlWithPkgs;
+
+  enableParallelBuilding = true;
+  # Missing dependencies during relinking:
+  #   ./.libs/libnetsnmpagent.so: file not recognized: file format not recognized
+  enableParallelInstalling = false;
+  doCheck = false;  # tries to use networking
+
+  postInstall = ''
+    for f in "$lib/lib/"*.la $bin/bin/net-snmp-config $bin/bin/net-snmp-create-v3-user; do
+      sed 's|-L${openssl.dev}|-L${lib.getLib openssl}|g' -i $f
+    done
+    mkdir $dev/bin
+    mv $bin/bin/net-snmp-config $dev/bin
+  '';
+
+  meta = with lib; {
     description = "Clients and server for the SNMP network monitoring protocol";
-    homepage = http://net-snmp.sourceforge.net/;
+    homepage = "http://www.net-snmp.org/";
     license = licenses.bsd3;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
   };
 }

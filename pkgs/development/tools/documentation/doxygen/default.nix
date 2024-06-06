@@ -1,44 +1,80 @@
-{ stdenv, cmake, fetchurl, perl, python, flex, bison, qt4, CoreServices, libiconv }:
+{ lib
+, stdenv
+, cmake
+, fetchFromGitHub
+, fetchpatch
+, python3
+, flex
+, bison
+, qt5
+, CoreServices
+, libiconv
+, spdlog
+, sqlite
+}:
 
 stdenv.mkDerivation rec {
+  pname = "doxygen";
+  version = "1.10.0";
 
-  name = "doxygen-1.8.11";
-
-  src = fetchurl {
-    url = "ftp://ftp.stack.nl/pub/users/dimitri/${name}.src.tar.gz";
-    sha256 = "0ja02pm3fpfhc5dkry00kq8mn141cqvdqqpmms373ncbwi38pl35";
+  src = fetchFromGitHub {
+    owner = "doxygen";
+    repo = "doxygen";
+    rev = "Release_${lib.replaceStrings [ "." ] [ "_" ] version}";
+    sha256 = "sha256-FPI5ICdn9Tne/g9SP6jAQS813AAyoDNooDR/Hyvq6R4=";
   };
 
-  nativeBuildInputs = [ cmake ];
+  patches = [
+    (fetchpatch {
+      name = "sys-spdlog-fix.patch";
+      url = "https://github.com/doxygen/doxygen/commit/0df6da616f01057d28b11c8bee28443c102dd424.patch";
+      hash = "sha256-7efkCQFYGslwqhIuPsLYTEiA1rq+mO0DuyQBMt0O+m0=";
+    })
+  ];
 
-  buildInputs =
-    [ perl python flex bison ]
-    ++ stdenv.lib.optional (qt4 != null) qt4
-    ++ stdenv.lib.optional stdenv.isSunOS libiconv
-    ++ stdenv.lib.optionals stdenv.isDarwin [ CoreServices libiconv ];
+  nativeBuildInputs = [
+    cmake
+    python3
+    flex
+    bison
+  ];
 
-  cmakeFlags =
-    [ "-DICONV_INCLUDE_DIR=${libiconv}/include" ] ++
-    stdenv.lib.optional (qt4 != null) "-Dbuild_wizard=YES";
+  buildInputs = [ libiconv spdlog sqlite ]
+    ++ lib.optionals (qt5 != null) (with qt5; [ qtbase wrapQtAppsHook ])
+    ++ lib.optionals stdenv.isDarwin [ CoreServices ];
 
-  NIX_CFLAGS_COMPILE =
-    stdenv.lib.optional stdenv.isDarwin "-mmacosx-version-min=10.9";
+  cmakeFlags = [
+    "-DICONV_INCLUDE_DIR=${libiconv}/include"
+    "-Duse_sys_spdlog=ON"
+    "-Duse_sys_sqlite3=ON"
+  ] ++ lib.optional (qt5 != null) "-Dbuild_wizard=YES";
 
-  enableParallelBuilding = true;
+  env.NIX_CFLAGS_COMPILE =
+    lib.optionalString stdenv.isDarwin "-mmacosx-version-min=10.9";
+
+  # put examples in an output so people/tools can test against them
+  outputs = [ "out" "examples" ];
+  postInstall = ''
+    cp -r ../examples $examples
+  '';
 
   meta = {
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = "http://doxygen.org/";
+    license = lib.licenses.gpl2Plus;
+    homepage = "https://www.doxygen.nl/";
+    changelog = "https://www.doxygen.nl/manual/changelog.html";
     description = "Source code documentation generator tool";
+    mainProgram = "doxygen";
 
     longDescription = ''
-      Doxygen is a documentation system for C++, C, Java, Objective-C,
-      Python, IDL (CORBA and Microsoft flavors), Fortran, VHDL, PHP,
-      C\#, and to some extent D.  It can generate an on-line
-      documentation browser (in HTML) and/or an off-line reference
-      manual (in LaTeX) from a set of documented source files.
+      Doxygen is the de facto standard tool for generating documentation from
+      annotated C++ sources, but it also supports other popular programming
+      languages such as C, Objective-C, C#, PHP, Java, Python, IDL (Corba,
+      Microsoft, and UNO/OpenOffice flavors), Fortran, VHDL and to some extent
+      D. It can generate an on-line documentation browser (in HTML) and/or an
+      off-line reference manual (in LaTeX) from a set of documented source
+      files.
     '';
 
-    platforms = if qt4 != null then stdenv.lib.platforms.linux else stdenv.lib.platforms.unix;
+    platforms = if qt5 != null then lib.platforms.linux else lib.platforms.unix;
   };
 }

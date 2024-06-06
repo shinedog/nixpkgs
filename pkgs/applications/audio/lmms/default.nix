@@ -1,31 +1,57 @@
-{ stdenv, fetchFromGitHub, SDL, alsaLib, cmake, fftwSinglePrec, fluidsynth
-, fltk13, libjack2, libvorbis , libsamplerate, libsndfile, pkgconfig
-, libpulseaudio, qt4, freetype, libgig
-}:
+{ lib, fetchFromGitHub, fetchpatch, cmake, pkg-config, alsa-lib ? null, carla ? null, fftwFloat, fltk13
+, fluidsynth ? null, lame ? null, libgig ? null, libjack2 ? null, libpulseaudio ? null
+, libsamplerate, libsoundio ? null, libsndfile, libvorbis ? null, portaudio ? null
+, qtbase, qtx11extras, qttools, SDL ? null, mkDerivation }:
 
-stdenv.mkDerivation rec {
-  name = "lmms-${version}";
-  version = "1.1.90";
+mkDerivation rec {
+  pname = "lmms";
+  version = "1.2.2";
 
   src = fetchFromGitHub {
     owner = "LMMS";
     repo = "lmms";
     rev = "v${version}";
-    sha256 = "0njiarndwqamqiinr1wbwkzjn87yzr1z5k9cfwk0jdkbalgakkq3";
+    sha256 = "006hwv1pbh3y5whsxkjk20hsbgwkzr4dawz43afq1gil69y7xpda";
+    fetchSubmodules = true;
   };
 
+  nativeBuildInputs = [ cmake qttools pkg-config ];
+
   buildInputs = [
-    SDL alsaLib cmake fftwSinglePrec fltk13 fluidsynth libjack2 libgig
-    libsamplerate libsndfile libvorbis pkgconfig libpulseaudio qt4
+    carla
+    alsa-lib
+    fftwFloat
+    fltk13
+    fluidsynth
+    lame
+    libgig
+    libjack2
+    libpulseaudio
+    libsamplerate
+    libsndfile
+    libsoundio
+    libvorbis
+    portaudio
+    qtbase
+    qtx11extras
+    SDL # TODO: switch to SDL2 in the next version
   ];
 
-  enableParallelBuilding = true;
+  patches = [
+    (fetchpatch {
+      url = "https://raw.githubusercontent.com/archlinux/svntogit-community/cf64acc45e3264c6923885867e2dbf8b7586a36b/trunk/lmms-carla-export.patch";
+      sha256 = "sha256-wlSewo93DYBN2PvrcV58dC9kpoo9Y587eCeya5OX+j4=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Linux MultiMedia Studio";
-    homepage = "http://lmms.sourceforge.net";
+  cmakeFlags = [ "-DWANT_QT5=ON" ];
+
+  meta = with lib; {
+    description = "DAW similar to FL Studio (music production software)";
+    mainProgram = "lmms";
+    homepage = "https://lmms.io";
     license = licenses.gpl2Plus;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.goibhniu ];
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    maintainers = with maintainers; [ goibhniu yana ];
   };
 }

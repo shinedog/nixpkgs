@@ -1,39 +1,49 @@
-{ stdenv, lib, fetchurl
-  , qt4, qmake4Hook, openssl
-  , xproto, libX11, libXScrnSaver, scrnsaverproto
-  , xz, zlib
+{ stdenv, lib, fetchFromGitHub
+, qtbase
+, qttools
+, qtx11extras
+, qtmultimedia
+, qtwebkit
+, wrapQtAppsHook
+, cmake
+, openssl
+, xorgproto, libX11, libXScrnSaver
+, xz, zlib
 }:
-stdenv.mkDerivation rec {
-  name = "vacuum-im-${version}";
-  version = "1.2.4";
+stdenv.mkDerivation {
+  pname = "vacuum-im";
+  version = "unstable-2021-12-09";
 
-  src = fetchurl {
-    url = "https://googledrive.com/host/0B7A5K_290X8-d1hjQmJaSGZmTTA/vacuum-${version}.tar.gz";
-    sha256 = "10qxpfbbaagqcalhk0nagvi5irbbz5hk31w19lba8hxf6pfylrhf";
+  src = fetchFromGitHub {
+    owner = "Vacuum-IM";
+    repo = "vacuum-im";
+    rev = "0abd5e11dd3e2538b8c47f5a06febedf73ae99ee";
+    sha256 = "0l9pln07zz874m1r6wnpc9vcdbpgvjdsy49cjjilc6s4p4b2c812";
   };
 
+  nativeBuildInputs = [
+    wrapQtAppsHook
+    cmake
+  ];
   buildInputs = [
-    qt4 openssl xproto libX11 libXScrnSaver scrnsaverproto xz zlib
+    qtbase
+    qttools
+    qtx11extras
+    qtmultimedia
+    qtwebkit
+    openssl
+    xorgproto
+    libX11
+    libXScrnSaver
+    xz
+    zlib
   ];
 
-  # hack: needed to fix build issues in
-  # http://hydra.nixos.org/build/38322959/nixlog/1
-  # should be an upstream issue but it's easy to fix
-  NIX_LDFLAGS = "-lz";
-
-  nativeBuildInputs = [ qmake4Hook ];
-
-  preConfigure = ''
-    qmakeFlags="$qmakeFlags INSTALL_PREFIX=$out"
-  '';
-
-  hardeningDisable = [ "format" ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An XMPP client fully composed of plugins";
     maintainers = [ maintainers.raskin ];
     platforms = platforms.linux;
     license = licenses.gpl3;
-    homepage = "http://code.google.com/p/vacuum-im/";
+    homepage = "http://www.vacuum-im.org";
   };
 }

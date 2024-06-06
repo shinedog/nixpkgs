@@ -1,21 +1,23 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchzip }:
 
-let version = "20030809";
-in
-stdenv.mkDerivation {
-  name = "kochi-substitute-naga10-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "kochi-substitute-naga10";
+  version = "20030809";
 
-  src = fetchurl {
-    url = "mirror://sourceforgejp/efont/5411/kochi-substitute-${version}.tar.bz2";
-    sha256 = "f4d69b24538833bf7e2c4de5e01713b3f1440960a6cc2a5993cb3c68cd23148c";
+  src = fetchzip {
+    url = "mirror://osdn/efont/5411/kochi-substitute-${version}.tar.bz2";
+    stripRoot = false;
+    hash = "sha256-dRJAxeVGYcNjLWqJJ+9Z2FW3BHrgyGRzlgM2x5YG3AM=";
   };
 
-  sourceRoot = "kochi-substitute-${version}";
-
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
-    cp ./kochi-gothic-subst.ttf $out/share/fonts/truetype/kochi-gothic-subst-naga10.ttf
-    cp ./kochi-mincho-subst.ttf $out/share/fonts/truetype/kochi-mincho-subst-naga10.ttf
+    mv */kochi-gothic-subst.ttf $out/share/fonts/truetype/kochi-gothic-subst-naga10.ttf
+    mv */kochi-mincho-subst.ttf $out/share/fonts/truetype/kochi-mincho-subst-naga10.ttf
+
+    runHook postInstall
   '';
 
   meta = {
@@ -27,8 +29,8 @@ stdenv.mkDerivation {
       this font may not be sold commercially. See kochi-substitute for the free
       Debian version.
     '';
-    homepage = http://sourceforge.jp/projects/efont/;
-    license = stdenv.lib.licenses.unfreeRedistributable;
-    maintainers = [ stdenv.lib.maintainers.auntie ];
+    homepage = "https://osdn.net/projects/efont/";
+    license = lib.licenses.unfreeRedistributable;
+    maintainers = [ lib.maintainers.auntie ];
   };
 }

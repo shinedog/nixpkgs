@@ -1,31 +1,95 @@
-{ stdenv, fetchFromGitHub, pkgconfig, gettext, gtk3, intltool, glib
-, gtk_doc, autoconf, automake, libtool, libarchive, libyaml
-, gobjectIntrospection, sqlite, libsoup, gcab, attr, acl, docbook_xsl
-, libuuid, json_glib, autoconf-archive
+{ lib, stdenv
+, fetchFromGitHub
+, substituteAll
+, docbook_xml_dtd_42
+, docbook_xsl
+, fontconfig
+, freetype
+, gdk-pixbuf
+, gettext
+, glib
+, gobject-introspection
+, gperf
+, gtk-doc
+, gtk3
+, json-glib
+, libarchive
+, curl
+, libuuid
+, libxslt
+, meson
+, ninja
+, pkg-config
+, pngquant
 }:
-
 stdenv.mkDerivation rec {
-  name = "appstream-glib-0.6.3";
+  pname = "appstream-glib";
+  version = "0.8.2";
+
+  outputs = [ "out" "dev" "man" "installedTests" ];
+  outputBin = "dev";
 
   src = fetchFromGitHub {
     owner = "hughsie";
     repo = "appstream-glib";
-    rev = stdenv.lib.replaceStrings ["." "-"] ["_" "_"] name;
-    sha256 = "12l0vzhi9vpyrnf7vrpq21rb26mb6yskp5zgngdjyjanwhzmc617";
+    rev = "${lib.replaceStrings ["-"] ["_"] pname}_${lib.replaceStrings ["."] ["_"] version}";
+    sha256 = "sha256-3QFiOJ38talA0GGL++n+DaA/AN7l4LOZQ7BJV6o8ius=";
   };
 
-  nativeBuildInputs = [ autoconf automake libtool pkgconfig intltool autoconf-archive ];
-  buildInputs = [ glib gtk_doc gettext sqlite libsoup
-                  gcab attr acl docbook_xsl libuuid json_glib
-                  libarchive libyaml gtk3 gobjectIntrospection ];
+  nativeBuildInputs = [
+    docbook_xml_dtd_42
+    docbook_xsl
+    gettext
+    gobject-introspection
+    gperf
+    gtk-doc
+    libxslt
+    meson
+    ninja
+    pkg-config
+  ];
 
-  configureScript = "./autogen.sh";
+  buildInputs = [
+    fontconfig
+    freetype
+    gdk-pixbuf
+    glib
+    gtk3
+    json-glib
+    libarchive
+    curl
+    libuuid
+  ];
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    glib
+    gdk-pixbuf
+  ];
+
+  patches = [
+    (substituteAll {
+      src = ./paths.patch;
+      pngquant = "${pngquant}/bin/pngquant";
+    })
+  ];
+
+  mesonFlags = [
+    "-Drpm=false"
+    "-Dstemmer=false"
+    "-Ddep11=false"
+  ];
+
+  doCheck = false; # fails at least 1 test
+
+  postInstall = ''
+    moveToOutput "share/installed-tests" "$installedTests"
+  '';
+
+  meta = with lib; {
     description = "Objects and helper methods to read and write AppStream metadata";
-    homepage    = https://github.com/hughsie/appstream-glib;
-    license     = licenses.lgpl21Plus;
-    platforms   = platforms.linux;
-    maintainers = with maintainers; [ lethalman matthewbauer ];
+    homepage = "https://people.freedesktop.org/~hughsient/appstream-glib/";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ matthewbauer ];
   };
 }

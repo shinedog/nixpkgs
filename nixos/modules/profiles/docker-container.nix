@@ -1,11 +1,12 @@
 { config, lib, pkgs, ... }:
 
-with lib;
-
 let
- pkgs2storeContents = l : map (x: { object = x; symlink = "none"; }) l;
+  inherit (pkgs) writeScript;
 
-in {
+  pkgs2storeContents = map (x: { object = x; symlink = "none"; });
+in
+
+{
   # Docker image config.
   imports = [
     ../installer/cd-dvd/channel.nix
@@ -14,21 +15,28 @@ in {
   ];
 
   # Create the tarball
-  system.build.tarball = import ../../lib/make-system-tarball.nix {
-    inherit (pkgs) stdenv perl xz pathsFromGraph;
-
-    contents = [];
+  system.build.tarball = pkgs.callPackage ../../lib/make-system-tarball.nix {
+    contents = [
+      {
+        source = "${config.system.build.toplevel}/.";
+        target = "./";
+      }
+    ];
     extraArgs = "--owner=0";
 
     # Add init script to image
-    storeContents = [
-      { object = config.system.build.toplevel + "/init";
-        symlink = "/init";
-      }
-    ] ++ (pkgs2storeContents [ pkgs.stdenv ]);
+    storeContents = pkgs2storeContents [
+      config.system.build.toplevel
+      pkgs.stdenv
+    ];
 
     # Some container managers like lxc need these
-    extraCommands = "mkdir -p proc sys dev";
+    extraCommands =
+      let script = writeScript "extra-commands.sh" ''
+            rm etc
+            mkdir -p proc sys dev etc
+          '';
+      in script;
   };
 
   boot.isContainer = true;

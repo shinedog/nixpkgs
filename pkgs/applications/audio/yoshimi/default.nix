@@ -1,39 +1,76 @@
-{ stdenv, fetchurl, alsaLib, boost, cairo, cmake, fftwSinglePrec, fltk
-, libjack2, libsndfile, libXdmcp, readline, lv2, mesa, minixml, pkgconfig, zlib, xorg
+{ lib
+, stdenv
+, fetchFromGitHub
+, alsa-lib
+, boost
+, cairo
+, cmake
+, fftwSinglePrec
+, fltk
+, libGLU
+, libjack2
+, libsndfile
+, libXdmcp
+, lv2
+, minixml
+, pcre
+, pkg-config
+, readline
+, xorg
+, zlib
 }:
 
-assert stdenv ? glibc;
+stdenv.mkDerivation rec {
+  pname = "yoshimi";
+  version = "2.3.2";
 
-stdenv.mkDerivation  rec {
-  name = "yoshimi-${version}";
-  version = "1.4.1";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/yoshimi/${name}.tar.bz2";
-    sha256 = "133sx42wb66g803pcrgdwph40wh94knvab3yfqkgm0001jv4v14y";
+  src = fetchFromGitHub {
+    owner = "Yoshimi";
+    repo = pname;
+    rev = version;
+    hash = "sha256-UaZjT7B9T3a3W9PD9abA/WPmt9Id8/zUUSZU05+8x9c=";
   };
 
+  sourceRoot = "${src.name}/src";
+
+  postPatch = ''
+    substituteInPlace Misc/Config.cpp --replace /usr $out
+    substituteInPlace Misc/Bank.cpp --replace /usr $out
+  '';
+
+  nativeBuildInputs = [ cmake pkg-config ];
+
   buildInputs = [
-    alsaLib boost cairo fftwSinglePrec fltk libjack2 libsndfile libXdmcp readline lv2 mesa
-    minixml zlib xorg.libpthreadstubs
+    alsa-lib
+    boost
+    cairo
+    fftwSinglePrec
+    fltk
+    libGLU
+    libjack2
+    libsndfile
+    libXdmcp
+    lv2
+    minixml
+    pcre
+    readline
+    xorg.libpthreadstubs
+    zlib
   ];
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  cmakeFlags = [ "-DFLTK_MATH_LIBRARY=${stdenv.cc.libc}/lib/libm.so" ];
 
-  preConfigure = "cd src";
-
-  cmakeFlags = [ "-DFLTK_MATH_LIBRARY=${stdenv.glibc.out}/lib/libm.so -DCMAKE_INSTALL_DATAROOTDIR=$out" ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "High quality software synthesizer based on ZynAddSubFX";
     longDescription = ''
       Yoshimi delivers the same synthesizer capabilities as
       ZynAddSubFX along with very good Jack and Alsa midi/audio
       functionality on Linux
     '';
-    homepage = http://yoshimi.sourceforge.net;
-    license = licenses.gpl2;
+    homepage = "https://yoshimi.github.io/";
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
     maintainers = [ maintainers.goibhniu ];
+    mainProgram = "yoshimi";
   };
 }

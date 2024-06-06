@@ -1,31 +1,43 @@
-{ stdenv, fetchurl, gnutls, pkgconfig, readline, zlib, libidn, gmp, libiconv }:
+{ lib, stdenv, fetchurl, openssl, pkg-config, readline, zlib, libidn2, gmp, libiconv, libunistring, gettext }:
 
 stdenv.mkDerivation rec {
-  name = "lftp-4.7.3";
+  pname = "lftp";
+  version = "4.9.2";
 
   src = fetchurl {
     urls = [
-      "http://lftp.yar.ru/ftp/${name}.tar.bz2"
-      "http://lftp.yar.ru/ftp/old/${name}.tar.bz2"
+      "https://lftp.yar.ru/ftp/${pname}-${version}.tar.xz"
+      "https://ftp.st.ryukoku.ac.jp/pub/network/ftp/lftp/${pname}-${version}.tar.xz"
       ];
-    sha256 = "06jmc9x86ga67yyx7655zv96gfv1gdm955a7g4afd3bwf6bzfxac";
+    sha256 = "03b7y0h3mf4jfq5y8zw6hv9v44z3n6i8hc1iswax96y3z7sc85y5";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ gnutls readline zlib libidn gmp libiconv ];
+  nativeBuildInputs = [ pkg-config ];
+
+  buildInputs = [ openssl readline zlib libidn2 gmp libiconv libunistring gettext ];
+
+  hardeningDisable = lib.optional stdenv.isDarwin "format";
+
+  env = lib.optionalAttrs stdenv.isDarwin {
+    # Required to build with clang 16 or `configure` will fail to detect several standard functions.
+    NIX_CFLAGS_COMPILE = "-Wno-error=implicit-function-declaration";
+  };
 
   configureFlags = [
+    "--with-openssl"
     "--with-readline=${readline.dev}"
+    "--with-zlib=${zlib.dev}"
+    "--without-expat"
   ];
 
-  postPatch = ''
-    substituteInPlace src/lftp_rl.c --replace 'history.h' 'readline/history.h'
-  '';
+  installFlags = [ "PREFIX=$(out)" ];
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "A file transfer program supporting a number of network protocols";
-    homepage = http://lftp.yar.ru/;
-    license = licenses.gpl3;
+    homepage = "https://lftp.yar.ru/";
+    license = licenses.gpl3Plus;
     platforms = platforms.unix;
     maintainers = [ maintainers.bjornfor ];
   };

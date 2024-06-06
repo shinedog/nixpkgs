@@ -1,12 +1,16 @@
-{ stdenv, fetchurl, perlPackages, jdk }:
+{ lib
+, fetchurl
+, perlPackages
+, jdk
+}:
 
 perlPackages.buildPerlPackage rec {
-  name = "awstats-${version}";
-  version = "7.4";
+  pname = "awstats";
+  version = "7.9";
 
   src = fetchurl {
-    url = "mirror://sourceforge/awstats/${name}.tar.gz";
-    sha256 = "0mdbilsl8g9a84qgyws4pakhqr3mfhs5g5dqbgsn9gn285rzxas3";
+    url = "mirror://sourceforge/awstats/${pname}-${version}.tar.gz";
+    sha256 = "sha256-YVF47TE9NDFfFaUi2xpdEsqcOV43hbsGKAq/+V2aBUY=";
   };
 
   postPatch = ''
@@ -15,6 +19,7 @@ perlPackages.buildPerlPackage rec {
   '';
 
   outputs = [ "bin" "out" "doc" ]; # bin just links the user-run executable
+
   propagatedBuildOutputs = [ ]; # otherwise out propagates bin -> cycle
 
   buildInputs = with perlPackages; [ ]; # plugins will need some
@@ -41,19 +46,23 @@ perlPackages.buildPerlPackage rec {
     mv wwwroot "$out/wwwroot"
     rm -r "$out/wwwroot/classes/src/"
 
+    mkdir -p "$out/share/awstats"
+    mv tools "$out/share/awstats/tools"
+
     mkdir -p "$bin/bin"
     ln -s "$out/wwwroot/cgi-bin/awstats.pl" "$bin/bin/awstats"
 
-    mkdir -p "$doc/share/"
+    mkdir -p "$doc/share/doc"
     mv README.md docs/
-    mv docs "$doc/share/awstats"
+    mv docs "$doc/share/doc/awstats"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    changelog = "https://www.awstats.org/docs/awstats_changelog.txt";
     description = "Real-time logfile analyzer to get advanced statistics";
-    homepage = http://awstats.org;
+    homepage = "https://awstats.org";
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
+    platforms = platforms.unix;
+    mainProgram = "awstats";
   };
 }
-

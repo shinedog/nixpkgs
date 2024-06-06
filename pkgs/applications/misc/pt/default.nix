@@ -1,18 +1,18 @@
-{ stdenv, lib, bundlerEnv, ruby }:
+{ lib, bundlerApp, bundlerUpdateScript }:
 
-bundlerEnv {
-  name = "pt-0.7.3";
+bundlerApp {
+  pname = "pt";
+  gemdir = ./.;
+  exes = [ "pt" ];
 
-  inherit ruby;
-  gemfile = ./Gemfile;
-  lockfile = ./Gemfile.lock;
-  gemset = ./gemset.nix;
+  passthru.updateScript = bundlerUpdateScript "pt";
 
   meta = with lib; {
     description = "Minimalist command-line Pivotal Tracker client";
-    homepage    = http://www.github.com/raul/pt;
+    homepage    = "http://www.github.com/raul/pt";
     license     = licenses.mit;
-    maintainers = with maintainers; [ ebzzry ];
+    maintainers = with maintainers; [ ebzzry manveru nicknovitski ];
     platforms   = platforms.unix;
+    mainProgram = "pt";
   };
 }

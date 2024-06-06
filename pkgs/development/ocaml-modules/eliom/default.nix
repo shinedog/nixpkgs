@@ -1,51 +1,60 @@
-{ stdenv, fetchurl, ocaml, findlib, which, ocsigen_server, ocsigen_deriving,
-  js_of_ocaml, ocaml_react, ocaml_lwt, calendar, cryptokit, tyxml,
-  ipaddr, ocamlnet, ocaml_ssl, ocaml_pcre, ocaml_optcomp,
-  reactivedata, opam, ppx_tools, camlp4}:
+{ buildDunePackage
+, lib
+, fetchFromGitHub
+, which
+, ocsigen_server
+, lwt_react
+, ppx_deriving
+, ppx_optcomp
+, js_of_ocaml-ocamlbuild
+, js_of_ocaml-ppx
+, js_of_ocaml-ppx_deriving_json
+, js_of_ocaml-lwt
+, js_of_ocaml-tyxml
+, lwt_ppx
+, ocsipersist
+}:
 
-let ocamlVersion = (stdenv.lib.getVersion ocaml);
-  in
-
-(
-assert stdenv.lib.versionAtLeast ocamlVersion "4";
-
-stdenv.mkDerivation rec
-{
+buildDunePackage rec {
   pname = "eliom";
-  version = "5.0.0";
-  name = "${pname}-${version}";
+  version = "10.4.1";
 
-  src = fetchurl {
-    url = "https://github.com/ocsigen/eliom/archive/${version}.tar.gz";
-    sha256 = "1g9wq2qpn0sgzyb6iq0h9afq5p68il4h8pc7jppqsislk87m09k7";
+  src = fetchFromGitHub {
+    owner = "ocsigen";
+    repo = "eliom";
+    rev = version;
+    hash = "sha256-j4t6GEd8hYyM87b9XvgcnaV9XMkouz6+v0SYW22/bqg=";
   };
 
-  patches = [ ./camlp4.patch ];
+  nativeBuildInputs = [
+    which
+  ];
+  buildInputs = [
+    js_of_ocaml-ocamlbuild
+    js_of_ocaml-ppx_deriving_json
+    ppx_optcomp
+  ];
 
-  buildInputs = [ocaml which ocsigen_server findlib ocsigen_deriving
-                 js_of_ocaml ocaml_optcomp opam ppx_tools camlp4 ];
+  propagatedBuildInputs = [
+    js_of_ocaml-lwt
+    js_of_ocaml-ppx
+    js_of_ocaml-tyxml
+    lwt_ppx
+    lwt_react
+    ocsigen_server
+    ocsipersist
+    ppx_deriving
+  ];
 
-  propagatedBuildInputs = [ ocaml_lwt reactivedata tyxml ipaddr
-                            calendar cryptokit ocamlnet ocaml_react ocaml_ssl
-                            ocaml_pcre ];
+  strictDeps = true;
 
-  preConfigure = stdenv.lib.optionalString (!stdenv.lib.versionAtLeast ocamlVersion "4.02") ''
-      export PPX=false
-    '';
-
-  installPhase =
-  ''opam-installer --script --prefix=$out ${pname}.install > install.sh
-    sh install.sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${ocamlVersion}/site-lib/
-  '';
-
-  createFindlibDestdir = true;
+  setupHook = [ ./setup-hook.sh ];
 
   meta = {
-    homepage = http://ocsigen.org/eliom/;
-    description = "Ocaml Framework for programming Web sites and client/server Web applications";
+    homepage = "http://ocsigen.org/eliom/";
+    description = "OCaml Framework for programming Web sites and client/server Web applications";
 
-    longDescription =''Eliom is a framework for programming Web sites
+    longDescription = ''Eliom is a framework for programming Web sites
     and client/server Web applications. It introduces new concepts to
     simplify programming common behaviours and uses advanced static
     typing features of OCaml to check many properties of the Web site
@@ -55,10 +64,8 @@ stdenv.mkDerivation rec
     distinguish both parts and the client side is compiled to JS using
     Ocsigen Js_of_ocaml.'';
 
-    license = stdenv.lib.licenses.lgpl21;
+    license = lib.licenses.lgpl21;
 
-    platforms = ocaml.meta.platforms or [];
-
-    maintainers = [ stdenv.lib.maintainers.gal_bolle ];
+    maintainers = [ lib.maintainers.gal_bolle ];
   };
-})
+}

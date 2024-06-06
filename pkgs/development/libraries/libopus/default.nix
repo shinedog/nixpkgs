@@ -1,28 +1,79 @@
-{ stdenv, fetchurl, fixedPoint ? false, withCustomModes ? true }:
+{ lib
+, stdenv
+, fetchurl
+, gitUpdater
+, meson
+, python3
+, ninja
+, fixedPoint ? false
+, withCustomModes ? true
+, withIntrinsics ? stdenv.hostPlatform.isAarch || stdenv.hostPlatform.isx86
+, withAsm ? false
 
-let
-  version = "1.1.3";
-in
-stdenv.mkDerivation rec {
-  name = "libopus-${version}";
+# tests
+, ffmpeg-headless
+, testers
+}:
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libopus";
+  version = "1.5.2";
 
   src = fetchurl {
-    url = "http://downloads.xiph.org/releases/opus/opus-${version}.tar.gz";
-    sha256 = "0cxnd7pjxbgh6l3cbzsw29phpr5cq28fikfhjlp1hc3y5s0gxdjq";
+    url = "https://downloads.xiph.org/releases/opus/opus-${finalAttrs.version}.tar.gz";
+    hash = "sha256-ZcHS94ufL7IAgsOMvkfJUa1YOTRYduRpQWEu6H+afOE=";
   };
+
+  patches = [
+    # Some tests time out easily on slower machines
+    ./test-timeout.patch
+  ];
+
+  postPatch = ''
+    patchShebangs meson/
+  '';
 
   outputs = [ "out" "dev" ];
 
-  configureFlags = stdenv.lib.optional fixedPoint "--enable-fixed-point"
-                ++ stdenv.lib.optional withCustomModes "--enable-custom-modes";
+  nativeBuildInputs = [
+    meson
+    python3
+    ninja
+  ];
 
-  doCheck = true;
+  mesonFlags = [
+    (lib.mesonBool "fixed-point" fixedPoint)
+    (lib.mesonBool "custom-modes" withCustomModes)
+    (lib.mesonEnable "intrinsics" withIntrinsics)
+    (lib.mesonEnable "rtcd" (withIntrinsics || withAsm))
+    (lib.mesonEnable "asm" withAsm)
+    (lib.mesonEnable "docs" false)
+  ];
 
-  meta = with stdenv.lib; {
-    description = "Open, royalty-free, highly versatile audio codec";
-    license = stdenv.lib.licenses.bsd3;
-    homepage = http://www.opus-codec.org/;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+  doCheck = !stdenv.isi686 && !stdenv.isAarch32; # test_unit_LPC_inv_pred_gain fails
+
+  passthru = {
+    updateScript = gitUpdater {
+      url = "https://gitlab.xiph.org/xiph/opus.git";
+      rev-prefix = "v";
+    };
+
+    tests = {
+      inherit ffmpeg-headless;
+
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+        moduleNames = [ "opus" ];
+      };
+    };
   };
-}
+
+  meta = with lib; {
+    description = "Open, royalty-free, highly versatile audio codec";
+    homepage = "https://opus-codec.org/";
+    changelog = "https://gitlab.xiph.org/xiph/opus/-/releases/v${finalAttrs.version}";
+    license = licenses.bsd3;
+    platforms = platforms.all;
+    maintainers = [ ];
+  };
+})

@@ -1,22 +1,30 @@
-{ stdenv, fetchgit }:
+{ lib, stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation {
-  name = "reattach-to-user-namespace-2.4";
+stdenv.mkDerivation rec {
+  pname = "reattach-to-user-namespace";
+  version = "2.9";
 
-  src = fetchgit {
-    url = "https://github.com/ChrisJohnsen/tmux-MacOSX-pasteboard.git";
-    sha256 = "0hrh95di5dvpynq2yfcrgn93l077h28i6msham00byw68cx0dd3z";
-    rev = "2765aeab8f337c29e260a912bf4267a2732d8640";
+  src = fetchFromGitHub {
+    owner = "ChrisJohnsen";
+    repo = "tmux-MacOSX-pasteboard";
+    rev = "v${version}";
+    sha256 = "1qgimh58hcx5f646gj2kpd36ayvrdkw616ad8cb3lcm11kg0ag79";
   };
 
-  buildFlags = "ARCHES=x86_64";
+  buildFlags =
+    if stdenv.hostPlatform.system == "x86_64-darwin" then [ "ARCHES=x86_64" ]
+    else if stdenv.hostPlatform.system == "aarch64-darwin" then [ "ARCHES=arm64" ]
+    else throw "reattach-to-user-namespace isn't being built for ${stdenv.hostPlatform.system} yet.";
 
   installPhase = ''
     mkdir -p $out/bin
     cp reattach-to-user-namespace $out/bin/
   '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.darwin;
+  meta = with lib; {
+    description = "A wrapper that provides access to the Mac OS X pasteboard service";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ lnl7 ];
+    platforms = platforms.darwin;
   };
 }

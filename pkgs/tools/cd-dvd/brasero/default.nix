@@ -1,27 +1,25 @@
-{ stdenv, lib, fetchurl, pkgconfig, gtk3, itstool, gst_all_1, libxml2, libnotify
-, libcanberra_gtk3, intltool, makeWrapper, dvdauthor, libburn, libisofs
-, vcdimager, wrapGAppsHook, hicolor_icon_theme }:
-
-# libdvdcss is "too old" (in fast "too new"), see https://bugs.launchpad.net/ubuntu/+source/brasero/+bug/611590
+{ stdenv, lib, fetchurl, pkg-config, gtk3, itstool, gst_all_1, libxml2, libnotify
+, libcanberra-gtk3, intltool, dvdauthor, libburn, libisofs
+, vcdimager, wrapGAppsHook3, hicolor-icon-theme }:
 
 let
   major = "3.12";
-  minor = "1";
+  minor = "3";
   binpath = lib.makeBinPath [ dvdauthor vcdimager ];
 
 in stdenv.mkDerivation rec {
   version = "${major}.${minor}";
-  name = "brasero-${version}";
+  pname = "brasero";
 
   src = fetchurl {
-    url = "http://download.gnome.org/sources/brasero/${major}/${name}.tar.xz";
-    sha256 = "09vi2hyhl0bz7imv3ky6h7x5m3d546n968wcghydwrkvwm9ylpls";
+    url = "mirror://gnome/sources/brasero/${major}/${pname}-${version}.tar.xz";
+    hash = "sha256-h3SerjOhQSB9GwC+IzttgEWYLtMkntS5ja4fOpdf6hU=";
   };
 
-  nativeBuildInputs = [ pkgconfig itstool intltool wrapGAppsHook ];
+  nativeBuildInputs = [ pkg-config itstool intltool wrapGAppsHook3 ];
 
-  buildInputs = [ gtk3 libxml2 libnotify libcanberra_gtk3 libburn libisofs
-                  hicolor_icon_theme
+  buildInputs = [ gtk3 libxml2 libnotify libcanberra-gtk3 libburn libisofs
+                  hicolor-icon-theme
                   gst_all_1.gstreamer gst_all_1.gst-plugins-base
                   gst_all_1.gst-plugins-good gst_all_1.gst-plugins-bad
                   gst_all_1.gst-plugins-ugly gst_all_1.gst-libav ];
@@ -38,14 +36,15 @@ in stdenv.mkDerivation rec {
   ];
 
   preFixup = ''
-    gappsWrapperArgs+=(--prefix PATH : "${binpath}" --prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH")
+    gappsWrapperArgs+=(--prefix PATH : "${binpath}")
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Gnome CD/DVD Burner";
-    homepage = https://wiki.gnome.org/Apps/Brasero;
+    homepage = "https://gitlab.gnome.org/GNOME/brasero";
     maintainers = [ maintainers.bdimcheff ];
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
+    mainProgram = "brasero";
   };
 }

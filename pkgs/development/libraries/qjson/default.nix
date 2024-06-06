@@ -1,20 +1,23 @@
-{ stdenv, fetchFromGitHub, cmake, qt4 }:
+{ lib, stdenv, fetchFromGitHub, cmake, qtbase }:
 
 stdenv.mkDerivation rec {
-  version = "0.8.1";
-  name = "qjson-${version}";
+  version = "0.9.0";
+  pname = "qjson";
 
   src = fetchFromGitHub {
     owner = "flavio";
     repo = "qjson";
-    rev = "${version}";
-    sha256 = "1rb3ydrhyd4bczqzfv0kqpi2mx4hlpq1k8jvnwpcmvyaypqpqg59";
+    rev = version;
+    sha256 = "1f4wnxzx0qdmxzc7hqk28m0sva7z9p9xmxm6aifvjlp0ha6pmfxs";
   };
 
-  buildInputs = [ cmake qt4 ];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ qtbase ];
+  dontWrapQtApps = true;
 
-  meta = {
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    inherit (qt4.meta) platforms;
+  meta = with lib; {
+    description = "Lightweight data-interchange format";
+    homepage = "https://qjson.sourceforge.net/";
+    license = licenses.lgpl21;
   };
 }

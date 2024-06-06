@@ -1,50 +1,77 @@
-{stdenv, fetchurl, gtk2, pkgconfig, perl, perlXMLParser, libxml2, gettext
-, python, libxml2Python, docbook5, docbook_xsl, libxslt, intltool, libart_lgpl
-, withGNOME ? false, libgnomeui }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, appstream-glib
+, dblatex
+, desktop-file-utils
+, graphene
+, gtk3
+, gtk-mac-integration-gtk3
+, intltool
+, libxml2
+, libxslt
+, meson
+, ninja
+, pkg-config
+, poppler
+, python3
+, wrapGAppsHook3
+  # Building with docs are still failing in unstable-2023-09-28
+, withDocs ? false
+}:
 
-stdenv.mkDerivation rec {
-  name = "dia-${minVer}.3";
-  minVer = "0.97";
+stdenv.mkDerivation {
+  pname = "dia";
+  version = "unstable-2023-09-28";
 
-  src = fetchurl {
-    url = "mirror://gnome/sources/dia/${minVer}/${name}.tar.xz";
-    sha256 = "0d3x6w0l6fwd0l8xx06y1h56xf8ss31yzia3a6xr9y28xx44x492";
+  src = fetchFromGitLab {
+    owner = "GNOME";
+    repo = "dia";
+    domain = "gitlab.gnome.org";
+    rev = "bd551bb2558dcc89bc0bf7b4dd85b38cd85ad322";
+    hash = "sha256-U+8TUE1ULt6MNxnvw9kFjCAVBecUy2Sarof6H9+kR7Q=";
   };
 
-  correctPersistence = fetchurl {
-    url = https://launchpadlibrarian.net/132677658/persistence;
-    sha256 = "1rv6zv9i03bna4bdp1wzn72lg7kdwi900y1izdq0imibi54nxjsk";
-  };
+  # Required for the PDF plugin when building with clang.
+  CXXFLAGS = "-std=c++17";
 
-  buildInputs =
-    [ gtk2 perlXMLParser libxml2 gettext python libxml2Python docbook5
-      libxslt docbook_xsl libart_lgpl
-    ] ++ stdenv.lib.optional withGNOME libgnomeui;
-
-  nativeBuildInputs = [ pkgconfig intltool perl ];
-
-  configureFlags = stdenv.lib.optionalString withGNOME "--enable-gnome";
-
-  patches = [ ];
-
-  # This file should normally require a gtk-update-icon-cache -q /usr/share/icons/hicolor command
-  # It have no reasons to exist in a redistribuable package
-  postInstall = ''
-    rm $out/share/icons/hicolor/icon-theme.cache
-
-    cd "$out"/bin/
-    mv dia .dia-wrapped
-    echo '#! ${stdenv.shell}' >> dia
-    echo 'test -f "$HOME/.dia/persistence" || cp ${correctPersistence} "$HOME/.dia/persistence" ' >> dia
-    echo 'chmod u+rw "$HOME/.dia/persistence" ' >> dia
-    echo "\"$out/bin/"'.dia-wrapped" "$@"' >> dia
-    chmod a+x dia
+  preConfigure = ''
+    patchShebangs .
   '';
 
-  meta = {
+  buildInputs = [
+    graphene
+    gtk3
+    libxml2
+    python3
+    poppler
+  ] ++
+  lib.optionals withDocs [
+    libxslt
+  ] ++
+  lib.optionals stdenv.isDarwin [
+    gtk-mac-integration-gtk3
+  ];
+
+  nativeBuildInputs = [
+    appstream-glib
+    desktop-file-utils
+    intltool
+    meson
+    ninja
+    pkg-config
+    wrapGAppsHook3
+  ] ++
+  lib.optionals withDocs [
+    dblatex
+  ];
+
+  meta = with lib; {
     description = "Gnome Diagram drawing software";
-    homepage = http://live.gnome.org/Dia;
-    maintainers = with stdenv.lib.maintainers; [raskin urkud];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "dia";
+    homepage = "http://live.gnome.org/Dia";
+    maintainers = with maintainers; [ raskin ];
+    license = licenses.gpl2;
+    platforms = platforms.unix;
   };
 }

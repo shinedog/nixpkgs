@@ -1,28 +1,24 @@
-{stdenv, fetchurl, ocaml, findlib, camlp4, minimal ? true}:
+{ buildDunePackage, lib, fetchurl, cppo }:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "3.11";
+buildDunePackage rec {
+  pname = "extlib";
+  version = "1.7.9";
 
-stdenv.mkDerivation {
-  name = "ocaml-extlib-1.6.1";
+  minimalOCamlVersion = "4.02";
 
   src = fetchurl {
-    url = http://ocaml-extlib.googlecode.com/files/extlib-1.6.1.tar.gz;
-    sha256 = "1jmfj2w0f3ap0swz8k3qqmrl6x2y4gkmg88vv024xnmliiiv7m48";
+    url = "https://ygrek.org/p/release/ocaml-${pname}/${pname}-${version}.tar.gz";
+    hash = "sha512-I4asafA36lIINcBiTTmun7/+Q6ILGOJH3gMiMu1vQZ1me1PSMUxvVtxx02i/C2IBpWwvPypb39kzdmxabLmHaA==";
   };
 
-  buildInputs = [ocaml findlib camlp4];
+  nativeBuildInputs = [ cppo ];
 
-  createFindlibDestdir = true;
-
-  configurePhase = "true";      # Skip configure
-  # De facto, option minimal=1 seems to be the default.  See the README.
-  buildPhase     = "make ${if minimal then "minimal=1" else ""} build";
-  installPhase   = "make ${if minimal then "minimal=1" else ""} install";
+  doCheck = true;
 
   meta = {
-    homepage = http://code.google.com/p/ocaml-extlib/;
+    homepage = "https://github.com/ygrek/ocaml-extlib";
     description = "Enhancements to the OCaml Standard Library modules";
-    license = stdenv.lib.licenses.lgpl21;
-    platforms = ocaml.meta.platforms or [];
+    license = lib.licenses.lgpl21Only;
+    maintainers = [ lib.maintainers.sternenseemann ];
   };
 }

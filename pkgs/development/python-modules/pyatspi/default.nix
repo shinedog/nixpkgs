@@ -1,28 +1,55 @@
-{ stdenv, fetchurl, pkgconfig, at_spi2_core, pythonPackages }:
+{
+  lib,
+  fetchurl,
+  pkg-config,
+  buildPythonPackage,
+  isPy3k,
+  at-spi2-core,
+  pygobject3,
+  gnome,
+  python,
+}:
 
-stdenv.mkDerivation rec {
-  version = "2.18.0";
-  name = "pyatspi-${version}";
+buildPythonPackage rec {
+  pname = "pyatspi";
+  version = "2.46.1";
+  format = "other";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/pyatspi/2.18/${name}.tar.xz";
-    sha256 = "0imbyk2v6c11da7pkwz91313pkkldxs8zfg81zb2ql6h0nnh6vzq";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "+R9qV0NOnAfRPVxL+BndeOjuYFqsKuRdjGTCgRT7BBs=";
   };
 
-  broken = true;
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
-    at_spi2_core
-    pkgconfig
-    pythonPackages.python
-    pythonPackages.pygobject3
+    at-spi2-core
+    pygobject3
   ];
 
-  meta = with stdenv.lib; {
-    description = "Python 3 bindings for at-spi";
-    homepage = http://www.linuxfoundation.org/en/AT-SPI_on_D-Bus;
+  configureFlags = [ "PYTHON=${python.pythonOnBuildForHost.interpreter}" ];
+
+  postPatch = ''
+    # useless python existence check for us
+    substituteInPlace configure \
+      --replace '&& ! which' '&& false'
+  '';
+
+  disabled = !isPy3k;
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      attrPath = "python3.pkgs.${pname}";
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
+    description = "Python client bindings for D-Bus AT-SPI";
+    homepage = "https://wiki.linuxfoundation.org/accessibility/d-bus";
     license = licenses.gpl2;
-    maintainers = with maintainers; [ jgeerds ];
+    maintainers = with maintainers; [ jtojnar ];
     platforms = with platforms; unix;
   };
 }

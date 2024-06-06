@@ -1,28 +1,56 @@
-{ stdenv, fetchgit, fetchurl, writeText
-, qt4, qmake4Hook, protobuf, libpcap
-, wireshark, gzip, diffutils, gawk
+{ lib, mkDerivation, fetchFromGitHub, fetchurl, qmake, makeDesktopItem
+, qtbase, qtscript, protobuf, libpcap, wireshark, gzip, diffutils, gawk
+, libnl
+, copyDesktopItems
 }:
 
-stdenv.mkDerivation rec {
-  name = "ostinato-2015-12-24";
-  src = fetchgit {
-    url = "https://github.com/pstavirs/ostinato.git";
-    rev = "414d89860de0987843295d149bcabeac7c6fd9e5";
-    sha256 = "1yif8z8ih027jdsgnxd82z9914wrqpkpi4xgxqv9lygnb2jjjrdx";
+mkDerivation rec {
+  pname = "ostinato";
+  version = "1.3.0";
+
+  src = fetchFromGitHub  {
+    owner  = "pstavirs";
+    repo   = "ostinato";
+    rev    = "v${version}";
+    sha256 = "sha256-/fPUxGeh5Cc3rb+1mR0chkiFPw5m+O6KtWDvzLn0iYo=";
   };
 
-  ostinato_png = fetchurl {
-    url = "http://ostinato.org/images/site-logo.png";
+  ostinatoIcon = fetchurl {
+    url = "https://ostinato.org/images/site-logo.png";
     sha256 = "f5c067823f2934e4d358d76f65a343efd69ad783a7aeabd7ab4ce3cd03490d70";
   };
 
-  buildInputs = [ qt4 protobuf libpcap ];
+  buildInputs = [ qtbase protobuf libpcap qtscript libnl ];
 
-  nativeBuildInputs = [ qmake4Hook ];
+  nativeBuildInputs = [
+    copyDesktopItems
+    qmake
+  ];
 
   patches = [ ./drone_ini.patch ];
+  prePatch = ''
+    sed -i 's|/usr/include/libnl3|${libnl.dev}/include/libnl3|' server/drone.pro
+  '';
 
-  postInstall = ''
+  desktopItems = lib.singleton (makeDesktopItem {
+    name          = "ostinato";
+    desktopName   = "Ostinato";
+    genericName   = "Packet/Traffic Generator and Analyzer";
+    comment       = "Network packet and traffic generator and analyzer with a friendly GUI";
+    categories    = [ "Network" ];
+    startupNotify = true;
+    exec          = "@out@/bin/ostinato";
+    icon          =  ostinatoIcon;
+    extraConfig   = {
+      "GenericName[it]" = "Generatore ed Analizzatore di pacchetti di rete";
+      "Comment[it]"     = "Generatore ed Analizzatore di pacchetti di rete con interfaccia amichevole";
+    };
+  });
+
+  preFixup = ''
+    substituteInPlace $out/share/applications/ostinato.desktop \
+      --subst-var out
+
     cat > $out/bin/ostinato.ini <<EOF
     WiresharkPath=${wireshark}/bin/wireshark
     TsharkPath=${wireshark}/bin/tshark
@@ -30,34 +58,17 @@ stdenv.mkDerivation rec {
     DiffPath=${diffutils}/bin/diff
     AwkPath=${gawk}/bin/awk
     EOF
-
-    mkdir -p $out/share/pixmaps
-    cp ${ostinato_png} $out/share/pixmaps/ostinato.png
-
-    # Create a desktop item.
-    mkdir -p $out/share/applications
-    cat > $out/share/applications/ostinato.desktop <<EOF
-    [Desktop Entry]
-    Type=Application
-    Encoding=UTF-8
-    Name=Ostinato
-    GenericName=Packet/Traffic Generator and Analyzer
-    GenericName[it]=Generatore ed Analizzatore di pacchetti di rete
-    Comment=Network packet and traffic generator and analyzer with a friendly GUI
-    Comment[it]=Generatore ed Analizzatore di pacchetti di rete con interfaccia amichevole
-    Icon=$out/share/pixmaps/ostinato.png
-    Exec=$out/bin/ostinato
-    Terminal=false
-    Categories=Network;
-    StartupNotify=true
-    EOF
   '';
 
-  meta = with stdenv.lib; {
+  # `cd common; qmake ostproto.pro; make pdmlreader.o`:
+  # pdmlprotocol.h:23:25: fatal error: protocol.pb.h: No such file or directory
+  enableParallelBuilding = false;
+
+  meta = with lib; {
     description = "A packet traffic generator and analyzer";
-    homepage = http://ostinato.org;
-    license = licenses.gpl3;
+    homepage    = "https://ostinato.org/";
+    license     = licenses.gpl3Plus;
     maintainers = with maintainers; [ rick68 ];
-    platforms = platforms.linux;  # also OS X and cygwin
+    platforms   = with platforms; linux ++ darwin ++ cygwin;
   };
 }

@@ -1,27 +1,30 @@
-{ stdenv, fetchgit, ocaml, findlib, ocamlbuild, menhir, which }:
+{ lib, fetchFromGitHub, ocamlPackages }:
 
-let inherit (stdenv.lib) getVersion versionAtLeast; in
+let
+  inherit (ocamlPackages) buildDunePackage js_of_ocaml menhir;
+in
 
-assert versionAtLeast (getVersion ocaml) "3.12";
+buildDunePackage rec {
+  pname = "eff";
+  version = "5.1";
 
-stdenv.mkDerivation {
-
-  name = "eff-20140928";
-
-  src = fetchgit {
-    url = "https://github.com/matijapretnar/eff.git";
-    rev = "90f884a790fddddb51d4d1d3b7c2edf1e8aabb64";
-    sha256 = "0cqqrpvfw0nrk5d28mkzfvc8yzqxcss0k46bkmqhqjkqq886n2mm";
+  src = fetchFromGitHub {
+    owner = "matijapretnar";
+    repo = "eff";
+    rev = "v${version}";
+    hash = "sha256-0U61y41CA0YaoNk9Hsj7j6eb2V6Ku3MAjW9lMEimiC0=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild menhir which ];
+  nativeBuildInputs = [ menhir ];
+
+  buildInputs = [ js_of_ocaml ];
 
   doCheck = true;
-  checkTarget = "test";
 
-  meta = with stdenv.lib; {
-    homepage = "http://www.eff-lang.org";
+  meta = with lib; {
+    homepage = "https://www.eff-lang.org";
     description = "A functional programming language based on algebraic effects and their handlers";
+    mainProgram = "eff";
     longDescription = ''
       Eff is a functional language with handlers of not only exceptions,
       but also of other computational effects such as state or I/O. With
@@ -29,7 +32,6 @@ stdenv.mkDerivation {
       backtracking, multi-threading, and much more...
     '';
     license = licenses.bsd2;
-    platforms = ocaml.meta.platforms or [];
     maintainers = [ maintainers.jirkamarsik ];
   };
 }

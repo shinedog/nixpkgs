@@ -1,53 +1,143 @@
-{ stdenv, fetchFromGitHub, cmake, irrlicht, libpng, bzip2, curl, libogg, jsoncpp
-, libjpeg, libXxf86vm, mesa, openal, libvorbis, xlibsWrapper, sqlite, luajit
-, freetype, gettext, doxygen, ncurses, leveldb
+{ lib
+, stdenv
+, fetchFromGitHub
+, gitUpdater
+, cmake
+, irrlichtmt
+, coreutils
+, libpng
+, bzip2
+, curl
+, libogg
+, jsoncpp
+, libjpeg
+, libGLU
+, openal
+, libvorbis
+, sqlite
+, lua5_1
+, luajit
+, freetype
+, gettext
+, doxygen
+, ncurses
+, graphviz
+, xorg
+, gmp
+, libspatialindex
+, leveldb
+, postgresql
+, hiredis
+, libiconv
+, zlib
+, libXrandr
+, libX11
+, ninja
+, prometheus-cpp
+, OpenGL
+, OpenAL ? openal
+, Carbon
+, Cocoa
+, withTouchSupport ? false
+, buildClient ? true
+, buildServer ? true
 }:
 
-let
-  version = "0.4.14";
-  sources = {
-    src = fetchFromGitHub {
-      owner = "minetest";
-      repo = "minetest";
-      rev = "${version}";
-      sha256 = "1f74wsiqj8x1m8wqmxijb00df5ljlvy4ac0ahbh325vfzi0bjla3";
-    };
-    data = fetchFromGitHub {
-      owner = "minetest";
-      repo = "minetest_game";
-      rev = "${version}";
-      sha256 = "1dc9zfbp603h2nlk39bw37kjbswrfmpd9yg3v72z1jb89pcxzsqs";
-    };
-  };
-in stdenv.mkDerivation {
-  name = "minetest-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "minetest";
+  version = "5.8.0";
 
-  src = sources.src;
+  src = fetchFromGitHub {
+    owner = "minetest";
+    repo = "minetest";
+    rev = finalAttrs.version;
+    hash = "sha256-Oct8nQORSH8PjYs+gHU9QrKObMfapjAlGvycj+AJnOs=";
+  };
 
   cmakeFlags = [
-    "-DENABLE_FREETYPE=1"
-    "-DENABLE_GETTEXT=1"
-    "-DGETTEXT_INCLUDE_DIR=${gettext}/include/gettext"
-    "-DCURL_INCLUDE_DIR=${curl.dev}/include/curl"
-    "-DIRRLICHT_INCLUDE_DIR=${irrlicht}/include/irrlicht"
+    (lib.cmakeBool "BUILD_CLIENT" buildClient)
+    (lib.cmakeBool "BUILD_SERVER" buildServer)
+    (lib.cmakeBool "ENABLE_PROMETHEUS" buildServer)
+    (lib.cmakeBool "ENABLE_TOUCH" withTouchSupport)
+    # Ensure we use system libraries
+    (lib.cmakeBool "ENABLE_SYSTEM_GMP" true)
+    (lib.cmakeBool "ENABLE_SYSTEM_JSONCPP" true)
+    # Updates are handled by nix anyway
+    (lib.cmakeBool "ENABLE_UPDATE_CHECKER" false)
+    # ...but make it clear that this is a nix package
+    (lib.cmakeFeature "VERSION_EXTRA" "NixOS")
+
+    # Remove when https://github.com/NixOS/nixpkgs/issues/144170 is fixed
+    (lib.cmakeFeature "CMAKE_INSTALL_BINDIR" "bin")
+    (lib.cmakeFeature "CMAKE_INSTALL_DATADIR" "share")
+    (lib.cmakeFeature "CMAKE_INSTALL_DOCDIR" "share/doc/minetest")
+    (lib.cmakeFeature "CMAKE_INSTALL_MANDIR" "share/man")
+    (lib.cmakeFeature "CMAKE_INSTALL_LOCALEDIR" "share/locale")
+
+  ];
+
+  nativeBuildInputs = [
+    cmake
+    doxygen
+    graphviz
+    ninja
   ];
 
   buildInputs = [
-    cmake irrlicht libpng bzip2 libjpeg curl libogg jsoncpp libXxf86vm mesa
-    openal libvorbis xlibsWrapper sqlite luajit freetype gettext doxygen ncurses
+    irrlichtmt
+    jsoncpp
+    gettext
+    freetype
+    sqlite
+    curl
+    bzip2
+    ncurses
+    gmp
+    libspatialindex
+  ] ++ lib.optional (lib.meta.availableOn stdenv.hostPlatform luajit) luajit
+    ++ lib.optionals stdenv.isDarwin [
+    libiconv
+    OpenGL
+    OpenAL
+    Carbon
+    Cocoa
+  ] ++ lib.optionals buildClient [
+    libpng
+    libjpeg
+    libGLU
+    openal
+    libogg
+    libvorbis
+    xorg.libX11
+  ] ++ lib.optionals buildServer [
     leveldb
+    postgresql
+    hiredis
+    prometheus-cpp
   ];
 
-  postInstall = ''
-    mkdir -pv $out/share/minetest/games/minetest_game/
-    cp -rv ${sources.data}/* $out/share/minetest/games/minetest_game/
+  postPatch = ''
+    substituteInPlace src/filesys.cpp --replace "/bin/rm" "${coreutils}/bin/rm"
+  '' + lib.optionalString stdenv.isDarwin ''
+    sed -i '/pagezero_size/d;/fixup_bundle/d' src/CMakeLists.txt
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://minetest.net/;
+  postInstall = lib.optionalString stdenv.isLinux ''
+    patchShebangs $out
+  '' + lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/Applications
+    mv $out/minetest.app $out/Applications
+  '';
+
+  passthru.updateScript = gitUpdater {
+    ignoredVersions = "^[^.]+$|.*-android$";
+  };
+
+  meta = with lib; {
+    homepage = "https://minetest.net/";
     description = "Infinite-world block sandbox game";
     license = licenses.lgpl21Plus;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ jgeerds c0dehero ];
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = with maintainers; [ pyrolagus fpletz fgaz ];
   };
-}
+})

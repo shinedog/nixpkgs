@@ -10,9 +10,9 @@ let
     name = "ircd-hybrid-service";
     scripts = [ "=>/bin" ./control.in ];
     substFiles = [ "=>/conf" ./ircd.conf ];
-    inherit (pkgs) ircdHybrid coreutils su iproute gnugrep procps;
+    inherit (pkgs) ircdHybrid coreutils su iproute2 gnugrep procps;
 
-    ipv6Enabled = if config.networking.enableIPv6 then "true" else "false";
+    ipv6Enabled = boolToString config.networking.enableIPv6;
 
     inherit (cfg) serverName sid description adminEmail
             extraPort;
@@ -36,71 +36,74 @@ in
 
     services.ircdHybrid = {
 
-      enable = mkOption {
-        default = false;
-        description = "
-          Enable IRCD.
-        ";
-      };
+      enable = mkEnableOption "IRCD";
 
       serverName = mkOption {
         default = "hades.arpa";
-        description = "
+        type = types.str;
+        description = ''
           IRCD server name.
-        ";
+        '';
       };
 
       sid = mkOption {
         default = "0NL";
-        description = "
+        type = types.str;
+        description = ''
           IRCD server unique ID in a net of servers.
-        ";
+        '';
       };
 
       description = mkOption {
         default = "Hybrid-7 IRC server.";
-        description = "
+        type = types.str;
+        description = ''
           IRCD server description.
-        ";
+        '';
       };
 
       rsaKey = mkOption {
         default = null;
-        example = literalExample "/root/certificates/irc.key";
-        description = "
+        example = literalExpression "/root/certificates/irc.key";
+        type = types.nullOr types.path;
+        description = ''
           IRCD server RSA key.
-        ";
+        '';
       };
 
       certificate = mkOption {
         default = null;
-        example = literalExample "/root/certificates/irc.pem";
-        description = "
+        example = literalExpression "/root/certificates/irc.pem";
+        type = types.nullOr types.path;
+        description = ''
           IRCD server SSL certificate. There are some limitations - read manual.
-        ";
+        '';
       };
 
       adminEmail = mkOption {
         default = "<bit-bucket@example.com>";
+        type = types.str;
         example = "<name@domain.tld>";
-        description = "
+        description = ''
           IRCD server administrator e-mail.
-        ";
+        '';
       };
 
       extraIPs = mkOption {
         default = [];
         example = ["127.0.0.1"];
-        description = "
+        type = types.listOf types.str;
+        description = ''
           Extra IP's to bind.
-        ";
+        '';
       };
 
       extraPort = mkOption {
         default = "7117";
-        description = "
+        type = types.str;
+        description = ''
           Extra port to avoid filtering.
-        ";
+        '';
       };
 
     };
@@ -112,18 +115,18 @@ in
 
   config = mkIf config.services.ircdHybrid.enable {
 
-    users.extraUsers = singleton
-      { name = "ircd";
-        description = "IRCD owner";
+    users.users.ircd =
+      { description = "IRCD owner";
         group = "ircd";
         uid = config.ids.uids.ircd;
       };
 
-    users.extraGroups.ircd.gid = config.ids.gids.ircd;
+    users.groups.ircd.gid = config.ids.gids.ircd;
 
-    systemd.services."ircd-hybrid" = {
+    systemd.services.ircd-hybrid = {
       description = "IRCD Hybrid server";
-      after = [ "started networking" ];
+      wants = [ "network-online.target" ];
+      after = [ "network-online.target" ];
       wantedBy = [ "multi-user.target" ];
       script = "${ircdService}/bin/control start";
     };

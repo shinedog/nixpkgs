@@ -1,22 +1,36 @@
-{ gsmakeDerivation
+{ lib
+, stdenv
+, make
+, wrapGNUstepAppsHook
 , cairo
-, fetchurl
-, base, gui
-, x11
+, fetchzip
+, base
+, gui
+, fontconfig
 , freetype
-, pkgconfig
+, pkg-config
+, libXft
+, libXmu
 }:
-let
-  version = "0.25.0";
-in
-gsmakeDerivation {
-  name = "gnustep-back-${version}";
-  src = fetchurl {
-    url = "ftp://ftp.gnustep.org/pub/gnustep/core/gnustep-back-${version}.tar.gz";
-    sha256 = "14gs1b32ahnihd7mwpjrws2b8hl11rl1wl24a7651d3z2l7f6xj2";
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gnustep-back";
+  version = "0.30.0";
+
+  src = fetchzip {
+    url = "ftp://ftp.gnustep.org/pub/gnustep/core/gnustep-back-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-HD4PLdkE573nPWqFwffUmcHw8VYIl5rLiPKWrbnwpCI=";
   };
-  buildInputs = [ cairo base gui freetype pkgconfig x11 ];
+
+  nativeBuildInputs = [ make pkg-config wrapGNUstepAppsHook ];
+  buildInputs = [ cairo base gui fontconfig freetype libXft libXmu ];
+
   meta = {
     description = "A generic backend for GNUstep";
+    mainProgram = "gpbs";
+    homepage = "https://gnustep.github.io/";
+    license = lib.licenses.lgpl2Plus;
+    maintainers = with lib.maintainers; [ ashalkhakov matthewbauer dblsaiko ];
+    platforms = lib.platforms.linux;
   };
-}
+})

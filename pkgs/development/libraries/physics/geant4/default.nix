@@ -1,150 +1,143 @@
-{ enableMultiThreading ? false
-, enableG3toG4         ? false
+{ enableMultiThreading ? true
 , enableInventor       ? false
-, enableGDML           ? false
-, enableQT             ? false
+, enableQT             ? false # deprecated name
+, enableQt             ? enableQT
 , enableXM             ? false
-, enableOpenGLX11      ? false
+, mesa
+, enableOpenGLX11      ? !mesa.meta.broken
+, enablePython         ? false
 , enableRaytracerX11   ? false
 
 # Standard build environment with cmake.
-, stdenv, fetchurl, cmake
+, lib, stdenv, fetchurl, cmake
 
-# Optional system packages, otherwise internal GEANT4 packages are used.
-, clhep ? null
-, expat ? null
-, zlib  ? null
+, clhep
+, expat
+, xercesc
+, zlib
 
-# For enableGDML.
-, xercesc ? null
-
-# For enableQT.
-, qt ? null # qt4SDK or qt5SDK
+# For enableQt.
+, qtbase
+, wrapQtAppsHook
 
 # For enableXM.
-, motif ? null # motif or lesstif
+, motif
 
-# For enableQT, enableXM, enableOpenGLX11, enableRaytracerX11.
-, mesa   ? null
-, xlibsWrapper    ? null
-, libXmu ? null
+# For enableInventor
+, coin3d
+, soxt
+, libXpm
+
+# For enableQt, enableXM, enableOpenGLX11, enableRaytracerX11.
+, libGLU, libGL
+, libXext
+, libXmu
+
+# For enablePython
+, boost
+, python3
+
+# For tests
+, callPackage
 }:
 
-# G4persistency library with support for GDML
-assert enableGDML -> xercesc != null;
-
-# If enableQT, Qt4/5 User Interface and Visualization drivers.
-assert enableQT -> qt != null;
-
-# Motif User Interface and Visualisation drivers.
-assert enableXM -> motif != null;
-
-# OpenGL/X11 User Interface and Visualisation drivers.
-assert enableQT || enableXM || enableOpenGLX11 || enableRaytracerX11 -> mesa   != null;
-assert enableQT || enableXM || enableOpenGLX11 || enableRaytracerX11 -> xlibsWrapper    != null;
-assert enableQT || enableXM || enableOpenGLX11 || enableRaytracerX11 -> libXmu != null;
-
 let
-  buildGeant4 =
-    { version, src, multiThreadingCapable ? false }:
+  boost_python = boost.override { enablePython = true; python = python3; };
+in
 
-    stdenv.mkDerivation rec {
-      inherit version src;
-      name = "geant4-${version}";
+lib.warnIf (enableQT != false) "geant4: enableQT is deprecated, please use enableQt"
 
-      # The data directory holds not just interaction cross section data, but other
-      # files which the installer needs to write, so we link to the previously installed
-      # data instead. This assumes the default data installation location of $out/share.
-      preConfigure = ''
-        mkdir -p $out/share/Geant4-${version}
-        ln -s ${g4data}/Geant4-${version}/data $out/share/Geant4-${version}/data
-      '';
+stdenv.mkDerivation rec {
+  version = "11.2.1";
+  pname = "geant4";
 
-      multiThreadingFlag = if multiThreadingCapable then "-DGEANT4_BUILD_MULTITHREADED=${if enableMultiThreading then "ON" else "OFF"}" else "";
-
-      cmakeFlags = ''
-        ${multiThreadingFlag}
-        -DGEANT4_USE_GDML=${if enableGDML then "ON" else "OFF"}
-        -DGEANT4_USE_G3TOG4=${if enableG3toG4 then "ON" else "OFF"}
-        -DGEANT4_USE_QT=${if enableQT then "ON" else "OFF"}
-        -DGEANT4_USE_XM=${if enableXM then "ON" else "OFF"}
-        -DGEANT4_USE_OPENGL_X11=${if enableOpenGLX11 then "ON" else "OFF"}
-        -DGEANT4_USE_INVENTOR=${if enableInventor then "ON" else "OFF"}
-        -DGEANT4_USE_RAYTRACER_X11=${if enableRaytracerX11 then "ON" else "OFF"}
-        -DGEANT4_USE_SYSTEM_CLHEP=${if clhep != null then "ON" else "OFF"}
-        -DGEANT4_USE_SYSTEM_EXPAT=${if expat != null then "ON" else "OFF"}
-        -DGEANT4_USE_SYSTEM_ZLIB=${if zlib != null then "ON" else "OFF"}
-      '';
-
-      g4data = installData {
-        inherit version src;
-      };
-
-      enableParallelBuilding = true;
-      buildInputs = [ cmake clhep expat zlib xercesc qt motif mesa xlibsWrapper libXmu ];
-      propagatedBuildInputs = [ g4data clhep expat zlib xercesc qt motif mesa xlibsWrapper libXmu ];
-
-      setupHook = ./setup-hook.sh;
-
-      # Set the myriad of envars required by Geant4 if we use a nix-shell.
-      shellHook = ''
-        source $out/nix-support/setup-hook
-      '';
-
-      meta = {
-        description = "A toolkit for the simulation of the passage of particles through matter";
-        longDescription = ''
-          Geant4 is a toolkit for the simulation of the passage of particles through matter.
-          Its areas of application include high energy, nuclear and accelerator physics, as well as studies in medical and space science.
-          The two main reference papers for Geant4 are published in Nuclear Instruments and Methods in Physics Research A 506 (2003) 250-303, and IEEE Transactions on Nuclear Science 53 No. 1 (2006) 270-278.
-        '';
-        homepage = http://www.geant4.org;
-        license = stdenv.lib.licenses.g4sl;
-        maintainers = [ ];
-        platforms = stdenv.lib.platforms.all;
-      };
-    };
-
-  installData = 
-    { version, src }:
- 
-    stdenv.mkDerivation rec {
-      inherit version src;
-      name = "g4data-${version}";
-
-      cmakeFlags = ''
-        -DGEANT4_INSTALL_DATA="ON"
-      '';
-
-      buildInputs = [ cmake expat ];
-
-      enableParallelBuilding = true;
-      buildPhase = ''
-        make G4EMLOW G4NDL G4NEUTRONXS G4PII G4SAIDDATA PhotonEvaporation RadioactiveDecay RealSurface
-      '';
-
-      installPhase = ''
-        mkdir -p $out/Geant4-${version}
-        cp -R data/ $out/Geant4-${version}
-      '';
-
-      meta = {
-        description = "Data files for the Geant4 toolkit";
-        homepage = http://www.geant4.org;
-        license = stdenv.lib.licenses.g4sl;
-        maintainers = [ ];
-        platforms = stdenv.lib.platforms.all;
-      };
-    }; 
-
-  fetchGeant4 = import ./fetch.nix {
-    inherit stdenv fetchurl;
+  src = fetchurl {
+    url = "https://cern.ch/geant4-data/releases/geant4-v${version}.tar.gz";
+    hash = "sha256-g122VD1csugBZ1lYllvpaHf2bWkHu1IZVLWYt4Xerl4=";
   };
 
-in {
-  v10_0_2 = buildGeant4 {
-    inherit (fetchGeant4.v10_0_2) version src;
-    multiThreadingCapable = true;
+  # Fix broken paths in a .pc
+  postPatch = ''
+    substituteInPlace source/externals/ptl/cmake/Modules/PTLPackageConfigHelpers.cmake \
+      --replace '${"$"}{prefix}/${"$"}{PTL_INSTALL_' '${"$"}{PTL_INSTALL_'
+  '';
+
+  cmakeFlags = [
+    "-DGEANT4_INSTALL_DATA=OFF"
+    "-DGEANT4_USE_GDML=ON"
+    "-DGEANT4_USE_G3TOG4=ON"
+    "-DGEANT4_USE_QT=${if enableQt then "ON" else "OFF"}"
+    "-DGEANT4_USE_XM=${if enableXM then "ON" else "OFF"}"
+    "-DGEANT4_USE_OPENGL_X11=${if enableOpenGLX11 then "ON" else "OFF"}"
+    "-DGEANT4_USE_INVENTOR=${if enableInventor then "ON" else "OFF"}"
+    "-DGEANT4_USE_PYTHON=${if enablePython then "ON" else "OFF"}"
+    "-DGEANT4_USE_RAYTRACER_X11=${if enableRaytracerX11 then "ON" else "OFF"}"
+    "-DGEANT4_USE_SYSTEM_CLHEP=ON"
+    "-DGEANT4_USE_SYSTEM_EXPAT=ON"
+    "-DGEANT4_USE_SYSTEM_ZLIB=ON"
+    "-DGEANT4_BUILD_MULTITHREADED=${if enableMultiThreading then "ON" else "OFF"}"
+  ] ++ lib.optionals (enableOpenGLX11 && stdenv.isDarwin) [
+    "-DXQuartzGL_INCLUDE_DIR=${libGL.dev}/include"
+    "-DXQuartzGL_gl_LIBRARY=${libGL}/lib/libGL.dylib"
+  ] ++ lib.optionals (enableMultiThreading && enablePython) [
+    "-DGEANT4_BUILD_TLS_MODEL=global-dynamic"
+  ] ++ lib.optionals enableInventor [
+    "-DINVENTOR_INCLUDE_DIR=${coin3d}/include"
+    "-DINVENTOR_LIBRARY_RELEASE=${coin3d}/lib/libCoin.so"
+  ];
+
+  nativeBuildInputs =  [
+    cmake
+  ];
+
+  propagatedNativeBuildInputs = lib.optionals enableQt [
+    wrapQtAppsHook
+  ];
+  dontWrapQtApps = true; # no binaries
+
+  buildInputs =
+    lib.optionals enableOpenGLX11 [ libGLU libXext libXmu ]
+    ++ lib.optionals enableInventor [ libXpm coin3d soxt motif ]
+    ++ lib.optionals enablePython [ boost_python python3 ];
+
+  propagatedBuildInputs = [ clhep expat xercesc zlib ]
+    ++ lib.optionals enableOpenGLX11 [ libGL ]
+    ++ lib.optionals enableXM [ motif ]
+    ++ lib.optionals enableQt [ qtbase ];
+
+  postFixup = ''
+    # Don't try to export invalid environment variables.
+    sed -i 's/export G4\([A-Z]*\)DATA/#export G4\1DATA/' "$out"/bin/geant4.sh
+  '' + lib.optionalString enableQt ''
+    wrapQtAppsHook
+  '';
+
+  setupHook = ./geant4-hook.sh;
+
+  passthru = {
+    data = callPackage ./datasets.nix {};
+
+    tests = callPackage ./tests.nix {};
+
+    inherit enableQt;
   };
-} 
- 
+
+  # Set the myriad of envars required by Geant4 if we use a nix-shell.
+  shellHook = ''
+    source $out/nix-support/setup-hook
+  '';
+
+  meta = with lib; {
+    broken = (stdenv.isLinux && stdenv.isAarch64);
+    description = "A toolkit for the simulation of the passage of particles through matter";
+    longDescription = ''
+      Geant4 is a toolkit for the simulation of the passage of particles through matter.
+      Its areas of application include high energy, nuclear and accelerator physics, as well as studies in medical and space science.
+      The two main reference papers for Geant4 are published in Nuclear Instruments and Methods in Physics Research A 506 (2003) 250-303, and IEEE Transactions on Nuclear Science 53 No. 1 (2006) 270-278.
+    '';
+    homepage = "http://www.geant4.org";
+    license = licenses.g4sl;
+    maintainers = with maintainers; [ omnipotententity veprbl ];
+    platforms = platforms.unix;
+  };
+}

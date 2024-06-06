@@ -1,30 +1,43 @@
-{ pkgs, lib, emscripten }:
+{ pkgs, lib, emscripten, python3 }:
 
+argsFun:
+
+let
+  wrapDerivation = f:
+    pkgs.stdenv.mkDerivation (finalAttrs:
+      f (lib.toFunction argsFun finalAttrs)
+    );
+in
+wrapDerivation (
 { buildInputs ? [], nativeBuildInputs ? []
 
 , enableParallelBuilding ? true
 
 , meta ? {}, ... } @ args:
 
-pkgs.stdenv.mkDerivation (
-  args // 
+  args //
   {
 
-  name = "emscripten-${args.name}";
-  buildInputs = [ emscripten ] ++ buildInputs;
-  nativeBuildInputs = [ emscripten ] ++ nativeBuildInputs;
+  pname = "emscripten-${lib.getName args}";
+  version = lib.getVersion args;
+  buildInputs = [ emscripten python3 ] ++ buildInputs;
+  nativeBuildInputs = [ emscripten python3 ] ++ nativeBuildInputs;
 
   # fake conftest results with emscripten's python magic
   EMCONFIGURE_JS=2;
+
+  # removes archive indices
+  dontStrip = args.dontStrip or true;
 
   configurePhase = args.configurePhase or ''
     # FIXME: Some tests require writing at $HOME
     HOME=$TMPDIR
     runHook preConfigure
 
-    # probably requires autotools as dependency
-    ./autogen.sh
     emconfigure ./configure --prefix=$out
+
+    mkdir -p .emscriptencache
+    export EM_CACHE=$(pwd)/.emscriptencache
 
     runHook postConfigure
   '';
@@ -33,13 +46,23 @@ pkgs.stdenv.mkDerivation (
     runHook preBuild
 
     HOME=$TMPDIR
+
     emmake make
 
     runHook postBuild
   '';
 
+  doCheck = true;
+
   checkPhase = args.checkPhase or ''
     runHook preCheck
+
+    echo "Please provide a test for your emscripten based library/tool, see libxml2 as an exmple on how to use emcc/node to verify your build"
+    echo ""
+    echo "In normal C 'unresolved symbols' would yield an error and a breake of execution. In contrast, in emscripten they are only a warning which is ok given that emscripten assumptions about shared libraries."
+    echo "  -> https://github.com/kripken/emscripten/wiki/Linking"
+    echo "So just assume the dependencies were built using hydra, then YOU WILL NEVER see the warning and your code depending on a library will always fail!"
+    exit 1
 
     runHook postCheck
   '';

@@ -1,26 +1,23 @@
-{ stdenv, fetchzip, buildOcaml, time, autoconf, automake }:
+{ lib, fetchFromGitHub, buildDunePackage, stdlib-shims }:
 
-buildOcaml rec {
-  name = "bitstring";
-  version = "f1673f8"; 
-  src = fetchzip {
-    url = https://storage.googleapis.com/google-code-archive-source/v2/code.google.com/bitstring/source-archive.zip;
-    sha256 = "03343yggwp3y483zj5axaalxlnl698xrjiv3hmd4c2s05g53iwas";
+buildDunePackage rec {
+  pname = "bitstring";
+  version = "4.1.1";
+
+  duneVersion = "3";
+
+  src = fetchFromGitHub {
+    owner = "xguerin";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-eO7/S9PoMybZPnQQ+q9qbqKpYO4Foc9OjW4uiwwNds8=";
   };
 
-  patches = [ ./camlp4-git.patch ./meta.patch ./srcdir.patch ];
+  propagatedBuildInputs = [ stdlib-shims ];
 
-  buildInputs = [time autoconf automake];
-  doCheck = true;
-
-  createFindlibDestdir = true;
-  hasSharedObjects = true;
-
-  preConfigure = "./bootstrap";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "This library adds Erlang-style bitstrings and matching over bitstrings as a syntax extension and library for OCaml";
-    homepage = http://code.google.com/p/bitstring/;
+    homepage = "https://github.com/xguerin/bitstring";
     license = licenses.lgpl21Plus;
     maintainers = [ maintainers.maurer ];
   };

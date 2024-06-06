@@ -1,36 +1,31 @@
-{stdenv, fetchurlBoot, openssl, zlib, windows}:
+{ lib, stdenv, fetchurl, openssl, zlib, windows }:
 
 stdenv.mkDerivation rec {
-  name = "libssh2-1.7.0";
+  pname = "libssh2";
+  version = "1.11.0";
 
-  src = fetchurlBoot {
-    url = "${meta.homepage}/download/${name}.tar.gz";
-    sha256 = "116mh112w48vv9k3f15ggp5kxw5sj4b88dzb5j69llsh7ba1ymp4";
+  src = fetchurl {
+    url = "https://www.libssh2.org/download/libssh2-${version}.tar.gz";
+    sha256 = "sha256-NzYWHkHiaTMk3rOMJs/cPv5iCdY0ukJY2xzs/2pa1GE=";
   };
+
+  patches = [
+    # fetchpatch cannot be used due to infinite recursion
+    # https://github.com/libssh2/libssh2/commit/d34d9258b8420b19ec3f97b4cc5bf7aa7d98e35a
+    ./CVE-2023-48795.patch
+  ];
 
   outputs = [ "out" "dev" "devdoc" ];
 
-  buildInputs = [ openssl zlib ];
+  propagatedBuildInputs = [ openssl ]; # see Libs: in libssh2.pc
+  buildInputs = [ zlib ]
+    ++ lib.optional stdenv.hostPlatform.isMinGW windows.mingw_w64;
 
-  crossAttrs = {
-    # link against cross-built libraries
-    configureFlags = [
-      "--with-openssl"
-      "--with-libssl-prefix=${openssl.crossDrv}"
-      "--with-libz"
-      "--with-libz-prefix=${zlib.crossDrv}"
-    ];
-  } // stdenv.lib.optionalAttrs (stdenv.cross.libc == "msvcrt") {
-    # mingw needs import library of ws2_32 to build the shared library
-    preConfigure = ''
-      export LDFLAGS="-L${windows.mingw_w64}/lib $LDFLAGS"
-    '';
-  };
-
-  meta = {
+  meta = with lib; {
     description = "A client-side C library implementing the SSH2 protocol";
-    homepage = http://www.libssh2.org;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    homepage = "https://www.libssh2.org";
+    platforms = platforms.all;
+    license = with licenses; [ bsd3 libssh2 ];
+    maintainers = with maintainers; [ SuperSandro2000 ];
   };
 }

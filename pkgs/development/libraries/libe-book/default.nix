@@ -1,38 +1,51 @@
-{ stdenv, fetchurl, gperf, pkgconfig, librevenge, libxml2, boost, icu
-, cppunit, zlib
+{ lib
+, stdenv
+, fetchurl
+, gperf
+, pkg-config
+, librevenge
+, libxml2
+, boost
+, icu
+, cppunit
+, zlib
+, liblangtag
 }:
 
-let
-  s = # Generated upstream information
-  rec {
-    baseName="libe-book";
-    version="0.1.2";
-    name="${baseName}-${version}";
-    hash="1v48pd32r2pfysr3a3igc4ivcf6vvb26jq4pdkcnq75p70alp2bz";
-    url="mirror://sourceforge/project/libebook/libe-book-0.1.2/libe-book-0.1.2.tar.xz";
-    sha256="1v48pd32r2pfysr3a3igc4ivcf6vvb26jq4pdkcnq75p70alp2bz";
+stdenv.mkDerivation rec {
+  pname = "libe-book";
+  version = "0.1.3";
+
+  src = fetchurl {
+    url = "mirror://sourceforge/libebook/libe-book-${version}/libe-book-${version}.tar.xz";
+    hash = "sha256-fo2P808ngxrKO8b5zFMsL5DSBXx3iWO4hP89HjTf4fk=";
   };
+
+  # restore compatibility with icu68+
+  postPatch = ''
+    substituteInPlace src/lib/EBOOKCharsetConverter.cpp --replace \
+      "TRUE, TRUE, &status)" \
+      "true, true, &status)"
+  '';
+  nativeBuildInputs = [ pkg-config ];
+
   buildInputs = [
-    gperf pkgconfig librevenge libxml2 boost icu cppunit zlib
+    gperf
+    librevenge
+    libxml2
+    boost
+    icu
+    cppunit
+    zlib
+    liblangtag
   ];
 
-  # Boost 1.59 compatability fix
-  # Attempt removing when updating
-  postPatch = ''
-    sed -i 's,^CPPFLAGS.*,\0 -DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED,' src/lib/Makefile.in
-  '';
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
-  inherit buildInputs postPatch;
-  src = fetchurl {
-    inherit (s) url sha256;
-  };
-  meta = {
-    inherit (s) version;
-    description = ''Library for import of reflowable e-book formats'';
-    license = stdenv.lib.licenses.lgpl21Plus ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=unused-function";
+
+  meta = with lib; {
+    description = "Library for import of reflowable e-book formats";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
   };
 }

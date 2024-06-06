@@ -1,6 +1,6 @@
-{ stdenv, fetchFromGitHub, faust2jaqt, faust2lv2 }:
+{ lib, stdenv, fetchFromGitHub, faust2jaqt, faust2lv2 }:
 stdenv.mkDerivation rec {
-  name = "pluginUtils-${version}";
+  pname = "pluginUtils";
   version = "1.1";
 
   src = fetchFromGitHub {
@@ -12,12 +12,13 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ faust2jaqt faust2lv2 ];
 
+  dontWrapQtApps = true;
+
   buildPhase = ''
     for f in *.dsp
       do
         echo "Building jack standalone for $f"
         faust2jaqt -vec -time -t 99999 "$f"
-        sed -i "s|\[ *scale *: *log *\]||g ; s|\btgroup\b|hgroup|g" "$f"
         echo "Building lv2 for $f"
         faust2lv2 -vec -time -gui -t 99999 "$f"
       done
@@ -29,13 +30,15 @@ stdenv.mkDerivation rec {
     mkdir -p $out/lib/lv2
     mv *.lv2/ $out/lib/lv2
     mkdir -p $out/bin
-    cp * $out/bin/
-  '';
+    for f in $(find . -executable -type f); do
+      cp $f $out/bin/
+    done
+ '';
 
   meta = {
     description = "Some simple utility lv2 plugins";
-    homepage = https://github.com/magnetophon/pluginUtils;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.magnetophon ];
+    homepage = "https://github.com/magnetophon/pluginUtils";
+    license = lib.licenses.gpl3;
+    maintainers = [ lib.maintainers.magnetophon ];
   };
 }

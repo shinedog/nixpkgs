@@ -1,40 +1,52 @@
 { stdenv
-, fetchurl
+, lib
+, fetchFromGitHub
+, cmake
+, lapack
+, which
 , gfortran
-, openblas
+, blas
 }:
-stdenv.mkDerivation {
-  name = "qrupdate-1.1.2";
-  src = fetchurl {
-    url = mirror://sourceforge/qrupdate/qrupdate-1.1.2.tar.gz ;
-    sha256 = "024f601685phcm1pg8lhif3lpy5j9j0k6n0r46743g4fvh8wg8g2";
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "qrupdate";
+  version = "1.1.5";
+
+  src = fetchFromGitHub {
+    owner = "mpimd-csc";
+    repo = "qrupdate-ng";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-dHxLPrN00wwozagY2JyfZkD3sKUD2+BcnbjNgZepzFg=";
   };
 
-  configurePhase =
-    ''
-      export PREFIX=$out
-      sed -i -e 's,^BLAS=.*,BLAS=-L${openblas}/lib -lopenblas,' \
-          -e 's,^LAPACK=.*,LAPACK=-L${openblas}/lib -lopenblas,' \
-          Makeconf
-    ''
-    + stdenv.lib.optionalString openblas.blas64
-    ''
-      sed -i Makeconf -e '/^FFLAGS=.*/ s/$/-fdefault-integer-8/'
-    '';
+  cmakeFlags = assert (blas.isILP64 == lapack.isILP64); [
+    "-DCMAKE_Fortran_FLAGS=${toString ([
+      "-std=legacy"
+    ] ++ lib.optionals blas.isILP64 [
+      # If another application intends to use qrupdate compiled with blas with
+      # 64 bit support, it should add this to it's FFLAGS as well. See (e.g):
+      # https://savannah.gnu.org/bugs/?50339
+      "-fdefault-integer-8"
+    ])}"
+  ];
 
   doCheck = true;
 
-  checkTarget = "test";
+  nativeBuildInputs = [
+    cmake
+    which
+    gfortran
+  ];
+  buildInputs = [
+    blas
+    lapack
+  ];
 
-  buildFlags = [ "lib" "solib" ];
-
-  installTargets = if stdenv.isDarwin
-                   then ["install-staticlib" "install-shlib"]
-                   else "install";
-
-  buildInputs = [ gfortran openblas ];
-
-  meta = {
-    platforms = stdenv.lib.platforms.unix;
+  meta = with lib; {
+    description = "Library for fast updating of qr and cholesky decompositions";
+    homepage = "https://github.com/mpimd-csc/qrupdate-ng";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ doronbehar ];
+    platforms = platforms.unix;
   };
-}
+})

@@ -1,30 +1,27 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "gentium-book-basic-${version}";
-  major = "1";
-  minor = "102";
-  version = "${major}.${minor}";
+stdenvNoCC.mkDerivation rec {
+  pname = "gentium-book-basic";
+  version = "1.102";
 
   src = fetchzip {
-    name = "${name}.zip";
-    url = "http://software.sil.org/downloads/gentium/GentiumBasic_${major}${minor}.zip";
-    sha256 = "109yiqwdfb1bn7d6bjp8d50k1h3z3kz86p3faz11f9acvsbsjad0";
+    url = "http://software.sil.org/downloads/r/gentium/GentiumBasic_${lib.versions.major version}${lib.versions.minor version}.zip";
+    hash = "sha256-oCmpl95MJRfCV25cg/4cf8AwQWnoymXasSss1ziOPoE=";
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    mkdir -p $out/share/doc/${name}
-    cp -v *.ttf $out/share/fonts/truetype/
-    cp -v FONTLOG.txt GENTIUM-FAQ.txt $out/share/doc/${name}
+    runHook preInstall
+
+    install -Dm644 *.ttf                       -t $out/share/fonts/truetype
+    install -Dm644 FONTLOG.txt GENTIUM-FAQ.txt -t $out/share/doc/${pname}-${version}
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = "http://software.sil.org/gentium/";
+  meta = with lib; {
+    homepage = "https://software.sil.org/gentium/";
     description = "A high-quality typeface family for Latin, Cyrillic, and Greek";
-    maintainers = with maintainers; [ DamienCassou ];
+    maintainers = with maintainers; [ ];
     license = licenses.ofl;
     platforms = platforms.all;
   };

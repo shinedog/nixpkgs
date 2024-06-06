@@ -1,26 +1,41 @@
-{ stdenv, fetchgit, fuse, pkgconfig, which, attr, pandoc, git }:
+{ lib, stdenv, fetchFromGitHub, automake, autoconf, pkg-config, gettext, libtool, pandoc, which, attr, libiconv }:
 
 stdenv.mkDerivation rec {
-  name = "mergerfs-${version}";
-  version = "2.16.1";
+  pname = "mergerfs";
+  version = "2.40.2";
 
-  # not using fetchFromGitHub because of changelog being built with git log
-  src = fetchgit {
-    url = "https://github.com/trapexit/mergerfs";
-    rev = "refs/tags/${version}";
-    sha256 = "12fqgk54fnnibqiq82p4g2k6qnw3iy6dd64csmlf73yi67za5iwf";
-    deepClone = true;
+  src = fetchFromGitHub {
+    owner = "trapexit";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-3DfSGuTtM+h0IdtsIhLVXQxX5/Tj9G5Qcha3DWmyyq4=";
   };
 
-  buildInputs = [ fuse pkgconfig which attr pandoc git ];
+  nativeBuildInputs = [
+    automake autoconf pkg-config gettext libtool pandoc which
+  ];
+  prePatch = ''
+    sed -i -e '/chown/d' -e '/chmod/d' libfuse/Makefile
+  '';
+  buildInputs = [ attr libiconv ];
 
-  makeFlags = [ "PREFIX=$(out)" "XATTR_AVAILABLE=1" ];
+  preConfigure = ''
+    echo "${version}" > VERSION
+  '';
+
+  makeFlags = [ "DESTDIR=${placeholder "out"}" "XATTR_AVAILABLE=1" "PREFIX=/" "SBINDIR=/bin" ];
+  enableParallelBuilding = true;
+
+  postFixup = ''
+    ln -srf $out/bin/mergerfs $out/bin/mount.fuse.mergerfs
+    ln -srf $out/bin/mergerfs $out/bin/mount.mergerfs
+  '';
 
   meta = {
     description = "A FUSE based union filesystem";
-    homepage = https://github.com/trapexit/mergerfs;
-    license = stdenv.lib.licenses.isc;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ makefu ];
+    homepage = "https://github.com/trapexit/mergerfs";
+    license = lib.licenses.isc;
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ makefu ];
   };
 }

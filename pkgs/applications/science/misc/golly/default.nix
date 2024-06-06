@@ -1,45 +1,52 @@
-{stdenv, fetchurl, wxGTK, perl, python, zlib, mesa, libX11}:
-let
-  s = # Generated upstream information
-  rec {
-    baseName="golly";
-    version="2.8";
-    name="${baseName}-${version}";
-    hash="0a4vn2hm7h4b47v2iwip1z3n9y8isf79v08aipl2iqms2m3p5204";
-    url="mirror://sourceforge/project/golly/golly/golly-2.8/golly-2.8-src.tar.gz";
-    sha256="0a4vn2hm7h4b47v2iwip1z3n9y8isf79v08aipl2iqms2m3p5204";
-  };
-  buildInputs = [
-    wxGTK perl python zlib mesa libX11
-  ];
-in
+{lib, stdenv, fetchurl, wxGTK, perl, python3, zlib, libGLU, libGL, libX11, SDL2}:
 stdenv.mkDerivation rec {
-  inherit (s) name version;
-  inherit buildInputs;
+  pname = "golly";
+  version = "4.2";
+
   src = fetchurl {
-    inherit (s) url sha256;
+    hash = "sha256-VpEoqSPaZMP/AGIYZAbk5R/f8Crqvx8pKYN1O9Bl6V0=";
+    url="mirror://sourceforge/project/golly/golly/golly-${version}/golly-${version}-src.tar.gz";
   };
 
-  sourceRoot="${name}-src/gui-wx/configure";
-
-  # Link against Python explicitly as it is needed for scripts
-  makeFlags=[
-    "AM_LDFLAGS="
+  buildInputs = [
+    wxGTK perl python3 zlib libGLU libGL libX11 SDL2
   ];
-  NIX_LDFLAGS="-lpython${python.majorVersion} -lperl";
-  preConfigure=''
-    export NIX_LDFLAGS="$NIX_LDFLAGS -L$(dirname "$(find ${perl} -name libperl.so)")"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE
-      -DPYTHON_SHLIB=$(basename "$(
-        readlink -f ${python}/lib/libpython*.so)")"
+
+  setSourceRoot = ''
+    sourceRoot=$(echo */gui-wx)
+  '';
+
+  postPatch = ''
+    sed -e 's@PYTHON_SHLIB@${python3}/lib/libpython3.so@' -i wxprefs.cpp
+    sed -e 's@PERL_SHLIB@'"$(find "${perl}/lib/" -name libperl.so)"'@' -i wxprefs.cpp
+    ! grep _SHLIB *.cpp
+
+    grep /lib/libpython wxprefs.cpp
+    grep /libperl wxprefs.cpp
+  '';
+
+  makeFlags=[
+    "-f" "makefile-gtk"
+    "ENABLE_SOUND=1" "ENABLE_PERL=1"
+    "GOLLYDIR=${placeholder "out"}/share/golly"
+  ];
+
+  installPhase = ''
+    mkdir -p "$out/bin"
+    cp ../golly ../bgolly "$out/bin"
+
+    mkdir -p "$out/share/doc/golly/"
+    cp ../docs/*  "$out/share/doc/golly/"
+
+    mkdir -p "$out/share/golly"
+    cp -r ../{Help,Patterns,Scripts,Rules} "$out/share/golly"
   '';
 
   meta = {
-    inherit (s) version;
     description = "Cellular automata simulation program";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    downloadPage = "http://sourceforge.net/projects/golly/files/golly";
+    license = lib.licenses.gpl2;
+    maintainers = [lib.maintainers.raskin];
+    platforms = lib.platforms.linux;
+    downloadPage = "https://sourceforge.net/projects/golly/files/golly";
   };
 }

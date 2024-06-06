@@ -1,17 +1,30 @@
-{ stdenv, lib, buildGoPackage, fetchgit, fetchhg, fetchbzr, fetchsvn }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "hologram-${version}";
-  version = "20160209-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "8d86e3fdcbfd967ba58d8de02f5e8173c101212e";
+buildGoModule rec {
+  pname = "hologram";
+  version = "1.3";
 
-  goPackagePath = "github.com/AdRoll/hologram";
-
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/AdRoll/hologram";
-    sha256 = "0i0p170brdsczfz079mqbc5y7x7mdph04p3wgqsd7xcrddvlkkaf";
+  src = fetchFromGitHub {
+    owner = "AdRoll";
+    repo = "hologram";
+    rev = version;
+    hash = "sha256-b65mplfDuwk8lEfJLKBY7BF0yGRksxHjwbEW6A7moo4=";
   };
 
-  goDeps = ./deps.nix;
+  postPatch = ''
+    sed -i 's|cacheTimeout != 3600|cacheTimeout != 0|' cmd/hologram-server/main.go
+
+    rm -f agent/metadata_service_test.go server/persistent_ldap_test.go server/server_test.go
+  '';
+
+  vendorHash = "sha256-HI5+02qSQVLy6ZKaFjy1bWtvVk5bqMBg1umu2ic5HuY=";
+
+  ldflags = [ "-s" "-w" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/AdRoll/hologram/";
+    description = "Easy, painless AWS credentials on developer laptops";
+    maintainers = with maintainers; [ ];
+    license = licenses.asl20;
+  };
 }

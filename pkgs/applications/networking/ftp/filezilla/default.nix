@@ -1,34 +1,73 @@
-{ stdenv, fetchurl, dbus, gnutls, wxGTK30, libidn, tinyxml, gettext
-, pkgconfig, xdg_utils, gtk2, sqlite, pugixml, libfilezilla, nettle }:
+{ lib, stdenv
+, fetchurl
+, autoreconfHook
+, dbus
+, gettext
+, gnutls
+, libfilezilla
+, libidn
+, nettle
+, pkg-config
+, pugixml
+, sqlite
+, tinyxml
+, boost
+, wrapGAppsHook3
+, wxGTK32
+, gtk3
+, xdg-utils
+, CoreServices
+, Security
+}:
 
-let version = "3.22.2.2"; in
-stdenv.mkDerivation {
-  name = "filezilla-${version}";
+stdenv.mkDerivation rec {
+  pname = "filezilla";
+  version = "3.67.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/filezilla/FileZilla_Client/${version}/FileZilla_${version}_src.tar.bz2";
-    sha256 = "1h02k13x88f04gkf433cxx1xvbr7kkl2aygb4i6581gzhzjifwdv";
+    url = "https://download.filezilla-project.org/client/FileZilla_${version}_src.tar.xz";
+    hash = "sha256-5drcgH25mc60ZJhPl00+9ZtWLFlUZlgFfpsgEYOtr5o=";
   };
 
   configureFlags = [
     "--disable-manualupdatecheck"
+    "--disable-autoupdatecheck"
   ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [
-    dbus gnutls wxGTK30 libidn tinyxml gettext xdg_utils gtk2 sqlite
-    pugixml libfilezilla nettle ];
+  nativeBuildInputs = [ autoreconfHook pkg-config wrapGAppsHook3 ];
 
-  meta = with stdenv.lib; {
-    homepage = http://filezilla-project.org/;
+  buildInputs = [
+    boost
+    dbus
+    gettext
+    gnutls
+    libfilezilla
+    libidn
+    nettle
+    pugixml
+    sqlite
+    tinyxml
+    wxGTK32
+    gtk3
+    xdg-utils
+  ] ++ lib.optionals stdenv.isDarwin [ CoreServices Security ];
+
+  preBuild = lib.optionalString (stdenv.isDarwin) ''
+    export MACOSX_DEPLOYMENT_TARGET=11.0
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://filezilla-project.org/";
     description = "Graphical FTP, FTPS and SFTP client";
-    license = licenses.gpl2;
     longDescription = ''
       FileZilla Client is a free, open source FTP client. It supports
       FTP, SFTP, and FTPS (FTP over SSL/TLS). The client is available
-      under many platforms, binaries for Windows, Linux and Mac OS X are
+      under many platforms, binaries for Windows, Linux and macOS are
       provided.
     '';
+    license = licenses.gpl2;
     platforms = platforms.linux;
     maintainers = with maintainers; [ pSub ];
   };

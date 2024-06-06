@@ -6,76 +6,51 @@ let
   cfg = config.services.asterisk;
 
   asteriskUser = "asterisk";
+  asteriskGroup = "asterisk";
 
   varlibdir = "/var/lib/asterisk";
   spooldir = "/var/spool/asterisk";
   logdir = "/var/log/asterisk";
 
-  asteriskEtc = pkgs.stdenv.mkDerivation
-  ((mapAttrs' (name: value: nameValuePair
-        # Fudge the names to make bash happy
-        ((replaceChars ["."] ["_"] name) + "_")
-        (value)
-      ) cfg.confFiles) //
-  {
-    confFilesString = concatStringsSep " " (
-      attrNames cfg.confFiles
-    );
-
-    name = "asterisk.etc";
-
+  # Add filecontents from files of useTheseDefaultConfFiles to confFiles, do not override
+  defaultConfFiles = subtractLists (attrNames cfg.confFiles) cfg.useTheseDefaultConfFiles;
+  allConfFiles = {
     # Default asterisk.conf file
-    # (Notice that astetcdir will be set to the path of this derivation)
-    asteriskConf = ''
+    "asterisk.conf".text = ''
       [directories]
-      astetcdir => @out@
-      astmoddir => ${pkgs.asterisk}/lib/asterisk/modules
+      astetcdir => /etc/asterisk
+      astmoddir => ${cfg.package}/lib/asterisk/modules
       astvarlibdir => /var/lib/asterisk
       astdbdir => /var/lib/asterisk
       astkeydir => /var/lib/asterisk
       astdatadir => /var/lib/asterisk
       astagidir => /var/lib/asterisk/agi-bin
       astspooldir => /var/spool/asterisk
-      astrundir => /var/run/asterisk
+      astrundir => /run/asterisk
       astlogdir => /var/log/asterisk
-      astsbindir => ${pkgs.asterisk}/sbin
+      astsbindir => ${cfg.package}/sbin
+      ${cfg.extraConfig}
     '';
-    extraConf = cfg.extraConfig;
 
     # Loading all modules by default is considered sensible by the authors of
     # "Asterisk: The Definitive Guide". Secure sites will likely want to
     # specify their own "modules.conf" in the confFiles option.
-    modulesConf = ''
+    "modules.conf".text = ''
       [modules]
       autoload=yes
     '';
 
     # Use syslog for logging so logs can be viewed with journalctl
-    loggerConf = ''
+    "logger.conf".text = ''
       [general]
 
       [logfiles]
       syslog.local0 => notice,warning,error
     '';
+  } //
+    mapAttrs (name: text: { inherit text; }) cfg.confFiles //
+    listToAttrs (map (x: nameValuePair x { source = cfg.package + "/etc/asterisk/" + x; }) defaultConfFiles);
 
-    buildCommand = ''
-      mkdir -p "$out"
-
-      # Create asterisk.conf, pointing astetcdir to the path of this derivation
-      echo "$asteriskConf" | sed "s|@out@|$out|g" > "$out"/asterisk.conf
-      echo "$extraConf" >> "$out"/asterisk.conf
-
-      echo "$modulesConf" > "$out"/modules.conf
-
-      echo "$loggerConf" > "$out"/logger.conf
-
-      # Config files specified in confFiles option override all other files
-      for i in $confFilesString; do
-        conf=$(echo "$i"_ | sed 's/\./_/g')
-        echo "''${!conf}" > "$out"/"$i"
-      done
-    '';
-  });
 in
 
 {
@@ -99,14 +74,14 @@ in
         '';
         description = ''
           Extra configuration options appended to the default
-          <literal>asterisk.conf</literal> file.
+          `asterisk.conf` file.
         '';
       };
 
       confFiles = mkOption {
         default = {};
         type = types.attrsOf types.str;
-        example = literalExample
+        example = literalExpression
           ''
             {
               "extensions.conf" = '''
@@ -154,18 +129,28 @@ in
         '';
         description = ''
           Sets the content of config files (typically ending with
-          <literal>.conf</literal>) in the Asterisk configuration directory.
+          `.conf`) in the Asterisk configuration directory.
 
-          Note that if you want to change <literal>asterisk.conf</literal>, it
-          is preferable to use the <option>services.asterisk.extraConfig</option>
-          option over this option. If <literal>"asterisk.conf"</literal> is
-          specified with the <option>confFiles</option> option (not recommended),
-          you must be prepared to set your own <literal>astetcdir</literal>
+          Note that if you want to change `asterisk.conf`, it
+          is preferable to use the {option}`services.asterisk.extraConfig`
+          option over this option. If `"asterisk.conf"` is
+          specified with the {option}`confFiles` option (not recommended),
+          you must be prepared to set your own `astetcdir`
           path.
 
           See
-          <link xlink:href="http://www.asterisk.org/community/documentation"/>
+          <https://www.asterisk.org/community/documentation/>
           for more examples of what is possible here.
+        '';
+      };
+
+      useTheseDefaultConfFiles = mkOption {
+        default = [ "ari.conf" "acl.conf" "agents.conf" "amd.conf" "calendar.conf" "cdr.conf" "cdr_syslog.conf" "cdr_custom.conf" "cel.conf" "cel_custom.conf" "cli_aliases.conf" "confbridge.conf" "dundi.conf" "features.conf" "hep.conf" "iax.conf" "pjsip.conf" "pjsip_wizard.conf" "phone.conf" "phoneprov.conf" "queues.conf" "res_config_sqlite3.conf" "res_parking.conf" "statsd.conf" "udptl.conf" "unistim.conf" ];
+        type = types.listOf types.str;
+        example = [ "sip.conf" "dundi.conf" ];
+        description = ''Sets these config files to the default content. The default value for
+          this option contains all necesscary files to avoid errors at startup.
+          This does not override settings via {option}`services.asterisk.confFiles`.
         '';
       };
 
@@ -178,16 +163,29 @@ in
           Additional command line arguments to pass to Asterisk.
         '';
       };
+      package = mkPackageOption pkgs "asterisk" { };
     };
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers = singleton
-    { name = asteriskUser;
-      uid = config.ids.uids.asterisk;
-      description = "Asterisk daemon user";
-      home = varlibdir;
-    };
+    environment.systemPackages = [ cfg.package ];
+
+    environment.etc = mapAttrs' (name: value:
+      nameValuePair "asterisk/${name}" value
+    ) allConfFiles;
+
+    users.users.asterisk =
+      { name = asteriskUser;
+        group = asteriskGroup;
+        uid = config.ids.uids.asterisk;
+        description = "Asterisk daemon user";
+        home = varlibdir;
+      };
+
+    users.groups.asterisk =
+      { name = asteriskGroup;
+        gid = config.ids.gids.asterisk;
+      };
 
     systemd.services.asterisk = {
       description = ''
@@ -196,14 +194,17 @@ in
 
       wantedBy = [ "multi-user.target" ];
 
+      # Do not restart, to avoid disruption of running calls. Restart unit by yourself!
+      restartIfChanged = false;
+
       preStart = ''
         # Copy skeleton directory tree to /var
         for d in '${varlibdir}' '${spooldir}' '${logdir}'; do
           # TODO: Make exceptions for /var directories that likely should be updated
           if [ ! -e "$d" ]; then
             mkdir -p "$d"
-            cp --recursive ${pkgs.asterisk}/"$d" "$d"
-            chown --recursive ${asteriskUser} "$d"
+            cp --recursive ${cfg.package}/"$d"/* "$d"/
+            chown --recursive ${asteriskUser}:${asteriskGroup} "$d"
             find "$d" -type d | xargs chmod 0755
           fi
         done
@@ -215,9 +216,11 @@ in
             # FIXME: This doesn't account for arguments with spaces
             argString = concatStringsSep " " cfg.extraArguments;
           in
-          "${pkgs.asterisk}/bin/asterisk -U ${asteriskUser} -C ${asteriskEtc}/asterisk.conf ${argString} -F";
+          "${cfg.package}/bin/asterisk -U ${asteriskUser} -C /etc/asterisk/asterisk.conf ${argString} -F";
+        ExecReload = ''${cfg.package}/bin/asterisk -x "core reload"
+          '';
         Type = "forking";
-        PIDFile = "/var/run/asterisk/asterisk.pid";
+        PIDFile = "/run/asterisk/asterisk.pid";
       };
     };
   };

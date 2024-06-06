@@ -1,14 +1,14 @@
-{ stdenv, fetchFromGitHub, libpcap, ppp }:
+{ lib, stdenv, fetchFromGitHub, libpcap, ppp }:
 
 stdenv.mkDerivation rec {
-  name = "xl2tpd-${version}";
-  version = "1.3.7";
+  pname = "xl2tpd";
+  version = "1.3.18";
 
   src = fetchFromGitHub {
     owner = "xelerance";
     repo = "xl2tpd";
     rev = "v${version}";
-    sha256 = "0wjkj2b5rkxhx522wmkml5s0zdp68hkvrh7npx839dvsr79fji7k";
+    sha256 = "sha256-Uc3PeTf/ow9p8noPcMLdT6S5dks9igDU6CC9koy+ff4=";
   };
 
   buildInputs = [ libpcap ];
@@ -19,11 +19,11 @@ stdenv.mkDerivation rec {
 
   makeFlags = [ "PREFIX=$(out)" ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://www.xelerance.com/software/xl2tpd/";
+  meta = with lib; {
+    homepage = src.meta.homepage;
     description = "Layer 2 Tunnelling Protocol Daemon (RFC 2661)";
     platforms = platforms.linux;
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     maintainers = with maintainers; [ abbradar ];
   };
 }

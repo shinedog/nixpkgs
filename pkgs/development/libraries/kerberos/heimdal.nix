@@ -1,64 +1,138 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, python2, perl, yacc, flex
-, texinfo, perlPackages
-, openldap, libcap_ng, sqlite, openssl, db, libedit, pam
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, python3
+, perl
+, bison
+, flex
+, texinfo
+, perlPackages
 
-# Extra Args
-, type ? ""
+, openldap
+, libcap_ng
+, sqlite
+, openssl
+, db
+, libedit
+, pam
+, krb5
+, libmicrohttpd
+, cjson
+
+, CoreFoundation
+, Security
+, SystemConfiguration
+
+, curl
+, jdk
+, unzip
+, which
+
+, nixosTests
+
+, withCJSON ? true
+, withCapNG ? stdenv.isLinux
+# libmicrohttpd should theoretically work for darwin as well, but something is broken.
+# It affects tests check-bx509d and check-httpkadmind.
+, withMicroHTTPD ? stdenv.isLinux
+, withOpenLDAP ? true
+, withOpenLDAPAsHDBModule ? false
+, withOpenSSL ? true
+, withSQLite3 ? true
 }:
 
-let
-  libOnly = type == "lib";
-in
-with stdenv.lib;
-stdenv.mkDerivation rec {
-  name = "${type}heimdal-2015-09-13";
+assert lib.assertMsg (withOpenLDAPAsHDBModule -> withOpenLDAP) ''
+  OpenLDAP needs to be enabled in order to build the OpenLDAP HDB Module.
+'';
+
+stdenv.mkDerivation {
+  pname = "heimdal";
+  version = "7.8.0-unstable-2023-11-29";
 
   src = fetchFromGitHub {
     owner = "heimdal";
     repo = "heimdal";
-    rev = "c81572ab5dcee3062e715b9e25ca7a20f6ec456b";
-    sha256 = "1r60i4v6y5lpll0l2qpn0ycp6q6f1xjg7k1csi547zls8k96yk9s";
+    rev = "3253c49544eacb33d5ad2f6f919b0696e5aab794";
+    hash = "sha256-uljzQBzXrZCZjcIWfioqHN8YsbUUNy14Vo+A3vZIXzM=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig python2 perl yacc flex ]
-    ++ (with perlPackages; [ JSON ])
-    ++ optional (!libOnly) texinfo;
-  buildInputs = optionals (!stdenv.isFreeBSD) [ libcap_ng db ]
-    ++ [ sqlite openssl libedit ]
-    ++ optionals (!libOnly) [ openldap pam ];
+  outputs = [ "out" "dev" "man" "info" ];
 
-  ## ugly, X should be made an option
-  configureFlags = [
-    "--sysconfdir=/etc"
-    "--localstatedir=/var"
-    "--enable-hdb-openldap-module"
-    "--with-sqlite3=${sqlite.dev}"
-    "--with-libedit=${libedit}"
-    "--with-openssl=${openssl.dev}"
-    "--without-x"
-    "--with-berkeley-db=${db}"
-  ] ++ optionals (!libOnly) [
-    "--with-openldap=${openldap.dev}"
-  ] ++ optionals (!stdenv.isFreeBSD) [
-    "--with-capng"
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+    python3
+    perl
+    bison
+    flex
+    texinfo
+  ]
+  ++ (with perlPackages; [ JSON ]);
+
+  buildInputs = [ db libedit pam ]
+    ++ lib.optionals (stdenv.isDarwin) [ CoreFoundation Security SystemConfiguration ]
+    ++ lib.optionals (withCJSON) [ cjson ]
+    ++ lib.optionals (withCapNG) [ libcap_ng ]
+    ++ lib.optionals (withMicroHTTPD) [ libmicrohttpd ]
+    ++ lib.optionals (withOpenLDAP) [ openldap ]
+    ++ lib.optionals (withOpenSSL) [ openssl ]
+    ++ lib.optionals (withSQLite3) [ sqlite ];
+
+  doCheck = true;
+  nativeCheckInputs = [
+    curl
+    jdk
+    unzip
+    which
   ];
 
-  buildPhase = optionalString libOnly ''
-    (cd include; make -j $NIX_BUILD_CORES)
-    (cd lib; make -j $NIX_BUILD_CORES)
-    (cd tools; make -j $NIX_BUILD_CORES)
-    (cd include/hcrypto; make -j $NIX_BUILD_CORES)
-    (cd lib/hcrypto; make -j $NIX_BUILD_CORES)
+  configureFlags = [
+    "--with-libedit-include=${libedit.dev}/include"
+    "--with-libedit-lib=${libedit}/lib"
+    "--with-berkeley-db-include=${db.dev}/include"
+    "--with-berkeley-db"
+
+    "--without-x"
+    "--disable-afs-string-to-key"
+  ] ++ lib.optionals (withCapNG) [
+    "--with-capng"
+  ] ++ lib.optionals (withCJSON) [
+    "--with-cjson=${cjson}"
+  ] ++ lib.optionals (withOpenLDAP) [
+    "--with-openldap=${openldap.dev}"
+  ] ++ lib.optionals (withOpenLDAPAsHDBModule) [
+    "--enable-hdb-openldap-module"
+  ] ++ lib.optionals (withSQLite3) [
+    "--with-sqlite3=${sqlite.dev}"
+  ];
+
+  # (check-ldap) slapd resides within ${openldap}/libexec,
+  #              which is not part of $PATH by default.
+  # (check-ldap) prepending ${openldap}/bin to the path to avoid
+  #              using the default installation of openldap on unsandboxed darwin systems,
+  #              which does not support the new mdb backend at the moment (2024-01-13).
+  # (check-ldap) the bdb backend got deprecated in favour of mdb in openldap 2.5.0,
+  #              but the heimdal tests still seem to expect bdb as the openldap backend.
+  #              This might be fixed upstream in a future update.
+  patchPhase = ''
+    runHook prePatch
+
+    substituteInPlace tests/ldap/slapd-init.in \
+      --replace 'SCHEMA_PATHS="' 'SCHEMA_PATHS="${openldap}/etc/schema '
+    substituteInPlace tests/ldap/check-ldap.in \
+      --replace 'PATH=' 'PATH=${openldap}/libexec:${openldap}/bin:'
+    substituteInPlace tests/ldap/slapd.conf \
+      --replace 'database	bdb' 'database mdb'
+
+    runHook postPatch
   '';
 
-  installPhase = optionalString libOnly ''
-    (cd include; make -j $NIX_BUILD_CORES install)
-    (cd lib; make -j $NIX_BUILD_CORES install)
-    (cd tools; make -j $NIX_BUILD_CORES install)
-    (cd include/hcrypto; make -j $NIX_BUILD_CORES install)
-    (cd lib/hcrypto; make -j $NIX_BUILD_CORES install)
-    rm -rf $out/{libexec,sbin,share}
-    find $out/bin -type f | grep -v 'krb5-config' | xargs rm
+  # (test_cc) heimdal uses librokens implementation of `secure_getenv` on darwin,
+  #           which expects either USER or LOGNAME to be set.
+  preCheck = lib.optionalString (stdenv.isDarwin) ''
+    export USER=nix-builder
   '';
 
   # We need to build hcrypt for applications like samba
@@ -72,9 +146,15 @@ stdenv.mkDerivation rec {
     (cd include/hcrypto; make -j $NIX_BUILD_CORES install)
     (cd lib/hcrypto; make -j $NIX_BUILD_CORES install)
 
-    # Doesn't succeed with --libexec=$out/sbin, so
-    mv "$out/libexec/"* $out/sbin/
-    rmdir $out/libexec
+    mkdir -p $dev/bin
+    mv $out/bin/krb5-config $dev/bin/
+
+    # asn1 compilers, move them to $dev
+    mv $out/libexec/heimdal/* $dev/bin
+    rmdir $out/libexec/heimdal
+
+    # compile_et is needed for cross-compiling this package and samba
+    mv lib/com_err/.libs/compile_et $dev/bin
   '';
 
   # Issues with hydra
@@ -82,12 +162,17 @@ stdenv.mkDerivation rec {
   #  hx_locl.h:67:25: fatal error: pkcs10_asn1.h: No such file or directory
   #enableParallelBuilding = true;
 
-  meta = {
-    description = "An implementation of Kerberos 5 (and some more stuff)";
-    license = licenses.bsd3;
-    platforms = platforms.linux ++ platforms.freebsd;
-    maintainers = with maintainers; [ wkennington ];
+  passthru = {
+    implementation = "heimdal";
+    tests.nixos = nixosTests.kerberos.heimdal;
   };
 
-  passthru.implementation = "heimdal";
+  meta = with lib; {
+    homepage = "https://www.heimdal.software";
+    changelog = "https://github.com/heimdal/heimdal/releases";
+    description = "An implementation of Kerberos 5 (and some more stuff)";
+    license = licenses.bsd3;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ h7x4 ];
+  };
 }

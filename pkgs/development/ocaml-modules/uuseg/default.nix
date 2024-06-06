@@ -1,45 +1,49 @@
-{ stdenv, buildOcaml, fetchurl, ocaml, findlib, ocamlbuild, opam, uucp, uutf, cmdliner }:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uucp, uutf, cmdliner
+, version ? if lib.versionAtLeast ocaml.version "4.14" then "15.1.0" else "15.0.0"
+, cmdlinerSupport ? lib.versionAtLeast cmdliner.version "1.1"
+}:
 
 let
   pname = "uuseg";
-  webpage = "http://erratique.ch/software/${pname}";
+  webpage = "https://erratique.ch/software/${pname}";
 in
 
-buildOcaml rec {
+stdenv.mkDerivation rec {
 
-  minimumSupportedOcamlVersion = "4.01";
-
-  name = pname;
-  version = "0.9.0";
+  name = "ocaml${ocaml.version}-${pname}-${version}";
+  inherit version;
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "00n4zi8dyw2yzi4nr2agcrr33b0q4dr9mgnkczipf4c0gm5cm50h";
+    hash = {
+      "15.1.0" = "sha256-IPI3Wd51HzX4n+uGcgc04us29jMjnKbGgVEAdp0CVMU=";
+      "15.0.0" = "sha256-q8x3bia1QaKpzrWFxUmLWIraKqby7TuPNGvbSjkY4eM=";
+    }."${version}";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam cmdliner ];
-  propagatedBuildInputs = [ uucp uutf ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [  topkg uutf ]
+  ++ lib.optional cmdlinerSupport cmdliner;
+  propagatedBuildInputs = [ uucp ];
 
-  createFindlibDestdir = true;
-
-  unpackCmd = "tar xjf $src";
+  strictDeps = true;
 
   buildPhase = ''
-    ocaml pkg/build.ml \
-      native=true native-dynlink=true \
-      uutf=true cmdliner=true
+    runHook preBuild
+    ${topkg.run} build \
+      --with-uutf true \
+      --with-cmdliner ${lib.boolToString cmdlinerSupport}
+    runHook postBuild
   '';
 
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install | sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${ocaml.version}/site-lib/${pname}
-  '';
+  inherit (topkg) installPhase;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An OCaml library for segmenting Unicode text";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = webpage;
     license = licenses.bsd3;
     maintainers = [ maintainers.vbgl ];
+    mainProgram = "usegtrip";
+    inherit (ocaml.meta) platforms;
   };
 }

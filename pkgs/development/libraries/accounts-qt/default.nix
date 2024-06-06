@@ -1,28 +1,35 @@
-{ stdenv, fetchFromGitLab, doxygen, glib, libaccounts-glib, pkgconfig, qtbase, qmakeHook }:
+{ stdenv, lib, fetchFromGitLab, gitUpdater, doxygen, glib, libaccounts-glib, pkg-config, qmake, qtbase, wrapQtAppsHook }:
 
-stdenv.mkDerivation rec {
-  name = "accounts-qt-${version}";
-  version = "1.13";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "accounts-qt";
+  version = "1.17";
 
+  # pinned to fork with Qt6 support
   src = fetchFromGitLab {
-    sha256 = "1gpkgw05dwsf2wk5cy3skgss3kw6mqh7iv3fadrxqxfc1za1xmyl";
-    rev = version;
-    repo = "libaccounts-qt";
     owner = "accounts-sso";
+    repo = "libaccounts-qt";
+    rev = "refs/tags/VERSION_${finalAttrs.version}";
+    hash = "sha256-mPZgD4r7vlUP6wklvZVknGqTXZBckSOtNzK7p6e2qSA=";
   };
 
-  buildInputs = [ glib libaccounts-glib qtbase ];
-  nativeBuildInputs = [ doxygen pkgconfig qmakeHook ];
+  propagatedBuildInputs = [ glib libaccounts-glib ];
+  buildInputs = [ qtbase ];
+  nativeBuildInputs = [ doxygen pkg-config qmake wrapQtAppsHook ];
 
-  preConfigure = ''
-    qmakeFlags="$qmakeFlags LIBDIR=$out/lib CMAKE_CONFIG_PATH=$out/lib/cmake"
+  # remove forbidden references to /build
+  preFixup = ''
+    patchelf --shrink-rpath --allowed-rpath-prefixes "$NIX_STORE" "$out"/bin/*
   '';
 
-  meta = with stdenv.lib; {
-    description = "Qt library for accessing the online accounts database";
-    homepage = "http://code.google.com/p/accounts-sso/";
-    license = licenses.lgpl21;
-    maintainers = with maintainers; [ nckx ];
-    platforms = with platforms; linux;
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "VERSION_";
   };
-}
+
+  meta = with lib; {
+    description = "Qt library for accessing the online accounts database";
+    mainProgram = "accountstest";
+    homepage = "https://gitlab.com/accounts-sso/libaccounts-qt";
+    license = licenses.lgpl21;
+    platforms = platforms.linux;
+  };
+})

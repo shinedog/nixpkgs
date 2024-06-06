@@ -1,46 +1,59 @@
-{stdenv, libiconv, fetchurl, zlib, openssl, tcl, readline, sqlite, ed, which
-, tcllib, withJson ? true}:
+{ lib, stdenv
+, installShellFiles
+, tcl
+, libiconv
+, fetchurl
+, buildPackages
+, zlib
+, openssl
+, readline
+, withInternalSqlite ? true
+, sqlite
+, ed
+, which
+, tcllib
+, withJson ? true
+}:
 
-stdenv.mkDerivation rec {
-  name = "fossil-1.36";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "fossil";
+  version = "2.23";
 
   src = fetchurl {
-    urls = 
-      [
-        https://fossil-scm.org/index.html/uv/download/fossil-src-1.36.tar.gz
-      ];
-    name = "${name}.tar.gz";
-    sha256 = "04px1mnq5dlc6gaihxj5nj6k7ac43wfryzifaairjh74qmgc6xi6";
+    url = "https://www.fossil-scm.org/home/tarball/version-${finalAttrs.version}/fossil-${finalAttrs.version}.tar.gz";
+    hash = "sha256-dfgI6BNRAYqXFnRtnvGh/huxkEcz6LQYZDiB04GYhZM=";
   };
 
-  buildInputs = [ zlib openssl readline sqlite which ed ]
-             ++ stdenv.lib.optional stdenv.isDarwin libiconv;
-  nativeBuildInputs = [ tcl ];
+  # required for build time tool `./tools/translate.c`
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
 
-  doCheck = true;
+  nativeBuildInputs = [ installShellFiles tcl tcllib ];
 
-  checkTarget = "test";
+  buildInputs = [ zlib openssl readline which ed ]
+    ++ lib.optional stdenv.isDarwin libiconv
+    ++ lib.optional (!withInternalSqlite) sqlite;
 
-  preCheck = ''
-    export TCLLIBPATH="${tcllib}/lib/tcllib${tcllib.version}"
-  '';
-  configureFlags = if withJson then  "--json" else  "";
+  enableParallelBuilding = true;
 
-  preBuild=''
+  doCheck = stdenv.hostPlatform == stdenv.buildPlatform;
+
+  configureFlags =
+    lib.optional (!withInternalSqlite) "--disable-internal-sqlite"
+    ++ lib.optional withJson "--json";
+
+  preBuild = ''
     export USER=nonexistent-but-specified-user
   '';
 
   installPhase = ''
     mkdir -p $out/bin
     INSTALLDIR=$out/bin make install
+
+    installManPage fossil.1
+    installShellCompletion --name fossil.bash tools/fossil-autocomplete.bash
   '';
 
-  crossAttrs = {
-    doCheck = false;
-    makeFlagsArray = [ "TCC=${stdenv.cross.config}-gcc" ];
-  };
-
-  meta = {
+  meta = with lib; {
     description = "Simple, high-reliability, distributed software configuration management";
     longDescription = ''
       Fossil is a software configuration management system.  Fossil is
@@ -49,12 +62,10 @@ stdenv.mkDerivation rec {
       many such systems in use today. Fossil strives to distinguish itself
       from the others by being extremely simple to setup and operate.
     '';
-    homepage = http://www.fossil-scm.org/;
-    license = stdenv.lib.licenses.bsd2;
-    platforms = with stdenv.lib.platforms; all;
-    maintainers = [ #Add your name here!
-      stdenv.lib.maintainers.z77z
-      stdenv.lib.maintainers.viric
-    ];
+    homepage = "https://www.fossil-scm.org/";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ maggesi viric ];
+    platforms = platforms.all;
+    mainProgram = "fossil";
   };
-}
+})

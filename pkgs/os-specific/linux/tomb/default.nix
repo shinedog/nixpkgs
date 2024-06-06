@@ -1,41 +1,79 @@
-{ stdenv, fetchurl, zsh, pinentry, cryptsetup, gnupg1orig, makeWrapper }:
+{ stdenvNoCC
+, lib
+, fetchFromGitHub
+, substituteAll
+, makeWrapper
+, zsh
+, coreutils
+, cryptsetup
+, e2fsprogs
+, file
+, gawk
+, getent
+, gettext
+, gnugrep
+, gnupg
+, libargon2
+, lsof
+, pinentry
+, util-linux
+, nix-update-script
+}:
 
-let
-    version = "2.2";
-in
+stdenvNoCC.mkDerivation rec {
+  pname = "tomb";
+  version = "2.10";
 
-stdenv.mkDerivation rec {
-  name = "tomb-${version}";
-
-  src = fetchurl {
-    url = "https://files.dyne.org/tomb/tomb-${version}.tar.gz";
-    sha256 = "11msj38fdmymiqcmwq1883kjqi5zr01ybdjj58rfjjrw4zw2w5y0";
+  src = fetchFromGitHub {
+    owner = "dyne";
+    repo = "Tomb";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-lLxQJX0P6b6lbXEcrq45EsX9iKiayZ9XkhqgMfpN3/w=";
   };
 
-  buildInputs = [ makeWrapper ];
+  buildInputs = [ zsh pinentry ];
 
-  buildPhase = ''
-    # manually patch the interpreter
-    sed -i -e "1s|.*|#!${zsh}/bin/zsh|g" tomb
+  nativeBuildInputs = [ makeWrapper ];
+
+  postPatch = ''
+    # if not, it shows .tomb-wrapped when running
+    substituteInPlace tomb \
+      --replace-fail 'TOMBEXEC=$0' 'TOMBEXEC=tomb'
   '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/share/man/man1
-
-    cp tomb $out/bin/tomb
-    cp doc/tomb.1 $out/share/man/man1
+    install -Dm755 tomb $out/bin/tomb
+    install -Dm644 doc/tomb.1 $out/share/man/man1/tomb.1
 
     wrapProgram $out/bin/tomb \
-        --prefix PATH : "${pinentry}/bin" \
-        --prefix PATH : "${cryptsetup}/bin" \
-        --prefix PATH : "${gnupg1orig}/bin"
+      --prefix PATH : $out/bin:${lib.makeBinPath [
+          coreutils
+          cryptsetup
+          e2fsprogs
+          file
+          gawk
+          getent
+          gettext
+          gnugrep
+          gnupg
+          libargon2
+          lsof
+          pinentry
+          util-linux
+        ]}
   '';
 
-  meta = {
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "File encryption on GNU/Linux";
-    homepage = https://www.dyne.org/software/tomb/;
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.dyne.org/software/tomb/";
+    changelog = "https://github.com/dyne/Tomb/blob/v${version}/ChangeLog.md";
+    license = licenses.gpl3Only;
+    mainProgram = "tomb";
+    maintainers = with maintainers; [ peterhoeg anthonyroussel ];
+    platforms = platforms.linux;
   };
 }

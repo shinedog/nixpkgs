@@ -1,32 +1,48 @@
-{ stdenv, fetchFromGitHub, cmake }:
-
-stdenv.mkDerivation rec {
-  name = "nlohmann_json-${version}";
-  version = "2.0.7";
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+}:
+let
+  testData = fetchFromGitHub {
+    owner = "nlohmann";
+    repo = "json_test_data";
+    rev = "v3.1.0";
+    hash = "sha256-bG34W63ew7haLnC82A3lS7bviPDnApLipaBjJAjLcVk=";
+  };
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "nlohmann_json";
+  version = "3.11.3";
 
   src = fetchFromGitHub {
     owner = "nlohmann";
     repo = "json";
-    rev = "v${version}";
-    sha256 = "03jklvlcsms09p79qz9piqrdy2vhn4rkwidwfgq6cpxm6anqyqjh";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-7F0Jon+1oWL7uqet5i1IgHX0fUw/+z0QwEcA3zs5xHg=";
   };
 
   nativeBuildInputs = [ cmake ];
 
-  doCheck = true;
-  checkTarget = "test";
+  cmakeFlags = [
+    "-DJSON_BuildTests=${if finalAttrs.finalPackage.doCheck then "ON" else "OFF"}"
+    "-DJSON_FastTests=ON"
+    "-DJSON_MultipleHeaders=ON"
+  ] ++ lib.optional finalAttrs.finalPackage.doCheck "-DJSON_TestDataDirectory=${testData}";
 
-  crossAttrs = {
-    cmakeFlags = "-DBuildTests=OFF";
-    doCheck = false;
-  } // stdenv.lib.optionalAttrs (stdenv.cross.libc == "msvcrt") {
-    cmakeFlags = "-DBuildTests=OFF -DCMAKE_SYSTEM_NAME=Windows";
-  };
+  doCheck = stdenv.hostPlatform == stdenv.buildPlatform;
 
-  meta = with stdenv.lib; {
-    description = "Header only C++ library for the JSON file format";
-    homepage = https://github.com/nlohmann/json;
+  # skip tests that require git or modify “installed files”
+  preCheck = ''
+    checkFlagsArray+=("ARGS=-LE 'not_reproducible|git_required'")
+  '';
+
+  postInstall = "rm -rf $out/lib64";
+
+  meta = with lib; {
+    description = "JSON for Modern C++";
+    homepage = "https://json.nlohmann.me";
+    changelog = "https://github.com/nlohmann/json/blob/develop/ChangeLog.md";
     license = licenses.mit;
     platforms = platforms.all;
   };
-}
+})

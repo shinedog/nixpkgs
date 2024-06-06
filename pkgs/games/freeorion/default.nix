@@ -1,41 +1,87 @@
-{ stdenv, fetchurl, cmake, boost, SDL2, python2, freetype, openal, libogg, libvorbis, zlib, libpng, libtiff, libjpeg, mesa, glew, doxygen
-, libxslt, makeWrapper }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, doxygen
+, graphviz
+, makeWrapper
+, boost179
+, SDL2
+, python3
+, freetype
+, openal
+, libogg
+, libvorbis
+, zlib
+, libpng
+, libtiff
+, libjpeg
+, libGLU
+, libGL
+, glew
+, libxslt
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.4.5";
-  name = "freeorion-${version}";
+  pname = "freeorion";
+  version = "0.5.0.1";
 
-  src = fetchurl {
-    url = "https://github.com/freeorion/freeorion/releases/download/v0.4.5/FreeOrion_v0.4.5_2015-09-01.f203162_Source.tar.gz";
-    sha256 = "3b99b92eeac72bd059566dbabfab54368989ba83f72e769bc94eb8dd4fe414c0";
+  src = fetchFromGitHub {
+    owner = "freeorion";
+    repo = "freeorion";
+    rev = "v${version}";
+    sha256 = "sha256-VvTq6TcLc5BMvRTjVsZ2HA9ug3WAqFuTHIoFQ/9/zWc=";
   };
 
-  buildInputs = [ cmake boost SDL2 python2 freetype openal libogg libvorbis zlib libpng libtiff libjpeg mesa glew doxygen makeWrapper ];
+  buildInputs = [
+    (boost179.override { enablePython = true; python = python3; })
+    (python3.withPackages (p: with p; [ pycodestyle ]))
+    SDL2
+    freetype
+    glew
+    libGL
+    libGLU
+    libjpeg
+    libogg
+    libpng
+    libtiff
+    libvorbis
+    openal
+    zlib
+  ];
 
-  # cherry pick for acceptable performance https://github.com/freeorion/freeorion/commit/92455f97c28055e296718230d2e3744eccd738ec
-  patches = [ ./92455f9.patch ];
+  nativeBuildInputs = [
+    cmake
+    doxygen
+    graphviz
+    makeWrapper
+  ];
 
-  enableParallelBuilding = true;
+  # as of 0.5.0.1 FreeOrion doesn't work with "-DOpenGL_GL_PREFERENCE=GLVND"
+  cmakeFlags = [ "-DOpenGL_GL_PREFERENCE=LEGACY" ];
 
   postInstall = ''
-    mkdir -p $out/fixpaths
+    mkdir -p $out/libexec
     # We need final slashes for XSLT replace to work properly
-    substitute ${./fix-paths.xslt} $out/fixpaths/fix-paths.xslt \
+    substitute ${./fix-paths.xslt} $out/share/freeorion/fix-paths.xslt \
       --subst-var-by nixStore "$NIX_STORE/" \
       --subst-var-by out "$out/"
-    substitute ${./fix-paths.sh} $out/fixpaths/fix-paths \
+    substitute ${./fix-paths.sh} $out/libexec/fix-paths \
       --subst-var-by libxsltBin ${libxslt.bin} \
+      --subst-var-by shell ${stdenv.shell} \
       --subst-var out
-    chmod +x $out/fixpaths/fix-paths
+    chmod +x $out/libexec/fix-paths
 
     wrapProgram $out/bin/freeorion \
-      --run $out/fixpaths/fix-paths
+      --run $out/libexec/fix-paths \
+      --prefix LD_LIBRARY_PATH : $out/lib/freeorion
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A free, open source, turn-based space empire and galactic conquest (4X) computer game";
-    homepage = "http://www.freeorion.org";
-    license = [ licenses.gpl2 licenses.cc-by-sa-30 ];
+    homepage = "https://www.freeorion.org/";
+    license = with licenses; [ gpl2 cc-by-sa-30 ];
     platforms = platforms.linux;
+    maintainers = with maintainers; [ tex ];
   };
 }

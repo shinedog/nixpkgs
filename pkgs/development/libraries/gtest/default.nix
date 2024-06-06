@@ -1,34 +1,46 @@
-{ stdenv, cmake, callPackage }:
-let
-  source = callPackage ./source.nix { };
-in
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, ninja
+, static ? stdenv.hostPlatform.isStatic,
+}:
+
 stdenv.mkDerivation rec {
-  name = "gtest-${source.version}";
+  pname = "gtest";
+  version = "1.14.0";
 
-  src = source;
+  outputs = [ "out" "dev" ];
 
-  buildInputs = [ cmake ];
-
-  configurePhase = ''
-    mkdir build
-    cd build
-    cmake ../ -DCMAKE_INSTALL_PREFIX=$out
-  '';
-
-  installPhase = ''
-    mkdir -p $out/lib
-    cp -v libgtest.a libgtest_main.a $out/lib
-    cp -v -r ../include $out
-    cp -v -r ../src $out
-  '';
-
-  meta = with stdenv.lib; {
-    description = "Google's framework for writing C++ tests";
-    homepage = https://code.google.com/p/googletest/;
-    license = licenses.bsd3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ zoomulator ];
+  src = fetchFromGitHub {
+    owner = "google";
+    repo = "googletest";
+    rev = "v${version}";
+    hash = "sha256-t0RchAHTJbuI5YW4uyBPykTvcjy90JW9AOPNjIhwh6U=";
   };
 
-  passthru = { inherit source; };
+  patches = [
+    ./fix-cmake-config-includedir.patch
+  ];
+
+  nativeBuildInputs = [ cmake ninja ];
+
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=${if static then "OFF" else "ON"}"
+  ] ++ lib.optionals (
+    (stdenv.cc.isGNU && (lib.versionOlder stdenv.cc.version "11.0"))
+    || (stdenv.cc.isClang && (lib.versionOlder stdenv.cc.version "16.0"))
+  ) [
+    # Enable C++17 support
+    # https://github.com/google/googletest/issues/3081
+    "-DCMAKE_CXX_STANDARD=17"
+  ];
+
+  meta = with lib; {
+    description = "Google's framework for writing C++ tests";
+    homepage = "https://github.com/google/googletest";
+    license = licenses.bsd3;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ ivan-tkatchev ];
+  };
 }

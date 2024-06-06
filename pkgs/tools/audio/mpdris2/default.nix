@@ -1,26 +1,55 @@
-{ stdenv, fetchurl, autoreconfHook, intltool
-, pythonPackages
+{ lib
+, autoreconfHook
+, fetchFromGitHub
+, glib
+, gobject-introspection
+, intltool
+, libnotify
+, python3
+, wrapGAppsHook3
 }:
 
-stdenv.mkDerivation rec {
-  name = "mpDris2";
-  version = "0.6";
+python3.pkgs.buildPythonApplication rec {
+  pname = "mpDris2";
+  version = "0.9.1";
+  format = "other";
 
-  src = fetchurl {
-    url = "https://github.com/eonpatapon/${name}/archive/${version}.tar.gz";
-    sha256 = "0zdmamj2ldhr6y3s464w8y2x3yizda784jnlrg3j3myfabssisvz";
+  src = fetchFromGitHub {
+    owner = "eonpatapon";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-1Y6K3z8afUXeKhZzeiaEF3yqU0Ef7qdAj9vAkRlD2p8=";
   };
 
-  buildInputs = [ intltool autoreconfHook pythonPackages.wrapPython ];
-  propagatedBuildInputs = with pythonPackages; [ python pygtk dbus-python ];
-  pythonPath = with pythonPackages; [ mpd pygtk dbus-python notify ];
-  postInstall = "wrapPythonPrograms";
+  preConfigure = ''
+    intltoolize -f
+  '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    autoreconfHook
+    gobject-introspection
+    intltool
+    wrapGAppsHook3
+  ];
+
+  buildInputs = [
+    glib
+    libnotify
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    dbus-python
+    mpd2
+    mutagen
+    pygobject3
+  ];
+
+  meta = with lib; {
     description = "MPRIS 2 support for mpd";
-    homepage = https://github.com/eonpatapon/mpDris2/;
+    homepage = "https://github.com/eonpatapon/mpDris2/";
     license = licenses.gpl3;
+    maintainers = with maintainers; [ ];
     platforms = platforms.unix;
-    maintainers = with maintainers; [ pjones ];
+    mainProgram = "mpDris2";
   };
 }

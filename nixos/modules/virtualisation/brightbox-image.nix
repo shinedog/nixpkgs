@@ -26,16 +26,16 @@ in
               rm $diskImageBase
               popd
             '';
-          diskImageBase = "nixos-image-${config.system.nixosLabel}-${pkgs.stdenv.system}.raw";
-          buildInputs = [ pkgs.utillinux pkgs.perl ];
+          diskImageBase = "nixos-image-${config.system.nixos.label}-${pkgs.stdenv.hostPlatform.system}.raw";
+          buildInputs = [ pkgs.util-linux pkgs.perl ];
           exportReferencesGraph =
             [ "closure" config.system.build.toplevel ];
         }
         ''
           # Create partition table
-          ${pkgs.parted}/sbin/parted /dev/vda mklabel msdos
-          ${pkgs.parted}/sbin/parted /dev/vda mkpart primary ext4 1 ${diskSize}
-          ${pkgs.parted}/sbin/parted /dev/vda print
+          ${pkgs.parted}/sbin/parted --script /dev/vda mklabel msdos
+          ${pkgs.parted}/sbin/parted --script /dev/vda mkpart primary ext4 1 ${diskSize}
+          ${pkgs.parted}/sbin/parted --script /dev/vda print
           . /sys/class/block/vda1/uevent
           mknod /dev/vda1 b $MAJOR $MINOR
 
@@ -103,7 +103,7 @@ in
   # Allow root logins only using the SSH key that the user specified
   # at instance creation time.
   services.openssh.enable = true;
-  services.openssh.permitRootLogin = "prohibit-password";
+  services.openssh.settings.PermitRootLogin = "prohibit-password";
 
   # Force getting the hostname from Google Compute.
   networking.hostName = mkDefault "";
@@ -111,7 +111,7 @@ in
   # Always include cryptsetup so that NixOps can use it.
   environment.systemPackages = [ pkgs.cryptsetup ];
 
-  systemd.services."fetch-ec2-data" =
+  systemd.services.fetch-ec2-data =
     { description = "Fetch EC2 Data";
 
       wantedBy = [ "multi-user.target" "sshd.service" ];
@@ -119,7 +119,7 @@ in
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
 
-      path = [ pkgs.wget pkgs.iproute ];
+      path = [ pkgs.wget pkgs.iproute2 ];
 
       script =
         ''

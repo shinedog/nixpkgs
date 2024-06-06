@@ -1,34 +1,35 @@
-{ stdenv, fetchurl, trousers, openssl, zlib }:
+{ lib, stdenv, fetchurl, openssl, perl, trousers, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "tboot-1.8.2";
+  pname = "tboot";
+  version = "1.11.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/tboot/${name}.tar.gz";
-    sha256 = "1l9ccm7ik9fs7kzg1bjc5cjh0pcf4v0k1c84dmyr51r084i7p31m";
+    url = "mirror://sourceforge/tboot/${pname}-${version}.tar.gz";
+    sha256 = "sha256-faTdvjjTFXZEoHeVQ1HMTfU+215yruiliFQcQbc/1VA=";
   };
 
-  buildInputs = [ trousers openssl zlib ];
+  buildInputs = [ openssl trousers zlib ];
 
-  patches = [ ./tboot-add-well-known-secret-option-to-lcp_writepol.patch ];
+  enableParallelBuilding = true;
 
-  hardeningDisable = [ "pic" "stackprotector" ];
+  preConfigure = ''
+    substituteInPlace tboot/Makefile --replace /usr/bin/perl ${perl}/bin/perl
 
-  configurePhase = ''
-    for a in lcptools utils tb_polgen; do
-      substituteInPlace $a/Makefile --replace /usr/sbin /sbin
+    for a in lcptools-v2 tb_polgen utils; do
+      substituteInPlace "$a/Makefile" --replace /usr/sbin /sbin
     done
     substituteInPlace docs/Makefile --replace /usr/share /share
   '';
 
-  installFlags = "DESTDIR=$(out)";
+  installFlags = [ "DESTDIR=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A pre-kernel/VMM module that uses Intel(R) TXT to perform a measured and verified launch of an OS kernel/VMM";
-    homepage    = http://sourceforge.net/projects/tboot/;
+    homepage    = "https://sourceforge.net/projects/tboot/";
+    changelog   = "https://sourceforge.net/p/tboot/code/ci/v${version}/tree/CHANGELOG";
     license     = licenses.bsd3;
-    maintainers = [ maintainers.ak ];
-    platforms   = platforms.linux;
+    maintainers = with maintainers; [ ak ];
+    platforms   = [ "x86_64-linux" "i686-linux" ];
   };
 }
-

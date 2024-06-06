@@ -1,30 +1,30 @@
-{stdenv, fetchgit}:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "open-dyslexic-${version}";
-  version = "2014-11-11";
+let version = "0.91.12"; in
+stdenvNoCC.mkDerivation {
+  pname = "open-dyslexic";
+  inherit version;
 
-  src = fetchgit {
-    url = "https://github.com/antijingoist/open-dyslexic.git";
-    rev = "f4b5ba89018b44d633608907e15f93fb3fabbabc";
-    sha256 = "04pa7c2cary6pqxsmxqrg7wi19szg7xh8panmvqvmc7jas0mzg6q";
+  src = fetchFromGitHub {
+    owner = "antijingoist";
+    repo = "opendyslexic";
+    rev = "v${version}";
+    hash = "sha256-a8hh8NGt5djj9EC7ChO3SnnjuYMOryzbHWTK4gC/vIw=";
   };
 
-  phases = ["unpackPhase" "installPhase"];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    cp -v 'otf/'*.otf $out/share/fonts/opentype
+    runHook preInstall
 
-    mkdir -p $out/share/doc/open-dyslexic
-    cp -v README.md $out/share/doc/open-dyslexic
+    install -Dm644 compiled/*.otf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://opendyslexic.org/;
+  meta = with lib; {
+    homepage = "https://opendyslexic.org/";
     description = "Font created to increase readability for readers with dyslexia";
-    license = "Bitstream Vera License (http://www.gnome.org/fonts/#Final_Bitstream_Vera_Fonts)";
+    license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

@@ -1,22 +1,27 @@
-{ stdenv, fetchurl, cmake }:
+{ lib, stdenv, fetchFromGitHub, cmake }:
 
 stdenv.mkDerivation rec {
-  version = "0.8.3";
-  name = "tini-${version}";
-  src = fetchurl {
-    url = "https://github.com/krallin/tini/archive/v0.8.3.tar.gz";
-    sha256 ="1w7rj4crrcyv25idmh4asbp2sxzwyihy5mbpw384bzxjzaxn9xpa";
+  version = "0.19.0";
+  pname = "tini";
+
+  src = fetchFromGitHub {
+    owner = "krallin";
+    repo = "tini";
+    rev = "v${version}";
+    sha256 ="1hnnvjydg7gi5gx6nibjjdnfipblh84qcpajc08nvr44rkzswck4";
   };
-  patchPhase = "sed -i /tini-static/d CMakeLists.txt";
-  NIX_CFLAGS_COMPILE = [
-    "-DPR_SET_CHILD_SUBREAPER=36"
-    "-DPR_GET_CHILD_SUBREAPER=37"
-  ];
-  buildInputs = [ cmake ];
-  meta = with stdenv.lib; {
+
+  postPatch = "sed -i /tini-static/d CMakeLists.txt";
+
+  env.NIX_CFLAGS_COMPILE = "-DPR_SET_CHILD_SUBREAPER=36 -DPR_GET_CHILD_SUBREAPER=37";
+
+  nativeBuildInputs = [ cmake ];
+
+  meta = with lib; {
     description = "A tiny but valid init for containers";
-    homepage = https://github.com/krallin/tini;
+    homepage = "https://github.com/krallin/tini";
     license = licenses.mit;
     platforms = platforms.linux;
+    mainProgram = "tini";
   };
 }

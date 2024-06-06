@@ -1,21 +1,24 @@
-{ stdenv, fetchsvn, autoconf, automake, libsndfile, libtool, pkgconfig }:
+{ lib, stdenv, fetchurl, autoconf, automake, libsndfile, libtool, pkg-config, libuuid }:
 
 stdenv.mkDerivation rec {
-  name = "libgig-svn-${version}";
-  version = "2334";
+  pname = "libgig";
+  version = "4.4.1";
 
-  src = fetchsvn {
-    url = "https://svn.linuxsampler.org/svn/libgig/trunk";
-    rev = "${version}";
-    sha256 = "0i7sj3zm6banl5avjdxblx0mlbxxzbsbr4x5hsl2fhrdsv5dnxhc";
+  src = fetchurl {
+    url = "https://download.linuxsampler.org/packages/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-/cie+rH5BhKObFRymWdXfo0EYgFwGLwSVRJX313+OqQ=";
   };
 
-  buildInputs = [ autoconf automake libsndfile libtool pkgconfig ];
+  nativeBuildInputs = [ autoconf automake libtool pkg-config ];
 
-  preConfigure = "make -f Makefile.cvs";
+  buildInputs = [ libsndfile libuuid ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.linuxsampler.org;
+  preConfigure = "make -f Makefile.svn";
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "http://www.linuxsampler.org";
     description = "Gigasampler file access library";
     license = licenses.gpl2;
     maintainers = [ maintainers.goibhniu ];

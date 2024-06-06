@@ -1,41 +1,58 @@
-{stdenv, fetchurl,
-  libtool, libjpeg, openssl, libX11, libXdamage, xproto, damageproto, 
-  xextproto, libXext, fixesproto, libXfixes, xineramaproto, libXinerama, 
-  libXrandr, randrproto, libXtst, zlib
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, libjpeg
+, openssl
+, zlib
+, libgcrypt
+, libpng
+, withSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
+, systemd
+, Carbon
 }:
 
-assert stdenv.isLinux;
+stdenv.mkDerivation rec {
+  pname = "libvncserver";
+  version = "0.9.14";
 
-let
-  s = # Generated upstream information
-  rec {
-    baseName="libvncserver";
-    version="0.9.9";
-    name="${baseName}-${version}";
-    hash="1y83z31wbjivbxs60kj8a8mmjmdkgxlvr2x15yz95yy24lshs1ng";
-    url="mirror://sourceforge/project/libvncserver/libvncserver/0.9.9/LibVNCServer-0.9.9.tar.gz";
-    sha256="1y83z31wbjivbxs60kj8a8mmjmdkgxlvr2x15yz95yy24lshs1ng";
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitHub {
+    owner = "LibVNC";
+    repo = "libvncserver";
+    rev = "LibVNCServer-${version}";
+    sha256 = "sha256-kqVZeCTp+Z6BtB6nzkwmtkJ4wtmjlSQBg05lD02cVvQ=";
   };
-  buildInputs = [
-    libtool libjpeg openssl libX11 libXdamage xproto damageproto
-    xextproto libXext fixesproto libXfixes xineramaproto libXinerama
-    libXrandr randrproto libXtst zlib
+
+  nativeBuildInputs = [
+    cmake
   ];
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
-  inherit buildInputs;
-  src = fetchurl {
-    inherit (s) url sha256;
-  };
-  preConfigure = ''
-    sed -e 's@/usr/include/linux@${stdenv.cc.libc}/include/linux@g' -i configure
-  '';
-  meta = {
-    inherit (s) version;
-    description =  "VNC server library";
-    license = stdenv.lib.licenses.gpl2Plus ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+
+  cmakeFlags = [
+    "-DWITH_SYSTEMD=${if withSystemd then "ON" else "OFF"}"
+  ];
+
+  buildInputs = [
+    libjpeg
+    openssl
+    libgcrypt
+    libpng
+  ] ++ lib.optionals withSystemd [
+    systemd
+  ] ++ lib.optionals stdenv.isDarwin [
+    Carbon
+  ];
+
+  propagatedBuildInputs = [
+    zlib
+  ];
+
+  meta = with lib; {
+    description = "VNC server library";
+    homepage = "https://libvnc.github.io/";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
   };
 }

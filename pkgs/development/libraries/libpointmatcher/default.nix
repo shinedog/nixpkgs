@@ -1,35 +1,31 @@
-{stdenv, fetchFromGitHub, cmake, eigen, boost, libnabo}:
+{ lib, stdenv, fetchFromGitHub, cmake, eigen, boost, libnabo, yaml-cpp }:
 
 stdenv.mkDerivation rec {
-  version = "2016-09-11";
-  name = "libpointmatcher-${version}";
+  pname = "libpointmatcher";
+  version = "1.4.2";
 
   src = fetchFromGitHub {
-    owner = "ethz-asl";
+    owner = "norlab-ulaval";
     repo = "libpointmatcher";
-    rev = "75044815d40ff934fe0bb7e05ed8bbf18c06493b";
-    sha256 = "1s7ilvg3lhr1fq8sxw05ydmbd3kl46496jnyxprhnpgvpmvqsbzl";
+    rev = version;
+    hash = "sha256-XXkvBxG9f8rW1O968+2R+gltMSRGqH225vOmzp6Tpb8=";
   };
 
-  buildInputs = [cmake eigen boost libnabo];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ eigen boost libnabo yaml-cpp ];
 
-  enableParallelBuilding = true;
+  cmakeFlags = [
+    (lib.cmakeFeature "EIGEN_INCLUDE_DIR" "${eigen}/include/eigen3")
+    (lib.cmakeBool "BUILD_TESTS" doCheck)
+  ];
 
-  cmakeFlags = "
-    -DEIGEN_INCLUDE_DIR=${eigen}/include/eigen3
-  ";
-
-  checkPhase = ''
-  export LD_LIBRARY_PATH=$PWD
-  ./utest/utest --path ../examples/data/
-  '';
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     inherit (src.meta) homepage;
     description = "An \"Iterative Closest Point\" library for 2-D/3-D mapping in robotic";
     license = licenses.bsd3;
-    platforms = [ "x86_64-linux" ];
+    platforms = platforms.linux;
     maintainers = with maintainers; [ cryptix ];
   };
 }

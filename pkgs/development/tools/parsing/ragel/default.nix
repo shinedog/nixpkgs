@@ -1,30 +1,55 @@
-{stdenv, fetchurl, transfig, tex , ghostscript, colm,  build-manual ? false
+{ lib, stdenv, fetchurl, fig2dev, texliveSmall, ghostscript, colm
+, build-manual ? false
 }:
 
-stdenv.mkDerivation rec {
-  name = "ragel-${version}";
-  version = "7.0.0.9";
+let
+  generic = { version, sha256, broken ? false, license }:
+    stdenv.mkDerivation rec {
+      pname = "ragel";
+      inherit version;
 
-  src = fetchurl {
-    url = "http://www.colm.net/files/ragel/${name}.tar.gz";
-    sha256 = "1w2jhfg3fxl15gcmm7z3jbi6splgc83mmwcfbp08lfc8sg2wmrmr";
+      src = fetchurl {
+        url = "https://www.colm.net/files/ragel/${pname}-${version}.tar.gz";
+        inherit sha256;
+      };
+
+      buildInputs = lib.optionals build-manual [ fig2dev ghostscript texliveSmall ];
+
+      preConfigure = lib.optionalString build-manual ''
+        sed -i "s/build_manual=no/build_manual=yes/g" DIST
+      '';
+
+      configureFlags = [ "--with-colm=${colm}" ];
+
+      env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isGNU "-std=gnu++98";
+
+      doCheck = true;
+
+      enableParallelBuilding = true;
+
+      meta = with lib; {
+        homepage = "https://www.colm.net/open-source/ragel/";
+        description = "State machine compiler";
+        mainProgram = "ragel";
+        inherit broken license;
+        platforms = platforms.unix;
+        maintainers = with maintainers; [ pSub ];
+      };
+    };
+
+in
+
+{
+  ragelStable = generic {
+    version = "6.10";
+    sha256 = "0gvcsl62gh6sg73nwaxav4a5ja23zcnyxncdcdnqa2yjcpdnw5az";
+    license = lib.licenses.gpl2;
   };
 
-  buildInputs = stdenv.lib.optional build-manual [ transfig ghostscript tex ];
-   
-  preConfigure = stdenv.lib.optional build-manual ''
-    sed -i "s/build_manual=no/build_manual=yes/g" DIST
-  '';
-
-  configureFlags = [ "--with-colm=${colm}" ];
-
-  doCheck = true;
-  
-  meta = with stdenv.lib; {
-    homepage = http://www.complang.org/ragel;
-    description = "State machine compiler";
-    license = licenses.gpl2;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ pSub ];
+  ragelDev = generic {
+    version = "7.0.0.12";
+    sha256 = "0x3si355lv6q051lgpg8bpclpiq5brpri5lv3p8kk2qhzfbyz69r";
+    license = lib.licenses.mit;
+    broken = stdenv.isDarwin;
   };
 }

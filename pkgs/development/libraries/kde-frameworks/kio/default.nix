@@ -1,21 +1,36 @@
-{ kdeFramework, lib, copyPathsToStore
-, ecm, acl, karchive
-, kbookmarks, kcompletion, kconfig, kconfigwidgets, kcoreaddons
-, kdbusaddons, kdoctools, ki18n, kiconthemes, kitemviews
-, kjobwidgets, knotifications, kservice, ktextwidgets, kwallet
-, kwidgetsaddons, kwindowsystem, kxmlgui
-, qtscript, qtx11extras, solid
+{
+  stdenv, lib, mkDerivation,
+  extra-cmake-modules, kdoctools, qttools,
+  acl, attr, libkrb5, util-linux,
+  karchive, kbookmarks, kcompletion, kconfig, kconfigwidgets, kcoreaddons,
+  kdbusaddons, ki18n, kiconthemes, kitemviews, kjobwidgets, knotifications,
+  kservice, ktextwidgets, kwallet, kwidgetsaddons, kwindowsystem, kxmlgui,
+  qtbase, qtscript, qtx11extras, solid, kcrash, kded,
 }:
 
-kdeFramework {
-  name = "kio";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm kdoctools ];
-  propagatedBuildInputs = [
-    acl karchive kbookmarks kcompletion kconfig kconfigwidgets kcoreaddons
-    kdbusaddons ki18n kiconthemes kitemviews kjobwidgets knotifications kservice
-    ktextwidgets kwallet kwidgetsaddons kwindowsystem kxmlgui solid qtscript
-    qtx11extras
+mkDerivation {
+  pname = "kio";
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
+  buildInputs = [
+    karchive kconfigwidgets kdbusaddons ki18n kiconthemes knotifications
+    ktextwidgets kwallet kwidgetsaddons kwindowsystem qtscript qtx11extras
+    kcrash libkrb5
+  ] ++ lib.lists.optionals stdenv.isLinux [
+    acl attr # both are needed for ACL support
+    util-linux # provides libmount
   ];
-  patches = copyPathsToStore (lib.readPathsFromFile ./. ./series);
+  propagatedBuildInputs = [
+    kbookmarks kcompletion kconfig kcoreaddons kitemviews kjobwidgets kservice
+    kxmlgui qtbase qttools solid
+  ] ++ lib.optionals stdenv.isLinux [
+    kded
+  ];
+  outputs = [ "out" "dev" ];
+  separateDebugInfo = true;
+  patches = [
+    ./0001-Remove-impure-smbd-search-path.patch
+  ];
+  meta = {
+    homepage = "https://api.kde.org/frameworks/kio/html/";
+  };
 }

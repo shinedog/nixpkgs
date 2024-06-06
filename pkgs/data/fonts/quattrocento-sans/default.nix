@@ -1,31 +1,29 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "quattrocento-sans-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "quattrocento-sans";
   version = "2.0";
 
-  src = fetchurl {
-    url = "http://www.impallari.com/media/releases/quattrocento-sans-v${version}.zip";
-    sha256 = "043jfdn18dgzpx3qb3s0hc541n6xv4gacsm4srd6f0pri45g4wh1";
+  src = fetchzip {
+    url = "https://web.archive.org/web/20170709124317/http://www.impallari.com/media/releases/quattrocento-sans-v${version}.zip";
+    stripRoot = false;
+    hash = "sha256-L3aFZmaA94B9APxsp8bSBpocIlK3Ehvj/RFXVcW2nso=";
   };
 
-  buildInputs = [unzip];
-  phases = ["unpackPhase" "installPhase"];
-
-  sourceRoot = "quattrocento-sans-v${version}";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    mkdir -p $out/share/doc/${name}
-    cp -v "src/"*.otf $out/share/fonts/opentype
-    cp -v FONTLOG.txt $out/share/doc/${name}
+    runHook preInstall
+
+    install -Dm644 */*/QuattrocentoSans*.otf -t $out/share/fonts/opentype
+    install -Dm644 */FONTLOG.txt             -t $out/share/doc/${pname}-${version}
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.impallari.com/quattrocentosans/;
+  meta = with lib; {
+    homepage = "http://www.impallari.com/quattrocentosans/";
     description = "A classic, elegant and sober sans-serif typeface";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

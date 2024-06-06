@@ -1,20 +1,21 @@
-{ stdenv, fetchurl, SDL2, ftgl, pkgconfig, libpng, libjpeg, pcre, SDL2_image, glew
-, mesa, boost, glm, freetype }:
+{ lib, stdenv, fetchurl, SDL2, ftgl, pkg-config, libpng, libjpeg, pcre, SDL2_image, glew
+, libGLU, libGL, boost, glm, freetype }:
 
 stdenv.mkDerivation rec {
-  name = "logstalgia-${version}";
-  version = "1.0.7";
+  pname = "logstalgia";
+  version = "1.1.2";
 
   src = fetchurl {
-    url = "https://github.com/acaudwell/Logstalgia/releases/download/${name}/${name}.tar.gz";
-    sha256 = "1qghz1j3jmfj093br2hfyibayg3fmhg8fvp5ix9n9rbvzc1zslsm";
+    url = "https://github.com/acaudwell/Logstalgia/releases/download/${pname}-${version}/${pname}-${version}.tar.gz";
+    sha256 = "1agwjlwzp1c86hqb1p7rmzqzhd3wpnyh8whsfq4sbx01wj0l0gzd";
   };
 
-  buildInputs = [ glew SDL2 ftgl pkgconfig libpng libjpeg pcre SDL2_image mesa boost
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ glew SDL2 ftgl libpng libjpeg pcre SDL2_image libGLU libGL boost
                   glm freetype ];
 
-  meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/logstalgia;
+  meta = with lib; {
+    homepage = "https://logstalgia.io/";
     description = "Website traffic visualization tool";
     license = licenses.gpl3Plus;
 
@@ -37,7 +38,8 @@ stdenv.mkDerivation rec {
       a Miscellaneous section.
     '';
 
-    platforms = platforms.gnu;
+    platforms = platforms.gnu ++ platforms.linux;
     maintainers = with maintainers; [ pSub ];
+    mainProgram = "logstalgia";
   };
 }

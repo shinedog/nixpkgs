@@ -11,15 +11,9 @@ in {
       description = "Enable unclutter to hide your mouse cursor when inactive";
       type = types.bool;
       default = false;
-      example = true;
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.unclutter;
-      defaultText = "pkgs.unclutter";
-      description = "unclutter derivation to use.";
-    };
+    package = mkPackageOption pkgs "unclutter" { };
 
     keystroke = mkOption {
       description = "Wait for a keystroke before hiding the cursor";
@@ -33,7 +27,7 @@ in {
       default = 1;
     };
 
-    threeshold = mkOption {
+    threshold = mkOption {
       description = "Minimum number of pixels considered cursor movement";
       type = types.int;
       default = 1;
@@ -57,18 +51,27 @@ in {
   config = mkIf cfg.enable {
     systemd.user.services.unclutter = {
       description = "unclutter";
-      wantedBy = [ "default.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
       serviceConfig.ExecStart = ''
         ${cfg.package}/bin/unclutter \
           -idle ${toString cfg.timeout} \
-          -display :${toString config.services.xserver.display} \
-          -jitter ${toString (cfg.threeshold - 1)} \
+          -jitter ${toString (cfg.threshold - 1)} \
           ${optionalString cfg.keystroke "-keystroke"} \
           ${concatMapStrings (x: " -"+x) cfg.extraOptions} \
           -not ${concatStringsSep " " cfg.excluded} \
       '';
+      serviceConfig.PassEnvironment = "DISPLAY";
       serviceConfig.RestartSec = 3;
       serviceConfig.Restart = "always";
     };
   };
+
+  imports = [
+    (mkRenamedOptionModule [ "services" "unclutter" "threeshold" ]
+                           [ "services"  "unclutter" "threshold" ])
+  ];
+
+  meta.maintainers = with lib.maintainers; [ rnhmjoj ];
+
 }

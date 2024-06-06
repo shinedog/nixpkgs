@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, options, lib, ... }:
 
 with lib;
 
@@ -11,6 +11,7 @@ with lib;
     services.mail = {
 
       sendmailSetuidWrapper = mkOption {
+        type = types.nullOr options.security.wrappers.type.nestedTypes.elemType;
         default = null;
         internal = true;
         description = ''
@@ -26,7 +27,7 @@ with lib;
 
   config = mkIf (config.services.mail.sendmailSetuidWrapper != null) {
 
-    security.setuidOwners = [ config.services.mail.sendmailSetuidWrapper ];
+    security.wrappers.sendmail = config.services.mail.sendmailSetuidWrapper;
 
   };
 

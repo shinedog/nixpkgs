@@ -1,20 +1,20 @@
-{ stdenv, fetchurl, cmake, pkgconfig }:
+{ lib, stdenv, fetchurl, cmake, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "resolv_wrapper-1.1.3";
+  pname = "resolv_wrapper";
+  version = "1.1.8";
 
   src = fetchurl {
-    url = "mirror://samba/cwrap/${name}.tar.gz";
-    sha256 = "1h76155pnmd3pqxfyi00q0fg6v45ad9dhnjsqcsbzg18s626wyad";
+    url = "mirror://samba/cwrap/resolv_wrapper-${version}.tar.gz";
+    sha256 = "sha256-+8MPd9o+EuzU72bM9at34LdEkwzNiQYkBAgvkoqOwuA=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A wrapper for the user, group and hosts NSS API";
-    homepage = "https://git.samba.org/?p=uid_wrapper.git;a=summary";
+    homepage = "https://git.samba.org/?p=uid_wrapper.git;a=summary;";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ wkennington ];
-    platforms = platforms.all;
+    platforms = platforms.linux;
   };
 }

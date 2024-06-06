@@ -1,39 +1,38 @@
-{ lib, stdenv, fetchurl, go }:
+{ lib, buildGoModule, fetchFromGitHub, nixosTests }:
 
-stdenv.mkDerivation rec {
-  name = "minio-client-${shortVersion}";
+buildGoModule rec {
+  pname = "minio-client";
+  version = "2024-06-01T15-03-35Z";
 
-  shortVersion = "20160821";
-  longVersion = "2016-08-21T03:02:49Z";
-
-  src = fetchurl {
-    url = "https://github.com/minio/mc/archive/RELEASE.${lib.replaceStrings [":"] ["-"] longVersion}.tar.gz";
-    sha256 = "1qnslwfspbvzawxrrym27agw79x8sgcafk7d0yakncjyg6vmdkka";
+  src = fetchFromGitHub {
+    owner = "minio";
+    repo = "mc";
+    rev = "RELEASE.${version}";
+    sha256 = "sha256-4BbqAGfHjM369EtZhFy01m3ClSnM1UHl/u+CXksY1+I=";
   };
 
-  buildInputs = [ go ];
+  vendorHash = "sha256-nM7q5Vg8VpsUo4/jt4sHK3UAMGxdDUq6TEBxurB9c/A=";
 
-  unpackPhase = ''
-    d=$TMPDIR/src/github.com/minio/mc
-    mkdir -p $d
-    tar xf $src -C $d --strip-component 1
-    export GOPATH=$TMPDIR
-    cd $d
+  subPackages = [ "." ];
+
+  patchPhase = ''
+    sed -i "s/Version.*/Version = \"${version}\"/g" cmd/build-constants.go
+    sed -i "s/ReleaseTag.*/ReleaseTag = \"RELEASE.${version}\"/g" cmd/build-constants.go
+    sed -i "s/CommitID.*/CommitID = \"${src.rev}\"/g" cmd/build-constants.go
   '';
 
-  buildPhase = ''
-    mkdir -p $out/bin
-    go build -o $out/bin/minio-client \
-      --ldflags "-X github.com/minio/mc/cmd.Version=${longVersion}"
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/mc --version | grep ${version} > /dev/null
   '';
 
-  installPhase = "ln -s minio-client $out/bin/mc";
+  passthru.tests.minio = nixosTests.minio;
 
-  meta = {
-    homepage = https://github.com/minio/mc;
+  meta = with lib; {
+    homepage = "https://github.com/minio/mc";
     description = "A replacement for ls, cp, mkdir, diff and rsync commands for filesystems and object storage";
-    maintainers = [ lib.maintainers.eelco ];
-    platforms = lib.platforms.linux;
-    license = lib.licenses.asl20;
+    maintainers = with maintainers; [ bachp eelco ];
+    mainProgram = "mc";
+    license = licenses.asl20;
   };
 }

@@ -1,43 +1,65 @@
-{ stdenv, fetchurl, flex, bison, ncurses, buddy, tecla, libsigsegv, gmpxx, makeWrapper }:
+{ lib, stdenv, fetchurl, unzip, makeWrapper, flex, bison, ncurses, buddy, tecla
+, libsigsegv, gmpxx, cln, yices
+# passthru.tests
+, tamarin-prover
+}:
 
-stdenv.mkDerivation rec {
-  name = "maude-2.6";
+let
+  version = "3.3.1";
+in
+
+stdenv.mkDerivation {
+  pname = "maude";
+  inherit version;
 
   src = fetchurl {
-    url = "http://maude.cs.uiuc.edu/download/current/Maude-2.6.tar.gz";
-    sha256 = "182abzhvjvlaa21aqv7802v3bs57a4dm7cw09s3mqmih7nzpkfm5";
+    url = "https://github.com/SRI-CSL/Maude/archive/refs/tags/Maude${version}.tar.gz";
+    sha256 = "ueM8qi3fLogWT8bA+ZyBnd9Zr9oOKuoiu2YpG6o5J1E=";
   };
 
-  fullMaude = fetchurl {
-    url = "https://full-maude.googlecode.com/git/full-maude261h.maude";
-    sha256 = "0xx8bfn6arsa75m5vhp5lmpazgfw230ssq33h9vifswlvzzc81ha";
-  };
-
-  buildInputs = [flex bison ncurses buddy tecla gmpxx libsigsegv makeWrapper];
+  nativeBuildInputs = [ flex bison unzip makeWrapper ];
+  buildInputs = [
+    ncurses buddy tecla gmpxx libsigsegv cln yices
+  ];
 
   hardeningDisable = [ "stackprotector" ] ++
-    stdenv.lib.optionals stdenv.isi686 [ "pic" "fortify" ];
+    lib.optionals stdenv.isi686 [ "pic" "fortify" ];
 
+  # Fix for glibc-2.34, see
+  # https://gitweb.gentoo.org/repo/gentoo.git/commit/dev-lang/maude/maude-3.1-r1.ebuild?id=f021cc6cfa1e35eb9c59955830f1fd89bfcb26b4
+  configureFlags = [ "--without-libsigsegv" ];
+
+  # Certain tests (in particular, Misc/fileTest) expect us to build in a subdirectory
+  # We'll use the directory Opt/ as suggested in INSTALL
   preConfigure = ''
+    mkdir Opt; cd Opt
     configureFlagsArray=(
-      --datadir=$out/share/maude
+      --datadir="$out/share/maude"
       TECLA_LIBS="-ltecla -lncursesw"
+      LIBS="-lcln"
       CFLAGS="-O3" CXXFLAGS="-O3"
     )
   '';
+  configureScript = "../configure";
 
   doCheck = true;
 
   postInstall = ''
     for n in "$out/bin/"*; do wrapProgram "$n" --suffix MAUDE_LIB ':' "$out/share/maude"; done
-    mkdir -p $out/share/maude
-    cp ${fullMaude} -d $out/share/maude/full-maude.maude
   '';
 
+  passthru.tests = {
+    # tamarin-prover only supports specific versions of maude explicitly
+    inherit tamarin-prover;
+  };
+
+  enableParallelBuilding = true;
+
   meta = {
-    homepage = "http://maude.cs.uiuc.edu/";
+    homepage = "http://maude.cs.illinois.edu/";
     description = "High-level specification language";
-    license = stdenv.lib.licenses.gpl2;
+    mainProgram = "maude";
+    license = lib.licenses.gpl2Plus;
 
     longDescription = ''
       Maude is a high-performance reflective language and system
@@ -49,7 +71,7 @@ stdenv.mkDerivation rec {
       rewriting logic computation.
     '';
 
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.peti ];
+    platforms = lib.platforms.unix;
+    maintainers = [ lib.maintainers.peti ];
   };
 }

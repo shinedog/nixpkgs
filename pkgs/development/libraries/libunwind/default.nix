@@ -1,33 +1,41 @@
-{ stdenv, fetchurl, fetchpatch, xz }:
+{ stdenv, lib, fetchFromGitHub, autoreconfHook, xz, buildPackages }:
 
 stdenv.mkDerivation rec {
-  name = "libunwind-1.1";
+  pname = "libunwind";
+  version = "1.8.1";
 
-  src = fetchurl {
-    url = "mirror://savannah/libunwind/${name}.tar.gz";
-    sha256 = "16nhx2pahh9d62mvszc88q226q5lwjankij276fxwrm8wb50zzlx";
+  src = fetchFromGitHub {
+    owner = "libunwind";
+    repo = "libunwind";
+    rev = "v${version}";
+    hash = "sha256-rCFBHs6rCSnp5FEwbUR5veNNTqSQpFblAv8ebSPX0qE=";
   };
 
-  patches = [ ./libunwind-1.1-lzma.patch ./cve-2015-3239.patch
-              # https://lists.nongnu.org/archive/html/libunwind-devel/2014-04/msg00000.html
-              (fetchpatch {
-                url = "https://raw.githubusercontent.com/dropbox/pyston/1b2e676417b0f5f17526ece0ed840aa88c744145/libunwind_patches/0001-Change-the-RBP-validation-heuristic-to-allow-size-0-.patch";
-                sha256 = "1a0fsgfxmgd218nscswx7pgyb7rcn2gh6566252xhfvzhgn5i4ha";
-              })
-            ];
-
-  postPatch = ''
-    sed -i -e '/LIBLZMA/s:-lzma:-llzma:' configure
+  postPatch = if (stdenv.cc.isClang || stdenv.hostPlatform.isStatic) then ''
+    substituteInPlace configure.ac --replace "-lgcc_s" ""
+  '' else lib.optionalString stdenv.hostPlatform.isMusl ''
+    substituteInPlace configure.ac --replace "-lgcc_s" "-lgcc_eh"
   '';
 
-  outputs = [ "out" "dev" ];
+  nativeBuildInputs = [ autoreconfHook ];
+
+  outputs = [ "out" "dev" "devman" ];
+
+  configureFlags = [
+    # Starting from 1.8.1 libunwind installs testsuite by default.
+    # As we don't run the tests we disable it (this also fixes circular
+    # reference install failure).
+    "--disable-tests"
+    # Without latex2man, no man pages are installed despite being
+    # prebuilt in the source tarball.
+    "LATEX2MAN=${buildPackages.coreutils}/bin/true"
+  ]
+  # See https://github.com/libunwind/libunwind/issues/693
+  ++ lib.optionals (with stdenv.hostPlatform; isAarch64 && isMusl && !isStatic) [
+    "CFLAGS=-mno-outline-atomics"
+  ];
 
   propagatedBuildInputs = [ xz ];
-
-  preInstall = ''
-    mkdir -p "$out/lib"
-    touch "$out/lib/libunwind-generic.so"
-  '';
 
   postInstall = ''
     find $out -name \*.la | while read file; do
@@ -35,10 +43,14 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.nongnu.org/libunwind;
+  doCheck = false; # fails
+
+  meta = with lib; {
+    homepage = "https://www.nongnu.org/libunwind";
     description = "A portable and efficient API to determine the call-chain of a program";
-    platforms = platforms.linux;
-    license = licenses.gpl2;
+    maintainers = with maintainers; [ orivej ];
+    # https://github.com/libunwind/libunwind#libunwind
+    platforms = [ "aarch64-linux" "armv5tel-linux" "armv6l-linux" "armv7a-linux" "armv7l-linux" "i686-freebsd" "i686-linux" "loongarch64-linux" "mips64el-linux" "mipsel-linux" "powerpc64-linux" "powerpc64le-linux" "riscv64-linux" "s390x-linux" "x86_64-freebsd" "x86_64-linux" "x86_64-solaris" ];
+    license = licenses.mit;
   };
 }

@@ -1,30 +1,39 @@
-{ stdenv, fetchurl, python, pkgconfig, cmake, bluez, libusb1, curl
-, libiconv, gettext, sqlite
+{ lib, stdenv, fetchFromGitHub, substituteAll, pkg-config, cmake, bluez, libusb1, curl
+, libiconv, gettext, sqlite, bash, dialog
 , dbiSupport ? false, libdbi ? null, libdbiDrivers ? null
 , postgresSupport ? false, postgresql ? null
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "gammu-${version}";
-  version = "1.33.0";
+  pname = "gammu";
+  version = "1.42.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/project/gammu/gammu/${version}/gammu-${version}.tar.xz";
-    sha256 = "18gplx1v9d70k1q86d5i4n4dfpx367g34pj3zscppx126vwhv112";
+  src = fetchFromGitHub {
+    owner = "gammu";
+    repo = "gammu";
+    rev = version;
+    sha256 = "sha256-aeaGHVxOMiXRU6RHws+oAnzdO9RY1jw/X/xuGfSt76I=";
   };
 
-  patches = [ ./bashcomp-dir.patch ];
+  patches = [
+    ./bashcomp-dir.patch
+    ./systemd.patch
+    (substituteAll {
+      src = ./gammu-config-dialog.patch;
+      dialog = "${dialog}/bin/dialog";
+    })
+  ];
 
-  buildInputs = [ python pkgconfig cmake bluez libusb1 curl gettext sqlite libiconv ]
-  ++ optionals dbiSupport [ libdbi libdbiDrivers ]
-  ++ optionals postgresSupport [ postgresql ];
+  nativeBuildInputs = [ pkg-config cmake ];
 
-  enableParallelBuilding = true;
+  strictDeps = true;
 
-  meta = {
-    homepage = "http://wammu.eu/gammu/";
+  buildInputs = [ bash bluez libusb1 curl gettext sqlite libiconv ]
+  ++ lib.optionals dbiSupport [ libdbi libdbiDrivers ]
+  ++ lib.optionals postgresSupport [ postgresql ];
+
+  meta = with lib; {
+    homepage = "https://wammu.eu/gammu/";
     description = "Command line utility and library to control mobile phones";
     license = licenses.gpl2;
     platforms = platforms.linux;

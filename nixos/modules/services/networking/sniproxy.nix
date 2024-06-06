@@ -14,6 +14,8 @@ let
 
 in
 {
+  imports = [ (mkRemovedOptionModule [ "services" "sniproxy" "logDir" ] "Now done by LogsDirectory=. Set to a custom path if you log to a different folder in your config.") ];
+
   options = {
     services.sniproxy = {
       enable = mkEnableOption "sniproxy server";
@@ -34,7 +36,7 @@ in
         type = types.lines;
         default = "";
         description = "sniproxy.conf configuration excluding the daemon username and pid file.";
-        example = literalExample ''
+        example = ''
           error_log {
             filename /var/log/sniproxy/error.log
           }
@@ -47,16 +49,9 @@ in
           table {
             example.com 192.0.2.10
             example.net 192.0.2.20
-        }
+          }
         '';
       };
-
-      logDir = mkOption {
-        type = types.str;
-        default = "/var/log/sniproxy/";
-        description = "Location of the log directory for sniproxy.";
-      };
-
     };
 
   };
@@ -66,30 +61,24 @@ in
       description = "sniproxy server";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
-      preStart = ''
-        test -d ${cfg.logDir} || {
-          echo "Creating initial log directory for sniproxy in ${cfg.logDir}"
-          mkdir -p ${cfg.logDir}
-          chmod 640 ${cfg.logDir}
-          }
-        chown -R ${cfg.user}:${cfg.group} ${cfg.logDir}
-      '';
 
       serviceConfig = {
         Type = "forking";
         ExecStart = "${pkgs.sniproxy}/bin/sniproxy -c ${configFile}";
+        LogsDirectory = "sniproxy";
+        LogsDirectoryMode = "0640";
         Restart = "always";
       };
     };
 
-    users.extraUsers = mkIf (cfg.user == "sniproxy") {
+    users.users = mkIf (cfg.user == "sniproxy") {
       sniproxy = {
         group = cfg.group;
         uid = config.ids.uids.sniproxy;
       };
     };
 
-    users.extraGroups = mkIf (cfg.group == "sniproxy") {
+    users.groups = mkIf (cfg.group == "sniproxy") {
       sniproxy = {
         gid = config.ids.gids.sniproxy;
       };

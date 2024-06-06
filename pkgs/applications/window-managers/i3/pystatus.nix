@@ -1,34 +1,55 @@
-{ stdenv, fetchurl, libpulseaudio, python3Packages, extraLibs ? [] }:
+{ lib
+, fetchFromGitHub
+, libpulseaudio
+, libnotify
+, gobject-introspection
+, python3Packages
+, extraLibs ? [] }:
 
 python3Packages.buildPythonApplication rec {
-  name = "${pname}-${version}";
-  version = "3.35";
+  # i3pystatus moved to rolling release:
+  # https://github.com/enkore/i3pystatus/issues/584
+  version = "unstable-2020-06-12";
   pname = "i3pystatus";
-  disabled = !python3Packages.isPy3k;
 
-  src = fetchurl {
-    url = "mirror://pypi/i/${pname}/${name}.tar.gz";
-    sha256 = "0g5m05rbqvq1qrspm6fyzky9xfhaz5pvc4hfzgdxrzijn8nfc860";
+  src = fetchFromGitHub {
+    owner = "enkore";
+    repo = "i3pystatus";
+    rev = "dad5eb0c5c8a2ecd20c37ade4732586c6e53f44b";
+    sha256 = "18ygvkl92yr69kxsym57k1mc90asdxpz4b943i61qr0s4fc5n4mq";
   };
 
-  propagatedBuildInputs = with python3Packages; [ keyring colour netifaces praw psutil basiciw ] ++
-    [ libpulseaudio ] ++ extraLibs;
+  nativeBuildInputs = [
+    gobject-introspection
+  ];
 
-  libpulseaudioPath = stdenv.lib.makeLibraryPath [ libpulseaudio ];
-  ldWrapperSuffix = "--suffix LD_LIBRARY_PATH : \"${libpulseaudioPath}\"";
-  makeWrapperArgs = [ ldWrapperSuffix ]; # libpulseaudio.so is loaded manually
+  buildInputs = [ libpulseaudio libnotify ];
+
+  propagatedBuildInputs = with python3Packages; [
+    keyring colour netifaces psutil basiciw pygobject3
+  ] ++ extraLibs;
+
+  makeWrapperArgs = [
+    # LC_TIME != C results in locale.Error: unsupported locale setting
+    "--set" "LC_TIME" "C"
+    "--suffix" "LD_LIBRARY_PATH" ":" "${lib.makeLibraryPath [ libpulseaudio ]}"
+  ];
+
+  postPatch = ''
+    makeWrapperArgs+=(--set GI_TYPELIB_PATH "$GI_TYPELIB_PATH")
+  '';
 
   postInstall = ''
     makeWrapper ${python3Packages.python.interpreter} $out/bin/${pname}-python-interpreter \
       --prefix PYTHONPATH : "$PYTHONPATH" \
-      ${ldWrapperSuffix}
+      ''${makeWrapperArgs[@]}
   '';
 
   # no tests in tarball
   doCheck = false;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/enkore/i3pystatus;
+  meta = with lib; {
+    homepage = "https://github.com/enkore/i3pystatus";
     description = "A complete replacement for i3status";
     longDescription = ''
       i3pystatus is a growing collection of python scripts for status output compatible
@@ -39,4 +60,3 @@ python3Packages.buildPythonApplication rec {
     maintainers = [ maintainers.igsha ];
   };
 }
-

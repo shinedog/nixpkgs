@@ -1,17 +1,20 @@
-{stdenv, fetchurl, m4}:
+{ lib, stdenv, fetchurl, m4, fixDarwinDylibNames }:
 
 stdenv.mkDerivation rec {
-  name = "libmilter-8.14.8";
-  
+  pname = "libmilter";
+  version = "8.18.1";
+
   src = fetchurl {
-    url = "ftp://ftp.sendmail.org/pub/sendmail/sendmail.8.14.8.tar.gz";
-    sha256 = "1zmhzkj3gzx8022hsrysr3nzlcmv1qisb5i4jbx91661bw96ksq2";
+    url = "ftp://ftp.sendmail.org/pub/sendmail/sendmail.${version}.tar.gz";
+    sha256 = "sha256-y/HzCcOOSAb3zz6tJCYPF9H+j7YyVtE+2zzdGgmPB3A=";
   };
 
-  buildPhase = '' 
+  buildPhase = ''
     mkdir -p $out/lib
     cd libmilter
     cat > a.m4 <<EOF
+      define(\`confCC', \`$CC')
+      define(\`confAR', \`$AR')
       define(\`confEBINDIR', \`$out/libexec')
       define(\`confINCLUDEDIR', \`$out/include')
       define(\`confLIBDIR', \`$out/lib')
@@ -25,14 +28,22 @@ stdenv.mkDerivation rec {
       define(\`confLIBGRP', \`root')
       APPENDDEF(\`confENVDEF', \`-DNETINET6')
     EOF
+    export MILTER_SOVER=1
     sh Build -f ./a.m4
   '';
 
-  patches = [ ./install.patch ./sharedlib.patch];
-  
-  buildInputs = [m4];
+  patches = [ ./install.patch ./sharedlib.patch ./darwin.patch ];
 
-  meta = {
-    platforms = stdenv.lib.platforms.linux;
+  nativeBuildInputs = [ m4 ] ++ lib.optional stdenv.isDarwin fixDarwinDylibNames;
+
+  postInstall = lib.optionalString stdenv.isDarwin ''
+    fixDarwinDylibNames $out/lib/libmilter.*.1
+  '';
+
+  meta = with lib; {
+    description = "Sendmail Milter mail filtering API library";
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ fpletz ];
+    license = licenses.sendmail;
   };
 }

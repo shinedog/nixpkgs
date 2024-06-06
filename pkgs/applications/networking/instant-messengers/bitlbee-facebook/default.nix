@@ -1,28 +1,30 @@
-{ fetchurl, fetchFromGitHub, stdenv, bitlbee, autoconf, automake, libtool, pkgconfig, glib, json_glib }:
+{ lib, fetchFromGitHub, stdenv, bitlbee, autoconf, automake, libtool, pkg-config, json-glib }:
 
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "bitlbee-facebook-2015-08-27";
+  pname = "bitlbee-facebook";
+  version = "1.2.2";
 
   src = fetchFromGitHub {
-    rev = "094a11b542e2cd8fac4f00fe01870ecd1cb4c062";
-    owner = "jgeboski";
+    rev = "v${version}";
+    owner = "bitlbee";
     repo = "bitlbee-facebook";
-    sha256 = "1dvbl1z6fl3wswvqbs82vkqlggk24dyi8w7cmm5jh1fmaznmwqrl";
+    sha256 = "1qiiiq17ybylbhwgbwsvmshb517589r8yy5rsh1rfaylmlcxyy7z";
   };
 
-  buildInputs = [ bitlbee autoconf automake libtool pkgconfig glib json_glib ];
+  nativeBuildInputs = [ autoconf automake libtool pkg-config ];
+
+  buildInputs = [ bitlbee json-glib ];
 
   preConfigure = ''
     export BITLBEE_PLUGINDIR=$out/lib/bitlbee
     ./autogen.sh
   '';
 
-  meta = {
+  meta = with lib; {
     description = "The Facebook protocol plugin for bitlbee";
-
-    homepage = https://github.com/jgeboski/bitlbee-facebook;
+    homepage = "https://github.com/bitlbee/bitlbee-facebook";
     license = licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ toonn ];
+    platforms = platforms.linux;
   };
 }

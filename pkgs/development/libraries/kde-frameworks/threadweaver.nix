@@ -1,9 +1,12 @@
-{ kdeFramework, lib
-, ecm
+{
+  mkDerivation,
+  extra-cmake-modules,
+  qtbase
 }:
 
-kdeFramework {
-  name = "threadweaver";
-  nativeBuildInputs = [ ecm ];
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
+mkDerivation {
+  pname = "threadweaver";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  propagatedBuildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

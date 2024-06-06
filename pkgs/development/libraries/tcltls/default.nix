@@ -1,34 +1,25 @@
-{ stdenv, fetchurl, tcl, openssl }:
+{ lib, fetchurl, tcl, openssl }:
 
-stdenv.mkDerivation rec {
-  name = "tcltls-${version}";
-  version = "1.6";
+tcl.mkTclDerivation rec {
+  pname = "tcltls";
+  version = "1.7.22";
 
   src = fetchurl {
-    url = "mirror://sourceforge/tls/tls${version}-src.tar.gz";
-    sha256 = "adec50143a9ad634a671d24f7c7bbf2455487eb5f12d290f41797c32a98b93f3";
+    url = "https://core.tcl-lang.org/tcltls/uv/tcltls-${version}.tar.gz";
+    sha256 = "sha256-6E4reideyCxKqp0bH5eG2+Q1jIFekXU5/+f2Z/9Lw7Q=";
   };
 
-  buildInputs = [ tcl openssl ];
+  buildInputs = [ openssl ];
 
   configureFlags = [
-    "--with-tcl=${tcl}/lib"
-    "--with-tclinclude=${tcl}/include"
     "--with-ssl-dir=${openssl.dev}"
   ];
 
-  preConfigure = ''
-    configureFlags="--exec_prefix=$prefix $configureFlags"
-  '';
-
-  passthru = {
-    libPrefix = "tls${version}";
-  };
-
   meta = {
-    homepage = "http://tls.sourceforge.net/";
+    homepage = "https://core.tcl-lang.org/tcltls/index";
     description = "An OpenSSL / RSA-bsafe Tcl extension";
-    license = stdenv.lib.licenses.tcltk;
-    platforms = stdenv.lib.platforms.unix;
+    maintainers = [ lib.maintainers.agbrooks ];
+    license = lib.licenses.tcltk;
+    platforms = lib.platforms.unix;
   };
 }

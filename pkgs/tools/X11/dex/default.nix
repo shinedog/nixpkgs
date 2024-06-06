@@ -1,23 +1,33 @@
-{ stdenv, fetchFromGitHub, python3 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, python3
+, sphinx
+}:
 
 stdenv.mkDerivation rec {
-  program = "dex";
-  name = "${program}-${version}";
-  version = "0.7";
+  pname = "dex";
+  version = "0.9.0";
 
   src = fetchFromGitHub {
     owner = "jceb";
-    repo = program;
+    repo = pname;
     rev = "v${version}";
-    sha256 = "041ms01snalapapaniabr92d8iim1qrxian626nharjmp2rd69v5";
+    sha256 = "03aapcywnz4kl548cygpi25m8adwbmqlmwgxa66v4156ax9dqs86";
   };
 
-  propagatedBuildInputs = [ python3 ];
+  strictDeps = true;
+
+  nativeBuildInputs = [ sphinx ];
+  buildInputs = [ python3 ];
   makeFlags = [ "PREFIX=$(out)" "VERSION=$(version)" ];
 
-  meta = {
+  meta = with lib; {
     description = "A program to generate and execute DesktopEntry files of the Application type";
-    homepage = https://github.com/jceb/dex;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/jceb/dex";
+    platforms = platforms.linux;
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ nickcao ];
+    mainProgram = "dex";
   };
 }

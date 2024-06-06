@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, linuxHeaders, perl }:
+{ lib, stdenv, fetchurl, buildPackages, linuxHeaders, perl, nixosTests }:
 
 let
   commonMakeFlags = [
@@ -8,46 +8,52 @@ let
 in
 
 stdenv.mkDerivation rec {
-  name = "klibc-${version}";
-  version = "2.0.4";
+  pname = "klibc";
+  version = "2.0.13";
 
   src = fetchurl {
     url = "mirror://kernel/linux/libs/klibc/2.0/klibc-${version}.tar.xz";
-    sha256 = "7f9a0850586def7cf4faeeb75e5d0f66e613674c524f6e77b0f4d93a26c801cb";
+    hash = "sha256-1nOilPdC1ZNoIi/1w4Ri2BCYxVBjeZ3m+4p7o9SvBDY=";
   };
 
   patches = [ ./no-reinstall-kernel-headers.patch ];
 
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
   nativeBuildInputs = [ perl ];
+  strictDeps = true;
 
   hardeningDisable = [ "format" "stackprotector" ];
 
   makeFlags = commonMakeFlags ++ [
-    "KLIBCARCH=${stdenv.platform.kernelArch}"
+    "KLIBCARCH=${if stdenv.hostPlatform.isRiscV64 then "riscv64" else stdenv.hostPlatform.linuxArch}"
     "KLIBCKERNELSRC=${linuxHeaders}"
-  ] ++ stdenv.lib.optional (stdenv.platform.kernelArch == "arm") "CONFIG_AEABI=y";
-
-  crossAttrs = {
-    makeFlags = commonMakeFlags ++ [
-      "KLIBCARCH=${stdenv.cross.platform.kernelArch}"
-      "KLIBCKERNELSRC=${linuxHeaders.crossDrv}"
-      "CROSS_COMPILE=${stdenv.cross.config}-"
-    ] ++ stdenv.lib.optional (stdenv.cross.platform.kernelArch == "arm") "CONFIG_AEABI=y";
-  };
+  ] # TODO(@Ericson2314): We now can get the ABI from
+    # `stdenv.hostPlatform.parsed.abi`, is this still a good idea?
+    ++ lib.optional (stdenv.hostPlatform.linuxArch == "arm") "CONFIG_AEABI=y"
+    ++ lib.optional (stdenv.hostPlatform != stdenv.buildPlatform) "CROSS_COMPILE=${stdenv.cc.targetPrefix}";
 
   # Install static binaries as well.
   postInstall = ''
     dir=$out/lib/klibc/bin.static
     mkdir $dir
     cp $(find $(find . -name static) -type f ! -name "*.g" -a ! -name ".*") $dir/
-    cp usr/dash/sh $dir/
 
     for file in ${linuxHeaders}/include/*; do
       ln -sv $file $out/lib/klibc/include
     done
   '';
 
+  passthru.tests = {
+    # uses klibc's ipconfig
+    inherit (nixosTests) initrd-network-ssh;
+  };
+
   meta = {
-    platforms = [ "x86_64-linux" ];
+    description = "Minimalistic libc subset for initramfs usage";
+    mainProgram = "klcc";
+    homepage = "https://kernel.org/pub/linux/libs/klibc/";
+    maintainers = with lib.maintainers; [ fpletz ];
+    license = lib.licenses.bsd3;
+    platforms = lib.platforms.linux;
   };
 }

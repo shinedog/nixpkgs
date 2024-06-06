@@ -1,27 +1,42 @@
-{ stdenv, fetchurl, ncurses, readline }:
+{ lib, stdenv, fetchFromGitHub, ncurses, readline, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "hunspell-1.3.3";
+  version = "1.7.2";
+  pname = "hunspell";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/hunspell/${name}.tar.gz";
-    sha256 = "0v14ff9s37vkh45diaddndcrj0hmn67arh8xh8k79q9c1vgc1cm7";
+  src = fetchFromGitHub {
+    owner = "hunspell";
+    repo = "hunspell";
+    rev = "v${version}";
+    sha256 = "sha256-x2FXxnVIqsf5/UEQcvchAndXBv/3mW8Z55djQAFgNA8=";
   };
 
   outputs = [ "bin" "dev" "out" "man" ];
 
   buildInputs = [ ncurses readline ];
+  nativeBuildInputs = [ autoreconfHook ];
+
+  patches = [
+    ./0001-Make-hunspell-look-in-XDG_DATA_DIRS-for-dictionaries.patch
+  ];
+
+  postPatch = ''
+    patchShebangs tests
+  '';
+
+  autoreconfFlags = [ "-vfi" ];
+
   configureFlags = [ "--with-ui" "--with-readline" ];
 
   hardeningDisable = [ "format" ];
 
-  meta = with stdenv.lib; {
-    homepage = http://hunspell.sourceforge.net;
+  meta = with lib; {
+    homepage = "https://hunspell.sourceforge.net";
     description = "Spell checker";
     longDescription = ''
       Hunspell is the spell checker of LibreOffice, OpenOffice.org, Mozilla
       Firefox 3 & Thunderbird, Google Chrome, and it is also used by
-      proprietary software packages, like Mac OS X, InDesign, memoQ, Opera and
+      proprietary software packages, like macOS, InDesign, memoQ, Opera and
       SDL Trados.
 
       Main features:
@@ -33,12 +48,13 @@ stdenv.mkDerivation rec {
       * C++ library under GPL/LGPL/MPL tri-license.
       * Interfaces and ports:
         * Enchant (Generic spelling library from the Abiword project),
-        * XSpell (Mac OS X port, but Hunspell is part of the OS X from version 10.6 (Snow Leopard), and
+        * XSpell (macOS port, but Hunspell is part of the macOS from version 10.6 (Snow Leopard), and
             now it is enough to place Hunspell dictionary files into
             ~/Library/Spelling or /Library/Spelling for spell checking),
         * Delphi, Java (JNA, JNI), Perl, .NET, Python, Ruby ([1], [2]), UNO.
     '';
     platforms = platforms.all;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
+    license = with licenses; [ gpl2 lgpl21 mpl11 ];
+    maintainers = with lib.maintainers; [ ];
   };
 }

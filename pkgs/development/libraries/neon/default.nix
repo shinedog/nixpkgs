@@ -1,8 +1,9 @@
-{ stdenv, fetchurl, libxml2, pkgconfig
+{ lib, stdenv, fetchurl, libxml2, pkg-config
 , compressionSupport ? true, zlib ? null
 , sslSupport ? true, openssl ? null
-, static ? false
-, shared ? true
+, static ? stdenv.hostPlatform.isStatic
+, shared ? !stdenv.hostPlatform.isStatic
+, bash
 }:
 
 assert compressionSupport -> zlib != null;
@@ -10,36 +11,45 @@ assert sslSupport -> openssl != null;
 assert static || shared;
 
 let
-   inherit (stdenv.lib) optionals;
+   inherit (lib) optionals;
 in
 
 stdenv.mkDerivation rec {
-  version = "0.30.1";
-  name = "neon-${version}";
+  version = "0.32.5";
+  pname = "neon";
 
   src = fetchurl {
-    url = "http://www.webdav.org/neon/${name}.tar.gz";
-    sha256 = "1pawhk02x728xn396a1kcivy9gqm94srmgad6ymr9l0qvk02dih0";
+    url = "https://notroj.github.io/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-SHLhL4Alct7dSwL4cAZYFLLVFB99va9wju2rgmtRpYo=";
   };
 
-  patches = optionals stdenv.isDarwin [ ./0.29.6-darwin-fix-configure.patch ];
+  patches = optionals stdenv.isDarwin [ ./darwin-fix-configure.patch ];
 
-  buildInputs = [libxml2 pkgconfig openssl]
-    ++ stdenv.lib.optional compressionSupport zlib;
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [libxml2 openssl bash]
+    ++ lib.optional compressionSupport zlib;
 
-  configureFlags = ''
-    ${if shared then "--enable-shared" else "--disable-shared"}
-    ${if static then "--enable-static" else "--disable-static"}
-    ${if compressionSupport then "--with-zlib" else "--without-zlib"}
-    ${if sslSupport then "--with-ssl" else "--without-ssl"}
-    --enable-shared
+  strictDeps = true;
+
+  configureFlags = [
+    (lib.enableFeature shared "shared")
+    (lib.enableFeature static "static")
+    (lib.withFeature compressionSupport "zlib")
+    (lib.withFeature sslSupport "ssl")
+  ];
+
+  preConfigure = ''
+    export PKG_CONFIG="$(command -v "$PKG_CONFIG")"
   '';
 
   passthru = {inherit compressionSupport sslSupport;};
 
-  meta = {
+  meta = with lib; {
     description = "An HTTP and WebDAV client library";
-    homepage = http://www.webdav.org/neon/;
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "neon-config";
+    homepage = "https://notroj.github.io/neon/";
+    changelog = "https://github.com/notroj/${pname}/blob/${version}/NEWS";
+    platforms = platforms.unix;
+    license = licenses.lgpl2;
   };
 }

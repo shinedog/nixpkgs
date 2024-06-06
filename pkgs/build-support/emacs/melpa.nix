@@ -1,78 +1,125 @@
 # builder for Emacs packages built for packages.el
 # using MELPA package-build.el
 
-{ lib, stdenv, fetchurl, emacs, texinfo }:
-
-with lib;
-
-{ pname
-, version
-
-, recipeFile ? null
-
-, files ? null
-, fileSpecs ? [ "*.el" "*.el.in" "dir"
-                "*.info" "*.texi" "*.texinfo"
-                "doc/dir" "doc/*.info" "doc/*.texi" "doc/*.texinfo"
-              ]
-
-, meta ? {}
-
-, ...
-}@args:
+{ lib, stdenv, fetchFromGitHub, emacs, texinfo, writeText, gcc }:
 
 let
+  genericBuild = import ./generic.nix { inherit lib stdenv emacs texinfo writeText gcc; };
 
-  packageBuild = fetchurl {
-    url = https://raw.githubusercontent.com/milkypostman/melpa/2b3eb31c077fcaff94b74b757c1ce17650333943/package-build.el;
-    sha256 = "1biwg2pqmmdz5iwqbjdszljazqymvgyyjcnc255nr6qz8mhnx67j";
-  };
+  packageBuild = stdenv.mkDerivation {
+    name = "package-build";
+    src = fetchFromGitHub {
+      owner = "melpa";
+      repo = "package-build";
+      rev = "c48aa078c01b4f07b804270c4583a0a58ffea1c0";
+      sha256 = "sha256-MzPj375upIiYXdQR+wWXv3A1zMqbSrZlH0taLuxx/1M=";
+    };
 
-  targets = concatStringsSep " " (if files == null then fileSpecs else files);
+    patches = [ ./package-build-dont-use-mtime.patch ];
 
-  defaultMeta = {
-    homepage = args.src.meta.homepage or "http://melpa.org/#/${pname}";
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = "
+      mkdir -p $out
+      cp -r * $out
+    ";
   };
 
 in
 
-import ./generic.nix { inherit lib stdenv emacs texinfo; } ({
-  inherit packageBuild;
+{ /*
+    pname: Nix package name without special symbols and without version or
+    "emacs-" prefix.
+  */
+  pname
+  /*
+    ename: Original Emacs package name, possibly containing special symbols.
+    Default: pname
+  */
+, ename ? pname
+, version
+  /*
+    commit: Optional package history commit.
+    Default: src.rev or "unknown"
+    This will be written into the generated package but it is not needed during
+    the build process.
+  */
+, commit ? (args.src.rev or "unknown")
+  /*
+    files: Optional recipe property specifying the files used to build the package.
+    If null, do not set it in recipe, keeping the default upstream behaviour.
+    Default: null
+  */
+, files ? null
+  /*
+    recipe: Optional MELPA recipe.
+    Default: a minimally functional recipe
+  */
+, recipe ? (writeText "${pname}-recipe" ''
+    (${ename} :fetcher git :url ""
+              ${lib.optionalString (files != null) ":files ${files}"})
+  '')
+, meta ? {}
+, ...
+}@args:
 
-  buildPhase =
-    if recipeFile == null
-      then ''
-        runHook preBuild
+genericBuild ({
 
-        export archive=$(emacs --batch -Q -l $packageBuild -l ${./melpa2nix.el} \
-            -f melpa2nix-build-package \
-            ${pname} ${version} ${targets})
+  elpa2nix = ./elpa2nix.el;
+  melpa2nix = ./melpa2nix.el;
 
-        runHook postBuild
-      ''
-      else ''
-        runHook preBuild
+  inherit packageBuild commit ename recipe;
 
-        export archive=$(emacs --batch -Q -l $packageBuild -l ${./melpa2nix.el} \
-            -f melpa2nix-build-package-from-recipe \
-            ${recipeFile} ${version})
+  preUnpack = ''
+    mkdir -p "$NIX_BUILD_TOP/recipes"
+    if [ -n "$recipe" ]; then
+      cp "$recipe" "$NIX_BUILD_TOP/recipes/$ename"
+    fi
 
-        runHook postBuild
-      '';
+    ln -s "$packageBuild" "$NIX_BUILD_TOP/package-build"
+
+    mkdir -p "$NIX_BUILD_TOP/packages"
+  '';
+
+  postUnpack = ''
+    mkdir -p "$NIX_BUILD_TOP/working"
+    ln -s "$NIX_BUILD_TOP/$sourceRoot" "$NIX_BUILD_TOP/working/$ename"
+  '';
+
+  buildPhase = ''
+    runHook preBuild
+
+    cd "$NIX_BUILD_TOP"
+
+    emacs --batch -Q \
+        -L "$NIX_BUILD_TOP/package-build" \
+        -l "$melpa2nix" \
+        -f melpa2nix-build-package \
+        $ename $version $commit
+
+    runHook postBuild
+    '';
 
   installPhase = ''
     runHook preInstall
 
-    emacs --batch -Q -l ${./elpa2nix.el} \
+    archive="$NIX_BUILD_TOP/packages/$ename-$version.el"
+    if [ ! -f "$archive" ]; then
+        archive="$NIX_BUILD_TOP/packages/$ename-$version.tar"
+    fi
+
+    emacs --batch -Q \
+        -l "$elpa2nix" \
         -f elpa2nix-install-package \
         "$archive" "$out/share/emacs/site-lisp/elpa"
 
     runHook postInstall
   '';
 
-  meta = defaultMeta // meta;
+  meta = {
+    homepage = args.src.meta.homepage or "https://melpa.org/#/${pname}";
+  } // meta;
 }
 
-// removeAttrs args [ "files" "fileSpecs"
-                      "meta"
-                    ])
+// removeAttrs args [ "meta" ])

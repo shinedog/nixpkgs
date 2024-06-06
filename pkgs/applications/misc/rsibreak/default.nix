@@ -1,23 +1,26 @@
-{ stdenv, fetchurl, automoc4, cmake, gettext, perl, pkgconfig
-, kdelibs, kdebase_workspace }:
+{
+  mkDerivation, fetchurl, lib,
+  extra-cmake-modules, kdoctools,
+  knotifyconfig, kidletime, kwindowsystem, ktextwidgets, kcrash
+}:
 
-let version = "0.11";
-in
-stdenv.mkDerivation rec {
-  name = "rsibreak-${version}";
+mkDerivation rec {
+  pname = "rsibreak";
+  version = "0.12.13";
 
   src = fetchurl {
-    url = "mirror://debian/pool/main/r/rsibreak/rsibreak_${version}.orig.tar.gz";
-    sha256 = "0g27aswh8iz5v67v1wkjny4p100vs2gm0lw0qzfkg6sw1pb4i519";
+    url = "mirror://kde/stable/rsibreak/${version}/rsibreak-${version}.tar.xz";
+    sha256 = "N0C+f788fq5yotSC54H2K4WDc6PnGi8Nh/vXL4v0fxo=";
   };
 
-  nativeBuildInputs = [ automoc4 cmake gettext perl pkgconfig ];
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
+  propagatedBuildInputs = [ knotifyconfig kidletime kwindowsystem ktextwidgets kcrash ];
 
-  buildInputs = [ kdelibs kdebase_workspace ];
-
-  meta = {
-    homepage = http://userbase.kde.org/RSIBreak; # http://www.rsibreak.org/ is down since 2011
-    description = "Utility to help prevent repetitive strain injury for KDE 4";
-    inherit (kdelibs.meta) platforms maintainers;
+  meta = with lib; {
+    description = "Takes care of your health and regularly breaks your work to avoid repetitive strain injury (RSI)";
+    mainProgram = "rsibreak";
+    license = licenses.gpl2;
+    homepage = "https://www.kde.org/applications/utilities/rsibreak/";
+    maintainers = with maintainers; [ vandenoever ];
   };
 }

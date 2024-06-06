@@ -1,31 +1,64 @@
-{ stdenv, fetchFromGitHub, cmake, python, pkgconfig, expat, glib, pcre, openssl, curl, check, attr, gpgme }:
+{ lib, stdenv
+, fetchFromGitHub
+, cmake
+, python
+, pkg-config
+, libxml2
+, glib
+, openssl
+, zchunk
+, curl
+, check
+, gpgme
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.7.18";
-  name = "librepo-${version}";
+  version = "1.15.1";
+  pname = "librepo";
+
+  outputs = [ "out" "dev" "py" ];
 
   src = fetchFromGitHub {
-    owner  = "rpm-software-management";
-    repo   = "librepo";
-    rev    = name;
-    sha256 = "05iqx2kvfqsskb2r3n5p8f91i4gd4pbw6nh30pn532mgab64cvxk";
+    owner = "rpm-software-management";
+    repo = "librepo";
+    rev = version;
+    sha256 = "sha256-XVjVu+UTIDbrKHmfJ2zZBLp/h0cLCZFxv/XZ0Iy8VPI=";
   };
 
-  patchPhase = ''
-    substituteInPlace librepo/python/python2/CMakeLists.txt \
-      --replace ' ''${PYTHON_INSTALL_DIR}' " $out/lib/python2.7/site-packages"
-  '';
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
 
-  buildInputs = [ cmake python pkgconfig expat glib pcre openssl curl check attr gpgme ];
+  buildInputs = [
+    python
+    libxml2
+    glib
+    openssl
+    curl
+    check
+    gpgme
+    zchunk
+  ];
 
   # librepo/fastestmirror.h includes curl/curl.h, and pkg-config specfile refers to others in here
-  propagatedBuildInputs = [ curl gpgme expat ];
+  propagatedBuildInputs = [
+    curl
+    gpgme
+    libxml2
+  ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [ "-DPYTHON_DESIRED=${lib.substring 0 1 python.pythonVersion}" ];
+
+  postFixup = ''
+    moveToOutput "lib/${python.libPrefix}" "$py"
+  '';
+
+  meta = with lib; {
     description = "Library providing C and Python (libcURL like) API for downloading linux repository metadata and packages";
-    license     = licenses.lgpl2Plus;
-    platforms   = platforms.linux;
+    homepage = "https://rpm-software-management.github.io/librepo/";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.linux;
     maintainers = with maintainers; [ copumpkin ];
   };
 }
-

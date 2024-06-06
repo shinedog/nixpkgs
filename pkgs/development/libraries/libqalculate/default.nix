@@ -1,19 +1,69 @@
-{ stdenv, fetchurl, cln, libxml2, glib, intltool, pkgconfig, doxygen, autoreconfHook, readline }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, intltool
+, pkg-config
+, doxygen
+, autoreconfHook
+, buildPackages
+, curl
+, gettext
+, libiconv
+, readline
+, libxml2
+, mpfr
+, icu
+, gnuplot
+}:
 
-stdenv.mkDerivation rec {
-  name = "libqalculate-${version}";
-  version = "0.9.10";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libqalculate";
+  version = "5.1.1";
 
-  src = fetchurl {
-    url = "https://github.com/Qalculate/libqalculate/archive/v${version}.tar.gz";
-    sha256 = "0whzc15nwsrib6bpw4lqsm59yr0pfk44hny9sivfbwhidk0177zi";
+  src = fetchFromGitHub {
+    owner = "qalculate";
+    repo = "libqalculate";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-cmH92gdQ+fmtOLgx5ibKqLZaQFzx2z+GuXhR62dtftk=";
   };
 
   outputs = [ "out" "dev" "doc" ];
 
-  nativeBuildInputs = [ intltool pkgconfig autoreconfHook doxygen ];
-  buildInputs = [ readline ];
-  propagatedBuildInputs = [ cln libxml2 glib ];
+  nativeBuildInputs = [
+    intltool
+    pkg-config
+    autoreconfHook
+    doxygen
+  ];
+  depsBuildBuild = [
+    buildPackages.stdenv.cc
+  ];
+
+  buildInputs = [
+    curl
+    gettext
+    libiconv
+    readline
+  ];
+  propagatedBuildInputs = [
+    libxml2
+    mpfr
+    icu
+  ];
+  enableParallelBuilding = true;
+
+  preConfigure = ''
+    intltoolize -f
+  '';
+
+  patchPhase = ''
+    substituteInPlace libqalculate/Calculator-plot.cc \
+      --replace 'commandline = "gnuplot"' 'commandline = "${gnuplot}/bin/gnuplot"' \
+      --replace '"gnuplot - ' '"${gnuplot}/bin/gnuplot - '
+  '' + lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace src/qalc.cc \
+      --replace 'printf(_("aborted"))' 'printf("%s", _("aborted"))'
+  '';
 
   preBuild = ''
     pushd docs/reference
@@ -21,10 +71,12 @@ stdenv.mkDerivation rec {
     popd
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An advanced calculator library";
-    homepage = http://qalculate.github.io;
-    maintainers = with maintainers; [ urkud gebner ];
+    homepage = "http://qalculate.github.io";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ gebner doronbehar alyaeanyx ];
+    mainProgram = "qalc";
     platforms = platforms.all;
   };
-}
+})

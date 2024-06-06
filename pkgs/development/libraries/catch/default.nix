@@ -1,37 +1,41 @@
-{ stdenv, lib, cmake, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, cmake }:
 
 stdenv.mkDerivation rec {
-
-  name = "catch-${version}";
-  version = "1.5.0";
+  pname = "catch";
+  version = "1.12.2";
 
   src = fetchFromGitHub {
-    owner = "philsquared";
+    owner = "catchorg";
     repo = "Catch";
-    rev = "v" + version;
-    sha256 = "1ag8siafg7fmb50qdqznryrg3lvv56f09nvqwqqn2rlk83zjnaw0";
+    rev = "v${version}";
+    sha256 = "1gdp5wm8khn02g2miz381llw3191k7309qj8s3jd6sasj01rhf23";
   };
 
-  buildInputs = [ cmake ];
-  dontUseCmakeConfigure = true;
+  nativeBuildInputs = [ cmake ];
+  cmakeFlags = [ "-DUSE_CPP14=ON" ];
 
-  buildPhase = ''
-    cmake -Hprojects/CMake -BBuild -DCMAKE_BUILD_TYPE=Release -DUSE_CPP11=ON
-    cd Build
-    make
-    cd ..
-  '';
+  patches = [
+    # https://github.com/catchorg/Catch2/pull/2151
+    (fetchpatch {
+      url = "https://github.com/catchorg/Catch2/commit/bb6d08323f23a39eb65dd86671e68f4f5d3f2d6c.patch";
+      sha256 = "1vhbzx84nrhhf9zlbl6h5zmg3r5w5v833ihlswsysb9wp2i4isc5";
+    })
 
-  installPhase = ''
-    mkdir -p $out
-    mv include $out/.
-  '';
+    # Fix glibc-2.34 build
+    (fetchpatch {
+      url = "https://src.fedoraproject.org/rpms/catch1/raw/23276476148a657e7a45ade547f858cbf965a33a/f/catch1-sigstksz.patch";
+      sha256 = "sha256-XSsI3iDEZCUSbozlYWC0y/LZ7qr/5zwACpn1jHKD0yU=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  doCheck = true;
+  checkTarget = "test";
+
+  meta = with lib; {
     description = "A multi-paradigm automated test framework for C++ and Objective-C (and, maybe, C)";
     homepage = "http://catch-lib.net";
     license = licenses.boost;
-    maintainers = with maintainers; [ edwtjo ];
+    maintainers = with maintainers; [ edwtjo knedlsepp ];
     platforms = with platforms; unix;
   };
 }

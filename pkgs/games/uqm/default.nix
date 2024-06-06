@@ -1,6 +1,5 @@
-{ stdenv, fetchurl
-, pkgconfig, mesa
-, SDL, SDL_image, libpng, zlib, libvorbis, libogg, libmikmod, unzip
+{ stdenv, lib, fetchurl, fetchFromGitHub, pkg-config, libGLU, libGL
+, SDL2, libpng, libvorbis, libogg, libmikmod
 
 , use3DOVideos ? false, requireFile ? null, writeText ? null
 , haskellPackages ? null
@@ -11,14 +10,12 @@
 assert use3DOVideos -> requireFile != null && writeText != null
                     && haskellPackages != null;
 
-with stdenv.lib;
-
 let
   videos = import ./3dovideo.nix {
-    inherit stdenv requireFile writeText fetchurl haskellPackages;
+    inherit stdenv lib requireFile writeText fetchFromGitHub haskellPackages;
   };
 
-  remixPacks = imap (num: sha256: fetchurl rec {
+  remixPacks = lib.imap1 (num: sha256: fetchurl rec {
     name = "uqm-remix-disc${toString num}.uqm";
     url = "mirror://sourceforge/sc2/${name}";
     inherit sha256;
@@ -30,52 +27,53 @@ let
   ];
 
 in stdenv.mkDerivation rec {
-  name = "uqm-${version}";
-  version = "0.7.0";
+  pname = "uqm";
+  version = "0.8.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/sc2/uqm-${version}-source.tgz";
-    sha256 = "08dj7fsvflxx69an6vpf3wx050mk0ycmdv401yffrrqbgxgmqsd3";
+    url = "mirror://sourceforge/sc2/uqm-${version}-src.tgz";
+    sha256 = "JPL325z3+vU7lfniWA5vWWIFqY7QwzXP6DTGR4WtT1o=";
   };
 
   content = fetchurl {
     url = "mirror://sourceforge/sc2/uqm-${version}-content.uqm";
-    sha256 = "1gx39ns698hyczd4nx73mr0z86bbi4q3h8sw3pxjh1lzla5xpxmq";
+    sha256 = "d9dawl5vt1WjPEujs4p7e8Qfy8AolokbDMmskhS3Lu8=";
   };
 
   voice = fetchurl {
     url = "mirror://sourceforge/sc2/uqm-${version}-voice.uqm";
-    sha256 = "0yf9ff5sxk229202gsa7ski6wn7a8hkjjyr1yr7mjdxsnh0zik5w";
+    sha256 = "ntv1HXfYtTM5nF86+1STFKghDXqrccosUbTySDIzekU=";
   };
 
   music = fetchurl {
     url = "mirror://sourceforge/sc2/uqm-${version}-3domusic.uqm";
-    sha256 = "10nbvcrr0lc0mxivxfkcbxnibwk3vwmamabrlvwdsjxd9pk8aw65";
+    sha256 = "RM087H6VabQRettNd/FSKJCXJWYmc5GuCWMUhdIx2Lk=";
   };
 
-
- /* uses pthread_cancel(), which requires libgcc_s.so.1 to be
-    loadable at run-time. Adding the flag below ensures that the
-    library can be found. Obviously, though, this is a hack. */
-  NIX_LDFLAGS="-lgcc_s";
-
-  buildInputs = [SDL SDL_image libpng libvorbis libogg libmikmod unzip pkgconfig mesa];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ SDL2 libpng libvorbis libogg libmikmod libGLU libGL ];
 
   postUnpack = ''
     mkdir -p uqm-${version}/content/packages
     mkdir -p uqm-${version}/content/addons
-    ln -s "$content" "uqm-${version}/content/packages/uqm-0.7.0-content.uqm"
-    ln -s "$music" "uqm-${version}/content/addons/uqm-0.7.0-3domusic.uqm"
-    ln -s "$voice" "uqm-${version}/content/addons/uqm-0.7.0-voice.uqm"
-  '' + optionalString useRemixPacks (concatMapStrings (disc: ''
+    ln -s "$content" "uqm-${version}/content/packages/uqm-${version}-content.uqm"
+    ln -s "$music" "uqm-${version}/content/addons/uqm-${version}-3domusic.uqm"
+    ln -s "$voice" "uqm-${version}/content/addons/uqm-${version}-voice.uqm"
+  '' + lib.optionalString useRemixPacks (lib.concatMapStrings (disc: ''
     ln -s "${disc}" "uqm-$version/content/addons/${disc.name}"
-  '') remixPacks) + optionalString use3DOVideos ''
+  '') remixPacks) + lib.optionalString use3DOVideos ''
     ln -s "${videos}" "uqm-${version}/content/addons/3dovideo"
   '';
 
-  /* uqm has a 'unique' build system with a root script incidentally called
- * 'build.sh'. */
+  postPatch = ''
+    # Using _STRINGS_H as include guard conflicts with glibc.
+    sed -i -e '/^#/s/_STRINGS_H/_UQM_STRINGS_H/g' src/uqm/comm/*/strings.h
+    # See https://github.com/NixOS/nixpkgs/pull/93560
+    sed -i -e 's,/tmp/,$TMPDIR/,' build/unix/config_functions
+  '';
 
+  # uqm has a 'unique' build system with a root script incidentally called
+  # 'build.sh'.
   configurePhase = ''
     echo "INPUT_install_prefix_VALUE='$out'" >> config.state
     echo "INPUT_install_bindir_VALUE='$out/bin'" >> config.state
@@ -95,15 +93,18 @@ in stdenv.mkDerivation rec {
 
   meta = {
     description = "Remake of Star Control II";
+    mainProgram = "uqm";
     longDescription = ''
-    The goals for the The Ur-Quan Masters project are:
-      - to bring Star Control II to modern platforms, thereby making a lot of people happy
-      - to make game translations easy, thereby making even more people happy
-      - to adapt the code so that people can more easily make their own spin-offs, thereby making zillions more people happy!
+      The goals for the The Ur-Quan Masters project are:
+        - to bring Star Control II to modern platforms, thereby making a lot of
+          people happy
+        - to make game translations easy, thereby making even more people happy
+        - to adapt the code so that people can more easily make their own
+          spin-offs, thereby making zillions more people happy!
     '';
-    homepage = http://sc2.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with maintainers; [ jcumming aszlig ];
-    platforms = with platforms; linux;
+    homepage = "https://sc2.sourceforge.net/";
+    license = lib.licenses.gpl2;
+    maintainers = with lib.maintainers; [ jcumming aszlig ];
+    platforms = with lib.platforms; linux;
   };
 }

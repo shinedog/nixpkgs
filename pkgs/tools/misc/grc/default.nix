@@ -1,31 +1,53 @@
-{ stdenv, fetchurl, python }:
+{ lib
+, fetchFromGitHub
+, buildPythonApplication
+, installShellFiles
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.9";
-  name    = "grc-${version}";
+buildPythonApplication rec {
+  pname = "grc";
+  version = "1.13";
+  format = "other";
 
-  src = fetchurl {
-    url    = "http://korpus.juls.savba.sk/~garabik/software/grc/grc_${version}.orig.tar.gz";
-    sha256 = "0nsgqpijhpinnzscmpnhcjahv8yivz0g65h8zsly2md23ibnwqj1";
+  src = fetchFromGitHub {
+    owner = "garabik";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "1h0h88h484a9796hai0wasi1xmjxxhpyxgixn6fgdyc5h69gv8nl";
   };
 
-  installPhase = ''
-    sed -i s%/usr%% install.sh
-    sed -i "s% /usr/bin/python%${python}/bin/python%" grc
-    sed -i "s% /usr/bin/python%${python}/bin/python%" grc
-    ./install.sh "$out"
+  postPatch = ''
+    for f in grc grcat; do
+      substituteInPlace $f \
+        --replace /usr/local/ $out/
+    done
+
+    # Support for absolute store paths.
+    substituteInPlace grc.conf \
+      --replace "^([/\w\.]+\/)" "^([/\w\.\-]+\/)"
   '';
 
-  meta = with stdenv.lib; {
-    description = "Yet another colouriser for beautifying your logfiles or output of commands";
-    homepage    = http://korpus.juls.savba.sk/~garabik/software/grc.html;
-    license     = licenses.gpl2;
-    maintainers = with maintainers; [ lovek323 AndersonTorres ];
-    platforms   = platforms.unix;
+  nativeBuildInputs = [ installShellFiles ];
 
+  installPhase = ''
+    runHook preInstall
+
+    ./install.sh "$out" "$out"
+    installShellCompletion --zsh --name _grc _grc
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "http://kassiopeia.juls.savba.sk/~garabik/software/grc.html";
+    description = "A generic text colouriser";
     longDescription = ''
       Generic Colouriser is yet another colouriser (written in Python) for
       beautifying your logfiles or output of commands.
     '';
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ azahi lovek323 AndersonTorres peterhoeg ];
+    platforms = platforms.unix;
+    mainProgram = "grc";
   };
 }

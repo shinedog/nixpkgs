@@ -1,25 +1,22 @@
-{ stdenv, fetchurl, zeromq }:
+{ lib, stdenv, fetchurl, zeromq }:
 
 stdenv.mkDerivation rec {
-  version = "3.0.2";
-  name = "czmq-${version}";
+  version = "4.2.1";
+  pname = "czmq";
 
   src = fetchurl {
-    url = "http://download.zeromq.org/${name}.tar.gz";
-    sha256 = "16k9awrhdsymx7dnmvqcnkaq8lz8x8zppy6sh7ls8prpd6mkkjlb";
+    url = "https://github.com/zeromq/czmq/releases/download/v${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-XXIKIEwqWGRdb3ZDrxXVY6cS2tmMnTLB7ZEzd9qmrDk=";
   };
-
-  # Fix build on Glibc 2.24.
-  NIX_CFLAGS_COMPILE = "-Wno-error=deprecated-declarations";
 
   # Needs to be propagated for the .pc file to work
   propagatedBuildInputs = [ zeromq ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "http://czmq.zeromq.org/";
     description = "High-level C Binding for ZeroMQ";
+    mainProgram = "zmakecert";
     license = licenses.mpl20;
     platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
   };
 }

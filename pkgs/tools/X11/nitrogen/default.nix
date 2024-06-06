@@ -1,23 +1,19 @@
-{ stdenv, fetchurl, pkgconfig, glib, gtkmm2 }:
+{ lib, stdenv, fetchurl, pkg-config, glib, gtkmm2 }:
 
-let version = "1.6.0";
-in
 stdenv.mkDerivation rec {
-  name = "nitrogen-${version}";
+  pname = "nitrogen";
+  version = "1.6.1";
 
   src = fetchurl {
-    url = "http://projects.l3ib.org/nitrogen/files/${name}.tar.gz";
-    sha256 = "1pil2qa3v7x56zh9xvba8v96abnf9qgglbsdlrlv0kfjlhzl4jhr";
+    url = "http://projects.l3ib.org/nitrogen/files/${pname}-${version}.tar.gz";
+    sha256 = "0zc3fl1mbhq0iyndy4ysmy8vv5c7xwf54rbgamzfhfvsgdq160pl";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [ glib gtkmm2 ];
 
-  NIX_CXXFLAGS_COMPILE = "-std=c++11";
-
   patchPhase = ''
-    substituteInPlace data/Makefile.in --replace /usr/share $out/share
     patchShebangs data/icon-theme-installer
   '';
 
@@ -29,9 +25,10 @@ stdenv.mkDerivation rec {
       multi-head with Xinerama. Wallpapers are browsable with a convenient GUI,
       and settings are stored in a human-readable config file.
     '';
-    homepage = http://projects.l3ib.org/nitrogen/;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.auntie ];
+    homepage = "https://github.com/l3ib/nitrogen";
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.auntie ];
+    mainProgram = "nitrogen";
   };
 }

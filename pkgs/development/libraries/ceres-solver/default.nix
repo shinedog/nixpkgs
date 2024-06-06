@@ -1,45 +1,56 @@
-{ stdenv
-, eigen
+{ lib
+, stdenv
 , fetchurl
+, blas
 , cmake
-, google-gflags ? null
+, eigen
+, gflags
 , glog
+, suitesparse
+, metis
 , runTests ? false
+, enableStatic ? stdenv.hostPlatform.isStatic
+, withBlas ? true
 }:
 
-# google-gflags is required to run tests
-assert runTests -> google-gflags != null;
+# gflags is required to run tests
+assert runTests -> gflags != null;
 
-let
-  version = "1.10.0";
-in
-stdenv.mkDerivation {
-  name = "ceres-solver-${version}";
+stdenv.mkDerivation rec {
+  pname = "ceres-solver";
+  version = "2.1.0";
 
   src = fetchurl {
     url = "http://ceres-solver.org/ceres-solver-${version}.tar.gz";
-    sha256 = "20bb5db05c3e3e14a4062e2cf2b0742d2653359549ecded3e0653104ef3deb17";
+    sha256 = "sha256-99dO7N4K7XW/xR7EjJHQH+Fqa/FrzhmHpwcyhnAeL8Y=";
   };
 
-  buildInputs = [ cmake glog ]
-    ++ stdenv.lib.optional (google-gflags != null) google-gflags;
+  outputs = [ "out" "dev" ];
 
-  inherit eigen;
+  nativeBuildInputs = [ cmake ];
+  buildInputs = lib.optional runTests gflags;
+  propagatedBuildInputs = [ eigen glog ]
+  ++ lib.optionals withBlas [ blas suitesparse metis ];
+
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=${if enableStatic then "OFF" else "ON"}"
+  ];
+
+  # The Basel BUILD file conflicts with the cmake build directory on
+  # case-insensitive filesystems, eg. darwin.
+  preConfigure = ''
+    rm BUILD
+  '';
 
   doCheck = runTests;
 
   checkTarget = "test";
 
-  cmakeFlags = "
-    -DEIGEN_INCLUDE_DIR=${eigen}/include/eigen3
-  ";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "C++ library for modeling and solving large, complicated optimization problems";
     license = licenses.bsd3;
     homepage = "http://ceres-solver.org";
-    maintainers = with stdenv.lib.maintainers; [ giogadi ];
-    inherit version;
-    platforms = with stdenv.lib.platforms; unix;
+    maintainers = with maintainers; [ giogadi ];
+    platforms = platforms.unix;
   };
 }

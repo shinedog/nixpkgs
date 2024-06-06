@@ -1,30 +1,26 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "baekmuk-ttf-2.2";
+stdenvNoCC.mkDerivation rec {
+  pname = "baekmuk-ttf";
+  version = "2.2";
 
   src = fetchurl {
-    url = "http://kldp.net/baekmuk/release/865-${name}.tar.gz";
-    sha256 = "10hqspl70h141ywz1smlzdanlx9vwgsp1qrcjk68fn2xnpzpvaq8";
+    url = "http://kldp.net/baekmuk/release/865-${pname}-${version}.tar.gz";
+    hash = "sha256-CKt9/7VdWIfMlCzjcPXjO3VqVfu06vC5DyRAcOjVGII=";
   };
 
-  dontBuild = true;
+  installPhase = ''
+    runHook preInstall
 
-  installPhase = let
-    fonts_dir = "$out/share/fonts";
-    doc_dir = "$out/share/doc/${name}";
-  in ''
-    mkdir -pv ${fonts_dir}
-    mkdir -pv ${doc_dir}
-    cp ttf/*.ttf ${fonts_dir}
-    cp COPYRIGHT* ${doc_dir}
+    install -m444 -Dt $out/share/fonts        ttf/*.ttf
+    install -m444 -Dt $out/share/doc/${pname}-${version}  COPYRIGHT*
+
+    runHook postInstall
   '';
 
   meta = {
     description = "Korean font";
     homepage = "http://kldp.net/projects/baekmuk/";
     license = "BSD-like";
-    platforms = stdenv.lib.platforms.linux;
   };
 }
-

@@ -1,24 +1,48 @@
-{ stdenv, fetchurl, zlib }:
+{ lib
+, stdenv
+, fetchurl
+, unzip
+, zlib
+, enableUnfree ? false
+}:
+
 stdenv.mkDerivation rec {
-  name = "glucose-${version}";
-  version = "4.0";
+  pname = "glucose" + lib.optionalString enableUnfree "-syrup";
+  version = "4.2.1";
 
   src = fetchurl {
-    url = "http://www.labri.fr/perso/lsimon/downloads/softwares/glucose-syrup.tgz";
-    sha256 = "0bq5l2jabhdfhng002qfk0mcj4pfi1v5853x3c7igwfrgx0jmfld";
+    url = "https://www.labri.fr/perso/lsimon/downloads/softwares/glucose-${version}.zip";
+    hash = "sha256-J0J9EKC/4cCiZr/y4lz+Hm7OcmJmMIIWzQ+4c+KhqXg=";
   };
+
+  sourceRoot = "glucose-${version}/sources/${if enableUnfree then "parallel" else "simp"}";
+
+  postPatch = ''
+    substituteInPlace Main.cc \
+      --replace "defined(__linux__)" "defined(__linux__) && defined(__x86_64__)"
+  '';
+
+  nativeBuildInputs = [ unzip ];
 
   buildInputs = [ zlib ];
 
-  sourceRoot = "glucose-syrup/simp";
   makeFlags = [ "r" ];
+
   installPhase = ''
-    install -Dm0755 glucose_release $out/bin/glucose
+    runHook preInstall
+
+    install -Dm0755 ${pname}_release $out/bin/${pname}
+    mkdir -p "$out/share/doc/${pname}-${version}/"
+    install -Dm0755 ../{LICEN?E,README*,Changelog*} "$out/share/doc/${pname}-${version}/"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    description = "Modern, parallel SAT solver (sequential version)";
-    license = licenses.mit;
+  meta = with lib; {
+    description = "Modern, parallel SAT solver (${if enableUnfree then "parallel" else "sequential"} version)";
+    mainProgram = "glucose";
+    homepage = "https://www.labri.fr/perso/lsimon/research/glucose/";
+    license = if enableUnfree then licenses.unfreeRedistributable else licenses.mit;
     platforms = platforms.unix;
     maintainers = with maintainers; [ gebner ];
   };

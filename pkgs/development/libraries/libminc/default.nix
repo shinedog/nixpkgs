@@ -1,27 +1,48 @@
-{ stdenv, fetchurl, cmake, zlib, netcdf, hdf5 }:
+{ lib, stdenv, fetchFromGitHub, cmake, zlib, netcdf, nifticlib, hdf5 }:
 
-stdenv.mkDerivation rec {
-  _name = "libminc";
-  name  = "${_name}-2.3.00";
+stdenv.mkDerivation (finalAttrs: {
+  pname   = "libminc";
+  version = "2.4.06";
 
-  src = fetchurl {
-    url = "https://github.com/BIC-MNI/${_name}/archive/${_name}-2-3-00.tar.gz";
-    sha256 = "04ngqx4wkssxs9qqcgq2bvfs1cldcycmpcx587wy3b3m6lwf004c";
+  src = fetchFromGitHub {
+    owner = "BIC-MNI";
+    repo = "libminc";
+    rev = "refs/tags/release-${finalAttrs.version}";
+    hash = "sha256-HTt3y0AFM9pkEkWPb9cDmvUz4iBQWfpX7wLF9Vlg8hc=";
   };
 
+  postPatch = ''
+    patchShebangs .
+  '';
+
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ zlib netcdf hdf5 ];
+  buildInputs = [
+    zlib
+    nifticlib
+  ];
+  propagatedBuildInputs = [
+    netcdf
+    hdf5
+  ];
 
-  cmakeFlags = [ "-DBUILD_TESTING=${if doCheck then "ON" else "OFF"}"
-                 "-DLIBMINC_MINC1_SUPPORT=ON" ];
+  cmakeFlags = [
+    "-DLIBMINC_MINC1_SUPPORT=ON"
+    "-DLIBMINC_BUILD_SHARED_LIBS=ON"
+    "-DLIBMINC_USE_NIFTI=ON"
+    "-DLIBMINC_USE_SYSTEM_NIFTI=ON"
+  ];
 
-  checkPhase = "ctest";
-  doCheck = true;
+  doCheck = !stdenv.isDarwin;
+    # -j1: see https://github.com/BIC-MNI/libminc/issues/110
+  checkPhase = ''
+    ctest -j1 --output-on-failure
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/BIC-MNI/libminc;
+  meta = with lib; {
+    homepage = "https://github.com/BIC-MNI/libminc";
     description = "Medical imaging library based on HDF5";
     maintainers = with maintainers; [ bcdarwin ];
     platforms = platforms.unix;
+    license = licenses.free;
   };
-}
+})

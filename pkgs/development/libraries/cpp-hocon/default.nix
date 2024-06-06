@@ -1,26 +1,32 @@
-{ stdenv, fetchFromGitHub, cmake, boost, curl, leatherman }:
+{ lib, stdenv, fetchFromGitHub, cmake, boost, curl, leatherman }:
 
 stdenv.mkDerivation rec {
-  name = "cpp-hocon-${version}";
-  version = "0.1.2";
+  pname = "cpp-hocon";
+  version = "0.3.0";
 
   src = fetchFromGitHub {
-    sha256 = "0v2mnak6fh13dkl25lfvw1la2dfjqrh3lq1d40r3a52m56vwflrg";
+    sha256 = "0b24anpwkmvbsn5klnr58vxksw00ci9pjhwzx7a61kplyhsaiydw";
     rev = version;
     repo = "cpp-hocon";
     owner = "puppetlabs";
   };
 
+  postPatch = ''
+    sed -i -e '/add_subdirectory(tests)/d' lib/CMakeLists.txt
+  '';
+
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
+
   nativeBuildInputs = [ cmake ];
 
   buildInputs = [ boost curl leatherman ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     inherit (src.meta) homepage;
-    description = " A C++ port of the Typesafe Config library";
+    description = "A C++ port of the Typesafe Config library";
     license = licenses.asl20;
     maintainers = [ maintainers.womfoo ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 
 }

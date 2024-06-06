@@ -1,44 +1,86 @@
-{ stdenv, fetchurl, SDL, alsaLib, autoconf, automake, libjack2, perl
-, zlib, zziplib
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, gitUpdater
+, alsa-lib
+, cmake
+, Cocoa
+, CoreAudio
+, Foundation
+, libjack2
+, lhasa
+, makeWrapper
+, perl
+, pkg-config
+, rtmidi
+, SDL2
+, zlib
+, zziplib
 }:
 
-stdenv.mkDerivation rec {
-  version = "0.90.85";
-  name = "milkytracker-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "milkytracker";
+  version = "1.04.00";
 
-  src = fetchurl {
-    url = "http://milkytracker.org/files/milkytracker-0.90.85.tar.gz";
-    sha256 = "184pk0k9nv461a61sh6lb62wfadjwwk8ri3z5kpdbqnyssz0zfpv";
+  src = fetchFromGitHub {
+    owner = "milkytracker";
+    repo = "MilkyTracker";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-ta4eV/FGBfgTppJwDam0OKQ7udtlinbWly/FPCE+Qss=";
   };
 
-  # Get two official patches.
-  no_zzip_patch = fetchurl {
-    url = "http://www.milkytracker.org/files/patches-0.90.85/no_zziplib_dep.patch";
-    sha256 = "1w550q7pxa7w6v2v19ljk03hayacrs6y887izg11a1983wk7qzb3";
-      };
+  patches = [
+    # Fix crash after querying midi ports
+    # Remove when version > 1.04.00
+    (fetchpatch {
+      url = "https://github.com/milkytracker/MilkyTracker/commit/7e9171488fc47ad2de646a4536794fda21e7303d.patch";
+      hash = "sha256-CmnIwmGGnsnlRrvVAXe2zaQf1CFMB5BJPKmiwGOHgGY=";
+    })
+  ];
 
-  fix_64bit_patch = fetchurl {
-    url = "http://www.milkytracker.org/files/patches-0.90.85/64bit_freebsd_fix.patch";
-    sha256 = "0gwd4zslbd8kih80k4v7n2c65kvm2cq3kl6d7y33z1l007vzyvf6";
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    cmake
+    makeWrapper
+    pkg-config
+  ];
+
+  buildInputs = [
+    lhasa
+    libjack2
+    perl
+    rtmidi
+    SDL2
+    zlib
+    zziplib
+  ] ++ lib.optionals stdenv.hostPlatform.isLinux [
+    alsa-lib
+  ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    Cocoa
+    CoreAudio
+    Foundation
+  ];
+
+  postInstall = lib.optionalString stdenv.hostPlatform.isLinux ''
+    install -Dm644 $src/resources/milkytracker.desktop $out/share/applications/milkytracker.desktop
+    install -Dm644 $src/resources/pictures/carton.png $out/share/pixmaps/milkytracker.png
+    install -Dm644 $src/resources/milkytracker.appdata $out/share/appdata/milkytracker.appdata.xml
+  '';
+
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "v";
   };
 
-  patchPhase = ''
-    patch ./src/tracker/sdl/SDL_Main.cpp < ${fix_64bit_patch}
-    patch < ${no_zzip_patch}
-    patch ./src/compression/DecompressorGZIP.cpp < ${./decompressor_gzip.patch}
-  '';
-
-  preBuild=''
-    export CPATH=${zlib.out}/lib
-  '';
-
-  buildInputs = [ SDL alsaLib autoconf automake libjack2 perl zlib zziplib ];
-
-  meta = {
+  meta = with lib; {
     description = "Music tracker application, similar to Fasttracker II";
-    homepage = http://milkytracker.org;
-    license = stdenv.lib.licenses.gpl3Plus;
-    platforms = [ "x86_64-linux" "i686-linux" ];
-    maintainers = [ stdenv.lib.maintainers.zoomulator ];
+    homepage = "https://milkytracker.org/";
+    license = licenses.gpl3Plus;
+    platforms = platforms.unix;
+    # ibtool -> real Xcode -> I can't get that, and Ofborg can't test that
+    broken = stdenv.hostPlatform.isDarwin;
+    maintainers = with maintainers; [ OPNA2608 ];
+    mainProgram = "milkytracker";
   };
-}
+})

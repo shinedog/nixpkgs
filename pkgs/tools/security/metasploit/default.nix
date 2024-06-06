@@ -1,34 +1,70 @@
-{ stdenv, fetchurl, makeWrapper, ruby }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, makeWrapper
+, ruby
+, bundlerEnv
+, python3
+}:
 
-stdenv.mkDerivation rec {
-  name = "metasploit-framework-${version}";
-  version = "3.3.1";
+let
+  env = bundlerEnv {
+    inherit ruby;
+    name = "metasploit-bundler-env";
+    gemdir = ./.;
+  };
+in stdenv.mkDerivation rec {
+  pname = "metasploit-framework";
+  version = "6.4.11";
 
-  src = fetchurl {
-    url = "http://downloads.metasploit.com/data/releases/archive/framework-${version}.tar.bz2";
-    sha256 = "07clzw1zfnqjhyydsc4mza238isai58p7aygh653qxsqb9a0j7qw";
+  src = fetchFromGitHub {
+    owner = "rapid7";
+    repo = "metasploit-framework";
+    rev = "refs/tags/${version}";
+    hash = "sha256-//z4UmgREH5vQh1rzv5YpAfmjcWR+9NbitdJwjN+9jo=";
   };
 
-  buildInputs = [makeWrapper];
+  nativeBuildInputs = [
+    makeWrapper
+  ];
+
+  buildInputs = [
+    (python3.withPackages (ps: [ ps.requests ]))
+  ];
+
+  dontPatchELF = true; # stay away from exploit executables
 
   installPhase = ''
-    mkdir -p $out/share/msf
-    mkdir -p $out/bin
+    mkdir -p $out/{bin,share/msf}
 
     cp -r * $out/share/msf
 
-    for i in $out/share/msf/msf*; do
-        makeWrapper $i $out/bin/$(basename $i) --prefix RUBYLIB : $out/share/msf/lib
-    done
+    grep -rl "^#\!.*python2$" $out/share/msf | xargs -d '\n' rm
+
+    (
+      cd $out/share/msf/
+      for i in msf*; do
+        makeWrapper ${env}/bin/bundle $out/bin/$i \
+          --add-flags "exec ${ruby}/bin/ruby $out/share/msf/$i"
+      done
+    )
+
+    makeWrapper ${env}/bin/bundle $out/bin/msf-pattern_create \
+      --add-flags "exec ${ruby}/bin/ruby $out/share/msf/tools/exploit/pattern_create.rb"
+
+    makeWrapper ${env}/bin/bundle $out/bin/msf-pattern_offset \
+      --add-flags "exec ${ruby}/bin/ruby $out/share/msf/tools/exploit/pattern_offset.rb"
   '';
 
-  postInstall = ''
-    patchShebangs $out/share/msf
-  '';
+  # run with: nix-shell maintainers/scripts/update.nix --argstr path metasploit
+  passthru.updateScript = ./update.sh;
 
-  meta = {
+  meta = with lib; {
     description = "Metasploit Framework - a collection of exploits";
-    homepage = https://github.com/rapid7/metasploit-framework/wiki;
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://docs.metasploit.com/";
+    platforms = platforms.unix;
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ fab makefu ];
+    mainProgram = "msfconsole";
   };
 }

@@ -1,36 +1,59 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, fmt
+, catch2_3
+, staticBuild ? stdenv.hostPlatform.isStatic
+
+# tests
+, bear
+, tiledb
+}:
 
 stdenv.mkDerivation rec {
-  name = "spdlog-${version}";
-  version = stdenv.lib.strings.substring 0 7 rev;
-  rev = "292bdc5eb4929f183c78d2c67082b715306f81c9";
+  pname = "spdlog";
+  version = "1.13.0";
 
   src = fetchFromGitHub {
     owner = "gabime";
-    repo = "spdlog";
-    inherit rev;
-    sha256 = "1b6b0c81a8hisaibqlzj5mrk3snrfl8p5sqa056q2f02i62zksbn";
+    repo  = "spdlog";
+    rev   = "v${version}";
+    hash  = "sha256-3n8BnjZ7uMH8quoiT60yTU7poyOtoEmzNMOLa1+r7X0=";
   };
 
-  buildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ];
+  # Required to build tests, even if they aren't executed
+  buildInputs = [ catch2_3 ];
+  propagatedBuildInputs = [ fmt ];
 
-  # cmakeFlags = [ "-DSPDLOG_BUILD_EXAMPLES=ON" ];
+  cmakeFlags = [
+    "-DSPDLOG_BUILD_SHARED=${if staticBuild then "OFF" else "ON"}"
+    "-DSPDLOG_BUILD_STATIC=${if staticBuild then "ON" else "OFF"}"
+    "-DSPDLOG_BUILD_EXAMPLE=OFF"
+    "-DSPDLOG_BUILD_BENCH=OFF"
+    "-DSPDLOG_BUILD_TESTS=ON"
+    "-DSPDLOG_FMT_EXTERNAL=ON"
+  ];
 
-  outputs = [ "out" "doc" ];
+  outputs = [ "out" "doc" "dev" ] ;
 
   postInstall = ''
     mkdir -p $out/share/doc/spdlog
     cp -rv ../example $out/share/doc/spdlog
   '';
 
-  meta = with stdenv.lib; {
-    description    = "Very fast, header only, C++ logging library.";
-    homepage       = https://github.com/gabime/spdlog;
+  doCheck = true;
+
+  passthru.tests = {
+    inherit bear tiledb;
+  };
+
+  meta = with lib; {
+    description    = "Very fast, header only, C++ logging library";
+    homepage       = "https://github.com/gabime/spdlog";
     license        = licenses.mit;
     maintainers    = with maintainers; [ obadz ];
     platforms      = platforms.all;
-
-    # This is a header-only library, no point in hydra building it:
-    hydraPlatforms = [];
   };
 }

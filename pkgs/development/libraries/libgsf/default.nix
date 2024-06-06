@@ -1,35 +1,97 @@
-{ fetchurl, stdenv, pkgconfig, intltool, gettext, glib, libxml2, zlib, bzip2
-, python, perl, gdk_pixbuf, libiconv, libintlOrEmpty }:
-
-with { inherit (stdenv.lib) optionals; };
+{ fetchFromGitLab
+, lib
+, stdenv
+, autoreconfHook
+, gtk-doc
+, pkg-config
+, intltool
+, gettext
+, glib
+, libxml2
+, zlib
+, bzip2
+, perl
+, gdk-pixbuf
+, libiconv
+, libintl
+, gnome
+}:
 
 stdenv.mkDerivation rec {
-  name = "libgsf-1.14.36";
+  pname = "libgsf";
+  version = "1.14.52";
 
-  src = fetchurl {
-    url    = "mirror://gnome/sources/libgsf/1.14/${name}.tar.xz";
-    sha256 = "0h19ssxzz0cmznwga2xy55kjibm24mwxqarnpd0w7xy0hrzm1dvi";
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitLab {
+    domain = "gitlab.gnome.org";
+    owner = "GNOME";
+    repo = "libgsf";
+    rev = "LIBGSF_${lib.replaceStrings ["."] ["_"] version}";
+    hash = "sha256-uSi2/pZiST07YutU8SHNoY2LifEQhohQeyaH9spyG2s=";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool ];
+  postPatch = ''
+    # Fix cross-compilation
+    substituteInPlace configure.ac \
+      --replace "AC_PATH_PROG(PKG_CONFIG, pkg-config, no)" \
+                "PKG_PROG_PKG_CONFIG"
+  '';
 
-  buildInputs = [ gettext bzip2 zlib python ]
-    ++ stdenv.lib.optional doCheck perl;
+  strictDeps = true;
 
-  propagatedBuildInputs = [ libxml2 glib gdk_pixbuf libiconv ]
-    ++ libintlOrEmpty;
+  nativeBuildInputs = [
+    autoreconfHook
+    gtk-doc
+    pkg-config
+    intltool
+    libintl
+  ];
+
+  buildInputs = [
+    gettext
+    bzip2
+    zlib
+  ];
+
+  nativeCheckInputs = [
+    perl
+  ];
+
+  propagatedBuildInputs = [
+    libxml2
+    glib
+    gdk-pixbuf
+    libiconv
+  ];
 
   doCheck = true;
-  preCheck = "patchShebangs ./tests/";
 
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  preCheck = ''
+    patchShebangs ./tests/
+  '';
 
-  meta = with stdenv.lib; {
+  # checking pkg-config is at least version 0.9.0... ./configure: line 15213: no: command not found
+  # configure: error: in `/build/libgsf-1.14.50':
+  # configure: error: The pkg-config script could not be found or is too old.  Make sure it
+  # is in your PATH or set the PKG_CONFIG environment variable to the full
+  preConfigure = ''
+    export PKG_CONFIG="$(command -v "$PKG_CONFIG")"
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
     description = "GNOME's Structured File Library";
-    homepage    = http://www.gnome.org/projects/libgsf;
-    license     = licenses.lgpl2Plus;
+    homepage = "https://www.gnome.org/projects/libgsf";
+    license = licenses.lgpl21Only;
     maintainers = with maintainers; [ lovek323 ];
-    platforms   = stdenv.lib.platforms.unix;
+    platforms = lib.platforms.unix;
 
     longDescription = ''
       Libgsf aims to provide an efficient extensible I/O abstraction for

@@ -1,32 +1,58 @@
-{ stdenv, fetchFromGitHub, pkgconfig, libjpeg, libpng, xorg, libX11, mesa, libdrm, python27, wayland }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, makeWrapper
+, meson
+, ninja
+, wayland-scanner
+, libjpeg
+, libpng
+, libX11
+, libGL
+, libdrm
+, udev
+, wayland
+, wayland-protocols
+, mesa
+}:
 
 stdenv.mkDerivation rec {
-  name = "glmark2-${version}";
-  version = "2015-06-11";
+  pname = "glmark2";
+  version = "2023.01";
 
   src = fetchFromGitHub {
     owner = "glmark2";
     repo = "glmark2";
-    rev = "fa71af2dfab711fac87b9504b6fc9862f44bf72a";
-    sha256 = "1razwrmwk94wf8y7rnqpas9520gidixzcwa65pg946n823105znw";
+    rev = version;
+    sha256 = "sha256-WCvc5GqrAdpIKQ4LVqwO6ZGbzBgLCl49NxiGJynIjSQ=";
   };
 
+  depsBuildBuild = [ pkg-config ];
+  nativeBuildInputs = [ pkg-config makeWrapper meson ninja wayland-scanner ];
   buildInputs = [
-    pkgconfig libjpeg libpng xorg.libxcb libX11 mesa libdrm python27 wayland
+    libjpeg
+    libpng
+    libX11
+    libdrm
+    udev
+    wayland
+    wayland-protocols
+    mesa
   ];
 
-  buildPhase = ''
-    python ./waf configure --prefix=$out --with-flavors x11-gl,x11-glesv2,drm-gl,drm-glesv2,wayland-gl,wayland-glesv2
-    python2 ./waf
+  mesonFlags = [ "-Dflavors=drm-gl,drm-glesv2,gbm-gl,gbm-glesv2,wayland-gl,wayland-glesv2,x11-gl,x11-gl-egl,x11-glesv2" ];
+
+  postInstall = ''
+    for binary in $out/bin/glmark2*; do
+      wrapProgram $binary \
+        --set LD_LIBRARY_PATH ${libGL}/lib
+    done
   '';
 
-  installPhase = ''
-    python2 ./waf install --destdir="$pkgdir/"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "OpenGL (ES) 2.0 benchmark";
-    homepage = https://github.com/glmark2/glmark2;
+    homepage = "https://github.com/glmark2/glmark2";
     license = licenses.gpl3Plus;
     longDescription = ''
       glmark2 is a benchmark for OpenGL (ES) 2.0. It uses only the subset of

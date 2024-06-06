@@ -1,69 +1,53 @@
-{ stdenv, fetchgit, fetchFromGitHub, cmake, pkgconfig, git, python3,
-  python3Packages, glslang, spirv-tools, x11, libxcb, wayland }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, libX11, libxcb
+, libXrandr, wayland, moltenvk, vulkan-headers, addOpenGLRunpath
+, testers }:
 
-let
-  version = "1.0.26.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "vulkan-loader";
+  version = "1.3.283.0";
+
   src = fetchFromGitHub {
     owner = "KhronosGroup";
-    repo = "Vulkan-LoaderAndValidationLayers";
-    rev = "sdk-${version}";
-    sha256 = "157m746hc76xrxd3qq0f44f5dy7pjbz8cx74ykqrlbc7rmpjpk58";
+    repo = "Vulkan-Loader";
+    rev = "vulkan-sdk-${finalAttrs.version}";
+    hash = "sha256-pe4WYbfB20yRI5Pg+RxgmQcmdXsSoRxbBkQ3DdAL8r4=";
   };
-in
 
-stdenv.mkDerivation rec {
-  name = "vulkan-loader-${version}";
-  inherit version src;
+  patches = [ ./fix-pkgconfig.patch ];
 
-  prePatch = ''
-    if [ "$(cat '${src}/spirv-tools_revision')" != '${spirv-tools.src.rev}' ] \
-      || [ "$(cat '${src}/spirv-headers_revision')" != '${spirv-tools.headers.rev}' ] \
-      || [ "$(cat '${src}/glslang_revision')" != '${glslang.src.rev}' ]
-    then
-      echo "Version mismatch, aborting!"
-      false
-    fi
-  '';
+  nativeBuildInputs = [ cmake pkg-config ];
+  buildInputs = [ vulkan-headers ]
+    ++ lib.optionals stdenv.isLinux [ libX11 libxcb libXrandr wayland ];
 
-  buildInputs = [ cmake pkgconfig git python3 python3Packages.lxml
-                  glslang spirv-tools x11 libxcb wayland
-                ];
-  enableParallelBuilding = true;
+  cmakeFlags = [ "-DCMAKE_INSTALL_INCLUDEDIR=${vulkan-headers}/include" ]
+    ++ lib.optional stdenv.isDarwin "-DSYSCONFDIR=${moltenvk}/share"
+    ++ lib.optional stdenv.isLinux "-DSYSCONFDIR=${addOpenGLRunpath.driverLink}/share"
+    ++ lib.optional (stdenv.buildPlatform != stdenv.hostPlatform) "-DUSE_GAS=OFF";
 
-  cmakeFlags = [
-    "-DBUILD_WSI_WAYLAND_SUPPORT=ON" # XLIB/XCB supported by default
-  ];
+  outputs = [ "out" "dev" ];
 
-  patches = [ ./use-xdg-paths.patch ];
+  doInstallCheck = true;
 
-  outputs = [ "out" "dev" "demos" ];
-
-  preConfigure = ''
-    checkRev() {
-      [ "$2" = $(cat "$1_revision") ] || (echo "ERROR: dependency $1 is revision $2 but should be revision" $(cat "$1_revision") && exit 1)
+  installCheckPhase = ''
+    grep -q "${vulkan-headers}/include" $dev/lib/pkgconfig/vulkan.pc || {
+      echo vulkan-headers include directory not found in pkg-config file
+      exit 1
     }
-    checkRev spirv-tools "${spirv-tools.src.rev}"
-    checkRev spirv-headers "${spirv-tools.headers.rev}"
-    checkRev glslang "${glslang.src.rev}"
   '';
 
-  installPhase = ''
-    mkdir -p $out/lib $out/bin
-    cp -d loader/libvulkan.so* $out/lib
-    cp demos/vulkaninfo $out/bin
-    mkdir -p $out/lib $out/share/vulkan/explicit_layer.d
-    cp -d layers/*.so $out/lib/
-    cp -d layers/*.json $out/share/vulkan/explicit_layer.d/
-    sed -i "s:\\./lib:$out/lib/lib:g" "$out/share/vulkan/"*/*.json
-    mkdir -p $dev/include
-    cp -rv ../include $dev/
-    mkdir -p $demos/bin
-    cp demos/smoketest demos/tri demos/cube demos/*.spv demos/*.ppm $demos/bin
-   '';
-
-  meta = with stdenv.lib; {
-    description = "LunarG Vulkan loader";
-    homepage    = http://www.lunarg.com;
-    platforms   = platforms.linux;
+  passthru = {
+    tests.pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+    };
   };
-}
+
+  meta = with lib; {
+    description = "LunarG Vulkan loader";
+    homepage    = "https://www.lunarg.com";
+    platforms   = platforms.unix ++ platforms.windows;
+    license     = licenses.asl20;
+    maintainers = [ maintainers.ralith ];
+    broken = finalAttrs.version != vulkan-headers.version;
+    pkgConfigModules = [ "vulkan" ];
+  };
+})

@@ -1,11 +1,20 @@
-{ stdenv, fetchurl, autoreconfHook, pkgconfig, fftw, speexdsp }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, pkg-config
+, fftw
+, speexdsp
+, withFft ? !stdenv.hostPlatform.isMinGW
+}:
 
 stdenv.mkDerivation rec {
-  name = "speex-1.2rc2";
+  pname = "speex";
+  version = "1.2.1";
 
   src = fetchurl {
-    url = "http://downloads.us.xiph.org/releases/speex/${name}.tar.gz";
-    sha256 = "14g8ph39inkrif749lzjm089g7kwk0hymq1a3i9ch5gz8xr7r8na";
+    url = "http://downloads.us.xiph.org/releases/speex/speex-${version}.tar.gz";
+    sha256 = "sha256-S0TU8rOKNwotmKeDKf78VqDPk9HBvnACkhe6rmYo/uo=";
   };
 
   postPatch = ''
@@ -14,21 +23,21 @@ stdenv.mkDerivation rec {
 
   outputs = [ "out" "dev" "doc" ];
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ fftw speexdsp ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = lib.optionals withFft [ fftw ]
+    ++ [ speexdsp ];
 
-  # TODO: Remove this will help with immediate backward compatability
+  # TODO: Remove this will help with immediate backward compatibility
   propagatedBuildInputs = [ speexdsp ];
 
-  configureFlags = [
+  configureFlags = lib.optionals withFft [
     "--with-fft=gpl-fftw3"
   ];
 
-  meta = with stdenv.lib; {
-    hompage = http://www.speex.org/;
+  meta = with lib; {
+    homepage = "https://www.speex.org/";
     description = "An Open Source/Free Software patent-free audio compression format designed for speech";
     license = licenses.bsd3;
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+    platforms = platforms.unix ++ platforms.windows;
   };
 }

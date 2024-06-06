@@ -1,21 +1,39 @@
-{ stdenv, fetchurl, autoconf, automake, intltool, libtool, pkgconfig, encfs
-, glib , gnome3, gtk3, libgnome_keyring, vala_0_23, wrapGAppsHook, xorg
-, libgee_0_6
+{ lib, stdenv, fetchurl, autoconf, automake, intltool, libtool, pkg-config
+, encfs, libsecret , glib , libgee, gtk3, vala, wrapGAppsHook3, xorg
+, gobject-introspection
 }:
 
 stdenv.mkDerivation rec {
-  version = "1.8.16";
-  name = "gnome-encfs-manager-${version}";
+  version = "1.9";
+  pname = "gnome-encfs-manager";
 
   src = fetchurl {
-    url = "https://launchpad.net/gencfsm/trunk/1.8/+download/gnome-encfs-manager_${version}.tar.gz";
-    sha256 = "06sz6zcmvxkqww5gx4brcqs4hlpy9d8sal9nmw0pdsvh8k5vmpgn";
+    url = with lib.versions;
+      "https://launchpad.net/gencfsm/trunk/${major version}.${minor version}/+download/gnome-encfs-manager_${version}.tar.xz";
+    sha256 = "RXVwg/xhfAQv3pWp3UylOhMKDh9ZACTuKM4lPrn1dk8=";
   };
 
-  buildInputs = [ autoconf automake intltool libtool pkgconfig vala_0_23 glib encfs
-    gtk3 libgnome_keyring libgee_0_6 xorg.libSM xorg.libICE
-    wrapGAppsHook ];
+  nativeBuildInputs = [
+    autoconf
+    automake
+    intltool
+    libtool
+    pkg-config
+    vala
+    wrapGAppsHook3
+    gobject-introspection
+  ];
+  buildInputs = [
+    glib
+    encfs
+    gtk3
+    libgee
+    xorg.libSM
+    xorg.libICE
+    libsecret
+  ];
 
+  # Fix hardcoded paths to /bin/mkdir
   patches = [ ./makefile-mkdir.patch ];
 
   preConfigure = ''
@@ -24,14 +42,17 @@ stdenv.mkDerivation rec {
 
   configureFlags = [ "--disable-appindicator" ];
 
-  preFixup = ''gappsWrapperArgs+=(--prefix PATH : ${encfs}/bin)'';
+  preFixup = "gappsWrapperArgs+=(--prefix PATH : ${encfs}/bin)";
 
-  meta = with stdenv.lib; {
-    homepage = http://www.libertyzero.com/GEncfsM/;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "http://www.libertyzero.com/GEncfsM/";
+    downloadPage = "https://launchpad.net/gencfsm/";
     description = "EncFS manager and mounter with GNOME3 integration";
+    mainProgram = "gnome-encfs-manager";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
     maintainers = [ maintainers.spacefrogg ];
-    broken = true;
   };
 }

@@ -1,41 +1,48 @@
-{stdenv, fetchurl, ncurses, tcl, openssl, pam, pkgconfig, gettext, kerberos
+{ lib
+, stdenv
+, fetchgit
+, buildPackages
+, ncurses
+, tcl
+, openssl
+, pam
+, libkrb5
 , openldap
+, libxcrypt
+, gitUpdater
 }:
 
-# NOTE: Please check if any changes here are applicable to ../realpine/ as well
-let
-  version = "2.00";
-  baseName = "alpine";
-in
-stdenv.mkDerivation {
-  name = "${baseName}-${version}";
+stdenv.mkDerivation rec {
+  pname = "alpine";
+  version = "2.26";
 
-  src = fetchurl {
-    url = "ftp://ftp.cac.washington.edu/alpine/alpine-${version}.tar.bz2";
-    sha256 = "19m2w21dqn55rhxbh5lr9qarc2fqa9wmpj204jx7a0zrb90bhpf8";
+  src = fetchgit {
+    url = "https://repo.or.cz/alpine.git";
+    rev = "v${version}";
+    hash = "sha256-cJyUBatQBjD6RG+jesJ0JRhWghPRBACc/HQl+2aCTd0=";
   };
 
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+
   buildInputs = [
-    ncurses tcl openssl pam kerberos openldap
+    ncurses tcl openssl pam libkrb5 openldap libxcrypt
   ];
 
-  hardeningDisable = [ "format" "fortify" ];
+  hardeningDisable = [ "format" ];
 
   configureFlags = [
     "--with-ssl-include-dir=${openssl.dev}/include/openssl"
-    "--with-tcl-lib=${tcl.libPrefix}"
     "--with-passfile=.pine-passfile"
+    "--with-c-client-target=slx"
   ];
 
-  preConfigure = ''
-    export NIX_LDFLAGS="$NIX_LDFLAGS -lgcc_s"
-  '';
+  passthru.updateScript = gitUpdater { rev-prefix = "v"; };
 
-  meta = {
+  meta = with lib; {
     description = "Console mail reader";
-    license = stdenv.lib.licenses.asl20;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = "https://www.washington.edu/alpine/";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ raskin rhendric ];
+    platforms = platforms.linux;
+    homepage = "https://alpineapp.email/";
   };
 }

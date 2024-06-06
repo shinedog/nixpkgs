@@ -1,35 +1,86 @@
-{ stdenv
-, fetchurl
+{ lib, stdenv
+, fetchurl, unzip
 , hdf5
+, bzip2
+, libzip
+, zstd
+, szipSupport ? false
+, szip
+, libxml2
 , m4
 , curl # for DAP
+, removeReferencesTo
 }:
 
 let
-  mpiSupport = hdf5.mpiSupport;
-  mpi = hdf5.mpi;
+  inherit (hdf5) mpiSupport mpi;
 in stdenv.mkDerivation rec {
-    name = "netcdf-4.3.3.1";
-    src = fetchurl {
-        url = "http://www.unidata.ucar.edu/downloads/netcdf/ftp/${name}.tar.gz";
-        sha256 = "06ds8zm4qvjlqvv4qb637cqr0xgvbhnghrddisad5vj81s5kvpmx";
-    };
+  pname = "netcdf" + lib.optionalString mpiSupport "-mpi";
+  version = "4.9.2";
 
-    buildInputs = [ hdf5 m4 curl mpi];
+  src = fetchurl {
+    url = "https://downloads.unidata.ucar.edu/netcdf-c/${version}/netcdf-c-${version}.tar.gz";
+    hash = "sha256-zxG6u725lj8J9VB54LAZ9tA3H1L44SZKW6jp/asabEg=";
+  };
 
-    passthru = {
-      mpiSupport = mpiSupport;
-      inherit mpi;
-    };
+  postPatch = ''
+    patchShebangs .
 
-    configureFlags = [
-        "--enable-netcdf-4"
-        "--enable-dap"
-        "--enable-shared"
-    ]
-    ++ (stdenv.lib.optionals mpiSupport [ "--enable-parallel-tests" "CC=${mpi}/bin/mpicc" ]);
+    # this test requires the net
+    for a in ncdap_test/Makefile.am ncdap_test/Makefile.in; do
+      substituteInPlace $a --replace testurl.sh " "
+    done
 
-    meta = {
-        platforms = stdenv.lib.platforms.unix;
-    };
+    # Prevent building the tests from prepending `#!/bin/bash` and wiping out the patched shenbangs.
+    substituteInPlace nczarr_test/Makefile.in \
+      --replace '#!/bin/bash' '${stdenv.shell}'
+  '';
+
+  nativeBuildInputs = [ m4 removeReferencesTo ];
+
+  buildInputs = [
+    curl
+    hdf5
+    libxml2
+    mpi
+    bzip2
+    libzip
+    zstd
+  ] ++ lib.optional szipSupport szip;
+
+  passthru = {
+    inherit mpiSupport mpi;
+  };
+
+  configureFlags = [
+      "--enable-netcdf-4"
+      "--enable-dap"
+      "--enable-shared"
+      "--disable-dap-remote-tests"
+      "--with-plugin-dir=${placeholder "out"}/lib/hdf5-plugins"
+  ]
+  ++ (lib.optionals mpiSupport [ "--enable-parallel-tests" "CC=${lib.getDev mpi}/bin/mpicc" ]);
+
+  enableParallelBuilding = true;
+
+  disallowedReferences = [ stdenv.cc ];
+
+  postFixup = ''
+    remove-references-to -t ${stdenv.cc} "$(readlink -f $out/lib/libnetcdf.settings)"
+  '';
+
+  doCheck = !mpiSupport;
+  nativeCheckInputs = [ unzip ];
+
+  preCheck = ''
+    export HOME=$TEMP
+  '';
+
+  meta = {
+    description = "Libraries for the Unidata network Common Data Format";
+    platforms = lib.platforms.unix;
+    homepage = "https://www.unidata.ucar.edu/software/netcdf/";
+    changelog = "https://docs.unidata.ucar.edu/netcdf-c/${version}/RELEASE_NOTES.html";
+    license = lib.licenses.bsd3;
+  };
 }

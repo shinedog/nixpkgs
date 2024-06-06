@@ -1,36 +1,57 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, dbus, libcap }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch
+, meson, ninja, pkg-config, unixtools
+, dbus, libcap, polkit, systemd
+}:
 
 stdenv.mkDerivation rec {
-  name = "rtkit-0.11";
+  pname = "rtkit";
+  version = "0.13";
 
-  src = fetchurl {
-    url = "http://0pointer.de/public/${name}.tar.xz";
-    sha256 = "1l5cb1gp6wgpc9vq6sx021qs6zb0nxg3cn1ba00hjhgnrw4931b8";
+  src = fetchFromGitHub {
+    owner = "heftig";
+    repo = "rtkit";
+    rev = "c295fa849f52b487be6433e69e08b46251950399";
+    sha256 = "0yfsgi3pvg6dkizrww1jxpkvcbhzyw9110n1dypmzq0c5hlzjxcd";
   };
 
-  configureFlags = [
-    "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
-  ];
-
   patches = [
-    # Drop removed ControlGroup stanza
     (fetchpatch {
-      url = "http://git.0pointer.net/rtkit.git/patch/?id=6c28e20c0be2f616a025059fda0ffac84e7f4f17";
-      sha256 = "0lsxk5nv08i1wjb4xh20i5fcwg3x0qq0k4f8bc0r9cczph2sv7ck";
+      name = "meson-actual-use-systemd_systemunitdir.patch";
+      url = "https://github.com/heftig/rtkit/pull/19/commits/7d62095b94f8df3891c984a1535026d2658bb177.patch";
+      sha256 = "17acv549zqcgh7sgprfagbf6drqsr0zdwvf1dsqda7wlqc2h9zn7";
     })
 
-    # security patch: Pass uid of caller to polkit
     (fetchpatch {
-      url = "http://git.0pointer.net/rtkit.git/patch/?id=88d4082ef6caf6b071d749dca1c50e7edde914cc";
-      sha256 = "0hp1blbi359qz8fmr6nj4w9yc0jf3dd176f8pn25wdj38n13qkix";
+      name = "meson-fix-librt-find_library-check.patch";
+      url = "https://github.com/heftig/rtkit/pull/18/commits/98f70edd8f534c371cb4308b9720739c5178918d.patch";
+      sha256 = "18mnjjsdjfr184nkzi01xyphpdngi31ry4bmkv9ysjxf9wilv4nl";
+    })
+
+    (fetchpatch {
+      name = "rtkit-daemon-dont-log-debug-messages-by-default.patch";
+      url = "https://github.com/heftig/rtkit/pull/33/commits/ad649ee491ed1a41537774ad11564a208e598a09.patch";
+      sha256 = "sha256-p+MdJVMv58rFd1uc1UFKtq83RquDSFZ3M6YfaBU12UU=";
     })
   ];
 
-  buildInputs = [ pkgconfig dbus libcap ];
+  nativeBuildInputs = [ meson ninja pkg-config unixtools.xxd ];
+  buildInputs = [ dbus libcap polkit systemd ];
 
-  meta = {
-    homepage = http://0pointer.de/blog/projects/rtkit;
-    descriptions = "A daemon that hands out real-time priority to processes";
-    platforms = stdenv.lib.platforms.linux;
+  mesonFlags = [
+    "-Dinstalled_tests=false"
+
+    "-Ddbus_systemservicedir=${placeholder "out"}/share/dbus-1/system-services"
+    "-Ddbus_interfacedir=${placeholder "out"}/share/dbus-1/interfaces"
+    "-Ddbus_rulesdir=${placeholder "out"}/etc/dbus-1/system.d"
+    "-Dpolkit_actiondir=${placeholder "out"}/share/polkit-1/actions"
+    "-Dsystemd_systemunitdir=${placeholder "out"}/etc/systemd/system"
+  ];
+
+  meta = with lib; {
+    homepage = "https://github.com/heftig/rtkit";
+    description = "A daemon that hands out real-time priority to processes";
+    mainProgram = "rtkitctl";
+    license = with licenses; [ gpl3 bsd0 ]; # lib is bsd license
+    platforms = platforms.linux;
   };
 }

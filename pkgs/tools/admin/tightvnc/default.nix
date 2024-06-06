@@ -1,24 +1,57 @@
-{ stdenv, fetchurl, xlibsWrapper, zlib, libjpeg, imake, gccmakedep, libXmu
-, libXaw, libXpm, libXp , perl, xauth, fontDirectories, openssh }:
+{ lib
+, stdenv
+, fetchurl
+, zlib
+, libjpeg
+, imake
+, gccmakedep
+, libXaw
+, libXext
+, libXmu
+, libXp
+, libXpm
+, perl
+, xauth
+, fontDirectories
+, openssh
+}:
 
-stdenv.mkDerivation {
-  name = "tightvnc-1.3.10";
+stdenv.mkDerivation rec {
+  pname = "tightvnc";
+  version = "1.3.10";
 
   src = fetchurl {
-    url = mirror://sourceforge/vnc-tight/tightvnc-1.3.10_unixsrc.tar.bz2;
+    url = "mirror://sourceforge/vnc-tight/tightvnc-${version}_unixsrc.tar.bz2";
     sha256 = "f48c70fea08d03744ae18df6b1499976362f16934eda3275cead87baad585c0d";
   };
 
+  patches = [
+    ./1.3.10-CVE-2019-15678.patch
+    ./1.3.10-CVE-2019-15679.patch
+    ./1.3.10-CVE-2019-15680.patch
+    ./1.3.10-CVE-2019-8287.patch
+  ];
+
   # for the builder script
-  inherit xauth fontDirectories perl;
-  gcc = stdenv.cc.cc;
+  inherit fontDirectories;
 
   hardeningDisable = [ "format" ];
 
-  buildInputs = [ xlibsWrapper zlib libjpeg imake gccmakedep libXmu libXaw
-                  libXpm libXp xauth openssh ];
+  buildInputs = [
+    zlib
+    libjpeg
+    imake
+    gccmakedep
+    libXaw
+    libXext
+    libXmu
+    libXp
+    libXpm
+    xauth
+    openssh
+  ];
 
-  patchPhase = ''
+  postPatch = ''
     fontPath=
     for i in $fontDirectories; do
       for j in $(find $i -name fonts.dir); do
@@ -27,42 +60,43 @@ stdenv.mkDerivation {
     done
 
     sed -i "s@/usr/bin/ssh@${openssh}/bin/ssh@g" vncviewer/vncviewer.h
-  '';
 
-  buildPhase = ''
-    xmkmf
-    make World
     sed -e 's@/usr/bin/perl@${perl}/bin/perl@' \
         -e 's@unix/:7100@'$fontPath'@' \
         -i vncserver
 
-    cd Xvnc
-    sed -e 's@.* CppCmd .*@#define CppCmd		'$gcc'/bin/cpp@' -i config/cf/linux.cf
-    sed -e 's@.* CppCmd .*@#define CppCmd		'$gcc'/bin/cpp@' -i config/cf/Imake.tmpl
+    sed -e 's@.* CppCmd .*@#define CppCmd		cpp@' -i Xvnc/config/cf/linux.cf
+    sed -e 's@.* CppCmd .*@#define CppCmd		cpp@' -i Xvnc/config/cf/Imake.tmpl
     sed -i \
         -e 's@"uname","xauth","Xvnc","vncpasswd"@"uname","Xvnc","vncpasswd"@g' \
         -e "s@\<xauth\>@${xauth}/bin/xauth@g" \
-        ../vncserver
-    ./configure
-    make
-    cd ..
+        vncserver
+  '';
+
+  preInstall = ''
+    mkdir -p $out/bin
+    mkdir -p $out/share/man/man1
   '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/share/man/man1
+    runHook preInstall
+
     ./vncinstall $out/bin $out/share/man
 
+    runHook postInstall
+  '';
+
+  postInstall = ''
     # fix HTTP client:
-    t=$out/share/tightvnc
-    mkdir -p $t
-    sed -i "s@/usr/local/vnc/classes@$out/vnc/classes@g" $out/bin/vncserver
-    cp -r classes $t
+    mkdir -p $out/share/tightvnc
+    cp -r classes $out/share/tightvnc
+    substituteInPlace $out/bin/vncserver \
+      --replace /usr/local/vnc/classes $out/share/tightvnc/classes
   '';
 
   meta = {
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = "http://vnc-tight.sourceforge.net/";
+    license = lib.licenses.gpl2Plus;
+    homepage = "https://vnc-tight.sourceforge.net/";
     description = "Improved version of VNC";
 
     longDescription = ''
@@ -73,6 +107,10 @@ stdenv.mkDerivation {
     '';
 
     maintainers = [];
-    platforms = stdenv.lib.platforms.unix;
+    platforms = lib.platforms.unix;
+
+    knownVulnerabilities = [ "CVE-2021-42785" ];
+    # Unfortunately, upstream doesn't maintain the 1.3 branch anymore, and the
+    # new 2.x branch is substantially different (requiring either Windows or Java)
   };
 }

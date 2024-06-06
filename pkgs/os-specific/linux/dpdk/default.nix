@@ -1,71 +1,89 @@
-{ stdenv, lib, kernel, fetchurl, pkgconfig, libvirt }:
-
-assert lib.versionAtLeast kernel.version "3.18";
+{ stdenv, lib
+, fetchurl
+, pkg-config, meson, ninja, makeWrapper
+, libbsd, numactl, libbpf, zlib, elfutils, jansson, openssl, libpcap, rdma-core
+, doxygen, python3, pciutils
+, withExamples ? []
+, shared ? false
+, machine ? (
+    if stdenv.isx86_64 then "nehalem"
+    else if stdenv.isAarch64 then "generic"
+    else null
+  )
+}:
 
 stdenv.mkDerivation rec {
-  name = "dpdk-${version}-${kernel.version}";
-  version = "16.07";
+  pname = "dpdk";
+  version = "23.11";
 
   src = fetchurl {
-    url = "http://dpdk.org/browse/dpdk/snapshot/dpdk-${version}.tar.gz";
-    sha256 = "1sgh55w3xpc0lb70s74cbyryxdjijk1fbv9b25jy8ms3lxaj966c";
+    url = "https://fast.dpdk.org/rel/dpdk-${version}.tar.xz";
+    sha256 = "sha256-ZPpY/fyelRDo5BTjvt0WW9PUykZaIxsoAyP4PNU/2GU=";
   };
 
-  buildInputs = [ pkgconfig libvirt ];
+  nativeBuildInputs = [
+    makeWrapper
+    doxygen
+    meson
+    ninja
+    pkg-config
+    python3
+    python3.pkgs.sphinx
+    python3.pkgs.pyelftools
+  ];
+  buildInputs = [
+    jansson
+    libbpf
+    elfutils
+    libpcap
+    numactl
+    openssl.dev
+    zlib
+    python3
+  ];
 
-  RTE_KERNELDIR = "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build";
-  RTE_TARGET = "x86_64-native-linuxapp-gcc";
+  propagatedBuildInputs = [
+    # Propagated to support current DPDK users in nixpkgs which statically link
+    # with the framework (e.g. odp-dpdk).
+    rdma-core
+    # Requested by pkg-config.
+    libbsd
+  ];
 
-  # we need sse3 instructions to build
-  NIX_CFLAGS_COMPILE = [ "-march=core2" ];
-
-  enableParallelBuilding = true;
-  outputs = [ "out" "kmod" "examples" ];
-
-  hardeningDisable = [ "pic" ];
-
-  configurePhase = ''
-    make T=x86_64-native-linuxapp-gcc config
+  postPatch = ''
+    patchShebangs config/arm buildtools
   '';
 
-  buildPhase = ''
-    make T=x86_64-native-linuxapp-gcc install
-    make T=x86_64-native-linuxapp-gcc examples
-  '';
+  mesonFlags = [
+    "-Dtests=false"
+    "-Denable_docs=true"
+    "-Ddeveloper_mode=disabled"
+  ]
+  ++ [(if shared then "-Ddefault_library=shared" else "-Ddefault_library=static")]
+  ++ lib.optional (machine != null) "-Dmachine=${machine}"
+  ++ lib.optional (withExamples != []) "-Dexamples=${builtins.concatStringsSep "," withExamples}";
 
-  installPhase = ''
-    install -m 0755 -d $out/lib
-    install -m 0644 ${RTE_TARGET}/lib/*.a $out/lib
+  postInstall = ''
+    # Remove Sphinx cache files. Not only are they not useful, but they also
+    # contain store paths causing spurious dependencies.
+    rm -rf $out/share/doc/dpdk/html/.doctrees
 
-    install -m 0755 -d $out/include
-    install -m 0644 ${RTE_TARGET}/include/*.h $out/include
-
-    install -m 0755 -d $out/include/generic
-    install -m 0644 ${RTE_TARGET}/include/generic/*.h $out/include/generic
-
-    install -m 0755 -d $out/include/exec-env
-    install -m 0644 ${RTE_TARGET}/include/exec-env/*.h $out/include/exec-env
-
-    install -m 0755 -d $out/${RTE_TARGET}
-    install -m 0644 ${RTE_TARGET}/.config $out/${RTE_TARGET}
-
-    install -m 0755 -d $out/${RTE_TARGET}/include
-    install -m 0644 ${RTE_TARGET}/include/rte_config.h $out/${RTE_TARGET}/include
-
-    cp -pr mk scripts $out/
-
-    mkdir -p $kmod/lib/modules/${kernel.modDirVersion}/kernel/drivers/net
-    cp ${RTE_TARGET}/kmod/*.ko $kmod/lib/modules/${kernel.modDirVersion}/kernel/drivers/net
-
+    wrapProgram $out/bin/dpdk-devbind.py \
+      --prefix PATH : "${lib.makeBinPath [ pciutils ]}"
+  '' + lib.optionalString (withExamples != []) ''
     mkdir -p $examples/bin
-    find examples ${RTE_TARGET}/app -type f -executable -exec cp {} $examples/bin \;
+    find examples -type f -executable -exec install {} $examples/bin \;
   '';
 
-  meta = with stdenv.lib; {
+  outputs =
+    [ "out" "doc" ]
+    ++ lib.optional (withExamples != []) "examples";
+
+  meta = with lib; {
     description = "Set of libraries and drivers for fast packet processing";
-    homepage = http://dpdk.org/;
+    homepage = "http://dpdk.org/";
     license = with licenses; [ lgpl21 gpl2 bsd2 ];
-    platforms =  [ "x86_64-linux" ];
-    maintainers = [ maintainers.domenkozar ];
+    platforms =  platforms.linux;
+    maintainers = with maintainers; [ magenbluten orivej mic92 zhaofengli ];
   };
 }

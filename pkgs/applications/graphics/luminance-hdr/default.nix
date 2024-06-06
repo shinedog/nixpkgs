@@ -1,35 +1,39 @@
-{ stdenv, cmake, fetchurl, fetchpatch, pkgconfig, boost, exiv2, fftwFloat, gsl
+{ lib, mkDerivation, cmake, fetchFromGitHub, fetchpatch, pkg-config
+, boost, exiv2, fftwFloat, gsl
 , ilmbase, lcms2, libraw, libtiff, openexr
-, qtbase, qtdeclarative, qttools, qtwebkit
+, qtbase, qtdeclarative, qttools, qtwebengine, eigen
 }:
 
-stdenv.mkDerivation rec {
-  name = "luminance-hdr-2.4.0";
+mkDerivation rec {
+  pname = "luminance-hdr";
+  version = "2.6.1.1";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/qtpfsgui/${name}.tar.bz2";
-    sha256 = "00fldbcizrx8jcnjgq74n3zmbm27dxzl96fxa7q49689mfnlw08l";
+  src = fetchFromGitHub {
+    owner = "LuminanceHDR";
+    repo = "LuminanceHDR";
+    rev = "v.${version}";
+    sha256 = "sha256-PWqtYGx8drfMVp7D7MzN1sIUTQ+Xz5yyeHN87p2r6PY=";
   };
 
-  patches = [(fetchpatch {
-    name = "fix-qt53-build.diff";
-    url = "http://anonscm.debian.org/cgit/pkg-phototools/luminance-hdr.git/"
-      + "plain/debian/patches/51_qt5_printsupport.diff?id=00c869a860062dac181303f2c03a3513c0e210bc";
-    sha256 = "0nzvfxd3ybxx61rj6vxcaaxfrsxrl9af3h8jj7pr3rncisnl9gkl";
-  })];
+  patches = [
+    (fetchpatch {
+      name = "exiv2-0.28.patch";
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/luminancehdr/-/raw/2e4a7321c7d20a52da104f4aa4dc76ac7224d94b/exiv2-0.28.patch";
+      hash = "sha256-Hj+lqAd5VuTjmip8Po7YiGOWWDxnu4IMXOiEFBukXpk=";
+    })
+  ];
 
-  NIX_CFLAGS_COMPILE = "-I${ilmbase.dev}/include/OpenEXR";
+  env.NIX_CFLAGS_COMPILE = "-I${ilmbase.dev}/include/OpenEXR";
 
-  buildInputs =
-    [
-      qtbase qtdeclarative qttools qtwebkit
-      boost exiv2 fftwFloat gsl ilmbase lcms2 libraw libtiff openexr
-    ];
+  buildInputs = [
+    qtbase qtdeclarative qttools qtwebengine eigen
+    boost exiv2 fftwFloat gsl ilmbase lcms2 libraw libtiff openexr
+  ];
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  meta = with stdenv.lib; {
-    homepage = http://qtpfsgui.sourceforge.net/;
+  meta = with lib; {
+    homepage = "https://qtpfsgui.sourceforge.net/";
     description = "A complete open source solution for HDR photography";
     license = licenses.gpl2;
     platforms = platforms.linux;

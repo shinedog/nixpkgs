@@ -1,58 +1,111 @@
-{ stdenv, fetchurl, gtk3, pythonPackages, intltool,
-  pango, gsettings_desktop_schemas }:
+{ lib
+, fetchFromGitHub
+, gtk3
+, pythonPackages
+, glibcLocales
+, intltool
+, gexiv2
+, pango
+, gobject-introspection
+, wrapGAppsHook3
+, gettext
+  # Optional packages:
+, enableOSM ? true
+, osm-gps-map
+, glib-networking
+, enableGraphviz ? true
+, graphviz
+, enableGhostscript ? true
+, ghostscript
+}:
 
 let
-  inherit (pythonPackages) python buildPythonApplication;
-in buildPythonApplication rec {
-  version = "4.1.1";
-  name = "gramps-${version}";
+  inherit (pythonPackages) buildPythonApplication pythonOlder;
+in
+buildPythonApplication rec {
+  version = "5.2.2";
+  pname = "gramps";
+  pyproject = true;
 
-  buildInputs = [ intltool gtk3 ];
+  disabled = pythonOlder "3.8";
 
-  # Currently broken
-  doCheck = false;
-
-  src = fetchurl {
-    url = "mirror://sourceforge/gramps/Stable/${version}/${name}.tar.gz";
-    sha256 = "0jdps7yx2mlma1hdj64wssvnqd824xdvw0bmn2dnal5fn3h7h060";
+  src = fetchFromGitHub {
+    owner = "gramps-project";
+    repo = "gramps";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-umyc5G4p0GSEQEtq6sPUgtq1waNL1OW7iLxnf5dGcLc=";
   };
 
-  pythonPath = with pythonPackages; [ pygobject3 pycairo ] ++ [ pango ];
+  patches = [
+    # textdomain doesn't exist as a property on locale when running on Darwin
+    ./check-locale-hasattr-textdomain.patch
+    # disables the startup warning about bad GTK installation
+    ./disable-gtk-warning-dialog.patch
+  ];
 
-  # Same installPhase as in buildPythonApplication but without --old-and-unmanageble
-  # install flag.
-  installPhase = ''
-    runHook preInstall
+  nativeBuildInputs = [
+    wrapGAppsHook3
+    intltool
+    gettext
+    gobject-introspection
+    pythonPackages.setuptools
+  ];
 
-    mkdir -p "$out/lib/${python.libPrefix}/site-packages"
+  nativeCheckInputs = [
+    glibcLocales
+    pythonPackages.unittestCheckHook
+    pythonPackages.jsonschema
+    pythonPackages.mock
+    pythonPackages.lxml
+  ];
 
-    export PYTHONPATH="$out/lib/${python.libPrefix}/site-packages:$PYTHONPATH"
+  buildInputs = [ gtk3 pango gexiv2 ]
+    # Map support
+    ++ lib.optionals enableOSM [ osm-gps-map glib-networking ]
+    # Graphviz support
+    ++ lib.optional enableGraphviz graphviz
+    # Ghostscript support
+    ++ lib.optional enableGhostscript ghostscript
+  ;
 
-    ${python}/bin/${python.executable} setup.py install \
-      --install-lib=$out/lib/${python.libPrefix}/site-packages \
-      --prefix="$out"
+  propagatedBuildInputs = with pythonPackages; [
+    bsddb3
+    pyicu
+    pygobject3
+    pycairo
+  ];
 
-    eapth="$out/lib/${python.libPrefix}"/site-packages/easy-install.pth
-    if [ -e "$eapth" ]; then
-        # move colliding easy_install.pth to specifically named one
-        mv "$eapth" $(dirname "$eapth")/${name}.pth
-    fi
 
-    rm -f "$out/lib/${python.libPrefix}"/site-packages/site.py*
-
-    runHook postInstall
+  preCheck = ''
+    export HOME=$(mktemp -d)
+    mkdir .git # Make gramps think that it's not in an installed state
   '';
 
-  # gobjectIntrospection package, wrap accordingly
+  dontWrapGApps = true;
+
   preFixup = ''
-    wrapProgram $out/bin/gramps \
-      --prefix GI_TYPELIB_PATH : "$GI_TYPELIB_PATH" \
-      --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH:$out/share"
+    makeWrapperArgs+=(
+      "''${gappsWrapperArgs[@]}"
+    )
   '';
 
-  meta = with stdenv.lib; {
+  # https://github.com/NixOS/nixpkgs/issues/149812
+  # https://nixos.org/manual/nixpkgs/stable/#ssec-gnome-hooks-gobject-introspection
+  strictDeps = false;
+
+  meta = with lib; {
     description = "Genealogy software";
-    homepage = http://gramps-project.org;
-    license = licenses.gpl2;
+    mainProgram = "gramps";
+    homepage = "https://gramps-project.org";
+    maintainers = with maintainers; [ jk pinpox tomasajt ];
+    changelog = "https://github.com/gramps-project/gramps/blob/${src.rev}/ChangeLog";
+    longDescription = ''
+      Every person has their own story but they are also part of a collective
+      family history. Gramps gives you the ability to record the many details of
+      an individual's life as well as the complex relationships between various
+      people, places and events. All of your research is kept organized,
+      searchable and as precise as you need it to be.
+    '';
+    license = licenses.gpl2Plus;
   };
 }

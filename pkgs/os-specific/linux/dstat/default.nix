@@ -1,34 +1,43 @@
-{ stdenv, fetchurl, python2Packages }:
+{ lib, fetchFromGitHub, fetchpatch, python3Packages }:
 
-stdenv.mkDerivation rec {
-  name = "dstat-${version}";
-  version = "0.7.3";
+python3Packages.buildPythonApplication rec {
+  pname = "dstat";
+  format = "other";
+  version = "0.7.4";
 
-  src = fetchurl {
-    url = "https://github.com/dagwieers/dstat/archive/${version}.tar.gz";
-    sha256 = "16286z3y2lc9nsq8njzjkv6k2vyxrj9xiixj1k3gnsbvhlhkirj6";
+  src = fetchFromGitHub {
+    owner = "dstat-real";
+    repo = "dstat";
+    rev = "v${version}";
+    sha256 = "1qnmkhqmjd1m3if05jj29dvr5hn6kayq9bkkkh881w472c0zhp8v";
   };
 
-  buildInputs = with python2Packages; [ python-wifi wrapPython ];
+  propagatedBuildInputs = with python3Packages; [ six ];
 
-  pythonPath = with python2Packages; [ python-wifi ];
-
-  patchPhase = ''
-    sed -i -e 's|/usr/bin/env python|${python2Packages.python.interpreter}|' \
-           -e "s|/usr/share/dstat|$out/share/dstat|" dstat
-  '';
+  patches = [
+    ./fix_pluginpath.patch
+    # this fixes another bug with python3
+    (fetchpatch {
+      url = "https://github.com/efexgee/dstat/commit/220a785321b13b6df92a536080aca6ef1cb644ad.patch";
+      sha256 = "08kcz3yxvl35m55y7g1pr73x3bjcqnv0qlswxqyq8cqxg9zd64cn";
+    })
+  ];
 
   makeFlags = [ "prefix=$(out)" ];
 
-  postInstall = ''
-    wrapPythonProgramsIn $out/bin "$out $pythonPath"
+  # remove deprecation warnings
+  preFixup = ''
+    sed -i "s/import collections/import collections.abc/g" $out/share/dstat/dstat.py $out/bin/dstat
+    sed -i "s/collections.Sequence/collections.abc.Sequence/g" "$out"/bin/dstat
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://dag.wieers.com/home-made/dstat/;
+  meta = with lib; {
+    homepage = "http://dag.wieers.com/home-made/dstat/";
     description = "Versatile resource statistics tool";
+    mainProgram = "dstat";
     license = licenses.gpl2;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ jgeerds nckx ];
+    maintainers = with maintainers; [ ];
+    changelog = "https://github.com/dstat-real/dstat/blob/v${version}/ChangeLog";
   };
 }

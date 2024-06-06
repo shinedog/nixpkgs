@@ -1,13 +1,12 @@
-{ stdenv, fetchurl, withoutInitTools ? false }:
+{ lib, stdenv, fetchurl, libxcrypt, withoutInitTools ? false }:
 
-let version = "2.88dsf"; in
-
-stdenv.mkDerivation {
-  name = (if withoutInitTools then "sysvtools" else "sysvinit") + "-" + version;
+stdenv.mkDerivation rec {
+  pname = if withoutInitTools then "sysvtools" else "sysvinit";
+  version = "3.04";
 
   src = fetchurl {
-    url = "mirror://savannah/sysvinit/sysvinit-${version}.tar.bz2";
-    sha256 = "068mvzaz808a673zigyaqb63xc8bndh2klk16zi5c83rw70wifv0";
+    url = "mirror://savannah/sysvinit/sysvinit-${version}.tar.xz";
+    sha256 = "sha256-KmIf5uRSi8kTCLdIZ92q6733dT8COVwMW66Be9K346U=";
   };
 
   prePatch = ''
@@ -15,11 +14,9 @@ stdenv.mkDerivation {
     sed -i -e "s,/sbin/,$out/sbin/," src/halt.c src/init.c src/paths.h
   '';
 
-  makeFlags = "SULOGINLIBS=-lcrypt ROOT=$(out) MANDIR=/share/man";
+  buildInputs = [ libxcrypt ];
 
-  crossAttrs = {
-    makeFlags = "SULOGINLIBS=-lcrypt ROOT=$(out) MANDIR=/share/man CC=${stdenv.cross.config}-gcc";
-  };
+  makeFlags = [ "SULOGINLIBS=-lcrypt" "ROOT=$(out)" "MANDIR=/share/man" ];
 
   preInstall =
     ''
@@ -30,19 +27,20 @@ stdenv.mkDerivation {
     mv $out/sbin/killall5 $out/bin
     ln -sf killall5 $out/bin/pidof
   ''
-    + stdenv.lib.optionalString withoutInitTools
+    + lib.optionalString withoutInitTools
     ''
       shopt -s extglob
       rm -rf $out/sbin/!(sulogin)
       rm -rf $out/include
       rm -rf $out/share/man/man5
       rm $(for i in $out/share/man/man8/*; do echo $i; done | grep -v 'pidof\|killall5')
-      rm $out/bin/{mountpoint,wall} $out/share/man/man1/{mountpoint.1,wall.1}
+      rm $out/bin/wall $out/share/man/man1/wall.1
     '';
 
   meta = {
-    homepage = http://www.nongnu.org/sysvinit/;
+    homepage = "https://www.nongnu.org/sysvinit/";
     description = "Utilities related to booting and shutdown";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
   };
 }

@@ -1,24 +1,25 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation {
-  name = "lato-2.0";
+stdenvNoCC.mkDerivation {
+  pname = "lato";
+  version = "2.0";
 
-  src = fetchurl {
-    url = http://www.latofonts.com/download/Lato2OFL.zip;
-    sha256 = "1f5540g0ja1nx3ddd3ywn77xc81ssrxpq8n3gyb9sabyq2b4xda2";
+  src = fetchzip {
+    url = "https://www.latofonts.com/download/Lato2OFL.zip";
+    stripRoot = false;
+    hash = "sha256-n1TsqigCQIGqyGLGTjLtjHuBf/iCwRlnqh21IHfAuXI=";
   };
 
-  sourceRoot = "Lato2OFL";
-
-  buildInputs = [ unzip ];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/lato
-    cp *.ttf $out/share/fonts/lato
+    runHook preInstall
+
+    install -Dm644 Lato2OFL/*.ttf -t $out/share/fonts/lato
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.latofonts.com/;
+  meta = with lib; {
+    homepage = "https://www.latofonts.com/";
 
     description = ''
       Sans-serif typeface family designed in Summer 2010 by Łukasz Dziedzic

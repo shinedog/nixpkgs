@@ -1,46 +1,104 @@
-{ stdenv, fetchurl, glib, libxml2, pkgconfig
-, gnomeSupport ? true, libgnome_keyring3, sqlite, glib_networking, gobjectIntrospection
-, valaSupport ? true, vala_0_32
-, libintlOrEmpty
-, intltool, python }:
-let
-  majorVersion = "2.56";
-  version = "${majorVersion}.0";
-in
-stdenv.mkDerivation {
-  name = "libsoup-${version}";
+{ stdenv
+, lib
+, fetchurl
+, glib
+, libxml2
+, meson
+, ninja
+, pkg-config
+, gnome
+, libsysprof-capture
+, gobject-introspection
+, vala
+, libpsl
+, brotli
+, gnomeSupport ? true
+, sqlite
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+}:
 
-  src = fetchurl {
-    url = "mirror://gnome/sources/libsoup/${majorVersion}/libsoup-${version}.tar.xz";
-    sha256 = "d8216b71de8247bc6f274ec054c08547b2e04369c1f8add713e9350c8ef81fe5";
-  };
-
-  prePatch = ''
-    patchShebangs libsoup/
-  '' + stdenv.lib.optionalString valaSupport
-  ''
-     substituteInPlace libsoup/Makefile.in --replace "\$(DESTDIR)\$(vapidir)" "\$(DESTDIR)\$(girdir)/../vala/vapi"
-  '';
+stdenv.mkDerivation rec {
+  pname = "libsoup";
+  version = "2.74.3";
 
   outputs = [ "out" "dev" ];
 
-  buildInputs = libintlOrEmpty ++ [ intltool python sqlite ]
-    ++ stdenv.lib.optionals valaSupport [ vala_0_32 ];
-  nativeBuildInputs = [ pkgconfig ];
-  propagatedBuildInputs = [ glib libxml2 gobjectIntrospection ]
-    ++ stdenv.lib.optionals gnomeSupport [ libgnome_keyring3 ];
-  passthru.propagatedUserEnvPackages = [ glib_networking.out ];
+  src = fetchurl {
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "sha256-5Ld8Qc/EyMWgNfzcMgx7xs+3XvfFoDQVPfFBP6HZLxM=";
+  };
 
-  # glib_networking is a runtime dependency, not a compile-time dependency
-  configureFlags = "--disable-tls-check"
-    + " --enable-vala=${if valaSupport then "yes" else "no"}"
-    + stdenv.lib.optionalString (!gnomeSupport) " --without-gnome";
+  depsBuildBuild = [
+    pkg-config
+  ];
 
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    glib
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+    vala
+  ];
 
-  postInstall = "rm -rf $out/share/gtk-doc";
+  buildInputs = [
+    sqlite
+    libpsl
+    glib.out
+    brotli
+  ] ++ lib.optionals stdenv.isLinux [
+    libsysprof-capture
+  ];
+
+  propagatedBuildInputs = [
+    glib
+    libxml2
+  ];
+
+  mesonFlags = [
+    "-Dtls_check=false" # glib-networking is a runtime dependency, not a compile-time dependency
+    "-Dgssapi=disabled"
+    "-Dvapi=${if withIntrospection then "enabled" else "disabled"}"
+    "-Dintrospection=${if withIntrospection then "enabled" else "disabled"}"
+    "-Dgnome=${lib.boolToString gnomeSupport}"
+    "-Dntlm=disabled"
+  ] ++ lib.optionals (!stdenv.isLinux) [
+    "-Dsysprof=disabled"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = "-lpthread";
+
+  doCheck = false; # ERROR:../tests/socket-test.c:37:do_unconnected_socket_test: assertion failed (res == SOUP_STATUS_OK): (2 == 200)
+  separateDebugInfo = true;
+
+  postPatch = ''
+    # fixes finding vapigen when cross-compiling
+    # the commit is in 3.0.6
+    # https://gitlab.gnome.org/GNOME/libsoup/-/commit/5280e936d0a76f94dbc5d8489cfbdc0a06343f65
+    substituteInPlace meson.build \
+      --replace "required: vapi_opt)" "required: vapi_opt, native: false)"
+
+    patchShebangs libsoup/
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "odd-unstable";
+      freeze = true;
+    };
+  };
 
   meta = {
+    description = "HTTP client/server library for GNOME";
+    homepage = "https://gitlab.gnome.org/GNOME/libsoup";
+    license = lib.licenses.lgpl2Plus;
     inherit (glib.meta) maintainers platforms;
+    pkgConfigModules = [
+      "libsoup-2.4"
+      "libsoup-gnome-2.4"
+    ];
   };
 }

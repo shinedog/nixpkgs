@@ -1,21 +1,25 @@
-{ stdenv, fetchurl, cmake, pkgconfig }:
+{ lib, stdenv, fetchurl, cmake, pkg-config, darwin }:
 
 stdenv.mkDerivation rec {
-  name = "libdiscid-0.6.1";
+  pname = "libdiscid";
+  version = "0.6.4";
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake pkg-config ];
+
+  buildInputs = lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.IOKit ];
 
   src = fetchurl {
-    url = "http://ftp.musicbrainz.org/pub/musicbrainz/libdiscid/${name}.tar.gz";
-    sha256 = "1mbd5y9056638cffpfwc6772xwrsk18prv1djsr6jpfim38jpsxc";
+    url = "http://ftp.musicbrainz.org/pub/musicbrainz/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-3V6PHJrq1ELiO3SanMkzY3LmLoitcHmitiiVsDkMsoI=";
   };
 
-  meta = with stdenv.lib; {
+  NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-framework CoreFoundation -framework IOKit";
+
+  meta = with lib; {
     description = "A C library for creating MusicBrainz DiscIDs from audio CDs";
-    homepage = http://musicbrainz.org/doc/libdiscid;
+    homepage = "http://musicbrainz.org/doc/libdiscid";
     maintainers = with maintainers; [ ehmry ];
     license = licenses.lgpl21;
-    platforms = platforms.linux;
+    platforms = platforms.all;
   };
 }

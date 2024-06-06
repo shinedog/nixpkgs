@@ -1,28 +1,27 @@
-{ stdenv, fetchsvn, boost, gtk2, pkgconfig, python }:
+{ lib, stdenv, fetchgit, boost, gtk2, pkg-config, python3, wafHook }:
 
 stdenv.mkDerivation rec {
-  name = "raul-svn-${rev}";
-  rev = "5675";
+  pname = "raul";
+  version = "unstable-2019-12-09";
+  name = "${pname}-${version}";
 
-  src = fetchsvn {
-    url = "http://svn.drobilla.net/lad/trunk/raul";
-    rev = rev;
-    sha256 = "0yvm3j57lch89dixx7zsip7pxsws0xxy1y6ck7a3l0534qc5kny4";
+  src = fetchgit {
+    url = "https://gitlab.com/drobilla/raul.git";
+    fetchSubmodules = true;
+    rev = "e87bb398f025912fb989a09f1450b838b251aea1";
+    sha256 = "1z37jb6ghc13b8nv8a8hcg669gl8vh4ni9djvfgga9vcz8rmcg8l";
   };
 
-  buildInputs = [ boost gtk2 pkgconfig python ];
+  nativeBuildInputs = [ pkg-config wafHook python3 ];
+  buildInputs = [ boost gtk2 ];
 
-  configurePhase = "python waf configure --prefix=$out";
+  strictDeps = true;
 
-  buildPhase = "python waf";
-
-  installPhase = "python waf install";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A C++ utility library primarily aimed at audio/musical applications";
-    homepage = http://drobilla.net/software/raul;
+    homepage = "http://drobilla.net/software/raul";
     license = licenses.gpl3;
     maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

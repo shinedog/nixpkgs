@@ -1,38 +1,41 @@
-{ stdenv, fetchurl, mkfontdir, mkfontscale }:
-
-# adapted from https://aur.archlinux.org/packages/proggyfonts/
+{ lib, stdenv, fetchurl, mkfontscale }:
 
 stdenv.mkDerivation rec {
-  name = "proggyfonts-0.1";
+  pname = "proggyfonts";
+  version = "0.1";
 
   src = fetchurl {
-    url = "http://kaictl.net/software/${name}.tar.gz";
-    sha256 = "1plcm1sjpa3hdqhhin48fq6zmz3ndm4md72916hd8ff0w6596q0n";
+    url = "https://web.archive.org/web/20150801042353/http://kaictl.net/software/proggyfonts-${version}.tar.gz";
+    hash = "sha256-SsLzZdR5icVJNbr5rcCPbagPPtWghbqs2Jxmrtufsa4=";
   };
 
-  buildInputs = [ mkfontdir mkfontscale ];
+  nativeBuildInputs = [ mkfontscale ];
 
-  installPhase =
-    ''
-      mkdir -p $out/share/doc/$name $out/share/fonts/misc $out/share/fonts/truetype
+  dontConfigure = true;
+  dontBuild = true;
 
-      cp Licence.txt $out/share/doc/$name/LICENSE
+  installPhase = ''
+    runHook preInstall
 
-      for f in *.pcf; do
-        gzip -c "$f" > $out/share/fonts/misc/"$f".gz
-      done
-      cp *.bdf $out/share/fonts/misc
-      cp *.ttf $out/share/fonts/truetype
+    # compress pcf fonts
+    mkdir -p $out/share/fonts/misc
+    rm Speedy.pcf # duplicated as Speedy11.pcf
+    for f in *.pcf; do
+      gzip -n -9 -c "$f" > $out/share/fonts/misc/"$f".gz
+    done
 
-      for f in misc truetype; do
-        cd $out/share/fonts/$f
-        mkfontscale
-        mkfontdir
-      done
-    '';
+    install -D -m 644 *.bdf -t "$out/share/fonts/misc"
+    install -D -m 644 *.ttf -t "$out/share/fonts/truetype"
+    install -D -m 644 Licence.txt -t "$out/share/doc/$name"
 
-  meta = with stdenv.lib; {
-    homepage = http://upperbounds.net;
+    mkfontscale "$out/share/fonts/truetype"
+    mkfontdir   "$out/share/fonts/misc"
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://www.upperbounds.net";
     description = "A set of fixed-width screen fonts that are designed for code listings";
     license = licenses.mit;
     platforms = platforms.all;

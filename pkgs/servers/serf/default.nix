@@ -1,17 +1,45 @@
-{ stdenv, lib, buildGoPackage, fetchgit, fetchhg, fetchbzr, fetchsvn }:
+{ lib
+, buildGoModule
+, fetchFromGitHub
+}:
 
-buildGoPackage rec {
-  name = "serf-${version}";
-  version = "20150515-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "668982d8f90f5eff4a766583c1286393c1d27f68";
+buildGoModule rec {
+  pname = "serf";
+  version = "0.10.1";
+  rev = "a2bba5676d6e37953715ea10e583843793a0c507";
 
-  goPackagePath = "github.com/hashicorp/serf";
-
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/hashicorp/serf";
-    sha256 = "1h05h5xhaj27r1mh5zshnykax29lqjhfc0bx4v9swiwb873c24qk";
+  src = fetchFromGitHub {
+    owner = "hashicorp";
+    repo = "serf";
+    rev = "v${version}";
+    sha256 = "sha256-8cWSWRfge5UjNzgA1Qp4AzbgIfGBum/ghHcB8H8MyCE=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-6Kw0Co6vaBNkvVyK64wo9/39YF5UwuJg04EPoYwCP1c=";
+
+  subPackages = [ "cmd/serf" ];
+
+  # These values are expected by version/version.go
+  # https://github.com/hashicorp/serf/blob/7faa1b06262f70780c3c35ac25a4c96d754f06f3/version/version.go#L8-L22
+  ldflags = lib.mapAttrsToList
+    (n: v: "-X github.com/hashicorp/serf/version.${n}=${v}") {
+      GitCommit = rev;
+      Version = version;
+      VersionPrerelease = "";
+    };
+
+  # There are no tests for cmd/serf.
+  doCheck = false;
+
+  meta = with lib; {
+    description = "Service orchestration and management tool";
+    mainProgram = "serf";
+    longDescription = ''
+      Serf is a decentralized solution for service discovery and orchestration
+      that is lightweight, highly available, and fault tolerant.
+    '';
+    homepage = "https://www.serf.io";
+    license = licenses.mpl20;
+    maintainers = with maintainers; [ pradeepchhetri ];
+  };
 }

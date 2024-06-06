@@ -1,18 +1,32 @@
-{ stdenv, fetchurl, coreutils, pam, groff
-, sendmailPath ? "/var/setuid-wrappers/sendmail"
+{ lib
+, stdenv
+, fetchurl
+, buildPackages
+, coreutils
+, pam
+, groff
+, sssd
+, nixosTests
+, sendmailPath ? "/run/wrappers/bin/sendmail"
 , withInsults ? false
+, withSssd ? false
 }:
 
-stdenv.mkDerivation rec {
-  name = "sudo-1.8.18p1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "sudo";
+  # be sure to check if nixos/modules/security/sudo.nix needs updating when bumping
+  # e.g. links to man pages, value constraints etc.
+  version = "1.9.15p5";
 
   src = fetchurl {
-    urls =
-      [ "ftp://ftp.sudo.ws/pub/sudo/${name}.tar.gz"
-        "ftp://ftp.sudo.ws/pub/sudo/OLD/${name}.tar.gz"
-      ];
-    sha256 = "0d4l6y03khmzdd8vhfnq8lrb8gcxplzf7gav0a9sd08jf8f4g875";
+    url = "https://www.sudo.ws/dist/sudo-${finalAttrs.version}.tar.gz";
+    hash = "sha256-VY0QuaGZH7O5+n+nsH7EQFt677WzywsIcdvIHjqI5Vg=";
   };
+
+  prePatch = ''
+    # do not set sticky bit in nix store
+    substituteInPlace src/Makefile.in --replace 04755 0755
+  '';
 
   configureFlags = [
     "--with-env-editor"
@@ -22,51 +36,57 @@ stdenv.mkDerivation rec {
     "--with-logpath=/var/log/sudo.log"
     "--with-iologdir=/var/log/sudo-io"
     "--with-sendmail=${sendmailPath}"
-  ] ++ stdenv.lib.optional withInsults [
+    "--enable-tmpfiles.d=no"
+  ] ++ lib.optionals withInsults [
     "--with-insults"
     "--with-all-insults"
+  ] ++ lib.optionals withSssd [
+    "--with-sssd"
+    "--with-sssd-lib=${sssd}/lib"
   ];
 
   configureFlagsArray = [
-    "--with-passprompt=[sudo] password for %p: "  # intentional trailing space
+    "--with-passprompt=[sudo] password for %p: " # intentional trailing space
   ];
 
   postConfigure =
     ''
-    cat >> pathnames.h <<'EOF'
-      #undef _PATH_MV
-      #define _PATH_MV "${coreutils}/bin/mv"
-    EOF
-    makeFlags="install_uid=$(id -u) install_gid=$(id -g)"
-    installFlags="sudoers_uid=$(id -u) sudoers_gid=$(id -g) sysconfdir=$out/etc rundir=$TMPDIR/dummy vardir=$TMPDIR/dummy"
+      cat >> pathnames.h <<'EOF'
+        #undef _PATH_MV
+        #define _PATH_MV "${coreutils}/bin/mv"
+      EOF
+      makeFlags="install_uid=$(id -u) install_gid=$(id -g)"
+      installFlags="sudoers_uid=$(id -u) sudoers_gid=$(id -g) sysconfdir=$out/etc rundir=$TMPDIR/dummy vardir=$TMPDIR/dummy DESTDIR=/"
     '';
 
-  buildInputs = [ coreutils pam groff ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ groff ];
+  buildInputs = [ pam ];
 
   enableParallelBuilding = true;
 
-  postInstall =
-    ''
-    rm -f $out/share/doc/sudo/ChangeLog
-    '';
+  doCheck = false; # needs root
 
-  meta = {
+  postInstall = ''
+    rm $out/share/doc/sudo/ChangeLog
+  '';
+
+  passthru.tests = { inherit (nixosTests) sudo; };
+
+  meta = with lib; {
     description = "A command to run commands as root";
-
     longDescription =
       ''
-      Sudo (su "do") allows a system administrator to delegate
-      authority to give certain users (or groups of users) the ability
-      to run some (or all) commands as root or another user while
-      providing an audit trail of the commands and their arguments.
+        Sudo (su "do") allows a system administrator to delegate
+        authority to give certain users (or groups of users) the ability
+        to run some (or all) commands as root or another user while
+        providing an audit trail of the commands and their arguments.
       '';
-
-    homepage = http://www.sudo.ws/;
-
-    license = http://www.sudo.ws/sudo/license.html;
-
-    maintainers = [ stdenv.lib.maintainers.eelco ];
-
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.sudo.ws/";
+    # From https://www.sudo.ws/about/license/
+    license = with licenses; [ sudo bsd2 bsd3 zlib ];
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
+    mainProgram = "sudo";
   };
-}
+})

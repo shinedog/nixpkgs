@@ -1,44 +1,76 @@
-{ stdenv, fetchurl, pkgconfig, xorg, pcre, gstreamer, glib, libxml2
-, aspell, cairo, imlib2, xosd, libnotify, gtk2, pango, atk, enchant,
- gdk_pixbuf}:
+{ stdenv
+, lib
+, fetchurl
+, fetchpatch
+, autoreconfHook
+, intltool
+, pkg-config
+, wrapGAppsHook3
+, enchant
+, gdk-pixbuf
+, glib
+, gst_all_1
+, libnotify
+, pcre
+, xorg
+, xosd
+}:
 
-let s = import ./src-for-default.nix; in
+stdenv.mkDerivation {
+  pname = "xneur";
+  version = "0.20.0";
 
-stdenv.mkDerivation rec {
-  inherit (s) version name;
   src = fetchurl {
-    inherit(s) url;
-    sha256 = s.hash;
+    url = "https://github.com/AndrewCrewKuznetsov/xneur-devel/raw/f66723feb272c68f7c22a8bf0dbcafa5e3a8a5ee/dists/0.20.0/xneur_0.20.0.orig.tar.gz";
+    sha256 = "1lg3qpi9pkx9f5xvfc8yf39wwc98f769yb7i2438vqn66kla1xpr";
   };
 
-  buildInputs =
-    [ xorg.libX11 pkgconfig pcre gstreamer glib libxml2 aspell cairo
-      xorg.libXpm imlib2 xosd xorg.libXt xorg.libXext xorg.libXi libnotify
-      gtk2 pango enchant gdk_pixbuf
-    ];
+  nativeBuildInputs = [
+    autoreconfHook
+    intltool
+    pkg-config
+    wrapGAppsHook3
+  ];
 
-  preConfigure = ''
-    sed -e 's/-Werror//' -i configure
-    sed -e 's@for aspell_dir in@for aspell_dir in ${aspell} @' -i configure
-    sed -e 's@for imlib2_dir in@for imlib2_dir in ${imlib2} @' -i configure
-    sed -e 's@for xosd_dir in@for xosd_dir in ${xosd} @' -i configure
+  buildInputs = [
+    enchant
+    gdk-pixbuf
+    glib
+    gst_all_1.gst-plugins-base
+    gst_all_1.gst-plugins-good
+    gst_all_1.gstreamer
+    libnotify
+    pcre
+    xorg.libX11
+    xorg.libXext
+    xorg.libXi
+    xorg.libXtst
+    xosd
+  ];
 
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${gtk2.dev}/include/gtk-2.0"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${gtk2.out}/lib/gtk-2.0/include"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${cairo.dev}/include/cairo"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${pango.dev}/include/pango-1.0"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${atk.dev}/include/atk-1.0"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${gdk_pixbuf.dev}/include/gdk-pixbuf-2.0"
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE -I${gdk_pixbuf.out}/lib/gdk-pixbuf-2.0/include"
+  patches = [
+    (fetchpatch {
+      name = "gcc-10.patch";
+      url = "https://salsa.debian.org/debian/xneur/-/raw/da38ad9c8e1bf4e349f5ed4ad909f810fdea44c9/debian/patches/gcc-10.patch";
+      sha256 = "0pc17a4sdrnrc4z7gz28889b9ywqsm5mzm6m41h67j2f5zh9k3fy";
+    })
+    (fetchpatch {
+      name = "enchant2.patch";
+      url = "https://salsa.debian.org/debian/xneur/-/raw/695b0fea56cde4ff6cf0f3988218c5cb9d7ff5ae/debian/patches/enchant2.patch";
+      sha256 = "02a3kkfzdvs5f8dfm6j5x3jcn5j8qah9ykfymp6ffqsf4fijp65n";
+    })
+  ];
 
-    export NIX_LDFLAGS="$NIX_LDFLAGS -lnotify"
+  postPatch = ''
+    sed -e 's@for xosd_dir in@for xosd_dir in ${xosd} @' -i configure.ac
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Utility for switching between keyboard layouts";
-    homepage = http://xneur.ru;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [ stdenv.lib.maintainers.raskin ];
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "xneur";
+    homepage = "https://xneur.ru";
+    license = licenses.gpl2Plus;
+    maintainers = [ maintainers.raskin ];
+    platforms = platforms.linux;
   };
 }

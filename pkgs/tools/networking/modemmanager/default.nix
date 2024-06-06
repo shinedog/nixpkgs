@@ -1,52 +1,115 @@
-{ stdenv, fetchurl, udev, libgudev, polkit, dbus_glib, ppp, intltool, pkgconfig
-, libmbim, libqmi, systemd }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, fetchpatch
+, glib
+, libgudev
+, polkit
+, ppp
+, gettext
+, pkg-config
+, libxslt
+, python3
+, libmbim
+, libqmi
+, systemd
+, bash-completion
+, meson
+, ninja
+, vala
+, gobject-introspection
+, dbus
+, bash
+}:
 
 stdenv.mkDerivation rec {
-  name = "ModemManager-${version}";
-  version = "1.6.2";
+  pname = "modemmanager";
+  version = "1.22.0";
 
-  src = fetchurl {
-    url = "http://www.freedesktop.org/software/ModemManager/${name}.tar.xz";
-    sha256 = "14v31j916h63z7af107rias1zbb2y94p3jg77zhzhrn1v6c46m74";
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "mobile-broadband";
+    repo = "ModemManager";
+    rev = version;
+    hash = "sha256-/D9b2rCCUhpDCUfSNAWR65+3EyUywzFdH1R17eSKRDo=";
   };
 
-  nativeBuildInputs = [ intltool pkgconfig ];
+  patches = [
+    # Since /etc is the domain of NixOS, not Nix, we cannot install files there.
+    # But these are just placeholders so we do not need to install them at all.
+    ./no-dummy-dirs-in-sysconfdir.patch
 
-  buildInputs = [ udev libgudev polkit dbus_glib ppp libmbim libqmi systemd ];
-
-  configureFlags = [
-    "--with-polkit"
-    "--with-udev-base-dir=$(out)/lib/udev"
-    "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
-    "--sysconfdir=/etc"
-    "--localstatedir=/var"
-    "--with-suspend-resume=systemd"
+    (fetchpatch {
+      name = "GI_TYPELIB_PATH.patch";
+      url = "https://gitlab.freedesktop.org/mobile-broadband/ModemManager/-/commit/daa829287894273879799a383ed4dc373c6111b0.patch";
+      hash = "sha256-tPQokiZO2SpTlX8xMlkWjP1AIXgoLHW3rJwnmG33z/k=";
+    })
   ];
 
-  installFlags = [ "DESTDIR=\${out}" ];
+  strictDeps = true;
 
-  preInstall = ''
-    mkdir -p $out/etc/systemd/system
+  nativeBuildInputs = [
+    meson
+    ninja
+    vala
+    gobject-introspection
+    gettext
+    pkg-config
+    libxslt
+    python3
+  ];
+
+  buildInputs = [
+    glib
+    libgudev
+    polkit
+    ppp
+    libmbim
+    libqmi
+    systemd
+    bash-completion
+    dbus
+    bash # shebangs in share/ModemManager/fcc-unlock.available.d/
+  ];
+
+  nativeInstallCheckInputs = [
+    python3
+    python3.pkgs.dbus-python
+    python3.pkgs.pygobject3
+  ];
+
+  mesonFlags = [
+    "-Dudevdir=${placeholder "out"}/lib/udev"
+    "-Ddbus_policy_dir=${placeholder "out"}/share/dbus-1/system.d"
+    "--sysconfdir=/etc"
+    "--localstatedir=/var"
+    "-Dvapi=true"
+  ];
+
+  postPatch = ''
+    patchShebangs \
+      tools/test-modemmanager-service.py
   '';
 
-  postInstall = ''
-    mv $out/$out/etc/systemd/system/ModemManager.service $out/etc/systemd/system
-    rm -rf $out/$out/etc
-    mv $out/$out/* $out
-    DIR=$out/$out
-    while rmdir $DIR 2>/dev/null; do
-      DIR="$(dirname "$DIR")"
-    done
-
-    # systemd in NixOS doesn't use `systemctl enable`, so we need to establish
-    # aliases ourselves.
-    ln -s $out/etc/systemd/system/ModemManager.service \
-      $out/etc/systemd/system/dbus-org.freedesktop.ModemManager1.service
+  # In Nixpkgs g-ir-scanner is patched to produce absolute paths, and
+  # that interferes with ModemManager's tests, causing them to try to
+  # load libraries from the install path, which doesn't usually exist
+  # when `meson test' is run.  So to work around that, we run it as an
+  # install check instead, when those paths will have been created.
+  doInstallCheck = true;
+  installCheckPhase = ''
+    runHook preInstallCheck
+    export G_TEST_DBUS_DAEMON="${dbus}/bin/dbus-daemon"
+    patchShebangs tools/tests/test-wrapper.sh
+    mesonCheckPhase
+    runHook postInstallCheck
   '';
 
-  meta = {
+  meta = with lib; {
     description = "WWAN modem manager, part of NetworkManager";
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://www.freedesktop.org/wiki/Software/ModemManager/";
+    license = licenses.gpl2Plus;
+    maintainers = teams.freedesktop.members;
+    platforms = platforms.linux;
   };
 }

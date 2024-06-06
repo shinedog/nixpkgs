@@ -1,15 +1,15 @@
 { lib
 , python
-, makeSetupHook
+, makePythonHook
 , makeWrapper }:
 
-with lib;
-
-makeSetupHook {
-      deps = makeWrapper;
-      substitutions.libPrefix = python.libPrefix;
+makePythonHook {
+      name = "wrap-python-hook";
+      propagatedBuildInputs = [ makeWrapper ];
+      substitutions.sitePackages = python.sitePackages;
       substitutions.executable = python.interpreter;
-      substitutions.python = python;
+      substitutions.python = python.pythonOnBuildForHost;
+      substitutions.pythonHost = python;
       substitutions.magicalSedExpression = let
         # Looks weird? Of course, it's between single quoted shell strings.
         # NOTE: Order DOES matter here, so single character quotes need to be
@@ -18,7 +18,7 @@ makeSetupHook {
 
         mkStringSkipper = labelNum: quote: let
           label = "q${toString labelNum}";
-          isSingle = elem quote [ "\"" "'\"'\"'" ];
+          isSingle = lib.elem quote [ "\"" "'\"'\"'" ];
           endQuote = if isSingle then "[^\\\\]${quote}" else quote;
         in ''
           /^[a-z]?${quote}/ {
@@ -35,7 +35,7 @@ makeSetupHook {
           import sys
           import site
           import functools
-          sys.argv[0] = '"'$(basename "$f")'"'
+          sys.argv[0] = '"'$(readlink -f "$f")'"'
           functools.reduce(lambda k, p: site.addsitedir(p, k), ['"$([ -n "$program_PYTHONPATH" ] && (echo "'$program_PYTHONPATH'" | sed "s|:|','|g") || true)"'], site._init_pathinfo())
         '';
 
@@ -44,8 +44,8 @@ makeSetupHook {
           :r
           /\\$|,$/{N;br}
           /__future__|^ |^ *(#.*)?$/{n;br}
-          ${concatImapStrings mkStringSkipper quoteVariants}
-          /^[^# ]/i ${replaceStrings ["\n"] [";"] preamble}
+          ${lib.concatImapStrings mkStringSkipper quoteVariants}
+          /^[^# ]/i ${lib.replaceStrings ["\n"] [";"] preamble}
         }
       '';
 } ./wrap.sh

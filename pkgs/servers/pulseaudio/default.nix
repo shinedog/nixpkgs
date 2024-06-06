@@ -1,16 +1,16 @@
-{ lib, stdenv, fetchurl, pkgconfig, intltool, autoreconfHook
-, json_c, libsndfile, libtool
-, xorg, libcap, alsaLib, glib
+{ lib, stdenv, fetchurl, pkg-config
+, libsndfile, libtool, makeWrapper, perlPackages
+, xorg, libcap, alsa-lib, glib, dconf
 , avahi, libjack2, libasyncns, lirc, dbus
 , sbc, bluez5, udev, openssl, fftwFloat
-, speexdsp, systemd, webrtc-audio-processing, gconf ? null
-
-# Database selection
-, tdb ? null, gdbm ? null
+, soxr, speexdsp, systemd, webrtc-audio-processing_1
+, gst_all_1
+, check, libintl, meson, ninja, m4, wrapGAppsHook3
+, fetchpatch2
 
 , x11Support ? false
 
-, useSystemd ? true
+, useSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
 
 , # Whether to support the JACK sound system as a backend.
   jackaudioSupport ? false
@@ -20,108 +20,177 @@
 
 , airtunesSupport ? false
 
-, gconfSupport ? false
-
-, bluetoothSupport ? false
+, bluetoothSupport ? stdenv.isLinux
+, advancedBluetoothCodecs ? false
 
 , remoteControlSupport ? false
 
 , zeroconfSupport ? false
 
+, alsaSupport ? stdenv.isLinux
+, udevSupport ? stdenv.isLinux
+
 , # Whether to build only the library.
   libOnly ? false
+
+, AudioUnit, Cocoa, CoreServices, CoreAudio
 }:
 
 stdenv.mkDerivation rec {
-  name = "${if libOnly then "lib" else ""}pulseaudio-${version}";
-  version = "9.0";
+  pname = "${lib.optionalString libOnly "lib"}pulseaudio";
+  version = "17.0";
 
   src = fetchurl {
     url = "http://freedesktop.org/software/pulseaudio/releases/pulseaudio-${version}.tar.xz";
-    sha256 = "11j682g2mn723sz3bh4i44ggq29z053zcggy0glzn63zh9mxdly3";
+    hash = "sha256-BTeU1mcaPjl9hJ5HioC4KmPLnYyilr01tzMXu1zrh7U=";
   };
 
-  patches = [ ./caps-fix.patch ];
+  patches = [
+    # Install sysconfdir files inside of the nix store,
+    # but use a conventional runtime sysconfdir outside the store
+    ./add-option-for-installation-sysconfdir.patch
+
+    # Fix crashes with some UCM devices
+    # See https://gitlab.archlinux.org/archlinux/packaging/packages/pulseaudio/-/issues/4
+    (fetchpatch2 {
+      name = "alsa-ucm-Check-UCM-verb-before-working-with-device-status.patch";
+      url = "https://gitlab.freedesktop.org/pulseaudio/pulseaudio/-/commit/f5cacd94abcc47003bd88ad7ca1450de649ffb15.patch";
+      hash = "sha256-WyEqCitrqic2n5nNHeVS10vvGy5IzwObPPXftZKy/A8=";
+    })
+    (fetchpatch2 {
+      name = "alsa-ucm-Replace-port-device-UCM-context-assertion-with-an-error.patch";
+      url = "https://gitlab.freedesktop.org/pulseaudio/pulseaudio/-/commit/ed3d4f0837f670e5e5afb1afa5bcfc8ff05d3407.patch";
+      hash = "sha256-fMJ3EYq56sHx+zTrG6osvI/QgnhqLvWiifZxrRLMvns=";
+    })
+  ];
 
   outputs = [ "out" "dev" ];
 
-  nativeBuildInputs = [ pkgconfig intltool autoreconfHook ];
+  nativeBuildInputs = [ pkg-config meson ninja makeWrapper perlPackages.perl perlPackages.XMLParser m4 ]
+    ++ lib.optionals stdenv.isLinux [ glib ]
+    # gstreamer plugin discovery requires wrapping
+    ++ lib.optional (bluetoothSupport && advancedBluetoothCodecs) wrapGAppsHook3;
 
   propagatedBuildInputs =
     lib.optionals stdenv.isLinux [ libcap ];
 
   buildInputs =
-    [ json_c libsndfile speexdsp fftwFloat ]
+    [ libtool libsndfile soxr speexdsp fftwFloat check ]
     ++ lib.optionals stdenv.isLinux [ glib dbus ]
+    ++ lib.optionals stdenv.isDarwin [ AudioUnit Cocoa CoreServices CoreAudio libintl ]
     ++ lib.optionals (!libOnly) (
-      [ libasyncns webrtc-audio-processing ]
+      [ libasyncns webrtc-audio-processing_1 ]
       ++ lib.optional jackaudioSupport libjack2
-      ++ lib.optionals x11Support [ xorg.xlibsWrapper xorg.libXtst xorg.libXi ]
+      ++ lib.optionals x11Support [ xorg.libICE xorg.libSM xorg.libX11 xorg.libXi xorg.libXtst ]
       ++ lib.optional useSystemd systemd
-      ++ lib.optionals stdenv.isLinux [ alsaLib udev ]
+      ++ lib.optionals stdenv.isLinux [ alsa-lib udev ]
       ++ lib.optional airtunesSupport openssl
-      ++ lib.optional gconfSupport gconf
       ++ lib.optionals bluetoothSupport [ bluez5 sbc ]
+      # aptX and LDAC codecs are in gst-plugins-bad so far, rtpldacpay is in -good
+      ++ lib.optionals (bluetoothSupport && advancedBluetoothCodecs) (builtins.attrValues { inherit (gst_all_1) gst-plugins-bad gst-plugins-good gst-plugins-base gstreamer; })
       ++ lib.optional remoteControlSupport lirc
       ++ lib.optional zeroconfSupport  avahi
-    );
+  );
 
-  preConfigure = ''
-    # Performs and autoreconf
-    export NOCONFIGURE="yes"
-    patchShebangs bootstrap.sh
-    ./bootstrap.sh
+  mesonFlags = [
+    (lib.mesonEnable "alsa" (!libOnly && alsaSupport))
+    (lib.mesonEnable "asyncns" (!libOnly))
+    (lib.mesonEnable "avahi" zeroconfSupport)
+    (lib.mesonEnable "bluez5" (!libOnly && bluetoothSupport))
+    # advanced bluetooth audio codecs are provided by gstreamer
+    (lib.mesonEnable "bluez5-gstreamer" (!libOnly && bluetoothSupport && advancedBluetoothCodecs))
+    (lib.mesonOption "database" "simple")
+    (lib.mesonBool "doxygen" false)
+    (lib.mesonEnable "elogind" false)
+    # gsettings does not support cross-compilation
+    (lib.mesonEnable "gsettings" (stdenv.isLinux && (stdenv.buildPlatform == stdenv.hostPlatform)))
+    (lib.mesonEnable "gstreamer" false)
+    (lib.mesonEnable "gtk" false)
+    (lib.mesonEnable "jack" (jackaudioSupport && !libOnly))
+    (lib.mesonEnable "lirc" remoteControlSupport)
+    (lib.mesonEnable "openssl" airtunesSupport)
+    (lib.mesonEnable "orc" false)
+    (lib.mesonEnable "systemd" (useSystemd && !libOnly))
+    (lib.mesonEnable "tcpwrap" false)
+    (lib.mesonEnable "udev" (!libOnly && udevSupport))
+    (lib.mesonEnable "valgrind" false)
+    (lib.mesonEnable "webrtc-aec" (!libOnly))
+    (lib.mesonEnable "x11" x11Support)
 
-    # Move the udev rules under $(prefix).
-    sed -i "src/Makefile.in" \
-        -e "s|udevrulesdir[[:blank:]]*=.*$|udevrulesdir = $out/lib/udev/rules.d|g"
+    (lib.mesonOption "localstatedir" "/var")
+    (lib.mesonOption "sysconfdir" "/etc")
+    (lib.mesonOption "sysconfdir_install" "${placeholder "out"}/etc")
+    (lib.mesonOption "udevrulesdir" "${placeholder "out"}/lib/udev/rules.d")
 
-    # don't install proximity-helper as root and setuid
-    sed -i "src/Makefile.in" \
-        -e "s|chown root|true |" \
-        -e "s|chmod r+s |true |"
+    # pulseaudio complains if its binary is moved after installation;
+    # this is needed so that wrapGApp can operate *without*
+    # renaming the unwrapped binaries (see below)
+    "--bindir=${placeholder "out"}/.bin-unwrapped"
+  ]
+  ++ lib.optionals (stdenv.isLinux && useSystemd) [
+    (lib.mesonOption "systemduserunitdir" "${placeholder "out"}/lib/systemd/user")
+  ]
+  ++ lib.optionals stdenv.isDarwin [
+    (lib.mesonEnable "consolekit" false)
+    (lib.mesonEnable "dbus" false)
+    (lib.mesonEnable "glib" false)
+    (lib.mesonEnable "oss-output" false)
+  ];
+
+  # tests fail on Darwin because of timeouts
+  doCheck = !stdenv.isDarwin;
+  preCheck = ''
+    export HOME=$(mktemp -d)
   '';
 
-  configureFlags =
-    [ "--disable-solaris"
-      "--disable-jack"
-      "--disable-oss-output"
-    ] ++ lib.optional (!ossWrapper) "--disable-oss-wrapper" ++
-    [ "--localstatedir=/var"
-      "--sysconfdir=/etc"
-      "--with-access-group=audio"
-      "--with-bash-completion-dir=\${out}/share/bash-completions/completions"
-    ]
-    ++ lib.optional (jackaudioSupport && !libOnly) "--enable-jack"
-    ++ lib.optional stdenv.isDarwin "--with-mac-sysroot=/"
-    ++ lib.optional (stdenv.isLinux && useSystemd) "--with-systemduserunitdir=\${out}/lib/systemd/user";
-
-  enableParallelBuilding = true;
-
-  # not sure what the best practices are here -- can't seem to find a way
-  # for the compiler to bring in stdlib and stdio (etc.) properly
-  # the alternative is to copy the files from /usr/include to src, but there are
-  # probably a large number of files that would need to be copied (I stopped
-  # after the seventh)
-  NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-I/usr/include";
-
-  installFlags =
-    [ "sysconfdir=$(out)/etc"
-      "pulseconfdir=$(out)/etc/pulse"
-    ];
-
   postInstall = lib.optionalString libOnly ''
-    rm -rf $out/{bin,share,etc,lib/{pulse-*,systemd}}
-    sed 's|-lltdl|-L${libtool.lib}/lib -lltdl|' -i $out/lib/pulseaudio/libpulsecore-${version}.la
+    find $out/share -maxdepth 1 -mindepth 1 ! -name "vala" -prune -exec rm -r {} \;
+    find $out/share/vala -maxdepth 1 -mindepth 1 ! -name "vapi" -prune -exec rm -r {} \;
+    rm -r $out/{.bin-unwrapped,etc,lib/pulse-*}
   ''
-    + ''moveToOutput lib/cmake "$dev" '';
+    + ''
+    moveToOutput lib/cmake "$dev"
+    rm -f $out/.bin-unwrapped/qpaeq # this is packaged by the "qpaeq" package now, because of missing deps
+
+    cp config.h $dev/include/pulse
+  '';
+
+  preFixup = lib.optionalString (stdenv.isLinux  && (stdenv.hostPlatform == stdenv.buildPlatform)) ''
+    wrapProgram $out/libexec/pulse/gsettings-helper \
+     --prefix XDG_DATA_DIRS : "$out/share/gsettings-schemas/${pname}-${version}" \
+     --prefix GIO_EXTRA_MODULES : "${lib.getLib dconf}/lib/gio/modules"
+  ''
+  # add .so symlinks for modules to be found under macOS
+  + lib.optionalString stdenv.isDarwin ''
+    for file in $out/lib/pulseaudio/modules/*.dylib; do
+      ln -s "''$file" "''${file%.dylib}.so"
+      ln -s "''$file" "$out/lib/pulseaudio/''$(basename ''$file .dylib).so"
+    done
+  ''
+  # put symlinks to binaries in `$prefix/bin`;
+  # then wrapGApp will *rename these symlinks* instead of
+  # the original binaries in `$prefix/.bin-unwrapped` (see above);
+  # when pulseaudio is looking for its own binary (it does!),
+  # it will be happy to find it in its original installation location
+  + lib.optionalString (!libOnly) ''
+    mkdir -p $out/bin
+    ln -st $out/bin $out/.bin-unwrapped/*
+
+    # Ensure that service files use the wrapped binaries.
+    find "$out" -name "*.service" | while read f; do
+        substituteInPlace "$f" --replace "$out/.bin-unwrapped/" "$out/bin/"
+    done
+  '';
 
   meta = {
     description = "Sound server for POSIX and Win32 systems";
-    homepage    = http://www.pulseaudio.org/;
-    licenses    = lib.licenses.lgpl2Plus;
-    maintainers = with lib.maintainers; [ lovek323 wkennington ];
+    homepage    = "http://www.pulseaudio.org/";
+    license     = lib.licenses.lgpl2Plus;
+    maintainers = with lib.maintainers; [ lovek323 ];
     platforms   = lib.platforms.unix;
+
+    # https://gitlab.freedesktop.org/pulseaudio/pulseaudio/-/issues/1089
+    badPlatforms = [ lib.systems.inspect.platformPatterns.isStatic ];
 
     longDescription = ''
       PulseAudio is a sound server for POSIX and Win32 systems.  A

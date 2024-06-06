@@ -1,42 +1,41 @@
-{stdenv, fetchFromGitHub, ocaml, findlib, buildOcaml, type_conv, camlp4,
- ocamlmod, ocamlify, ounit, expect}:
-let
-  version = "0.9.2";
-in
-stdenv.mkDerivation {
-  name = "ocamlbuild";
-  inherit version;
+{ lib, stdenv, fetchFromGitHub, ocaml, findlib }:
+stdenv.mkDerivation rec {
+  pname = "ocaml${ocaml.version}-ocamlbuild";
+  version = "0.14.3";
 
   src = fetchFromGitHub {
     owner = "ocaml";
     repo = "ocamlbuild";
     rev = version;
-    sha256 = "0q4bvik08v444g1pill9zgwal48xs50jf424lbryfvqghhw5xjjc";
+    sha256 = "sha256-dfcNu4ugOYu/M0rRQla7lXum/g1UzncdLGmpPYo0QUM=";
   };
 
   createFindlibDestdir = true;
 
-  buildInputs = [ ocaml findlib ];
+  nativeBuildInputs = [ ocaml findlib ];
+  strictDeps = true;
+
+  # x86_64-unknown-linux-musl-ld: -r and -pie may not be used together
+  hardeningDisable = lib.optional stdenv.hostPlatform.isStatic "pie";
 
   configurePhase = ''
+  runHook preConfigure
+
   make -f configure.make Makefile.config \
     "OCAMLBUILD_PREFIX=$out" \
     "OCAMLBUILD_BINDIR=$out/bin" \
+    "OCAMLBUILD_MANDIR=$out/share/man" \
     "OCAMLBUILD_LIBDIR=$OCAMLFIND_DESTDIR"
+
+  runHook postConfigure
   '';
 
-  # configurePhase = "ocaml setup.ml -configure --prefix $out";
-  # buildPhase     = "ocaml setup.ml -build";
-  # installPhase   = "ocaml setup.ml -install";
-
-  # meta = with stdenv.lib; {
-  #   homepage = http://oasis.forge.ocamlcore.org/;
-  #   description = "Configure, build and install system for OCaml projects";
-  #   license = licenses.lgpl21;
-  #   platforms = ocaml.meta.platforms or [];
-  #   maintainers = with maintainers; [
-  #     vbgl z77z
-  #   ];
-  # };
+  meta = with lib; {
+    description = "A build system with builtin rules to easily build most OCaml projects";
+    homepage = "https://github.com/ocaml/ocamlbuild/";
+    license = licenses.lgpl2;
+    maintainers = with maintainers; [ vbgl ];
+    mainProgram = "ocamlbuild";
+    inherit (ocaml.meta) platforms;
+  };
 }
-

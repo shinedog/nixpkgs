@@ -1,43 +1,47 @@
-{ stdenv, lib, fetchurl, makeWrapper, yacc, gcc
-, withISpin ? true, tk, swarm, graphviz }:
+{ stdenv, lib, fetchFromGitHub, makeWrapper, bison, gcc, tk, swarm, graphviz }:
 
 let
-  binPath = stdenv.lib.makeBinPath [ gcc ];
-  ibinPath = stdenv.lib.makeBinPath [ gcc tk swarm graphviz tk ];
+  binPath = lib.makeBinPath [ gcc graphviz tk swarm ];
+in
 
-in stdenv.mkDerivation rec {
-  name = "spin-${version}";
-  version = "6.4.5";
-  url-version = stdenv.lib.replaceChars ["."] [""] version;
+stdenv.mkDerivation rec {
+  pname = "spin";
+  version = "6.5.2";
 
-  src = fetchurl {
-    # The homepage is behind CloudFlare anti-DDoS protection, which blocks cURL.
-    # Dropbox mirror from developers:
-    # https://www.dropbox.com/sh/fgzipzp4wpo3qc1/AADZPqS4aoR-pjNF6OQXRLQHa
-    url = "https://www.dropbox.com/sh/fgzipzp4wpo3qc1/AAANRpxsSyWC7iHZB-XgBwJFa/spin645.tar.gz?raw=1";
-    sha256 = "0x8qnwm2xa8f176c52mzpvnfzglxs6xgig7bcgvrvkb3xf114224";
+  src = fetchFromGitHub {
+    owner = "nimble-code";
+    repo = "Spin";
+    rev = "version-${version}";
+    sha256 = "sha256-drvQXfDZCZRycBZt/VNngy8zs4XVJg+d1b4dQXVcyFU=";
   };
 
   nativeBuildInputs = [ makeWrapper ];
-  buildInputs = [ yacc ];
+  buildInputs = [ bison ];
 
-  sourceRoot = "Spin/Src${version}";
+  sourceRoot = "${src.name}/Src";
 
-  installPhase = ''
-    install -Dm755 spin $out/bin/spin
-    wrapProgram $out/bin/spin \
-      --prefix PATH : ${binPath}
-  '' + lib.optionalString withISpin ''
-    install -Dm755 ../iSpin/ispin.tcl $out/bin/ispin
-    wrapProgram $out/bin/ispin \
-      --prefix PATH ':' "$out/bin:${ibinPath}"
+  preBuild = ''
+    mkdir -p $out/bin
+    mkdir -p $out/share/man/man1
   '';
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+  makeFlags = [ "DESTDIR=$(out)" ];
+
+  postInstall = ''
+    wrapProgram $out/bin/spin --prefix PATH : ${binPath}
+
+    mkdir -p $out/share/spin
+    cp $src/optional_gui/ispin.tcl $out/share/spin
+    makeWrapper $out/share/spin/ispin.tcl $out/bin/ispin \
+      --prefix PATH : $out/bin:${binPath}
+  '';
+
+  meta = with lib; {
     description = "Formal verification tool for distributed software systems";
-    homepage = http://spinroot.com/;
-    license = licenses.free;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ mornfall pSub ];
+    homepage = "https://spinroot.com/";
+    license = licenses.bsd3;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ pSub siraben ];
   };
 }

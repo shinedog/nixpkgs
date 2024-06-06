@@ -1,34 +1,43 @@
-{ stdenv, fetchFromGitHub, python2Packages, makeWrapper }:
+{ lib
+, buildPythonApplication
+, fetchFromGitLab
+, makeWrapper
+, cmake
+, six
+, pyparsing
+, asn1ate
+, colored
+}:
 
-stdenv.mkDerivation rec {
+buildPythonApplication rec {
   pname = "asn2quickder";
-  name = "${pname}-${version}";
-  version = "0.7-RC1";
+  version = "1.7.1";
 
-  src = fetchFromGitHub {
-    sha256 = "0ynajhbml28m4ipbj5mscjcv6g1a7frvxfimxh813rhgl0w3sgq8";
-    rev = "version-${version}";
-    owner = "vanrein";
-    repo = "${pname}";
+  src = fetchFromGitLab {
+    owner = "arpa2";
+    repo = "quick-der";
+    rev = "v${version}";
+    sha256 = "sha256-f+ph5PL+uWRkswpOLDwZFWjh938wxoJ6xocJZ2WZLEk=";
   };
 
-  propagatedBuildInputs = with python2Packages; [ pyparsing makeWrapper ];
+  postPatch = ''
+    patchShebangs ./python/scripts/*
 
-  patchPhase = with python2Packages; ''
-    substituteInPlace Makefile \
-      --replace '..' '..:$(DESTDIR)/${python.sitePackages}:${python2Packages.pyparsing}/${python.sitePackages}' \
-    '';
+    # Unpin pyparsing 3.0.0. Issue resolved in latest version.
+    substituteInPlace setup.py --replace 'pyparsing==3.0.0' 'pyparsing'
+  '';
 
-  installPhase = ''
-    mkdir -p $out/${python2Packages.python.sitePackages}/
-    mkdir -p $out/bin $out/lib $out/sbin $out/man
-    make DESTDIR=$out PREFIX=/ all
-    make DESTDIR=$out PREFIX=/ install
-    '';
+  dontUseCmakeConfigure = true;
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ makeWrapper cmake ];
+
+  propagatedBuildInputs = [ pyparsing asn1ate six colored ];
+
+  doCheck = false; # Flaky tests
+
+  meta = with lib; {
     description = "An ASN.1 compiler with a backend for Quick DER";
-    homepage = https://github.com/vanrein/asn2quickder;
+    homepage = "https://gitlab.com/arpa2/quick-der";
     license = licenses.bsd3;
     platforms = platforms.linux;
     maintainers = with maintainers; [ leenaars ];

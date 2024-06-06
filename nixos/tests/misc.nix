@@ -1,130 +1,139 @@
 # Miscellaneous small tests that don't warrant their own VM run.
 
-import ./make-test.nix ({ pkgs, ...} : {
+import ./make-test-python.nix ({ lib, pkgs, ...} : let
+  foo = pkgs.writeText "foo" "Hello World";
+in {
   name = "misc";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ eelco chaoflow ];
-  };
+  meta.maintainers = with lib.maintainers; [ eelco ];
 
-  machine =
-    { config, lib, pkgs, ... }:
-    with lib;
-    { swapDevices = mkOverride 0
+  nodes.machine =
+    { lib, ... }:
+    { swapDevices = lib.mkOverride 0
         [ { device = "/root/swapfile"; size = 128; } ];
-      environment.variables.EDITOR = mkOverride 0 "emacs";
-      services.nixosManual.enable = mkOverride 0 true;
+      environment.variables.EDITOR = lib.mkOverride 0 "emacs";
+      documentation.nixos.enable = lib.mkOverride 0 true;
       systemd.tmpfiles.rules = [ "d /tmp 1777 root root 10d" ];
-      fileSystems = mkVMOverride { "/tmp2" =
+      systemd.tmpfiles.settings."10-test"."/tmp/somefile".d = {};
+      virtualisation.fileSystems = { "/tmp2" =
         { fsType = "tmpfs";
           options = [ "mode=1777" "noauto" ];
         };
+        # Tests https://discourse.nixos.org/t/how-to-make-a-derivations-executables-have-the-s-permission/8555
+        "/user-mount/point" = {
+          device = "/user-mount/source";
+          fsType = "none";
+          options = [ "bind" "rw" "user" "noauto" ];
+        };
+        "/user-mount/denied-point" = {
+          device = "/user-mount/denied-source";
+          fsType = "none";
+          options = [ "bind" "rw" "noauto" ];
+        };
       };
-      systemd.automounts = singleton
+      systemd.automounts = lib.singleton
         { wantedBy = [ "multi-user.target" ];
           where = "/tmp2";
         };
       users.users.sybil = { isNormalUser = true; group = "wheel"; };
+      users.users.alice = { isNormalUser = true; };
       security.sudo = { enable = true; wheelNeedsPassword = false; };
-      security.hideProcessInformation = true;
-      users.users.alice = { isNormalUser = true; extraGroups = [ "proc" ]; };
+      boot.kernel.sysctl."vm.swappiness" = 1;
+      boot.kernelParams = [ "vsyscall=emulate" ];
+      system.extraDependencies = [ foo ];
     };
 
   testScript =
     ''
-      subtest "nixos-version", sub {
-          $machine->succeed("[ `nixos-version | wc -w` = 2 ]");
-      };
+      with subtest("nixos-version"):
+          machine.succeed("[ `nixos-version | wc -w` = 2 ]")
 
-      subtest "nixos-rebuild", sub {
-          $machine->succeed("nixos-rebuild --help | grep SYNOPSIS");
-      };
+      with subtest("nixos-rebuild"):
+          assert "NixOS module" in machine.succeed("nixos-rebuild --help")
 
-      # Sanity check for uid/gid assignment.
-      subtest "users-groups", sub {
-          $machine->succeed("[ `id -u messagebus` = 4 ]");
-          $machine->succeed("[ `id -g messagebus` = 4 ]");
-          $machine->succeed("[ `getent group users` = 'users:x:100:' ]");
-      };
+      with subtest("Sanity check for uid/gid assignment"):
+          assert "4" == machine.succeed("id -u messagebus").strip()
+          assert "4" == machine.succeed("id -g messagebus").strip()
+          assert "users:x:100:" == machine.succeed("getent group users").strip()
 
-      # Regression test for GMP aborts on QEMU.
-      subtest "gmp", sub {
-          $machine->succeed("expr 1 + 2");
-      };
+      with subtest("Regression test for GMP aborts on QEMU."):
+          machine.succeed("expr 1 + 2")
 
-      # Test that the swap file got created.
-      subtest "swapfile", sub {
-          $machine->waitForUnit("root-swapfile.swap");
-          $machine->succeed("ls -l /root/swapfile | grep 134217728");
-      };
+      with subtest("the swap file got created"):
+          machine.wait_for_unit("root-swapfile.swap")
+          machine.succeed("ls -l /root/swapfile | grep 134217728")
 
-      # Test whether kernel.poweroff_cmd is set.
-      subtest "poweroff_cmd", sub {
-          $machine->succeed("[ -x \"\$(cat /proc/sys/kernel/poweroff_cmd)\" ]")
-      };
+      with subtest("whether kernel.poweroff_cmd is set"):
+          machine.succeed('[ -x "$(cat /proc/sys/kernel/poweroff_cmd)" ]')
 
-      # Test whether the blkio controller is properly enabled.
-      subtest "blkio-cgroup", sub {
-          $machine->succeed("[ -n \"\$(cat /sys/fs/cgroup/blkio/blkio.sectors)\" ]")
-      };
+      with subtest("whether the io cgroupv2 controller is properly enabled"):
+          machine.succeed("grep -q '\\bio\\b' /sys/fs/cgroup/cgroup.controllers")
 
-      # Test whether we have a reboot record in wtmp.
-      subtest "reboot-wtmp", sub {
-          $machine->succeed("last | grep reboot >&2");
-      };
+      with subtest("whether we have a reboot record in wtmp"):
+          machine.shutdown
+          machine.wait_for_unit("multi-user.target")
+          machine.succeed("last | grep reboot >&2")
 
-      # Test whether we can override environment variables.
-      subtest "override-env-var", sub {
-          $machine->succeed('[ "$EDITOR" = emacs ]');
-      };
+      with subtest("whether we can override environment variables"):
+          machine.succeed('[ "$EDITOR" = emacs ]')
 
-      # Test whether hostname (and by extension nss_myhostname) works.
-      subtest "hostname", sub {
-          $machine->succeed('[ "`hostname`" = machine ]');
-          #$machine->succeed('[ "`hostname -s`" = machine ]');
-      };
+      with subtest("whether hostname (and by extension nss_myhostname) works"):
+          assert "machine" == machine.succeed("hostname").strip()
+          assert "machine" == machine.succeed("hostname -s").strip()
 
-      # Test whether systemd-udevd automatically loads modules for our hardware.
-      $machine->succeed("systemctl start systemd-udev-settle.service");
-      subtest "udev-auto-load", sub {
-          $machine->waitForUnit('systemd-udev-settle.service');
-          $machine->succeed('lsmod | grep psmouse');
-      };
+      with subtest("whether systemd-udevd automatically loads modules for our hardware"):
+          machine.succeed("systemctl start systemd-udev-settle.service")
+          machine.wait_for_unit("systemd-udev-settle.service")
+          assert "mousedev" in machine.succeed("lsmod")
 
-      # Test whether systemd-tmpfiles-clean works.
-      subtest "tmpfiles", sub {
-          $machine->succeed('touch /tmp/foo');
-          $machine->succeed('systemctl start systemd-tmpfiles-clean');
-          $machine->succeed('[ -e /tmp/foo ]');
-          $machine->succeed('date -s "@$(($(date +%s) + 1000000))"'); # move into the future
-          $machine->succeed('systemctl start systemd-tmpfiles-clean');
-          $machine->fail('[ -e /tmp/foo ]');
-      };
+      with subtest("whether systemd-tmpfiles-clean works"):
+          machine.succeed(
+              "touch /tmp/foo", "systemctl start systemd-tmpfiles-clean", "[ -e /tmp/foo ]"
+          )
+          # move into the future
+          machine.succeed(
+              'date -s "@$(($(date +%s) + 1000000))"',
+              "systemctl start systemd-tmpfiles-clean",
+          )
+          machine.fail("[ -e /tmp/foo ]")
 
-      # Test whether automounting works.
-      subtest "automount", sub {
-          $machine->fail("grep '/tmp2 tmpfs' /proc/mounts");
-          $machine->succeed("touch /tmp2/x");
-          $machine->succeed("grep '/tmp2 tmpfs' /proc/mounts");
-      };
+      with subtest("whether systemd-tmpfiles settings works"):
+          machine.succeed("[ -e /tmp/somefile ]")
 
-      subtest "shell-vars", sub {
-          $machine->succeed('[ -n "$NIX_PATH" ]');
-      };
+      with subtest("whether automounting works"):
+          machine.fail("grep '/tmp2 tmpfs' /proc/mounts")
+          machine.succeed("touch /tmp2/x")
+          machine.succeed("grep '/tmp2 tmpfs' /proc/mounts")
 
-      subtest "nix-db", sub {
-          $machine->succeed("nix-store -qR /run/current-system | grep nixos-");
-      };
+      with subtest(
+          "Whether mounting by a user is possible with the `user` option in fstab (#95444)"
+      ):
+          machine.succeed("mkdir -p /user-mount/source")
+          machine.succeed("touch /user-mount/source/file")
+          machine.succeed("chmod -R a+Xr /user-mount/source")
+          machine.succeed("mkdir /user-mount/point")
+          machine.succeed("chown alice:users /user-mount/point")
+          machine.succeed("su - alice -c 'mount /user-mount/point'")
+          machine.succeed("su - alice -c 'ls /user-mount/point/file'")
+      with subtest(
+          "Whether mounting by a user is denied without the `user` option in  fstab"
+      ):
+          machine.succeed("mkdir -p /user-mount/denied-source")
+          machine.succeed("touch /user-mount/denied-source/file")
+          machine.succeed("chmod -R a+Xr /user-mount/denied-source")
+          machine.succeed("mkdir /user-mount/denied-point")
+          machine.succeed("chown alice:users /user-mount/denied-point")
+          machine.fail("su - alice -c 'mount /user-mount/denied-point'")
 
-      # Test sudo
-      subtest "sudo", sub {
-          $machine->succeed("su - sybil -c 'sudo true'");
-      };
+      with subtest("shell-vars"):
+          machine.succeed('[ -n "$NIX_PATH" ]')
 
-      # Test hidepid
-      subtest "hidepid", sub {
-          $machine->succeed("grep -Fq hidepid=2 /etc/mtab");
-          $machine->succeed("[ `su - sybil -c 'pgrep -c -u root'` = 0 ]");
-          $machine->succeed("[ `su - alice -c 'pgrep -c -u root'` != 0 ]");
-      };
+      with subtest("Test sysctl"):
+          machine.wait_for_unit("systemd-sysctl.service")
+          assert "1" == machine.succeed("sysctl -ne vm.swappiness").strip()
+          machine.execute("sysctl vm.swappiness=60")
+          assert "60" == machine.succeed("sysctl -ne vm.swappiness").strip()
+
+      with subtest("Test boot parameters"):
+          assert "vsyscall=emulate" in machine.succeed("cat /proc/cmdline")
     '';
 })

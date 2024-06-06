@@ -1,25 +1,35 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, expat, libaio, boost }:
+{ lib
+, rustPlatform
+, fetchFromGitHub
+, nixosTests }:
 
-stdenv.mkDerivation rec {
-  name = "thin-provisioning-tools-${version}";
-  version = "0.6.3";
+rustPlatform.buildRustPackage rec {
+  pname = "thin-provisioning-tools";
+  version = "1.0.12";
 
   src = fetchFromGitHub {
     owner = "jthornber";
     repo = "thin-provisioning-tools";
     rev = "v${version}";
-    sha256 = "0glwhfzwj9afbqdv59ppgfqy7rik8m0vcap7279fpnvwpr1c2p5n";
+    hash = "sha256-wliyTWo3iOonqf4UW50V5co0RQlc75VwLofF9FHV2LI=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  cargoLock = {
+    lockFile = ./Cargo.lock;
+    outputHashes = {
+      "rio-0.9.4" = "sha256-2l5cm7YLZyf2kuRPMytu7Fdewi6x3+9KyyQBv2F8ZDA=";
+    };
+  };
 
-  buildInputs = [ expat libaio boost ];
+  passthru.tests = {
+    inherit (nixosTests.lvm2) lvm-thinpool-linux-latest;
+  };
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/jthornber/thin-provisioning-tools/;
+  meta = with lib; {
+    homepage = "https://github.com/jthornber/thin-provisioning-tools/";
     description = "A suite of tools for manipulating the metadata of the dm-thin device-mapper target";
     license = licenses.gpl3;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ globin ];
+    maintainers = with maintainers; [ ];
   };
 }

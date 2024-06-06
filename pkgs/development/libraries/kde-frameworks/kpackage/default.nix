@@ -1,16 +1,15 @@
-{ kdeFramework, lib, copyPathsToStore
-, ecm
-, karchive
-, kconfig
-, kcoreaddons
-, kdoctools
-, ki18n
+{
+  mkDerivation,
+  extra-cmake-modules, kdoctools,
+  karchive, kconfig, kcoreaddons, ki18n, qtbase,
 }:
 
-kdeFramework {
-  name = "kpackage";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm kdoctools ];
-  propagatedBuildInputs = [ karchive kconfig kcoreaddons ki18n ];
-  patches = copyPathsToStore (lib.readPathsFromFile ./. ./series);
+mkDerivation {
+  pname = "kpackage";
+  nativeBuildInputs = [ extra-cmake-modules kdoctools ];
+  buildInputs = [ karchive kconfig kcoreaddons ki18n qtbase ];
+  patches = [
+    ./0001-Allow-external-paths-default.patch
+    ./0002-QDirIterator-follow-symlinks.patch
+  ];
 }

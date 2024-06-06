@@ -1,36 +1,61 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, alsaLib, fftw,
-  libpulseaudio, ncurses }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, autoconf-archive
+, alsa-lib
+, fftw
+, iniparser
+, libpulseaudio
+, pipewire
+, ncurses
+, pkgconf
+, SDL2
+, libGL
+, withSDL2 ? false
+, withPipewire ? true
+}:
 
 stdenv.mkDerivation rec {
-  name = "cava-${version}";
-  version = "0.4.2";
-
-  buildInputs = [
-    alsaLib
-    fftw
-    libpulseaudio
-    ncurses
-  ];
+  pname = "cava";
+  version = "0.10.2";
 
   src = fetchFromGitHub {
     owner = "karlstav";
     repo = "cava";
     rev = version;
-    sha256 = "1c5gl8ghmd89f6097rjd2dzrgh1z4i4v9m4vn5wkpnnm68b96yyc";
+    hash = "sha256-y6RslsU/zmr0Ai/rnr73N3OtjuBcWa3JCwh9P5GkNss=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [
+    alsa-lib
+    fftw
+    libpulseaudio
+    ncurses
+    iniparser
+  ] ++ lib.optionals withSDL2 [
+    SDL2
+    libGL
+  ] ++ lib.optionals withPipewire [
+    pipewire
+  ];
 
-  postConfigure = ''
-    substituteInPlace Makefile \
-      --replace "-L/usr/local/lib -Wl,-rpath /usr/local/lib" ""
+  nativeBuildInputs = [
+    autoreconfHook
+    autoconf-archive
+    pkgconf
+  ];
+
+  preAutoreconf = ''
+    echo ${version} > version
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Console-based Audio Visualizer for Alsa";
-    homepage = https://github.com/karlstav/cava;
+    homepage = "https://github.com/karlstav/cava";
     license = licenses.mit;
     maintainers = with maintainers; [ offline mirrexagon ];
     platforms = platforms.linux;
+    mainProgram = "cava";
   };
 }

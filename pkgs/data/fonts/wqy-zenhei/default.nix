@@ -1,28 +1,27 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "wqy-zenhei-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "wqy-zenhei";
   version = "0.9.45";
 
   src = fetchurl {
-    url = "mirror://sourceforge/wqy/${name}.tar.gz";
-    sha256 = "1mkmxq8g2hjcglb3zajfqj20r4r88l78ymsp2xyl5yav8w3f7dz4";
+    url = "mirror://sourceforge/wqy/${pname}-${version}.tar.gz";
+    hash = "sha256-5LfjBkdb+UJ9F1dXjw5FKJMMhMROqj8WfUxC8RDuddY=";
   };
 
-  dontBuild = true;
+  installPhase = ''
+    runHook preInstall
 
-  installPhase =
-    ''
-      mkdir -p $out/share/fonts
-      install -m644 *.ttc $out/share/fonts/
-    '';
+    install -Dm644 *.ttc -t $out/share/fonts/
+
+    runHook postInstall
+  '';
 
   meta = {
     description = "A (mainly) Chinese Unicode font";
-    homepage = http://wenq.org;
-    license = stdenv.lib.licenses.gpl2; # with font embedding exceptions
-    maintainers = [ stdenv.lib.maintainers.pkmx ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = "http://wenq.org";
+    license = lib.licenses.gpl2; # with font embedding exceptions
+    maintainers = [ lib.maintainers.pkmx ];
+    platforms = lib.platforms.all;
   };
 }
-

@@ -1,25 +1,62 @@
-{ stdenv, fetchurl, pkgconfig, libxml2, ncurses, libsigcxx, libpar2
-, gnutls, libgcrypt, zlib, openssl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, boost
+, pkg-config
+, gnutls
+, libgcrypt
+, libpar2
+, libcap
+, libsigcxx
+, libxml2
+, ncurses
+, openssl
+, zlib
+, nixosTests
+}:
 
-stdenv.mkDerivation rec {
-  name = "nzbget-${version}";
-  version = "17.1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "nzbget";
+  version = "24.1";
 
-  src = fetchurl {
-    url = "http://github.com/nzbget/nzbget/releases/download/v${version}/nzbget-${version}-src.tar.gz";
-    sha256 = "0fcw43bigjmgxcz1jvqpd01sz4vciqsm311cbfv9lvmvv40gag2b";
+  src = fetchFromGitHub {
+    owner = "nzbgetcom";
+    repo = "nzbget";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-HovfnTsgu07/lp/spI+iA8H7lOj0Qyrri2MOJKyMKHQ=";
   };
 
-  buildInputs = [ pkgconfig libxml2 ncurses libsigcxx libpar2 gnutls
-                  libgcrypt zlib openssl ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+
+  buildInputs = [
+    boost
+    gnutls
+    libgcrypt
+    libpar2
+    libcap
+    libsigcxx
+    libxml2
+    ncurses
+    openssl
+    zlib
+  ];
+
+  prePatch = ''
+    sed -i 's/AC_INIT.*/AC_INIT( nzbget, m4_esyscmd_s( echo ${finalAttrs.version} ) )/' configure.ac
+  '';
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://nzbget.net;
+  passthru.tests = { inherit (nixosTests) nzbget; };
+
+  meta = with lib; {
+    homepage = "https://nzbget.com/";
+    changelog = "https://github.com/nzbgetcom/nzbget/releases/tag/v${finalAttrs.version}";
     license = licenses.gpl2Plus;
     description = "A command line tool for downloading files from news servers";
-    maintainers = with maintainers; [ pSub ];
+    maintainers = with maintainers; [ pSub devusb ];
     platforms = with platforms; unix;
+    mainProgram = "nzbget";
   };
-}
+})

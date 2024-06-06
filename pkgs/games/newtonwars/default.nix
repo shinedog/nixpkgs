@@ -1,17 +1,25 @@
-{ stdenv, fetchFromGitHub, makeWrapper, freeglut, mesa }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, makeWrapper
+, freeglut
+, libGLU
+, libGL
+}:
 
-stdenv.mkDerivation rec {
-  name = "newtonwars-${version}";
-  version = "20150609";
+stdenv.mkDerivation {
+  pname = "newtonwars";
+  version = "unstable-2023-04-08";
 
   src = fetchFromGitHub {
     owner = "Draradech";
     repo = "NewtonWars";
-    rev = "98bb99a1797fd0073e0fd25ef9218468d3a9f7cb";
-    sha256 = "0g63fwfcdxxlnqlagj1fb8ngm385gmv8f7p8b4r1z5cny2znxdvs";
+    rev = "a32ea49f8f1d2bdb8983c28d24735696ac987617";
+    hash = "sha256-qkvgQraYR+EXWUQkEvSOcbNFn2oRTjwj5U164tVto8M=";
   };
 
-  buildInputs = [ makeWrapper freeglut mesa ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ freeglut libGL libGLU ];
 
   patchPhase = ''
     sed -i "s;font24.raw;$out/share/font24.raw;g" display.c
@@ -26,12 +34,15 @@ stdenv.mkDerivation rec {
 
     wrapProgram $out/bin/nw \
       --prefix LD_LIBRARY_PATH ":" ${freeglut}/lib \
-      --prefix LD_LIBRARY_PATH ":" ${mesa}/lib
+      --prefix LD_LIBRARY_PATH ":" ${libGLU}/lib \
+      --prefix LD_LIBRARY_PATH ":" ${libGL}/lib
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A space battle game with gravity as the main theme";
+    mainProgram = "nw";
     maintainers = with maintainers; [ pSub ];
     platforms = platforms.linux;
+    license = licenses.mit;
   };
 }

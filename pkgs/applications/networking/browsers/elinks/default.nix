@@ -1,49 +1,64 @@
-{ stdenv, fetchurl, perl, ncurses, xlibsWrapper, bzip2, zlib, openssl
-, spidermonkey_1_8_5, gpm
-, enableGuile ? false, guile ? null   # Incompatible licenses, LGPLv3 - GPLv2
-, enablePython ? false, python ? null
+{ lib, stdenv, fetchFromGitHub, ncurses, libX11, bzip2, zlib
+, brotli, zstd, xz, openssl, autoreconfHook, gettext, pkg-config, libev
+, gpm, libidn, tre, expat
+, # Incompatible licenses, LGPLv3 - GPLv2
+  enableGuile        ? false,                                         guile ? null
+, enablePython       ? false,                                         python ? null
+, enablePerl         ? (!stdenv.isDarwin) && (stdenv.hostPlatform == stdenv.buildPlatform), perl ? null
+# re-add javascript support when upstream supports modern spidermonkey
 }:
 
 assert enableGuile -> guile != null;
 assert enablePython -> python != null;
 
 stdenv.mkDerivation rec {
-  name = "elinks-0.12pre6";
+  pname = "elinks";
+  version = "0.17.0";
 
-  src = fetchurl {
-    url = http://elinks.or.cz/download/elinks-0.12pre6.tar.bz2;
-    sha256 = "1nnakbi01g7yd3zqwprchh5yp45br8086b0kbbpmnclabcvlcdiq";
+  src = fetchFromGitHub {
+    owner = "rkd77";
+    repo = "elinks";
+    rev = "v${version}";
+    hash = "sha256-JeUiMHAqSZxxBe8DplzmzHzsY6KqoBqba0y8GDwaR0Y=";
   };
 
-  patches = [ ./gc-init.patch ];
+  buildInputs = [
+    ncurses libX11 bzip2 zlib brotli zstd xz
+    openssl libidn tre expat libev
+  ]
+    ++ lib.optional stdenv.isLinux gpm
+    ++ lib.optional enableGuile guile
+    ++ lib.optional enablePython python
+    ++ lib.optional enablePerl perl
+    ;
 
-  buildInputs = [ perl ncurses xlibsWrapper bzip2 zlib openssl spidermonkey_1_8_5 gpm ]
-    ++ stdenv.lib.optional enableGuile guile
-    ++ stdenv.lib.optional enablePython python;
+  nativeBuildInputs = [ autoreconfHook gettext pkg-config ];
 
-  configureFlags =
-    ''
-      --enable-finger --enable-html-highlight
-      --with-perl --enable-gopher --enable-cgi --enable-bittorrent
-      --with-spidermonkey=${spidermonkey_1_8_5}
-      --enable-nntp --with-openssl=${openssl.dev}
-    '' + stdenv.lib.optionalString enableGuile " --with-guile"
-    + stdenv.lib.optionalString enablePython " --with-python";
+  configureFlags = [
+    "--enable-finger"
+    "--enable-html-highlight"
+    "--enable-gopher"
+    "--enable-gemini"
+    "--enable-cgi"
+    "--enable-bittorrent"
+    "--enable-nntp"
+    "--enable-256-colors"
+    "--enable-true-color"
+    "--with-brotli"
+    "--with-lzma"
+    "--with-libev"
+    "--with-terminfo"
+  ] ++ lib.optional enableGuile        "--with-guile"
+    ++ lib.optional enablePython       "--with-python"
+    ++ lib.optional enablePerl         "--with-perl"
+    ;
 
-  crossAttrs = {
-    propagatedBuildInputs = [ ncurses.crossDrv zlib.crossDrv openssl.crossDrv ];
-    configureFlags = ''
-      --enable-finger --enable-html-highlight
-      --enable-gopher --enable-cgi --enable-bittorrent --enable-nntp
-      --with-openssl=${openssl.crossDrv}
-      --with-bzip2=${bzip2.crossDrv}
-    '';
-  };
-
-  meta = {
+  meta = with lib; {
     description = "Full-featured text-mode web browser";
-    homepage = http://elinks.or.cz;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "elinks";
+    homepage = "https://github.com/rkd77/elinks";
+    license = licenses.gpl2;
+    platforms = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ iblech gebner ];
   };
 }

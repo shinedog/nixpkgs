@@ -1,26 +1,24 @@
-{ stdenv, fetchurl, allegro }:
+{ lib, stdenv, fetchurl, allegro }:
 
 stdenv.mkDerivation rec {
-  name = "atanks-${version}";
-  version = "6.2";
+  pname = "atanks";
+  version = "6.6";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/atanks/atanks/${name}/${name}.tar.gz";
-    sha256 = "1s1lb87ind0y9d6hmfaf1b9wks8q3hd6w5n9dibq75rxqmcfvlpy";
+    url = "mirror://sourceforge/project/atanks/atanks/${pname}-${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-vGse/J/H52JPrR2DUtcuknvg+6IWC7Jbtri9bGNwv0M=";
   };
 
   buildInputs = [ allegro ];
 
-  patchPhase = ''
-    substituteInPlace Makefile --replace /usr $out
-  '';
+  makeFlags = [ "PREFIX=$(out)/" "INSTALL=install" "CXX=g++" ];
 
-  makeFlags = [ "PREFIX=$(out)/" "INSTALL=install" ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Atomic Tanks ballistics game";
-    homepage = http://atanks.sourceforge.net/;
+    mainProgram = "atanks";
+    homepage = "http://atanks.sourceforge.net/";
     maintainers = [ maintainers.raskin ];
     platforms = platforms.linux;
+    license = licenses.gpl2;
   };
 }

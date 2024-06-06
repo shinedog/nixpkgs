@@ -1,45 +1,90 @@
-{ stdenv, fetchurl, cmake, xlibsWrapper }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+, pkg-config
+, libpng
+, libjpeg
+, libwebp
+, blas
+, lapack
+, config
+, guiSupport ? false
+, libX11
+, sse4Support ? stdenv.hostPlatform.sse4_1Support
+, avxSupport ? stdenv.hostPlatform.avxSupport
+, cudaSupport ? config.cudaSupport
+, cudaPackages
+}@inputs:
+(if cudaSupport then cudaPackages.backendStdenv else inputs.stdenv).mkDerivation rec {
+  pname = "dlib";
+  version = "19.24.2";
 
-stdenv.mkDerivation rec {
-  version = "18.10";
-  name = "dlib-${version}";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/dclib/dlib/${name}.tar.bz2";
-    sha256 = "1g3v13azc29m5r7zqs3x0g731hny6spb66cxnra7f167z31ka3s7";
+  src = fetchFromGitHub {
+    owner = "davisking";
+    repo = "dlib";
+    rev = "v${version}";
+    sha256 = "sha256-Z1fScuaIHjj2L1uqLIvsZ7ARKNjM+iaA8SAtWUTPFZk=";
   };
 
-  # The supplied CMakeLists.txt does not have any install targets.
-  sources_var = "\$\{sources\}";
-  headers_var = "\$\{hearders\}";
-  preConfigure = ''
-    cat << EOF > CMakeLists.txt
-    cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
-    project(dlib)
+  postPatch = ''
+    rm -rf dlib/external
+  '';
 
-    include_directories(./)
+  cmakeFlags = [
+    (lib.cmakeBool "USE_SSE4_INSTRUCTIONS" sse4Support)
+    (lib.cmakeBool "USE_AVX_INSTRUCTIONS" avxSupport)
+    (lib.cmakeBool "DLIB_USE_CUDA" cudaSupport)
+  ] ++ lib.optionals cudaSupport [
+    (lib.cmakeFeature "DLIB_USE_CUDA_COMPUTE_CAPABILITIES" (builtins.concatStringsSep "," (with cudaPackages.flags; map dropDot cudaCapabilities)))
+  ];
 
-    file(GLOB sources ./dlib/all/*.cpp)
-    file(GLOB headers ./dlib/*.h)
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ] ++ lib.optionals cudaSupport (with cudaPackages; [
+    cuda_nvcc
+  ]);
 
-    SET(LIBRARY_OUTPUT_PATH ".")
-    add_library(dlib "SHARED" dlib/all/source.cpp ${sources_var} ${headers_var})
+  buildInputs = [
+    libpng
+    libjpeg
+    libwebp
+    blas
+    lapack
+  ]
+  ++ lib.optionals guiSupport [ libX11 ]
+  ++ lib.optionals cudaSupport (with cudaPackages; [
+    cuda_cudart.dev
+    cuda_cudart.lib
+    cuda_cudart.static
+    cuda_nvcc.dev
+    libcublas.dev
+    libcublas.lib
+    libcublas.static
+    libcurand.dev
+    libcurand.lib
+    libcurand.static
+    libcusolver.dev
+    libcusolver.lib
+    libcusolver.static
+    cudnn.dev
+    cudnn.lib
+    cudnn.static
+    cuda_cccl.dev
+  ]);
 
-    install(TARGETS dlib DESTINATION lib)
-    install(DIRECTORY dlib/ DESTINATION include/dlib FILES_MATCHING PATTERN "*.h")
-    EOF
-  '';   
+  passthru = {
+    inherit
+      cudaSupport cudaPackages
+      sse4Support avxSupport;
+  };
 
-  enableParallelBuilding = true;
-  buildInputs = [ cmake xlibsWrapper ];
-  propagatedBuildInputs = [ xlibsWrapper ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A general purpose cross-platform C++ machine learning library";
-    homepage = http://www.dlib.net;
-    license = stdenv.lib.licenses.boost;
+    homepage = "http://www.dlib.net";
+    license = licenses.boost;
     maintainers = with maintainers; [ christopherpoole ];
-    platforms = stdenv.lib.platforms.all;
+    platforms = platforms.unix;
   };
 }
-

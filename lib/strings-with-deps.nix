@@ -1,3 +1,4 @@
+{ lib }:
 /*
 Usage:
 
@@ -40,10 +41,15 @@ Usage:
   [1] maybe this behaviour should be removed to keep things simple (?)
 */
 
-with import ./lists.nix;
-with import ./attrsets.nix;
-with import ./strings.nix;
-
+let
+  inherit (lib)
+    concatStringsSep
+    head
+    isAttrs
+    listToAttrs
+    tail
+    ;
+in
 rec {
 
   /* !!! The interface of this function is kind of messed up, since

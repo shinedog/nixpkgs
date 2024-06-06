@@ -1,53 +1,134 @@
-{ stdenv, fetchurl, pkgconfig, libXft, cairo, harfbuzz
-, libintlOrEmpty, gobjectIntrospection
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, cairo
+, harfbuzz
+, libintl
+, libthai
+, darwin
+, fribidi
+, gnome
+, gi-docgen
+, makeFontsConf
+, freefont_ttf
+, meson
+, ninja
+, glib
+, python3
+, x11Support? !stdenv.isDarwin, libXft
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, buildPackages, gobject-introspection
+, testers
 }:
 
-with stdenv.lib;
+stdenv.mkDerivation (finalAttrs: {
+  pname = "pango";
+  version = "1.52.2";
 
-let
-  ver_maj = "1.40";
-  ver_min = "3";
-in
-stdenv.mkDerivation rec {
-  name = "pango-${ver_maj}.${ver_min}";
+  outputs = [ "bin" "out" "dev" ] ++ lib.optional withIntrospection "devdoc";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/pango/${ver_maj}/${name}.tar.xz";
-    sha256 = "abba8b5ce728520c3a0f1535eab19eac3c14aeef7faa5aded90017ceac2711d3";
+    url = with finalAttrs; "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-0Adq/gEIKBS4U97smfk0ns5fLOg5CLjlj/c2tB94qWs=";
   };
 
-  outputs = [ "bin" "dev" "out" "devdoc" ];
+  depsBuildBuild = [
+    pkg-config
+  ];
 
-  buildInputs = [ gobjectIntrospection ];
-  nativeBuildInputs = [ pkgconfig ];
-  propagatedBuildInputs = [ cairo harfbuzz libXft ] ++ libintlOrEmpty;
+  nativeBuildInputs = [
+    meson ninja
+    glib # for glib-mkenum
+    pkg-config
+    python3
+  ] ++ lib.optionals withIntrospection [
+    gi-docgen
+    gobject-introspection
+  ];
 
-  enableParallelBuilding = true;
+  buildInputs = [
+    fribidi
+    libthai
+  ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
+    ApplicationServices
+    Carbon
+    CoreGraphics
+    CoreText
+  ]);
 
-  doCheck = false; # test-layout fails on 1.40.3 (fails to find font config)
-  # jww (2014-05-05): The tests currently fail on Darwin:
-  #
-  # ERROR:testiter.c:139:iter_char_test: assertion failed: (extents.width == x1 - x0)
-  # .../bin/sh: line 5: 14823 Abort trap: 6 srcdir=. PANGO_RC_FILE=./pangorc ${dir}$tst
-  # FAIL: testiter
+  propagatedBuildInputs = [
+    cairo
+    glib
+    libintl
+    harfbuzz
+  ] ++ lib.optionals x11Support [
+    libXft
+  ];
 
-  configureFlags = optional stdenv.isDarwin "--without-x";
+  mesonFlags = [
+    (lib.mesonBool "gtk_doc" withIntrospection)
+    (lib.mesonEnable "introspection" withIntrospection)
+    (lib.mesonEnable "xft" x11Support)
+  ];
 
-  meta = with stdenv.lib; {
+  # Fontconfig error: Cannot load default config file
+  FONTCONFIG_FILE = makeFontsConf {
+    fontDirectories = [ freefont_ttf ];
+  };
+
+  # Run-time dependency gi-docgen found: NO (tried pkgconfig and cmake)
+  # it should be a build-time dep for build
+  # TODO: send upstream
+  postPatch = ''
+    substituteInPlace docs/meson.build \
+      --replace "'gi-docgen', req" "'gi-docgen', native:true, req"
+  '';
+
+  doCheck = false; # test-font: FAIL
+
+  postFixup = ''
+    # Cannot be in postInstall, otherwise _multioutDocs hook in preFixup will move right back.
+    moveToOutput "share/doc" "$devdoc"
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = finalAttrs.pname;
+      # 1.90 is alpha for API 2.
+      freeze = "1.90.0";
+    };
+    tests = {
+      pkg-config = testers.hasPkgConfigModules {
+        package = finalAttrs.finalPackage;
+      };
+    };
+  };
+
+  meta = with lib; {
     description = "A library for laying out and rendering of text, with an emphasis on internationalization";
 
     longDescription = ''
       Pango is a library for laying out and rendering of text, with an
       emphasis on internationalization.  Pango can be used anywhere
       that text layout is needed, though most of the work on Pango so
-      far has been done in the context of the GTK+ widget toolkit.
-      Pango forms the core of text and font handling for GTK+-2.x.
+      far has been done in the context of the GTK widget toolkit.
+      Pango forms the core of text and font handling for GTK.
     '';
 
-    homepage = http://www.pango.org/;
+    homepage = "https://www.pango.org/";
     license = licenses.lgpl2Plus;
 
-    maintainers = with maintainers; [ raskin urkud ];
-    platforms = with platforms; linux ++ darwin;
+    maintainers = with maintainers; [ raskin ] ++ teams.gnome.members;
+    platforms = platforms.unix;
+
+    pkgConfigModules = [
+      "pango"
+      "pangocairo"
+      "pangofc"
+      "pangoft2"
+      "pangoot"
+      "pangoxft"
+    ];
   };
-}
+})

@@ -1,50 +1,62 @@
-{ stdenv, fetchurl, fetchpatch, boehmgc, zlib, sqlite, pcre }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, boehmgc, zlib, sqlite, pcre, cmake, pkg-config
+, git, apacheHttpd, apr, aprutil, libmysqlclient, mbedtls_2, openssl, pkgs, gtk2, libpthreadstubs
+}:
 
 stdenv.mkDerivation rec {
-  name = "neko-${version}";
-  version = "2.0.0";
+  pname = "neko";
+  version = "2.3.0";
 
-  src = fetchurl {
-    url = "http://nekovm.org/_media/neko-${version}.tar.gz";
-    sha256 = "1lcm1ahbklfpd5lnqjwmvyj2vr85jbq57hszk5jgq0x6yx6p3927";
+  src = fetchFromGitHub {
+    owner = "HaxeFoundation";
+    repo = "neko";
+    rev = "v${lib.replaceStrings [ "." ] [ "-" ] version}";
+    sha256 = "19rc59cx7qqhcqlb0znwbnwbg04c1yq6xmvrwm1xi46k3vxa957g";
   };
 
-  patches = stdenv.lib.singleton (fetchpatch {
-    url = "https://github.com/HaxeFoundation/neko/commit/"
-        + "ccc78c29deab7971e1369f4fe3dedd14cf9f3128.patch";
-    sha256 = "1nya50rzai15hmpq2azganjxzgrfydf30glfwirgw6q8z7z3wpkq";
-  });
+  patches = [
+    # https://github.com/HaxeFoundation/neko/pull/224
+    (fetchpatch {
+      url = "https://github.com/HaxeFoundation/neko/commit/ff5da9b0e96cc0eabc44ad2c10b7a92623ba49ee.patch";
+      sha256 = "sha256-isM7QGPiyXgT2zpIGd+r12vKg7I1rOWYTTWxuECafro=";
+    })
+  ];
 
-  prePatch = with stdenv.lib; let
-    libs = concatStringsSep "," (map (lib: "\"${lib.dev}/include\"") buildInputs);
-  in ''
-    sed -i -e '/^search_includes/,/^}/c \
-      search_includes = function(_) { return $array(${libs}) }
-    ' src/tools/install.neko
-    sed -i -e '/allocated = strdup/s|"[^"]*"|"'"$out/lib/neko:$out/bin"'"|' \
-      vm/load.c
-    # temporarily, fixed in 1.8.3
-    sed -i -e 's/^#if defined(_64BITS)/& || defined(__x86_64__)/' vm/neko.h
+  nativeBuildInputs = [ cmake pkg-config git ];
+  buildInputs =
+    [ boehmgc zlib sqlite pcre apacheHttpd apr aprutil
+      libmysqlclient mbedtls_2 openssl libpthreadstubs ]
+      ++ lib.optional stdenv.isLinux gtk2
+      ++ lib.optionals stdenv.isDarwin [ pkgs.darwin.apple_sdk.frameworks.Security
+                                                pkgs.darwin.apple_sdk.frameworks.Carbon];
+  cmakeFlags = [ "-DRUN_LDCONFIG=OFF" ];
+  env = lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = "-Wno-error=implicit-function-declaration";
+  };
 
-    for disabled_mod in mod_neko{,2} mod_tora{,2} mysql ui; do
-      sed -i -e '/^libs/,/^}/{/^\s*'"$disabled_mod"'\s*=>/,/^\s*}/d}' \
-        src/tools/install.neko
-    done
+  installCheckPhase = ''
+    bin/neko bin/test.n
   '';
 
-  makeFlags = "INSTALL_PREFIX=$(out)";
-  buildInputs = [ boehmgc zlib sqlite pcre ];
+  # Called from tools/test.neko line 2
+  # Uncaught exception - Segmentation fault
+  doInstallCheck = !stdenv.isDarwin;
+  dontPatchELF = true;
   dontStrip = true;
 
-  preInstall = ''
-    install -vd "$out/lib" "$out/bin"
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "A high-level dynamically typed programming language";
-    homepage = http://nekovm.org;
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = [ stdenv.lib.maintainers.marcweber ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://nekovm.org";
+    license = [
+      # list based on https://github.com/HaxeFoundation/neko/blob/v2-3-0/LICENSE
+      licenses.gpl2Plus    # nekoc, nekoml
+      licenses.lgpl21Plus  # mysql.ndll
+      licenses.bsd3        # regexp.ndll
+      licenses.zlib        # zlib.ndll
+      licenses.asl20       # mod_neko, mod_tora, mbedTLS
+      licenses.mit         # overall, other libs
+      "https://github.com/HaxeFoundation/neko/blob/v2-3-0/LICENSE#L24-L40" # boehm gc
+    ];
+    maintainers = [ maintainers.marcweber maintainers.locallycompact ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

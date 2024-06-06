@@ -1,30 +1,60 @@
-{ stdenv, lib, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, asciidoctor, installShellFiles, git, testers, git-lfs }:
 
-buildGoPackage rec {
-  name = "git-lfs-${version}";
-  # NOTE: use versions after 1.2.1
-  version = "1.3.1";
-  rev = "9c9dffb1b5baddfa06f280ef1b5fbf68ecbc90b1";
-  
-  goPackagePath = "github.com/github/git-lfs";
+buildGoModule rec {
+  pname = "git-lfs";
+  version = "3.5.1";
 
   src = fetchFromGitHub {
-    inherit rev;
-    owner = "github";
+    owner = "git-lfs";
     repo = "git-lfs";
-    sha256 = "0fg48jxh0gmd0w5yy3avascaasxk85019qayaikzfkym8bdqplb2";
+    rev = "v${version}";
+    hash = "sha256-xSLXbAvIoY3c341qi89pTrjBZdXh/bPrweJD2O2gkjY=";
   };
 
-  # Tests fail with 'lfstest-gitserver.go:46: main redeclared in this block'
-  excludedPackages = [ "test" ];
+  vendorHash = "sha256-N8HB2qwBxjzfNucftHxmX2W9srCx62pjmkCWzwiCj/I=";
+
+  nativeBuildInputs = [ asciidoctor installShellFiles ];
+
+  ldflags = [
+    "-s"
+    "-w"
+    "-X github.com/git-lfs/git-lfs/v${lib.versions.major version}/config.Vendor=${version}"
+  ];
+
+  subPackages = [ "." ];
 
   preBuild = ''
-    pushd go/src/github.com/github/git-lfs
-      go generate ./commands
-    popd
+    GOARCH= go generate ./commands
+  '';
+
+  postBuild = ''
+    make man
+  '';
+
+  nativeCheckInputs = [ git ];
+
+  preCheck = ''
+    unset subPackages
   '';
 
   postInstall = ''
-    rm -v $bin/bin/{man,script}
+    installManPage man/man*/*
+    installShellCompletion --cmd git-lfs \
+      --bash <($out/bin/git-lfs completion bash) \
+      --fish <($out/bin/git-lfs completion fish) \
+      --zsh <($out/bin/git-lfs completion zsh)
   '';
+
+  passthru.tests.version = testers.testVersion {
+    package = git-lfs;
+  };
+
+  meta = with lib; {
+    description = "Git extension for versioning large files";
+    homepage = "https://git-lfs.github.com/";
+    changelog = "https://github.com/git-lfs/git-lfs/raw/v${version}/CHANGELOG.md";
+    license = licenses.mit;
+    maintainers = with maintainers; [ twey ];
+    mainProgram = "git-lfs";
+  };
 }

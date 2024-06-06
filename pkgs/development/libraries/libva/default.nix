@@ -1,36 +1,69 @@
-{ stdenv, lib, fetchurl, libX11, pkgconfig, libXext, libdrm, libXfixes, wayland, libffi
-, mesa_noglu
-, minimal ? true, libva
+{ stdenv, lib, fetchFromGitHub, meson, pkg-config, ninja, wayland-scanner
+, libdrm
+, minimal ? false
+, libX11, libXext, libXfixes, wayland, libffi, libGL
+, mesa
+# for passthru.tests
+, intel-compute-runtime
+, intel-media-driver
+, mpv
+, intel-vaapi-driver
+, vlc
+, testers
 }:
 
-stdenv.mkDerivation rec {
-  name = "libva-${version}";
-  version = "1.7.2";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libva" + lib.optionalString minimal "-minimal";
+  version = "2.21.0";
 
-  src = fetchurl {
-    url = "http://www.freedesktop.org/software/vaapi/releases/libva/${name}.tar.bz2";
-    sha256 = "04rczbnbi70y1ziy9ab59szi3glk9q35hshlws0bcj2ndbqirmjx";
+  src = fetchFromGitHub {
+    owner  = "intel";
+    repo   = "libva";
+    rev    = finalAttrs.version;
+    sha256 = "sha256-X9H5nxbYFSMfxZMxs3iWwCgdrJ2FTVWW7tlgQek3WIg=";
   };
 
-  outputs = [ "bin" "dev" "out" ];
+  outputs = [ "dev" "out" ];
 
-  nativeBuildInputs = [ pkgconfig ];
+  depsBuildBuild = [ pkg-config ];
+
+  nativeBuildInputs = [ meson pkg-config ninja ]
+    ++ lib.optional (!minimal) wayland-scanner;
 
   buildInputs = [ libdrm ]
-    ++ lib.optionals (!minimal) [ libva libX11 libXext libXfixes wayland libffi mesa_noglu ];
-  # TODO: share libs between minimal and !minimal - perhaps just symlink them
+    ++ lib.optionals (!minimal) [ libX11 libXext libXfixes wayland libffi libGL ];
 
-  configureFlags =
-    [ "--with-drivers-path=${mesa_noglu.driverLink}/lib/dri" ] ++
-    lib.optionals (!minimal) [ "--enable-glx" ];
+  mesonFlags = [
+    # Add FHS and Debian paths for non-NixOS applications
+    "-Ddriverdir=${mesa.drivers.driverLink}/lib/dri:/usr/lib/dri:/usr/lib32/dri:/usr/lib/x86_64-linux-gnu/dri:/usr/lib/i386-linux-gnu/dri"
+  ];
 
-  installFlags = [ "dummy_drv_video_ladir=$(out)/lib/dri" ];
-
-  meta = with stdenv.lib; {
-    homepage = http://www.freedesktop.org/wiki/Software/vaapi;
-    license = licenses.mit;
-    description = "VAAPI library: Video Acceleration API";
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ garbas ];
+  passthru.tests = {
+    # other drivers depending on libva and selected application users.
+    # Please get a confirmation from the maintainer before adding more applications.
+    inherit intel-compute-runtime intel-media-driver intel-vaapi-driver mpv vlc;
+    pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
   };
-}
+
+  meta = with lib; {
+    description = "An implementation for VA-API (Video Acceleration API)";
+    longDescription = ''
+      VA-API is an open-source library and API specification, which provides
+      access to graphics hardware acceleration capabilities for video
+      processing. It consists of a main library (this package) and
+      driver-specific acceleration backends for each supported hardware vendor.
+    '';
+    homepage = "https://01.org/linuxmedia/vaapi";
+    changelog = "https://raw.githubusercontent.com/intel/libva/${finalAttrs.version}/NEWS";
+    license = licenses.mit;
+    maintainers = with maintainers; [ SuperSandro2000 ];
+    pkgConfigModules = [ "libva" "libva-drm" ] ++ lib.optionals (!minimal) [
+      "libva-glx" "libva-wayland" "libva-x11"
+    ];
+    platforms = platforms.unix;
+    badPlatforms = [
+      # Mandatory libva shared library.
+      lib.systems.inspect.platformPatterns.isStatic
+    ];
+  };
+})

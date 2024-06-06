@@ -1,28 +1,29 @@
-{fetchFromGitHub , stdenv, makeWrapper, python, gtk3,  libwnck3 }:
+{fetchFromGitHub , lib, stdenv, python3, gtk3, libwnck,
+ gobject-introspection, wrapGAppsHook3 }:
 
 stdenv.mkDerivation  rec {
-  name = "clipster-unstable-${version}";
-  version = "2016-09-12";
+  pname = "clipster";
+  version = "2.1.1";
 
   src = fetchFromGitHub {
     owner = "mrichar1";
     repo = "clipster";
-    rev = "6526a849a0af4c392f4e8e5b18aacdda9c1a8e80";
-    sha256 = "0illdajp5z50h7lvglv0p72cpv4c592xmpamrg8kkjpg693bp873";
+    rev = version;
+    sha256 = "sha256-MLLkFsBBQtb7RFQN+uoEmuCn5bnbkYsqoyWGZtTCI2U=";
   };
 
-  pythonEnv = python.withPackages(ps: with ps; [ dbus-python pygtk pygobject3 ]);
+  pythonEnv = python3.withPackages(ps: with ps; [ pygobject3 ]);
 
-  buildInputs =  [ pythonEnv gtk3 libwnck3 makeWrapper ];
+  nativeBuildInputs = [ gobject-introspection ];
+  buildInputs =  [ pythonEnv gtk3 libwnck wrapGAppsHook3 ];
 
   installPhase = ''
+    sed -i 's/python/python3/g' clipster
     mkdir -p $out/bin/
     cp clipster $out/bin/
-    wrapProgram "$out/bin/clipster" \
-      --prefix GI_TYPELIB_PATH : "$GI_TYPELIB_PATH"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "lightweight python clipboard manager";
     longDescription = ''
       Clipster was designed to try to add a good selection of useful features, while avoiding bad design decisions or becoming excessively large.
@@ -42,9 +43,10 @@ stdenv.mkDerivation  rec {
       - Option to ignore clipboard updates form certain applications. (filter_classes)
       - Ability to delete items in clipboard history.
     '';
-    license = licenses.agpl3;
-    homepage = https://github.com/mrichar1/clipster;
+    license = licenses.agpl3Only;
+    homepage = "https://github.com/mrichar1/clipster";
     platforms = platforms.linux;
-    maintainers = [maintainers.magnetophon];
+    maintainers = [ maintainers.magnetophon ];
+    mainProgram = "clipster";
   };
 }

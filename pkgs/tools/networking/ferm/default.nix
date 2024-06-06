@@ -1,28 +1,40 @@
-{ stdenv, fetchurl, makeWrapper, perl, ebtables, ipset, iptables }:
+{ lib, stdenv, fetchurl, makeWrapper, perl, iptables, nixosTests }:
 
-stdenv.mkDerivation rec {
-  version = "2.3";
-  name = "ferm-${version}";
+let
+  inherit (lib.versions) majorMinor;
+in stdenv.mkDerivation rec {
+  version = "2.7";
+  pname = "ferm";
 
   src = fetchurl {
-    url = "http://ferm.foo-projects.org/download/${version}/ferm-${version}.tar.gz";
-    sha256 = "0jx63fhjw5y1ahgdbn4hgd7sq6clxl80dr8a2hkryibfbwz3vs4x";
+    url = "http://ferm.foo-projects.org/download/${majorMinor version}/ferm-${version}.tar.xz";
+    sha256 = "sha256-wA2RDVOU5pZ1YI617g9QTVz9pB6ZCi2akbqsbfk+P5I=";
   };
 
-  buildInputs = [ perl ipset ebtables iptables makeWrapper ];
-  preConfigure = ''
-    substituteInPlace config.mk --replace "PERL = /usr/bin/perl" "PERL = ${perl}/bin/perl"
-    substituteInPlace config.mk --replace "PREFIX = /usr" "PREFIX = $out"
-  '';
+  patches = [
+    ./import-ferm-wrapped.patch
+  ];
+
+  # perl is used at build time to gather the ferm version.
+  nativeBuildInputs = [ makeWrapper perl ];
+  buildInputs = [ perl ];
+
+  makeFlags = [
+    "PERL=perl"
+    "PREFIX=${placeholder "out"}"
+  ];
+
   postInstall = ''
     rm -r $out/lib/systemd
     for i in "$out/sbin/"*; do
-      wrapProgram "$i" --prefix PATH : "${iptables}/bin:${ipset}/bin:${ebtables}/bin"
+      wrapProgram "$i" --prefix PATH : "${lib.makeBinPath [ iptables ]}"
     done
   '';
 
+  passthru.tests.ferm = nixosTests.ferm;
+
   meta = {
-    homepage = http://ferm.foo-projects.org/;
+    homepage = "http://ferm.foo-projects.org/";
     description = "Tool to maintain complex firewalls";
     longDescription = ''
       ferm is a tool to maintain complex firewalls, without having the trouble to
@@ -31,8 +43,8 @@ stdenv.mkDerivation rec {
       command. The firewall configuration resembles structured programming-like
       language, which can contain levels and lists.
     '';
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [mic92];
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [mic92];
+    platforms = lib.platforms.linux;
   };
 }

@@ -1,29 +1,40 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchurl, makeBinaryWrapper, jre }:
 
-stdenv.mkDerivation rec {
-  version = "6.19";
-  name = "checkstyle-${version}";
+stdenvNoCC.mkDerivation rec {
+  version = "10.17.0";
+  pname = "checkstyle";
 
   src = fetchurl {
-    url = "mirror://sourceforge/checkstyle/${name}-bin.tar.gz";
-    sha256 = "0x899i5yamwyhv7wgii80fv5hl8bdq0b8wlx1f789l85ik8rjwk9";
+    url = "https://github.com/checkstyle/checkstyle/releases/download/checkstyle-${version}/checkstyle-${version}-all.jar";
+    sha256 = "sha256-UcNNc4UgwTidcZmKmrDm2r4NfPJiFJ8+AacpRJYGLkI=";
   };
 
+  nativeBuildInputs = [ makeBinaryWrapper ];
+  buildInputs = [ jre ];
+
+  dontUnpack = true;
+
   installPhase = ''
-    mkdir -p $out/checkstyle
-    cp -R * $out/checkstyle
+    runHook preInstall
+    install -D $src $out/checkstyle/checkstyle-all.jar
+    makeWrapper ${jre}/bin/java $out/bin/checkstyle \
+      --add-flags "-jar $out/checkstyle/checkstyle-all.jar"
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Checks Java source against a coding standard";
+    mainProgram = "checkstyle";
     longDescription = ''
       checkstyle is a development tool to help programmers write Java code that
       adheres to a coding standard. By default it supports the Sun Code
       Conventions, but is highly configurable.
     '';
-    homepage = http://checkstyle.sourceforge.net/;
+    homepage = "https://checkstyle.org/";
+    changelog = "https://checkstyle.org/releasenotes.html#Release_${version}";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.lgpl21;
     maintainers = with maintainers; [ pSub ];
-    platforms = with platforms; linux;
+    platforms = jre.meta.platforms;
   };
 }

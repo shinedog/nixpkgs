@@ -1,19 +1,22 @@
-{ stdenv, fetchurl, rsync, ocaml }:
+{ lib, stdenv, fetchurl, rsync, ocamlPackages }:
 
-stdenv.mkDerivation rec {
-  name = "abella-${version}";
-  version = "2.0.2";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "abella";
+  version = "2.0.8";
 
   src = fetchurl {
-    url = "http://abella-prover.org/distributions/${name}.tar.gz";
-    sha256 = "b56d865ebdb198111f1dcd5b6fbcc0d7fc6dd1294f7601903ba4e3c3322c099c";
+    url = "http://abella-prover.org/distributions/abella-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-80b/RUpE3KRY0Qu8eeTxAbk6mwGG6jVTPOP0qFjyj2M=";
   };
 
-  buildInputs = [ rsync ocaml ];
+  strictDeps = true;
+
+  nativeBuildInputs = [ rsync ] ++ (with ocamlPackages; [ ocaml dune_3 menhir findlib ]);
+  buildInputs = with ocamlPackages; [ cmdliner yojson ];
 
   installPhase = ''
     mkdir -p $out/bin
-    rsync -av abella    $out/bin/
+    rsync -av _build/default/src/abella.exe    $out/bin/abella
 
     mkdir -p $out/share/emacs/site-lisp/abella/
     rsync -av emacs/    $out/share/emacs/site-lisp/abella/
@@ -24,15 +27,16 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Interactive theorem prover";
+    mainProgram = "abella";
     longDescription = ''
       Abella is an interactive theorem prover based on lambda-tree syntax.
       This means that Abella is well-suited for reasoning about the meta-theory
       of programming languages and other logical systems which manipulate
       objects with binding.
     '';
-    homepage = http://abella-prover.org/;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = with stdenv.lib.maintainers; [ bcdarwin ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://abella-prover.org";
+    license = lib.licenses.gpl3;
+    maintainers = with lib.maintainers; [ bcdarwin ciil ];
+    platforms = lib.platforms.unix;
   };
-}
+})

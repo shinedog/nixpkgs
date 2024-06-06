@@ -1,12 +1,13 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "keyfuzz-${version}";
+stdenv.mkDerivation {
+  pname = "keyfuzz";
   version = "0.2";
 
-  meta = with stdenv.lib; {
-    description = "Manipulate the scancode/keycode translation tables of keyboard drivers.";
-    homepace    = http://0pointer.de/lennart/projects/keyfuzz/;
+  meta = with lib; {
+    description = "Manipulate the scancode/keycode translation tables of keyboard drivers";
+    mainProgram = "keyfuzz";
+    homepage    = "http://0pointer.de/lennart/projects/keyfuzz/";
     license     = licenses.gpl2Plus;
     platforms   = platforms.linux;
     maintainers = with maintainers; [ mboes ];
@@ -17,5 +18,5 @@ stdenv.mkDerivation rec {
     sha256 = "0xv9ymivp8fnyc5xcyh1vamxnx90bzw66wlld813fvm6q2gsiknk";
   };
 
-  configureFlags = "--without-initdir --disable-lynx";
+  configureFlags = [ "--without-initdir" "--disable-lynx" ];
 }

@@ -1,29 +1,77 @@
-{ stdenv, fetchurl, SDL, frei0r, gettext, mlt, jack1, pkgconfig, qtbase,
-qtmultimedia, qtwebkit, qtx11extras, qtwebsockets, qtquickcontrols,
-qtgraphicaleffects,
-qmakeHook, makeQtWrapper }:
+{ lib
+, fetchFromGitHub
+, stdenv
+, wrapQtAppsHook
+, substituteAll
+, SDL2
+, frei0r
+, ladspaPlugins
+, gettext
+, mlt
+, jack1
+, pkg-config
+, fftw
+, qtbase
+, qttools
+, qtmultimedia
+, qtcharts
+, cmake
+, Cocoa
+, gitUpdater
+}:
+stdenv.mkDerivation (finalAttrs: {
+  pname = "shotcut";
+  version = "24.04.28";
 
-stdenv.mkDerivation rec {
-  name = "shotcut-${version}";
-  version = "16.10";
-
-  src = fetchurl {
-    url = "https://github.com/mltframework/shotcut/archive/v${version}.tar.gz";
-    sha256 = "0brskci86bwdj2ahjfvv3v254ligjn97bm0f6c8yg46r0jb8q5xw";
+  src = fetchFromGitHub {
+    owner = "mltframework";
+    repo = "shotcut";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-iMg2XrTrLFZXXvnJ7lMdkxf/LTaL9bh9Nc2jsPOS0eo=";
   };
 
-  buildInputs = [ SDL frei0r gettext mlt pkgconfig qtbase qtmultimedia qtwebkit
-    qtx11extras qtwebsockets qtquickcontrols qtgraphicaleffects qmakeHook makeQtWrapper ];
+  nativeBuildInputs = [ pkg-config cmake wrapQtAppsHook ];
+  buildInputs = [
+    SDL2
+    frei0r
+    ladspaPlugins
+    gettext
+    mlt
+    fftw
+    qtbase
+    qttools
+    qtmultimedia
+    qtcharts
+  ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
+    Cocoa
+  ];
 
-  enableParallelBuilding = true;
+  env.NIX_CFLAGS_COMPILE = "-DSHOTCUT_NOUPGRADE";
+  cmakeFlags = [
+    "-DSHOTCUT_VERSION=${finalAttrs.version}"
+  ];
 
-  postInstall = ''
-    mkdir -p $out/share/shotcut
-    cp -r src/qml $out/share/shotcut/
-    wrapQtProgram $out/bin/shotcut --prefix FREI0R_PATH : ${frei0r}/lib/frei0r-1 --prefix LD_LIBRARY_PATH : ${stdenv.lib.makeLibraryPath [ jack1 SDL ]}
+  patches = [
+    (substituteAll { inherit mlt; src = ./fix-mlt-ffmpeg-path.patch; })
+  ];
+
+  qtWrapperArgs = [
+    "--set FREI0R_PATH ${frei0r}/lib/frei0r-1"
+    "--set LADSPA_PATH ${ladspaPlugins}/lib/ladspa"
+    "--prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath ([SDL2] ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [jack1])}"
+  ];
+
+  postInstall = lib.optionalString stdenv.hostPlatform.isDarwin ''
+    mkdir $out/Applications $out/bin
+    mv $out/Shotcut.app $out/Applications/Shotcut.app
+    ln -s $out/Applications/Shotcut.app/Contents/MacOS/Shotcut $out/bin/shotcut
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "v";
+  };
+
+  meta = with lib; {
     description = "A free, open source, cross-platform video editor";
     longDescription = ''
       An official binary for Shotcut, which includes all the
@@ -34,13 +82,10 @@ stdenv.mkDerivation rec {
       nixpkgs maintainer(s). If you wish to report any bugs upstream,
       please use the official build from shotcut.org instead.
     '';
-    homepage = http://shotcut.org;
-    license = licenses.gpl3;
-    maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
-
-    # after qt5 bump it probably needs to be updated,
-    # but newer versions seem to need newer than the latest stable mlt
-    # broken = true;
+    homepage = "https://shotcut.org";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ goibhniu woffs peti ];
+    platforms = platforms.unix;
+    mainProgram = "shotcut";
   };
-}
+})

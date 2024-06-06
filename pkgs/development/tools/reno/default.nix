@@ -1,27 +1,60 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ lib
+, git
+, gnupg1
+, python3Packages
+, fetchPypi
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "reno-${version}";
-  version = "1.8.0";
+with python3Packages; buildPythonApplication rec {
+  pname = "reno";
+  version = "3.1.0";
 
-  src = fetchurl {
-    url = "mirror://pypi/r/reno/${name}.tar.gz";
-    sha256 = "1pqg0xzcilmyrrnpa87m11xwlvfc94a98s28z9cgddkhw27lg3ps";
+  # Must be built from python sdist because of versioning quirks
+  src = fetchPypi {
+    inherit pname version;
+    sha256 = "2510e3aae4874674187f88f22f854e6b0ea1881b77039808a68ac1a5e8ee69b6";
   };
 
-  # Don't know how to make tests pass
-  doCheck = false;
+  propagatedBuildInputs = [
+    dulwich
+    pbr
+    pyyaml
+    setuptools  # required for finding pkg_resources at runtime
+  ];
 
-  # Nothing to strip (python files)
-  dontStrip = true;
+  nativeCheckInputs = [
+    # Python packages
+    pytestCheckHook
+    docutils
+    fixtures
+    sphinx
+    testtools
+    testscenarios
 
-  propagatedBuildInputs = with pythonPackages; [ pbr six pyyaml ];
-  buildInputs = with pythonPackages; [ Babel ];
+    # Required programs to run all tests
+    git
+    gnupg1
+  ];
 
-  meta = with stdenv.lib; {
+  # remove b/c doesn't list all dependencies, and requires a few packages not in nixpkgs
+  postPatch = ''
+    rm test-requirements.txt
+  '';
+
+  disabledTests = [
+    "test_build_cache_db" # expects to be run from a git repository
+  ];
+
+  # verify executable
+  postCheck = ''
+    $out/bin/reno -h
+  '';
+
+  meta = with lib; {
     description = "Release Notes Manager";
-    homepage    = http://docs.openstack.org/developer/reno/;
-    license     = licenses.asl20;
-    maintainers = with maintainers; [ guillaumekoenig ];
+    mainProgram = "reno";
+    homepage = "https://docs.openstack.org/reno/latest";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ drewrisinger guillaumekoenig ];
   };
 }

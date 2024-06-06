@@ -1,32 +1,42 @@
-{ stdenv, fetchFromGitHub, cmake, luajit,
-  SDL2, SDL2_image, SDL2_ttf, physfs,
-  openal, libmodplug, libvorbis}:
+{ lib, mkDerivation, fetchFromGitLab, cmake, luajit
+,  SDL2, SDL2_image, SDL2_ttf, physfs, glm
+, openal, libmodplug, libvorbis
+, qtbase, qttools }:
 
-stdenv.mkDerivation rec {
-  name = "solarus-${version}";
-  version = "1.4.5";
-    
-  src = fetchFromGitHub {
-    owner = "christopho";
-    repo = "solarus";
-    rev = "d9fdb9fdb4e1b9fc384730a9279d134ae9f2c70e";
-    sha256 = "0xjx789d6crm322wmkqyq9r288vddsha59yavhy78c4r01gs1p5v";
+mkDerivation rec {
+  pname = "solarus";
+  version = "1.6.4";
+
+  src = fetchFromGitLab {
+    owner = "solarus-games";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sbdlf+R9OskDQ5U5rqUX2gF8l/fj0sDJv6BL7H1I1Ng=";
   };
-  
-  buildInputs = [ cmake luajit SDL2
-    SDL2_image SDL2_ttf physfs
-    openal libmodplug libvorbis ];
 
-  meta = with stdenv.lib; {
+  outputs = [ "out" "lib" "dev" ];
+
+  nativeBuildInputs = [ cmake qttools ];
+  buildInputs = [ luajit SDL2
+    SDL2_image SDL2_ttf physfs
+    openal libmodplug libvorbis
+    qtbase glm ];
+
+  preFixup = ''
+    mkdir $lib/
+    mv $out/lib $lib
+  '';
+
+  meta = with lib; {
     description = "A Zelda-like ARPG game engine";
     longDescription = ''
       Solarus is a game engine for Zelda-like ARPG games written in lua.
       Many full-fledged games have been writen for the engine.
     '';
-    homepage = http://www.solarus-games.org;
+    homepage = "https://www.solarus-games.org";
     license = licenses.gpl3;
-    maintainers = [ maintainers.Nate-Devv ];
+    maintainers = [ ];
     platforms = platforms.linux;
   };
-  
+
 }

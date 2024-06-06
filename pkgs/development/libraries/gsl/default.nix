@@ -1,24 +1,34 @@
-{ fetchurl, fetchpatch, stdenv }:
+{ fetchurl, lib, stdenv }:
 
 stdenv.mkDerivation rec {
-  name = "gsl-2.2";
+  pname = "gsl";
+  version = "2.7.1";
+
+  outputs = [ "out" "dev" ];
 
   src = fetchurl {
-    url = "mirror://gnu/gsl/${name}.tar.gz";
-    sha256 = "1pyq2c0j91z955746myn29c89jwkd435s2cbj8ks2hpag6d0mr2d";
+    url = "mirror://gnu/gsl/${pname}-${version}.tar.gz";
+    sha256 = "sha256-3LD71DBIgyt1f/mUJpGo3XACbV2g/4VgHlJof23us0s=";
   };
 
-  patches = [
-    # ToDo: there might be more impurities than FMA support check
-    ./disable-fma.patch # http://lists.gnu.org/archive/html/bug-gsl/2011-11/msg00019.html
-  ];
+  preConfigure = if (lib.versionAtLeast stdenv.hostPlatform.darwinMinVersion "11" && stdenv.isDarwin) then ''
+    MACOSX_DEPLOYMENT_TARGET=10.16
+  '' else null;
 
-  doCheck = stdenv.system != "i686-linux"; # https://lists.gnu.org/archive/html/bug-gsl/2015-11/msg00012.html
+  postInstall = ''
+    moveToOutput bin/gsl-config "$dev"
+  '';
+
+  # do not let -march=skylake to enable FMA (https://lists.gnu.org/archive/html/bug-gsl/2011-11/msg00019.html)
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isx86_64 "-mno-fma";
+
+  # https://lists.gnu.org/archive/html/bug-gsl/2015-11/msg00012.html
+  doCheck = stdenv.hostPlatform.system != "i686-linux";
 
   meta = {
     description = "The GNU Scientific Library, a large numerical library";
-    homepage = http://www.gnu.org/software/gsl/;
-    license = stdenv.lib.licenses.gpl3Plus;
+    homepage = "https://www.gnu.org/software/gsl/";
+    license = lib.licenses.gpl3Plus;
 
     longDescription = ''
       The GNU Scientific Library (GSL) is a numerical library for C
@@ -30,6 +40,6 @@ stdenv.mkDerivation rec {
       fitting.  There are over 1000 functions in total with an
       extensive test suite.
     '';
-    platforms = stdenv.lib.platforms.unix;
+    platforms = lib.platforms.all;
   };
 }

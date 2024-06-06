@@ -1,36 +1,93 @@
-{ stdenv, fetchurl, pkgconfig, cups, poppler, poppler_utils, fontconfig
-, libjpeg, libpng, perl, ijs, qpdf, dbus, substituteAll, bash, avahi
-, makeWrapper, coreutils, gnused, bc, gawk, gnugrep, which
+{ lib
+, avahi
+, bc
+, coreutils
+, cups
+, dbus
+, dejavu_fonts
+, fetchurl
+, fetchpatch
+, fontconfig
+, gawk
+, ghostscript
+, gnugrep
+, gnused
+, ijs
+, libexif
+, libjpeg
+, liblouis
+, libpng
+, makeWrapper
+, mupdf
+, perl
+, pkg-config
+, poppler
+, poppler_utils
+, qpdf
+, stdenv
+, which
+, withAvahi ? true
 }:
 
 let
-  binPath = stdenv.lib.makeBinPath [ coreutils gnused bc gawk gnugrep which ];
+  binPath = lib.makeBinPath [ bc coreutils gawk gnused gnugrep which ];
 
-in stdenv.mkDerivation rec {
-  name = "cups-filters-${version}";
-  version = "1.11.1";
+in
+stdenv.mkDerivation rec {
+  pname = "cups-filters";
+  version = "1.28.17";
 
   src = fetchurl {
-    url = "http://openprinting.org/download/cups-filters/${name}.tar.xz";
-    sha256 = "0x0jxn1hnif92m7dyqrqh015gpsf79dviarb7dfl0zya2drlk1m8";
+    url = "https://github.com/OpenPrinting/cups-filters/releases/download/${version}/${pname}-${version}.tar.xz";
+    hash = "sha256-Jwo3UqlgNoqpnUMftdNPQDmyrJQ8V22EBhLR2Bhcm7k=";
   };
 
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
-
-  buildInputs = [
-    cups poppler poppler_utils fontconfig libjpeg libpng perl
-    ijs qpdf dbus avahi
+  patches = [
+    (fetchpatch {
+      name = "CVE-2023-24805.patch";
+      url = "https://github.com/OpenPrinting/cups-filters/commit/93e60d3df358c0ae6f3dba79e1c9684657683d89.patch";
+      hash = "sha256-KgWTYFr2uShL040azzE+KaNyBPy7Gs/hCnEgQmmPCys=";
+    })
   ];
 
+  nativeBuildInputs = [ pkg-config makeWrapper ];
+
+  buildInputs = [
+    cups
+    dbus
+    fontconfig
+    ghostscript
+    ijs
+    libexif
+    libjpeg
+    liblouis # braille embosser support
+    libpng
+    mupdf
+    perl
+    poppler
+    poppler_utils
+    qpdf
+  ] ++ lib.optionals withAvahi [ avahi ];
+
   configureFlags = [
+    "--with-mutool-path=${mupdf}/bin/mutool"
     "--with-pdftops=pdftops"
+    "--with-pdftops-path=${poppler_utils}/bin/pdftops"
+    "--with-gs-path=${ghostscript}/bin/gs"
+    "--with-pdftocairo-path=${poppler_utils}/bin/pdftocairo"
+    "--with-ippfind-path=${cups}/bin/ippfind"
     "--enable-imagefilters"
     "--with-rcdir=no"
     "--with-shell=${stdenv.shell}"
-    "--with-test-font-path=/path-does-not-exist"
-  ];
+    "--with-test-font-path=${dejavu_fonts}/share/fonts/truetype/DejaVuSans.ttf"
+    "--localstatedir=/var"
+    "--sysconfdir=/etc"
+  ] ++ lib.optionals (!withAvahi) [ "--disable-avahi" ];
 
   makeFlags = [ "CUPS_SERVERBIN=$(out)/lib/cups" "CUPS_DATADIR=$(out)/share/cups" "CUPS_SERVERROOT=$(out)/etc/cups" ];
+
+  # https://github.com/OpenPrinting/cups-filters/issues/512
+  env.NIX_CFLAGS_COMPILE = "-std=c++17";
 
   postConfigure =
     ''
@@ -41,6 +98,9 @@ in stdenv.mkDerivation rec {
 
       # Ensure that gstoraster can find gs in $PATH.
       substituteInPlace filter/gstoraster.c --replace execve execvpe
+
+      # Patch shebangs of generated build scripts
+      patchShebangs filter
     '';
 
   postInstall =
@@ -51,11 +111,12 @@ in stdenv.mkDerivation rec {
     '';
 
   enableParallelBuilding = true;
+  doCheck = true;
 
   meta = {
-    homepage = http://www.linuxfoundation.org/collaborate/workgroups/openprinting/cups-filters;
+    homepage = "http://www.linuxfoundation.org/collaborate/workgroups/openprinting/cups-filters";
     description = "Backends, filters, and other software that was once part of the core CUPS distribution but is no longer maintained by Apple Inc";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2;
+    platforms = lib.platforms.linux;
   };
 }

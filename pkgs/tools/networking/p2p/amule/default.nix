@@ -1,57 +1,87 @@
 { monolithic ? true # build monolithic amule
-, daemon ? false # build amule daemon
+, enableDaemon ? false # build amule daemon
 , httpServer ? false # build web interface for the daemon
 , client ? false # build amule remote gui
-, fetchurl, stdenv, zlib, wxGTK, perl, cryptopp, libupnp, gettext, libpng ? null
-, pkgconfig, makeWrapper, libX11 ? null }:
+, fetchFromGitHub
+, fetchpatch
+, stdenv
+, lib
+, cmake
+, zlib
+, wxGTK32
+, perl
+, cryptopp
+, libupnp
+, boost # Not using boost leads to crashes with gtk3
+, gettext
+, libpng
+, pkg-config
+, makeWrapper
+, libX11
+}:
 
-assert httpServer -> libpng != null;
-assert client -> libX11 != null;
-with stdenv;
-let
-  # Enable/Disable Feature
-  edf = enabled: flag: if enabled then "--enable-" + flag else "--disable-" + flag;
-in
-mkDerivation rec {
-  name = "aMule-2.3.1";
+# daemon and client are not build monolithic
+assert monolithic || (!monolithic && (enableDaemon || client || httpServer));
 
-  src = fetchurl {
-    url = "mirror://sourceforge/amule/${name}.tar.xz";
-    sha256 = "0hvpx3c005nvxsfand5bwfxxiq3mv0mpykajfm2lkygjh1rw2383";
+stdenv.mkDerivation rec {
+  pname = "amule"
+    + lib.optionalString httpServer "-web"
+    + lib.optionalString enableDaemon "-daemon"
+    + lib.optionalString client "-gui";
+  version = "2.3.3";
+
+  src = fetchFromGitHub {
+    owner = "amule-project";
+    repo = "amule";
+    rev = version;
+    sha256 = "1nm4vxgmisn1b6l3drmz0q04x067j2i8lw5rnf0acaapwlp8qwvi";
   };
 
-  buildInputs =
-    [ zlib wxGTK perl cryptopp libupnp gettext pkgconfig makeWrapper ]
-    ++ lib.optional httpServer libpng
-    ++ lib.optional client libX11;
+  patches = [
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/a/amule/1%3A2.3.3-3/debian/patches/wx3.2.patch";
+      hash = "sha256-OX5Ef80bL+dQqHo2OBLZvzMUrU6aOHfsF7AtoE1r7rs=";
+    })
+  ];
 
-  patches = [ ./gcc47.patch ]; # from Gentoo
+  nativeBuildInputs = [ cmake gettext makeWrapper pkg-config ];
 
-  configureFlags = ''
-    --with-crypto-prefix=${cryptopp}
-    --disable-debug
-    --enable-optimize
-    ${edf monolithic "monolithic"}
-    ${edf daemon "amule-daemon"}
-    ${edf client "amule-gui"}
-    ${edf httpServer "webserver"}
-  '';
+  buildInputs = [
+    zlib
+    wxGTK32
+    perl
+    cryptopp.dev
+    libupnp
+    boost
+  ] ++ lib.optional httpServer libpng
+  ++ lib.optional client libX11;
 
-  postConfigure = ''
-    sed -i "src/libs/ec/file_generator.pl"     \
-        -es'|/usr/bin/perl|${perl}/bin/perl|g'
+  cmakeFlags = [
+    "-DBUILD_MONOLITHIC=${if monolithic then "ON" else "OFF"}"
+    "-DBUILD_DAEMON=${if enableDaemon then "ON" else "OFF"}"
+    "-DBUILD_REMOTEGUI=${if client then "ON" else "OFF"}"
+    "-DBUILD_WEBSERVER=${if httpServer then "ON" else "OFF"}"
+    # building only the daemon fails when these are not set... this is
+    # due to mistakes in the Amule cmake code, but it does not cause
+    # extra code to be built...
+    "-Dwx_NEED_GUI=ON"
+    "-Dwx_NEED_ADV=ON"
+    "-Dwx_NEED_NET=ON"
+  ];
+
+  postPatch = ''
+    echo "find_package(Threads)" >> cmake/options.cmake
   '';
 
   # aMule will try to `dlopen' libupnp and libixml, so help it
   # find them.
   postInstall = lib.optionalString monolithic ''
-    wrapProgram "$out/bin/amule" --prefix LD_LIBRARY_PATH ":" "${libupnp}/lib"
+    wrapProgram $out/bin/amule \
+      --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [ libupnp ]}
   '';
 
-  meta = {
-    homepage = http://amule.org/;
+  meta = with lib; {
     description = "Peer-to-peer client for the eD2K and Kademlia networks";
-
     longDescription = ''
       aMule is an eMule-like client for the eD2k and Kademlia
       networks, supporting multiple platforms.  Currently aMule
@@ -63,9 +93,11 @@ mkDerivation rec {
       applications.
     '';
 
-    license = stdenv.lib.licenses.gpl2Plus;
-
-    platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
-    maintainers = [ stdenv.lib.maintainers.phreedom ];
+    homepage = "https://github.com/amule-project/amule";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.unix;
+    # Undefined symbols for architecture arm64: "_FSFindFolder"
+    broken = stdenv.isDarwin;
   };
 }

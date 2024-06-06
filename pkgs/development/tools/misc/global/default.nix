@@ -1,28 +1,31 @@
-{ fetchurl, stdenv, libtool, makeWrapper
-, coreutils, ctags, ncurses, pythonPackages, sqlite, pkgconfig
+{ fetchurl, lib, stdenv, libtool, makeWrapper
+, coreutils, ctags, ncurses, python3Packages, sqlite, universal-ctags
 }:
 
-stdenv.mkDerivation rec {
-  name = "global-${version}";
-  version = "6.5.5";
+let
+  pygments = python3Packages.pygments;
+in stdenv.mkDerivation rec {
+  pname = "global";
+  version = "6.6.12";
 
   src = fetchurl {
-    url = "mirror://gnu/global/${name}.tar.gz";
-    sha256 = "0yyg91qw8399lnxfai4bxkh9yq71qdwp9kvadgzp05cdqni44nxw";
+    url = "mirror://gnu/global/${pname}-${version}.tar.gz";
+    hash = "sha256-VCpbBoQOFOylSLS7YLRMCtzwECTmjrNi+L9xYAeIWQE=";
   };
 
   nativeBuildInputs = [ libtool makeWrapper ];
 
-  buildInputs = [ ncurses ];
+  buildInputs = [ ncurses sqlite ];
 
-  propagatedBuildInputs = [ pythonPackages.pygments ];
+  propagatedBuildInputs = [ pygments ];
 
   configureFlags = [
     "--with-ltdl-include=${libtool}/include"
     "--with-ltdl-lib=${libtool.lib}/lib"
-    "--with-ncurses=${ncurses.dev}"
-    "--with-sqlite3=${sqlite.dev}"
+    "--with-ncurses=${ncurses}"
+    "--with-sqlite3"
     "--with-exuberant-ctags=${ctags}/bin/ctags"
+    "--with-universal-ctags=${universal-ctags}/bin/ctags"
     "--with-posix-sort=${coreutils}/bin/sort"
   ];
 
@@ -33,12 +36,12 @@ stdenv.mkDerivation rec {
     cp -v *.el "$out/share/emacs/site-lisp"
 
     wrapProgram $out/bin/gtags \
-      --prefix PYTHONPATH : "$(toPythonPath ${pythonPackages.pygments})"
+      --prefix PYTHONPATH : "$(toPythonPath ${pygments})"
     wrapProgram $out/bin/global \
-      --prefix PYTHONPATH : "$(toPythonPath ${pythonPackages.pygments})"
+      --prefix PYTHONPATH : "$(toPythonPath ${pygments})"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Source code tag system";
     longDescription = ''
       GNU GLOBAL is a source code tagging system that works the same way
@@ -50,9 +53,10 @@ stdenv.mkDerivation rec {
       independence of any editor.  It runs on a UNIX (POSIX) compatible
       operating system like GNU and BSD.
     '';
-    homepage = http://www.gnu.org/software/global/;
+    homepage = "https://www.gnu.org/software/global/";
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ pSub peterhoeg ];
     platforms = platforms.unix;
+    changelog = "https://cvs.savannah.gnu.org/viewvc/global/global/NEWS?view=markup&pathrev=VERSION-${lib.replaceStrings [ "." ] [ "_" ] version}";
   };
 }

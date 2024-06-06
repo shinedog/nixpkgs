@@ -1,33 +1,43 @@
-{ stdenv, buildGoPackage, fetchFromGitHub, makeWrapper, gnupg1compat, bzip2, xz, graphviz }:
+{ lib, buildGoModule, fetchFromGitHub, installShellFiles, makeWrapper, gnupg, bzip2, xz, graphviz, testers, aptly }:
 
-buildGoPackage rec {
-  name = "aptly-${version}";
-  version = "0.9.7";
-  rev = "v${version}";
+buildGoModule rec {
+  pname = "aptly";
+  version = "1.5.0";
 
   src = fetchFromGitHub {
-    inherit rev;
-    owner = "smira";
+    owner = "aptly-dev";
     repo = "aptly";
-    sha256 = "0j1bmqdah4i83r2cf8zcq87aif1qg90yasgf82yygk3hj0gw1h00";
+    rev = "v${version}";
+    sha256 = "sha256-LqGOLXXaGfQfoj2r+aY9SdOKUDI9+22EsHKBhHMidyk=";
   };
 
-  goPackagePath = "github.com/smira/aptly";
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-6l3OFKFTtFWT68Ylav6woczBlMhD75C9ZoQ6OeLz0Cs=";
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ installShellFiles makeWrapper ];
+
+  ldflags = [ "-s" "-w" "-X main.Version=${version}" ];
 
   postInstall = ''
-    rm $bin/bin/man
-    wrapProgram "$bin/bin/aptly" \
-      --prefix PATH ":" "${stdenv.lib.makeBinPath [ gnupg1compat bzip2 xz graphviz ]}"
+    installShellCompletion --bash --name aptly completion.d/aptly
+    installShellCompletion --zsh --name _aptly completion.d/_aptly
+    wrapProgram "$out/bin/aptly" \
+      --prefix PATH ":" "${lib.makeBinPath [ gnupg bzip2 xz graphviz ]}"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://www.aptly.info;
+  doCheck = false;
+
+  passthru.tests.version = testers.testVersion {
+    package = aptly;
+    command = "aptly version";
+  };
+
+  meta = with lib; {
+    homepage = "https://www.aptly.info";
     description = "Debian repository management tool";
     license = licenses.mit;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.montag451 ];
+    maintainers = with maintainers; [ montag451 ] ++ teams.bitnomial.members;
+    changelog =
+      "https://github.com/aptly-dev/aptly/releases/tag/v${version}";
+    mainProgram = "aptly";
   };
 }

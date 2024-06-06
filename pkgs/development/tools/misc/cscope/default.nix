@@ -1,21 +1,22 @@
-{ fetchurl, stdenv, ncurses
+{ fetchurl, lib, stdenv, ncurses
 , emacsSupport ? true, emacs
 }:
 
 stdenv.mkDerivation rec {
-  name = "cscope-15.8b";
+  pname = "cscope";
+  version = "15.9";
 
   src = fetchurl {
-    url = "mirror://sourceforge/cscope/${name}.tar.gz";
-    sha256 = "1byk29rcpyygrnr03h5j3y8j0aqxldd9dr5ihi9q982sy28x12a8";
+    url = "mirror://sourceforge/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "0ngiv4aj3rr35k3q3wjx0y19gh7i1ydqa0cqip6sjwd8fph5ll65";
   };
 
-  configureFlags = "--with-ncurses=${ncurses.dev}";
+  configureFlags = [ "--with-ncurses=${ncurses.dev}" ];
 
   buildInputs = [ ncurses ];
-  nativeBuildInputs = stdenv.lib.optional emacsSupport emacs;
+  nativeBuildInputs = lib.optional emacsSupport emacs;
 
-  postInstall = stdenv.lib.optionalString emacsSupport ''
+  postInstall = lib.optionalString emacsSupport ''
     cd "contrib/xcscope"
 
     sed -i "cscope-indexer" \
@@ -31,11 +32,6 @@ stdenv.mkDerivation rec {
     cp xcscope.el{,c} "$out/share/emacs/site-lisp"
   '';
 
-  crossAttrs = {
-    postInstall = "";
-    propagatedBuildInputs = [ ncurses.crossDrv ];
-  };
-
   meta = {
     description = "A developer's tool for browsing source code";
 
@@ -49,10 +45,10 @@ stdenv.mkDerivation rec {
 
     license = "BSD-style";
 
-    homepage = http://cscope.sourceforge.net/;
+    homepage = "https://cscope.sourceforge.net/";
 
-    maintainers = with stdenv.lib.maintainers; [viric];
+    maintainers = with lib.maintainers; [viric];
 
-    platforms = with stdenv.lib.platforms; linux;
+    platforms = lib.platforms.unix;
   };
 }

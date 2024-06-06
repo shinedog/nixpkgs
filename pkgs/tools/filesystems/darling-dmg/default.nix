@@ -1,22 +1,31 @@
-{ stdenv, fetchFromGitHub, cmake, fuse, zlib, bzip2, openssl, libxml2, icu } :
+{ lib, stdenv, fetchFromGitHub, cmake, fuse, zlib, bzip2, openssl, libxml2, icu, lzfse, libiconv }:
 
 stdenv.mkDerivation rec {
-  name = "darling-dmg-${version}";
-  version = "1.0.4";
+  pname = "darling-dmg";
+  version = "1.0.4+git20200427";
 
   src = fetchFromGitHub {
     owner = "darlinghq";
     repo = "darling-dmg";
-    rev = "v${version}";
-    sha256 = "0x285p16zfnp0p6injw1frc8krif748sfgxhdd7gb75kz0dfbkrk";
+    rev = "71cc76c792db30328663272788c0b64aca27fdb0";
+    sha256 = "08iphkxlmjddrxpbm13gxyqwcrd0k65z3l1944n4pccb6qbyj8gv";
   };
 
-  buildInputs = [ cmake fuse openssl zlib bzip2 libxml2 icu ];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ fuse openssl zlib bzip2 libxml2 icu lzfse ]
+    ++ lib.optionals stdenv.isDarwin [ libiconv ];
 
-  meta = {
-    homepage = http://www.darlinghq.org/;
-    description = "Darling lets you open OS X dmgs on Linux";
-    platforms = stdenv.lib.platforms.linux;
-    license = stdenv.lib.licenses.gpl3;
+  CXXFLAGS = [
+    "-DCOMPILE_WITH_LZFSE=1"
+    "-llzfse"
+  ];
+
+  meta = with lib; {
+    homepage = "https://www.darlinghq.org/";
+    description = "Darling lets you open macOS dmgs on Linux";
+    mainProgram = "darling-dmg";
+    platforms = platforms.unix;
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ Luflosi ];
   };
 }

@@ -1,30 +1,33 @@
-{ stdenv, fetchurl, openssl, gmp, zlib, iproute, nettools }:
+{ lib, stdenv, fetchurl, openssl, gmp, zlib, iproute2, nettools, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "gvpe-${version}";
-  version = "2.25";
+  pname = "gvpe";
+  version = "3.1";
 
   src = fetchurl {
-    url = "http://ftp.gnu.org/gnu/gvpe/gvpe-${version}.tar.gz";
-    sha256 = "1gsipcysvsk80gvyn9jnk9g0xg4ng9yd5zp066jnmpgs52d2vhvk";
+    url = "https://ftp.gnu.org/gnu/gvpe/gvpe-${version}.tar.gz";
+    sha256 = "sha256-8evVctclu5QOCAdxocEIZ8NQnc2DFvYRSBRQPcux6LM=";
   };
 
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [ openssl gmp zlib ];
 
   configureFlags = [
     "--enable-tcp"
     "--enable-http-proxy"
     "--enable-dns"
-    ];
+  ];
 
-  preBuild = ''
-    sed -e 's@"/sbin/ifconfig.*"@"${iproute}/sbin/ip link set $IFNAME address $MAC mtu $MTU"@' -i src/device-linux.C
+  postPatch = ''
+    sed -e 's@"/sbin/ifconfig.*"@"${iproute2}/sbin/ip link set dev $IFNAME address $MAC mtu $MTU"@' -i src/device-linux.C
     sed -e 's@/sbin/ifconfig@${nettools}/sbin/ifconfig@g' -i src/device-*.C
   '';
 
-  meta = {
+  meta = with lib; {
     description = "A protected multinode virtual network";
-    maintainers = [ stdenv.lib.maintainers.raskin ];
-    platforms = with stdenv.lib.platforms; linux ++ freebsd;
+    homepage = "http://software.schmorp.de/pkg/gvpe.html";
+    maintainers = [ maintainers.raskin ];
+    platforms = with platforms; linux ++ freebsd;
+    license = licenses.gpl2Plus;
   };
 }

@@ -1,24 +1,26 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "mononoki-${version}";
-  version = "1.2";
+stdenvNoCC.mkDerivation rec {
+  pname = "mononoki";
+  version = "1.6";
 
-  src = fetchurl {
+  src = fetchzip {
     url = "https://github.com/madmalik/mononoki/releases/download/${version}/mononoki.zip";
-    sha256 = "0n66bnn2i776fbky14qjijwsbrja9yzc1xfsmvz99znvcdvflafg";
+    stripRoot = false;
+    hash = "sha256-HQM9rzIJXLOScPEXZu0MzRlblLfbVVNJ+YvpONxXuwQ=";
   };
 
-  buildInputs = [ unzip ];
-  phases = [ "unpackPhase" ];
+  installPhase = ''
+    runHook preInstall
 
-  unpackPhase = ''
     mkdir -p $out/share/fonts/mononoki
-    unzip $src -d $out/share/fonts/mononoki
+    cp * $out/share/fonts/mononoki
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/madmalik/mononoki;
+  meta = with lib; {
+    homepage = "https://github.com/madmalik/mononoki";
     description = "A font for programming and code review";
     license = licenses.ofl;
     platforms = platforms.all;

@@ -1,34 +1,57 @@
-{ stdenv, fetchurl, intltool, pkgconfig
-, anthy, ibus, glib, gobjectIntrospection, gtk3, python3, pygobject3
+{ lib, stdenv
+, fetchurl
+, gettext
+, pkg-config
+, wrapGAppsHook3
+, anthy
+, ibus
+, glib
+, gobject-introspection
+, gtk3
+, python3
 }:
 
 stdenv.mkDerivation rec {
-  name = "ibus-anthy-${version}";
-  version = "1.5.8";
+  pname = "ibus-anthy";
+  version = "1.5.16";
 
-  meta = with stdenv.lib; {
-    isIbusEngine = true;
-    description  = "IBus interface to the anthy input method";
-    homepage     = http://wiki.github.com/fujiwarat/ibus-anthy;
-    license      = licenses.gpl2Plus;
-    platforms    = platforms.linux;
-    maintainers  = with maintainers; [ gebner ericsagnes ];
+  src = fetchurl {
+    url = "https://github.com/ibus/ibus-anthy/releases/download/${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-FVIiFLWK2ISsydmx2hPxXbfc12w7GKiFCQRuXsYT0a4=";
   };
 
-  configureFlags = "--with-anthy-zipcode=${anthy}/share/anthy/zipcode.t";
-
   buildInputs = [
-    anthy glib gobjectIntrospection gtk3 ibus python3 pygobject3
+    anthy
+    glib
+    gtk3
+    ibus
+    (python3.withPackages (ps: [
+      ps.pygobject3
+      (ps.toPythonModule ibus)
+    ]))
   ];
 
-  nativeBuildInputs = [ intltool pkgconfig ];
+  nativeBuildInputs = [
+    gettext
+    gobject-introspection
+    pkg-config
+    wrapGAppsHook3
+  ];
+
+  configureFlags = [
+    "--with-anthy-zipcode=${anthy}/share/anthy/zipcode.t"
+  ];
 
   postFixup = ''
     substituteInPlace $out/share/ibus/component/anthy.xml --replace \$\{exec_prefix\} $out
   '';
 
-  src = fetchurl {
-    url = "https://github.com/ibus/ibus-anthy/releases/download/${version}/${name}.tar.gz";
-    sha256 = "1aj7vnfky7izl23xyjky78z3qas3q72l3kr8dnql2lnivsrb8q1y";
+  meta = with lib; {
+    isIbusEngine = true;
+    description = "IBus interface to the anthy input method";
+    homepage = "https://github.com/fujiwarat/ibus-anthy";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ gebner ericsagnes ];
   };
 }

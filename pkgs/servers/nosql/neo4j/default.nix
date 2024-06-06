@@ -1,38 +1,44 @@
-{ stdenv, fetchurl, makeWrapper, jre8, which, gawk }:
-
-with stdenv.lib;
+{ stdenv, lib, fetchurl, nixosTests, makeWrapper, openjdk17, which, gawk }:
 
 stdenv.mkDerivation rec {
-  name = "neo4j-${version}";
-  version = "3.0.6";
+  pname = "neo4j";
+  version = "5.20.0";
 
   src = fetchurl {
-    url = "http://dist.neo4j.org/neo4j-community-${version}-unix.tar.gz";
-    sha256 = "efeab41183e9e5fa94a2d396c65ea93a24e9f105cb3b5f0d0a8e42fb709f4660";
+    url = "https://neo4j.com/artifact.php?name=neo4j-community-${version}-unix.tar.gz";
+    hash = "sha256-IDIVdIQCcChx5RHG3/88Yvclh8ToDfcDv4VAhcQ20GY=";
   };
 
-  buildInputs = [ makeWrapper jre8 which gawk ];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     mkdir -p "$out/share/neo4j"
     cp -R * "$out/share/neo4j"
 
     mkdir -p "$out/bin"
-    for NEO4J_SCRIPT in neo4j neo4j-admin neo4j-import neo4j-shell
+    for NEO4J_SCRIPT in neo4j neo4j-admin cypher-shell
     do
+        chmod +x "$out/share/neo4j/bin/$NEO4J_SCRIPT"
         makeWrapper "$out/share/neo4j/bin/$NEO4J_SCRIPT" \
             "$out/bin/$NEO4J_SCRIPT" \
-            --prefix PATH : "${stdenv.lib.makeBinPath [ jre8 which gawk ]}" \
-            --set JAVA_HOME "$jre8"
+            --prefix PATH : "${lib.makeBinPath [ openjdk17 which gawk ]}" \
+            --set JAVA_HOME "${openjdk17}"
     done
+
+    patchShebangs $out/share/neo4j/bin/neo4j-admin
+
+    # user will be asked to change password on first login
+    # password must be at least 8 characters long
+    $out/bin/neo4j-admin dbms set-initial-password neo4jadmin
   '';
 
-  meta = with stdenv.lib; {
-    description = "A highly scalable, robust (fully ACID) native graph database";
-    homepage = "http://www.neo4j.org/";
-    license = licenses.gpl3;
+  passthru.tests.nixos = nixosTests.neo4j;
 
-    maintainers = [ maintainers.offline ];
-    platforms = stdenv.lib.platforms.unix;
+  meta = with lib; {
+    description = "A highly scalable, robust (fully ACID) native graph database";
+    homepage = "https://neo4j.com/";
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ jonringer offline ];
+    platforms = platforms.unix;
   };
 }

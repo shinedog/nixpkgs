@@ -1,17 +1,19 @@
-{ stdenv, fetchurl, jre, unzip }:
+{ lib, stdenv, fetchurl, jre, unzip, runtimeShell }:
 
-stdenv.mkDerivation rec {
-  major = "14";
-  minor = "2";
-  version = "${major}.${minor}";
-  name = "umlet-${version}";
+stdenv.mkDerivation {
+  pname = "umlet";
+  version = "15.1.0";
 
   src = fetchurl {
-    url = "http://www.umlet.com/umlet_${major}_${minor}/umlet-standalone-${version}.zip";
-    sha256 = "1fcc7ms92vcc4b8jh56bd3zrqdb0bwhbbzdxycc952fb0j6m62fw";
+    # NOTE: The download URL breaks consistency - sometimes w/ patch versions
+    # and sometimes w/o. Furthermore, for 15.1.0 they moved everything to the
+    # new /download subfolder.
+    # As releases are very rarely, just modify it by hand..
+    url = "https://www.umlet.com/download/umlet_15_1/umlet-standalone-15.1.zip";
+    hash = "sha256-M6oVWbOmPBTygS+TFkY9PWucFfYLD33suNUuWpFLMIo=";
   };
 
-  buildInputs = [ unzip ];
+  nativeBuildInputs = [ unzip ];
 
   installPhase = ''
     mkdir -p "$out/bin"
@@ -20,7 +22,7 @@ stdenv.mkDerivation rec {
     cp -R * "$out/lib"
 
     cat > "$out/bin/umlet" << EOF
-    #!${stdenv.shell}
+    #!${runtimeShell}
 
     programDir="$out/lib"
     cd "\$programDir"
@@ -33,19 +35,21 @@ stdenv.mkDerivation rec {
     chmod a+x "$out/bin/umlet"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Free, open-source UML tool with a simple user interface";
     longDescription = ''
       UMLet is a free, open-source UML tool with a simple user interface:
       draw UML diagrams fast, produce sequence and activity diagrams from
       plain text, export diagrams to eps, pdf, jpg, svg, and clipboard,
       share diagrams using Eclipse, and create new, custom UML elements.
-      UMLet runs stand-alone or as Eclipse plug-in on Windows, OS X and
+      UMLet runs stand-alone or as Eclipse plug-in on Windows, macOS and
       Linux.
     '';
-    homepage = http://www.umlet.com;
+    homepage = "https://www.umlet.com";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.gpl3;
-    maintainers = [ maintainers.DamienCassou ];
+    maintainers = with maintainers; [ oxzi ];
     platforms = platforms.all;
+    mainProgram = "umlet";
   };
 }

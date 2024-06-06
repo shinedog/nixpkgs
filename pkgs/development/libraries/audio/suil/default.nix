@@ -1,27 +1,30 @@
-{ stdenv, fetchurl, gtk2, lv2, pkgconfig, python, serd, sord, sratom, qt4 }:
+{ stdenv, lib, fetchurl, gtk2, lv2, pkg-config, python3, serd, sord, sratom
+, wafHook
+, withQt5 ? true, qt5 ? null
+}:
 
 stdenv.mkDerivation rec {
-  name = "suil-${version}";
-  version = "0.8.2";
+  pname = "suil";
+  version = "0.10.6";
 
   src = fetchurl {
-    url = "http://download.drobilla.net/${name}.tar.bz2";
-    sha256 = "1s3adyiw7sa5gfvm5wasa61qa23629kprxyv6w8hbxdiwp0hhxkq";
+    url = "https://download.drobilla.net/${pname}-${version}.tar.bz2";
+    sha256 = "0z4v01pjw4wh65x38w6icn28wdwxz13ayl8hvn4p1g9kmamp1z06";
   };
 
-  buildInputs = [ gtk2 lv2 pkgconfig python qt4 serd sord sratom ];
+  nativeBuildInputs = [ pkg-config wafHook python3 ];
+  buildInputs = [ gtk2 lv2 serd sord sratom ]
+    ++ lib.optionals withQt5 (with qt5; [ qtbase qttools ]);
 
-  configurePhase = "python waf configure --prefix=$out";
+  dontWrapQtApps = true;
 
-  buildPhase = "python waf";
+  strictDeps = true;
 
-  installPhase = "python waf install";
-
-  meta = with stdenv.lib; {
-    homepage = http://drobilla.net/software/suil;
+  meta = with lib; {
+    homepage = "http://drobilla.net/software/suil";
     description = "A lightweight C library for loading and wrapping LV2 plugin UIs";
     license = licenses.mit;
-    maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ goibhniu ];
+    platforms = platforms.unix;
   };
 }

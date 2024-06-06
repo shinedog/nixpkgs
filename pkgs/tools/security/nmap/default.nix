@@ -1,51 +1,53 @@
-{ stdenv, fetchurl, libpcap, pkgconfig, openssl
-, graphicalSupport ? false
-, gtk2 ? null
-, libX11 ? null
-, withPython ? false # required for the `ndiff` binary
-, python2 ? null
+{ lib, stdenv, fetchurl, libpcap, pkg-config, openssl, lua5_4
+, pcre, libssh2
+, withLua ? true
 }:
 
-assert withPython -> python2 != null;
-
-with stdenv.lib;
-
-let
-
-  # Zenmap (the graphical program) also requires Python,
-  # so automatically enable pythonSupport if graphicalSupport is requested.
-  pythonSupport = withPython || graphicalSupport;
-
-  pythonEnv = python2.withPackages(ps: with ps; []
-    ++ optionals graphicalSupport [ pycairo pygobject2 pygtk pysqlite ]
-  );
-
-in stdenv.mkDerivation rec {
-  name = "nmap${optionalString graphicalSupport "-graphical"}-${version}";
-  version = "7.31";
+stdenv.mkDerivation rec {
+  pname = "nmap";
+  version = "7.94";
 
   src = fetchurl {
     url = "https://nmap.org/dist/nmap-${version}.tar.bz2";
-    sha256 = "0hiqb28950kn4bjsmw0ksfyss7j2qdmgrj3xsjf7073pq01lx7yb";
+    sha256 = "sha256-1xvhie7EPX4Jm6yFcVCdMWxFd8p5SRgyrD4SF7yPksw=";
   };
 
-  patches = ./zenmap.patch;
+  prePatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace libz/configure \
+        --replace /usr/bin/libtool ar \
+        --replace 'AR="libtool"' 'AR="ar"' \
+        --replace 'ARFLAGS="-o"' 'ARFLAGS="-r"'
+  '';
 
-  configureFlags = []
-    ++ optional (!pythonSupport) "--without-ndiff"
-    ++ optional (!graphicalSupport) "--without-zenmap"
-    ;
+  configureFlags = [
+    (if withLua then "--with-liblua=${lua5_4}" else "--without-liblua")
+    "--with-liblinear=included"
+    "--without-ndiff"
+    "--without-zenmap"
+  ];
 
-  buildInputs = [ libpcap pkgconfig openssl ]
-    ++ optional pythonSupport pythonEnv
-    ++ optionals graphicalSupport [ gtk2 libX11 ]
-    ;
+  postInstall = ''
+    install -m 444 -D nselib/data/passwords.lst $out/share/wordlists/nmap.lst
+  '';
 
-  meta = {
+  makeFlags = lib.optionals (stdenv.buildPlatform != stdenv.hostPlatform) [
+    "AR=${stdenv.cc.bintools.targetPrefix}ar"
+    "RANLIB=${stdenv.cc.bintools.targetPrefix}ranlib"
+    "CC=${stdenv.cc.targetPrefix}gcc"
+  ];
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ pcre libssh2 libpcap openssl ];
+
+  enableParallelBuilding = true;
+
+  doCheck = false; # fails 3 tests, probably needs the net
+
+  meta = with lib; {
     description = "A free and open source utility for network discovery and security auditing";
-    homepage    = http://www.nmap.org;
-    license     = licenses.gpl2;
+    homepage    = "http://www.nmap.org";
+    license     = licenses.gpl2Only;
     platforms   = platforms.all;
-    maintainers = with maintainers; [ mornfall thoughtpolice fpletz ];
+    maintainers = with maintainers; [ thoughtpolice fpletz ];
   };
 }

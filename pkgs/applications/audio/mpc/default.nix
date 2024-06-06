@@ -1,27 +1,63 @@
-{ stdenv, fetchurl, mpd_clientlib }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, installShellFiles
+, libiconv
+, libmpdclient
+, meson
+, ninja
+, pkg-config
+, sphinx
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.27";
-  name = "mpc-${version}";
+  pname = "mpc";
+  version = "0.34";
 
-  src = fetchurl {
-    url = "http://www.musicpd.org/download/mpc/0/${name}.tar.xz";
-    sha256 = "0r10wsqxsi07gns6mfnicvpci0sbwwj4qa9iyr1ysrgadl5bx8j5";
+  src = fetchFromGitHub {
+    owner = "MusicPlayerDaemon";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-2FjYBfak0IjibuU+CNQ0y9Ei8hTZhynS/BK2DNerhVw=";
   };
 
-  buildInputs = [ mpd_clientlib ];
+  patches = [
+    # fix the build with meson 0.60 (https://github.com/MusicPlayerDaemon/mpc/pull/76)
+    (fetchpatch {
+      url = "https://github.com/MusicPlayerDaemon/mpc/commit/b656ca4b6c2a0d5b6cebd7f7daa679352f664e0e.patch";
+      sha256 = "sha256-fjjSlCKxgkz7Em08CaK7+JAzl8YTzLcpGGMz2HJlsVw=";
+    })
+  ];
 
-  preConfigure =
-    ''
-      export LIBMPDCLIENT_LIBS=${mpd_clientlib}/lib/libmpdclient.${if stdenv.isDarwin then mpd_clientlib.majorVersion + ".dylib" else "so." + mpd_clientlib.majorVersion + ".0." + mpd_clientlib.minorVersion}
-      export LIBMPDCLIENT_CFLAGS=${mpd_clientlib}
-    '';
+  buildInputs = [
+    libmpdclient
+  ]
+  ++ lib.optionals stdenv.isDarwin [ libiconv ];
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    installShellFiles
+    meson
+    ninja
+    pkg-config
+    sphinx
+  ];
+
+  postInstall = ''
+    installShellCompletion --cmd mpc --bash $out/share/doc/mpc/contrib/mpc-completion.bash
+  '';
+
+  postFixup = ''
+    rm $out/share/doc/mpc/contrib/mpc-completion.bash
+  '';
+
+  meta = with lib; {
+    homepage = "https://www.musicpd.org/clients/mpc/";
     description = "A minimalist command line interface to MPD";
-    homepage = http://www.musicpd.org/clients/mpc/;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.algorith ];
-    platforms = with platforms; linux ++ darwin;
+    changelog = "https://raw.githubusercontent.com/MusicPlayerDaemon/mpc/v${version}/NEWS";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ AndersonTorres ];
+    platforms = with platforms; unix;
+    mainProgram = "mpc";
   };
 }

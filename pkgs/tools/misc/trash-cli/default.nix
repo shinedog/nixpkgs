@@ -1,41 +1,69 @@
-{ stdenv, fetchurl, substituteAll, coreutils, python2, python2Packages }:
+{ lib, fetchFromGitHub, installShellFiles, nix-update-script, python3Packages }:
 
-assert stdenv.isLinux;
+python3Packages.buildPythonApplication rec {
+  pname = "trash-cli";
+  version = "0.24.5.26";
 
-python2Packages.buildPythonApplication rec {
-  name = "trash-cli-${version}";
-  version = "0.12.9.14";
-  namePrefix = "";
-
-  src = fetchurl {
-    url = "https://github.com/andreafrancia/trash-cli/archive/${version}.tar.gz";
-    sha256 = "10idvzrlppj632pw6mpk1zy9arn1x4lly4d8nfy9cz4zqv06lhvh";
+  src = fetchFromGitHub {
+    owner = "andreafrancia";
+    repo = "trash-cli";
+    rev = version;
+    hash = "sha256-ltuMnxtG4jTTSZd6ZHWl8wI0oQMMFqW0HAPetZMfGtc=";
   };
 
+  propagatedBuildInputs = with python3Packages; [ psutil six ];
 
-  patches = [
-    # Fix paths.
-    (substituteAll {
-      src = ./nix-paths.patch;
-      df = "${coreutils}/bin/df";
-      python = "${python2}/bin/${python2.executable}";
-      libc = "${stdenv.cc.libc.out}/lib/libc.so.6";
-    })
-
-    # Apply https://github.com/JaviMerino/trash-cli/commit/4f45a37a3
-    # to fix failing test case.
-    ./fix_should_output_info_for_multiple_files.patch
+  nativeBuildInputs = with python3Packages; [
+    installShellFiles
+    shtab
   ];
 
-  buildInputs = with python2Packages; [ nose mock ];
+  nativeCheckInputs = with python3Packages; [
+    mock
+    pytestCheckHook
+  ];
 
-  checkPhase = "nosetests";
+  postPatch = ''
+    sed -i '/typing/d' setup.cfg
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/andreafrancia/trash-cli;
-    description = "Command line tool for the desktop trash can";
+  doInstallCheck = true;
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    # Create a home directory with a test file.
+    HOME="$(mktemp -d)"
+    touch "$HOME/deleteme"
+
+    # Verify that trash list is initially empty.
+    [[ $($out/bin/trash-list) == "" ]]
+
+    # Trash a test file and verify that it shows up in the list.
+    $out/bin/trash "$HOME/deleteme"
+    [[ $($out/bin/trash-list) == *" $HOME/deleteme" ]]
+
+    # Empty the trash and verify that it is empty.
+    $out/bin/trash-empty
+    [[ $($out/bin/trash-list) == "" ]]
+
+    runHook postInstallCheck
+  '';
+  postInstall = ''
+    for bin in trash-empty trash-list trash-restore trash-put trash; do
+      installShellCompletion --cmd "$bin" \
+        --bash <("$out/bin/$bin" --print-completion bash) \
+        --zsh  <("$out/bin/$bin" --print-completion zsh)
+    done
+  '';
+
+  passthru.updateScript = nix-update-script { };
+
+  meta = with lib; {
+    homepage = "https://github.com/andreafrancia/trash-cli";
+    description = "Command line interface to the freedesktop.org trashcan";
     maintainers = [ maintainers.rycee ];
-    platforms = platforms.all;
-    license = licenses.gpl2;
+    platforms = platforms.unix;
+    license = licenses.gpl2Plus;
+    mainProgram = "trash";
   };
 }

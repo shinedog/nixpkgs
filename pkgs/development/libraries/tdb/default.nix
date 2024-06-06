@@ -1,39 +1,72 @@
-{ stdenv, fetchurl, python, pkgconfig, readline, libxslt
-, docbook_xsl, docbook_xml_dtd_42
+{ lib, stdenv
+, fetchurl
+, pkg-config
+, wafHook
+, python3
+, readline
+, libxslt
+, libxcrypt
+, docbook-xsl-nons
+, docbook_xml_dtd_45
 }:
 
 stdenv.mkDerivation rec {
-  name = "tdb-1.3.11";
+  pname = "tdb";
+  version = "1.4.10";
 
   src = fetchurl {
-    url = "mirror://samba/tdb/${name}.tar.gz";
-    sha256 = "0i1l38h0vyck6zkcj4fn2l03spadlmyr1qa1xpdp9dy2ccbm3s1r";
+    url = "mirror://samba/tdb/${pname}-${version}.tar.gz";
+    hash = "sha256-AjOOM8FsIcnilXHO9SPnaytwhjYlT28wxs8ZXUjGLa8=";
   };
 
-  buildInputs = [
-    python pkgconfig readline libxslt docbook_xsl docbook_xml_dtd_42
+  nativeBuildInputs = [
+    python3
+    pkg-config
+    wafHook
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_45
   ];
 
+  buildInputs = [
+    python3
+    readline # required to build python
+    libxcrypt
+  ];
+
+  # otherwise the configure script fails with
+  # PYTHONHASHSEED=1 missing! Don't use waf directly, use ./configure and make!
   preConfigure = ''
-    sed -i 's,#!/usr/bin/env python,#!${python}/bin/python,g' buildtools/bin/waf
+    export PKGCONFIG="$PKG_CONFIG"
+    export PYTHONHASHSEED=1
   '';
 
-  configureFlags = [
+  wafPath = "buildtools/bin/waf";
+
+  wafConfigureFlags = [
     "--bundled-libraries=NONE"
     "--builtin-libraries=replace"
   ];
 
-  meta = with stdenv.lib; {
+  postFixup = if stdenv.isDarwin
+    then ''install_name_tool -id $out/lib/libtdb.dylib $out/lib/libtdb.dylib''
+    else null;
+
+  # python-config from build Python gives incorrect values when cross-compiling.
+  # If python-config is not found, the build falls back to using the sysconfig
+  # module, which works correctly in all cases.
+  PYTHON_CONFIG = "/invalid";
+
+  meta = with lib; {
     description = "The trivial database";
-    longDescription =
-      '' TDB is a Trivial Database. In concept, it is very much like GDBM,
-         and BSD's DB except that it allows multiple simultaneous writers and
-         uses locking internally to keep writers from trampling on each
-         other.  TDB is also extremely small.
-      '';
-    homepage = http://tdb.samba.org/;
+    longDescription = ''
+      TDB is a Trivial Database. In concept, it is very much like GDBM,
+      and BSD's DB except that it allows multiple simultaneous writers
+      and uses locking internally to keep writers from trampling on each
+      other. TDB is also extremely small.
+    '';
+    homepage = "https://tdb.samba.org/";
     license = licenses.lgpl3Plus;
-    maintainers = with maintainers; [ wkennington ];
     platforms = platforms.all;
   };
 }

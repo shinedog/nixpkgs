@@ -1,84 +1,77 @@
-{ stdenv, fetchurl, fetchpatch, fixDarwinDylibNames }:
+{ stdenv, lib, fetchurl, fetchpatch, fixDarwinDylibNames, testers, buildPackages }:
 
 let
-  pname = "icu4c";
-  version = "57.1";
+  make-icu = (import ./make-icu.nix) {
+    inherit stdenv lib buildPackages fetchurl fixDarwinDylibNames testers;
+  };
 in
-stdenv.mkDerivation ({
-  name = pname + "-" + version;
-
-  src = fetchurl {
-    url = "http://download.icu-project.org/files/${pname}/${version}/${pname}-"
-      + (stdenv.lib.replaceChars ["."] ["_"] version) + "-src.tgz";
-    sha256 = "10cmkqigxh9f73y7q3p991q6j8pph0mrydgj11w1x6wlcp5ng37z";
+{
+  icu74 = make-icu {
+    version = "74.2";
+    hash = "sha256-aNsIIhKpbW9T411g9H04uWLp+dIHp0z6x4Apro/14Iw=";
   };
-
-  outputs = [ "out" "dev" ];
-  outputBin = "dev";
-
-  # FIXME: This fixes dylib references in the dylibs themselves, but
-  # not in the programs in $out/bin.
-  buildInputs = stdenv.lib.optional stdenv.isDarwin fixDarwinDylibNames;
-
-  postUnpack = ''
-    sourceRoot=''${sourceRoot}/source
-    echo Source root reset to ''${sourceRoot}
-  '';
-
-  # This pre/postPatch shenanigans is to handle that the patches expect
-  # to be outside of `source`.
-  prePatch = ''
-    pushd ..
-  '';
-  postPatch = ''
-    popd
-  '';
-
-  patches = [
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/i/icu/57.1-5/debian/patches/CVE-2014-6585.patch";
-      sha256 = "1s8kqax444pqf5chwxvgsx1n1dx7v74h34fqh08fyq57mcjnpj4d";
-    })
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/i/icu/57.1-5/debian/patches/CVE-2015-4760.patch";
-      sha256 = "08gawyqbylk28i9pxv9vsw2drdpd6i97q0aml4nmv2xyb1ala0wp";
-    })
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/i/icu/57.1-5/debian/patches/CVE-2016-0494.patch";
-      sha256 = "1741s8lpmnizjprzk3xb7zkm5fznzgk8hhlrs8a338c18nalvxay";
-    })
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/i/icu/57.1-5/debian/patches/CVE-2016-6293.patch";
-      sha256 = "01h4xcss1vmsr60ijkv4lxsgvspwimyss61zp9nq4xd5i3kk1f4b";
-    })
-    (fetchpatch {
-      url = "https://sources.debian.net/data/main/i/icu/57.1-5/debian/patches/CVE-2016-7415.patch";
-      sha256 = "01d070h8d7rkj55ac8isr64m999bv5znc8vnxa7aajglsfidzs2r";
-    })
-  ];
-
-  preConfigure = ''
-    sed -i -e "s|/bin/sh|${stdenv.shell}|" configure
-  '';
-
-  configureFlags = "--disable-debug" +
-    stdenv.lib.optionalString (stdenv.isFreeBSD || stdenv.isDarwin) " --enable-rpath";
-
-  # remove dependency on bootstrap-tools in early stdenv build
-  postInstall = stdenv.lib.optionalString stdenv.isDarwin ''
-    sed -i 's/INSTALL_CMD=.*install/INSTALL_CMD=install/' $out/lib/icu/${version}/pkgdata.inc
-  '';
-
-  postFixup = ''moveToOutput lib/icu "$dev" '';
-
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
-    description = "Unicode and globalization support library";
-    homepage = http://site.icu-project.org/;
-    maintainers = with maintainers; [ raskin urkud ];
-    platforms = platforms.all;
+  icu73 = make-icu {
+    version = "73.2";
+    hash = "sha256-gYqAcS7TyqzZtlIwXgGvx/oWfm8ulJltpEuQwqtgTOE=";
   };
-} // (if stdenv.isArm then {
-  patches = [ ./0001-Disable-LDFLAGSICUDT-for-Linux.patch ];
-} else {}))
+  icu72 = make-icu {
+    version = "72.1";
+    hash = "sha256-otLTghcJKn7VZjXjRGf5L5drNw4gGCrTJe3qZoGnHWg=";
+  };
+  icu71 = make-icu {
+    version = "71.1";
+    hash = "sha256-Z6fm5R9h+vEwa2k1Mz4TssSKvY2m0vRs5q3KJLHiHr8=";
+  };
+  icu70 = make-icu {
+    version = "70.1";
+    hash = "sha256-jSBUKMF78Tu1NTAGae0oszihV7HAGuZtMdDT4tR8P9U=";
+  };
+  icu69 = make-icu {
+    version = "69.1";
+    hash = "sha256-TLp7es0dPELES7DBS+ZjcJjH+vKzMM6Ha8XzuRXQl0U=";
+  };
+  icu68 = make-icu {
+    version = "68.2";
+    hash = "sha256-x5GT3uOQeiGZuClqk7UsXLdDMsJvPRZyaUh2gNR51iU=";
+  };
+  icu67 = make-icu {
+    version = "67.1";
+    hash = "sha256-lKgM1vJRpTvSqZf28bWsZlP+eR36tm4esCJ3QPuG1dw=";
+  };
+  icu66 = make-icu {
+    version = "66.1";
+    hash = "sha256-UqPyIJq5VVnBzwoU8kM4AB84lhW/AOJYXvPbxD7PCi4=";
+  };
+  icu64 = make-icu {
+    version = "64.2";
+    hash = "sha256-Yn1dhHjm2W/IyQ/tSFEjkHmlYaaoueSLCJLyToLTHWw=";
+  };
+  icu63 = make-icu {
+    version = "63.1";
+    hash = "sha256-BcSQtpRU/OWGC36OKCEjFnSvChHX7y/r6poyUSmYy50=";
+    patches = [
+      # https://bugzilla.mozilla.org/show_bug.cgi?id=1499398
+      (fetchpatch {
+        url = "https://github.com/unicode-org/icu/commit/8baff8f03e07d8e02304d0c888d0bb21ad2eeb01.patch";
+        sha256 = "1awfa98ljcf95a85cssahw6bvdnpbq5brf1kgspy14w4mlmhd0jb";
+      })
+    ];
+    patchFlags = [ "-p3" ];
+  };
+  icu60 = make-icu {
+    version = "60.2";
+    hash = "sha256-8HPqjzW5JtcLsz5ld1CKpkKosxaoA/Eb4grzhIEdtBg=";
+  };
+  icu58 = make-icu {
+    version = "58.2";
+    hash = "sha256-KwpEEBU6myDeDiDH2LZgSacq7yRLU2g9DXUhNxaD2gw=";
+    patches = [
+      (fetchurl {
+        url = "http://bugs.icu-project.org/trac/changeset/39484?format=diff";
+        name = "icu-changeset-39484.diff";
+        sha256 = "0hxhpgydalyxacaaxlmaddc1sjwh65rsnpmg0j414mnblq74vmm8";
+      })
+    ];
+    patchFlags = [ "-p4" ];
+  };
+}

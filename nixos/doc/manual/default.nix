@@ -1,27 +1,32 @@
-{ pkgs, options, config, version, revision, extraSources ? [] }:
-
-with pkgs;
+{ pkgs
+, options
+, config
+, version
+, revision
+, extraSources ? []
+, baseOptionsJSON ? null
+, warningsAreErrors ? true
+, prefix ? ../../..
+}:
 
 let
-  lib = pkgs.lib;
+  inherit (pkgs) buildPackages runCommand docbook_xsl_ns;
 
-  # Remove invisible and internal options.
-  optionsList = lib.filter (opt: opt.visible && !opt.internal) (lib.optionAttrSetToDocList options);
+  inherit (pkgs.lib)
+    hasPrefix
+    removePrefix
+    flip
+    foldr
+    types
+    mkOption
+    escapeShellArg
+    concatMapStringsSep
+    sourceFilesBySuffices
+    ;
 
-  # Replace functions by the string <function>
-  substFunction = x:
-    if builtins.isAttrs x then lib.mapAttrs (name: substFunction) x
-    else if builtins.isList x then map substFunction x
-    else if builtins.isFunction x then "<function>"
-    else x;
+  common = import ./common.nix;
 
-  # Clean up declaration sites to not refer to the NixOS source tree.
-  optionsList' = lib.flip map optionsList (opt: opt // {
-    declarations = map stripAnyPrefixes opt.declarations;
-  }
-  // lib.optionalAttrs (opt ? example) { example = substFunction opt.example; }
-  // lib.optionalAttrs (opt ? default) { default = substFunction opt.default; }
-  // lib.optionalAttrs (opt ? type) { type = substFunction opt.type; });
+  manpageUrls = pkgs.path + "/doc/manpage-urls.json";
 
   # We need to strip references to /nix/store/* from options,
   # including any `extraSources` if some modules came from elsewhere,
@@ -29,185 +34,155 @@ let
   #
   # E.g. if some `options` came from modules in ${pkgs.customModules}/nix,
   # you'd need to include `extraSources = [ pkgs.customModules ]`
-  prefixesToStrip = map (p: "${toString p}/") ([ ../../.. ] ++ extraSources);
-  stripAnyPrefixes = lib.flip (lib.fold lib.removePrefix) prefixesToStrip;
+  prefixesToStrip = map (p: "${toString p}/") ([ prefix ] ++ extraSources);
+  stripAnyPrefixes = flip (foldr removePrefix) prefixesToStrip;
 
-  # Convert the list of options into an XML file.
-  optionsXML = builtins.toFile "options.xml" (builtins.toXML optionsList');
+  optionsDoc = buildPackages.nixosOptionsDoc {
+    inherit options revision baseOptionsJSON warningsAreErrors;
+    transformOptions = opt: opt // {
+      # Clean up declaration sites to not refer to the NixOS source tree.
+      declarations = map stripAnyPrefixes opt.declarations;
+    };
+  };
 
-  optionsDocBook = runCommand "options-db.xml" {} ''
-    optionsXML=${optionsXML}
-    if grep /nixpkgs/nixos/modules $optionsXML; then
-      echo "The manual appears to depend on the location of Nixpkgs, which is bad"
-      echo "since this prevents sharing via the NixOS channel.  This is typically"
-      echo "caused by an option default that refers to a relative path (see above"
-      echo "for hints about the offending path)."
-      exit 1
-    fi
-    ${libxslt.bin}/bin/xsltproc \
-      --stringparam revision '${revision}' \
-      -o $out ${./options-to-docbook.xsl} $optionsXML
+  nixos-lib = import ../../lib { };
+
+  testOptionsDoc = let
+      eval = nixos-lib.evalTest {
+        # Avoid evaluating a NixOS config prototype.
+        config.node.type = types.deferredModule;
+        options._module.args = mkOption { internal = true; };
+      };
+    in buildPackages.nixosOptionsDoc {
+      inherit (eval) options;
+      inherit revision;
+      transformOptions = opt: opt // {
+        # Clean up declaration sites to not refer to the NixOS source tree.
+        declarations =
+          map
+            (decl:
+              if hasPrefix (toString ../../..) (toString decl)
+              then
+                let subpath = removePrefix "/" (removePrefix (toString ../../..) (toString decl));
+                in { url = "https://github.com/NixOS/nixpkgs/blob/master/${subpath}"; name = subpath; }
+              else decl)
+            opt.declarations;
+      };
+      documentType = "none";
+      variablelistId = "test-options-list";
+      optionIdPrefix = "test-opt-";
+    };
+
+  testDriverMachineDocstrings = pkgs.callPackage
+    ../../../nixos/lib/test-driver/nixos-test-driver-docstrings.nix {};
+
+  prepareManualFromMD = ''
+    cp -r --no-preserve=all $inputs/* .
+
+    substituteInPlace ./manual.md \
+      --replace-fail '@NIXOS_VERSION@' "${version}"
+    substituteInPlace ./configuration/configuration.md \
+      --replace-fail \
+          '@MODULE_CHAPTERS@' \
+          ${escapeShellArg (concatMapStringsSep "\n" (p: "${p.value}") config.meta.doc)}
+    substituteInPlace ./nixos-options.md \
+      --replace-fail \
+        '@NIXOS_OPTIONS_JSON@' \
+        ${optionsDoc.optionsJSON}/${common.outputPath}/options.json
+    substituteInPlace ./development/writing-nixos-tests.section.md \
+      --replace-fail \
+        '@NIXOS_TEST_OPTIONS_JSON@' \
+        ${testOptionsDoc.optionsJSON}/${common.outputPath}/options.json
+    sed -e '/@PYTHON_MACHINE_METHODS@/ {' -e 'r ${testDriverMachineDocstrings}/machine-methods.md' -e 'd' -e '}' \
+      -i ./development/writing-nixos-tests.section.md
   '';
-
-  sources = lib.sourceFilesBySuffices ./. [".xml"];
-
-  modulesDoc = builtins.toFile "modules.xml" ''
-    <section xmlns:xi="http://www.w3.org/2001/XInclude" id="modules">
-    ${(lib.concatMapStrings (path: ''
-      <xi:include href="${path}" />
-    '') (lib.catAttrs "value" config.meta.doc))}
-    </section>
-  '';
-
-  copySources =
-    ''
-      cp -prd $sources/* . # */
-      chmod -R u+w .
-      ln -s ${modulesDoc} configuration/modules.xml
-      ln -s ${optionsDocBook} options-db.xml
-      echo "${version}" > version
-    '';
-
-  toc = builtins.toFile "toc.xml"
-    ''
-      <toc role="chunk-toc">
-        <d:tocentry xmlns:d="http://docbook.org/ns/docbook" linkend="book-nixos-manual"><?dbhtml filename="index.html"?>
-          <d:tocentry linkend="ch-options"><?dbhtml filename="options.html"?></d:tocentry>
-          <d:tocentry linkend="ch-release-notes"><?dbhtml filename="release-notes.html"?></d:tocentry>
-        </d:tocentry>
-      </toc>
-    '';
-
-  manualXsltprocOptions = toString [
-    "--param section.autolabel 1"
-    "--param section.label.includes.component.label 1"
-    "--stringparam html.stylesheet style.css"
-    "--param xref.with.number.and.title 1"
-    "--param toc.section.depth 3"
-    "--stringparam admon.style ''"
-    "--stringparam callout.graphics.extension .gif"
-    "--stringparam current.docid manual"
-    "--param chunk.section.depth 0"
-    "--param chunk.first.sections 1"
-    "--param use.id.as.filename 1"
-    "--stringparam generate.toc 'book toc appendix toc'"
-    "--stringparam chunk.toc ${toc}"
-  ];
-
-  olinkDB = runCommand "manual-olinkdb"
-    { inherit sources;
-      buildInputs = [ libxml2 libxslt ];
-    }
-    ''
-      ${copySources}
-
-      xsltproc \
-        ${manualXsltprocOptions} \
-        --stringparam collect.xref.targets only \
-        --stringparam targets.filename "$out/manual.db" \
-        --nonet --xinclude \
-        ${docbook5_xsl}/xml/xsl/docbook/xhtml/chunktoc.xsl \
-        ./manual.xml
-
-      # Check the validity of the man pages sources.
-      xmllint --noout --nonet --xinclude --noxincludenode \
-        --relaxng ${docbook5}/xml/rng/docbook/docbook.rng \
-        ./man-pages.xml
-
-      cat > "$out/olinkdb.xml" <<EOF
-      <?xml version="1.0" encoding="utf-8"?>
-      <!DOCTYPE targetset SYSTEM
-        "file://${docbook5_xsl}/xml/xsl/docbook/common/targetdatabase.dtd" [
-        <!ENTITY manualtargets SYSTEM "file://$out/manual.db">
-      ]>
-      <targetset>
-        <targetsetinfo>
-            Allows for cross-referencing olinks between the manpages
-            and manual.
-        </targetsetinfo>
-
-        <document targetdoc="manual">&manualtargets;</document>
-      </targetset>
-      EOF
-    '';
 
 in rec {
-
-  # The NixOS options in JSON format.
-  optionsJSON = runCommand "options-json"
-    { meta.description = "List of NixOS options in JSON format";
-    }
-    ''
-      # Export list of options in different format.
-      dst=$out/share/doc/nixos
-      mkdir -p $dst
-
-      cp ${builtins.toFile "options.json" (builtins.unsafeDiscardStringContext (builtins.toJSON
-        (builtins.listToAttrs (map (o: { name = o.name; value = removeAttrs o ["name" "visible" "internal"]; }) optionsList'))))
-      } $dst/options.json
-
-      mkdir -p $out/nix-support
-      echo "file json $dst/options.json" >> $out/nix-support/hydra-build-products
-    ''; # */
+  inherit (optionsDoc) optionsJSON optionsNix optionsDocBook;
 
   # Generate the NixOS manual.
-  manual = runCommand "nixos-manual"
-    { inherit sources;
-      buildInputs = [ libxml2 libxslt ];
+  manualHTML = runCommand "nixos-manual-html"
+    { nativeBuildInputs = [ buildPackages.nixos-render-docs ];
+      inputs = sourceFilesBySuffices ./. [ ".md" ];
       meta.description = "The NixOS manual in HTML format";
       allowedReferences = ["out"];
     }
     ''
-      ${copySources}
-
-      # Check the validity of the manual sources.
-      xmllint --noout --nonet --xinclude --noxincludenode \
-        --relaxng ${docbook5}/xml/rng/docbook/docbook.rng \
-        manual.xml
-
       # Generate the HTML manual.
-      dst=$out/share/doc/nixos
+      dst=$out/${common.outputPath}
       mkdir -p $dst
-      xsltproc \
-        ${manualXsltprocOptions} \
-        --stringparam target.database.document "${olinkDB}/olinkdb.xml" \
-        --nonet --xinclude --output $dst/ \
-        ${docbook5_xsl}/xml/xsl/docbook/xhtml/chunktoc.xsl ./manual.xml
 
-      mkdir -p $dst/images/callouts
-      cp ${docbook5_xsl}/xml/xsl/docbook/images/callouts/*.gif $dst/images/callouts/
+      cp ${../../../doc/style.css} $dst/style.css
+      cp ${../../../doc/anchor.min.js} $dst/anchor.min.js
+      cp ${../../../doc/anchor-use.js} $dst/anchor-use.js
 
-      cp ${./style.css} $dst/style.css
+      cp -r ${pkgs.documentation-highlighter} $dst/highlightjs
+
+      ${prepareManualFromMD}
+
+      nixos-render-docs -j $NIX_BUILD_CORES manual html \
+        --manpage-urls ${manpageUrls} \
+        --revision ${escapeShellArg revision} \
+        --generator "nixos-render-docs ${pkgs.lib.version}" \
+        --stylesheet style.css \
+        --stylesheet highlightjs/mono-blue.css \
+        --script ./highlightjs/highlight.pack.js \
+        --script ./highlightjs/loader.js \
+        --script ./anchor.min.js \
+        --script ./anchor-use.js \
+        --toc-depth 1 \
+        --chunk-toc-depth 1 \
+        ./manual.md \
+        $dst/${common.indexPath}
 
       mkdir -p $out/nix-support
       echo "nix-build out $out" >> $out/nix-support/hydra-build-products
       echo "doc manual $dst" >> $out/nix-support/hydra-build-products
     ''; # */
 
+  # Alias for backward compatibility. TODO(@oxij): remove eventually.
+  manual = manualHTML;
+
+  # Index page of the NixOS manual.
+  manualHTMLIndex = "${manualHTML}/${common.outputPath}/${common.indexPath}";
 
   manualEpub = runCommand "nixos-manual-epub"
-    { inherit sources;
-      buildInputs = [ libxml2 libxslt zip ];
+    { nativeBuildInputs = [ buildPackages.libxml2.bin buildPackages.libxslt.bin buildPackages.zip ];
+      doc = ''
+        <book xmlns="http://docbook.org/ns/docbook"
+              xmlns:xlink="http://www.w3.org/1999/xlink"
+              version="5.0"
+              xml:id="book-nixos-manual">
+          <info>
+            <title>NixOS Manual</title>
+            <subtitle>Version ${pkgs.lib.version}</subtitle>
+          </info>
+          <chapter>
+            <title>Temporarily unavailable</title>
+            <para>
+              The NixOS manual is currently not available in EPUB format,
+              please use the <link xlink:href="https://nixos.org/nixos/manual">HTML manual</link>
+              instead.
+            </para>
+            <para>
+              If you've used the EPUB manual in the past and it has been useful to you, please
+              <link xlink:href="https://github.com/NixOS/nixpkgs/issues/237234">let us know</link>.
+            </para>
+          </chapter>
+        </book>
+      '';
+      passAsFile = [ "doc" ];
     }
     ''
-      ${copySources}
-
-      # Check the validity of the manual sources.
-      xmllint --noout --nonet --xinclude --noxincludenode \
-        --relaxng ${docbook5}/xml/rng/docbook/docbook.rng \
-        manual.xml
-
       # Generate the epub manual.
-      dst=$out/share/doc/nixos
+      dst=$out/${common.outputPath}
 
       xsltproc \
-        ${manualXsltprocOptions} \
-        --stringparam target.database.document "${olinkDB}/olinkdb.xml" \
+        --param chapter.autolabel 0 \
         --nonet --xinclude --output $dst/epub/ \
-        ${docbook5_xsl}/xml/xsl/docbook/epub/docbook.xsl ./manual.xml
+        ${docbook_xsl_ns}/xml/xsl/docbook/epub/docbook.xsl \
+        $docPath
 
-      mkdir -p $dst/epub/OEBPS/images/callouts
-      cp -r ${docbook5_xsl}/xml/xsl/docbook/images/callouts/*.gif $dst/epub/OEBPS/images/callouts
       echo "application/epub+zip" > mimetype
       manual="$dst/nixos-manual.epub"
       zip -0Xq "$manual" mimetype
@@ -220,30 +195,21 @@ in rec {
     '';
 
 
-  # Generate the NixOS manpages.
-  manpages = runCommand "nixos-manpages"
-    { inherit sources;
-      buildInputs = [ libxml2 libxslt ];
+  # Generate the `man configuration.nix` package
+  nixos-configuration-reference-manpage = runCommand "nixos-configuration-reference-manpage"
+    { nativeBuildInputs = [
+        buildPackages.installShellFiles
+        buildPackages.nixos-render-docs
+      ];
       allowedReferences = ["out"];
     }
     ''
-      ${copySources}
-
-      # Check the validity of the man pages sources.
-      xmllint --noout --nonet --xinclude --noxincludenode \
-        --relaxng ${docbook5}/xml/rng/docbook/docbook.rng \
-        ./man-pages.xml
-
       # Generate manpages.
-      mkdir -p $out/share/man
-      xsltproc --nonet --xinclude \
-        --param man.output.in.separate.dir 1 \
-        --param man.output.base.dir "'$out/share/man/'" \
-        --param man.endnotes.are.numbered 0 \
-        --param man.break.after.slash 1 \
-        --stringparam target.database.document "${olinkDB}/olinkdb.xml" \
-        ${docbook5_xsl}/xml/xsl/docbook/manpages/docbook.xsl \
-        ./man-pages.xml
+      mkdir -p $out/share/man/man5
+      nixos-render-docs -j $NIX_BUILD_CORES options manpage \
+        --revision ${escapeShellArg revision} \
+        ${optionsJSON}/${common.outputPath}/options.json \
+        $out/share/man/man5/configuration.nix.5
     '';
 
 }

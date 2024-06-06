@@ -1,44 +1,128 @@
-{ stdenv, fetchurl, pam, pkgconfig, libxcb, glib, libXdmcp, itstool, libxml2
-, intltool, xlibsWrapper, libxklavier, libgcrypt, libaudit
-, qt4 ? null
-, withQt5 ? false, qtbase
+{ lib, stdenv
+, buildPackages
+, fetchFromGitHub
+, nix-update-script
+, substituteAll
+, plymouth
+, pam
+, pkg-config
+, autoconf
+, automake
+, libtool
+, libxcb
+, glib
+, libXdmcp
+, itstool
+, intltool
+, libxklavier
+, libgcrypt
+, audit
+, busybox
+, polkit
+, accountsservice
+, gtk-doc
+, gnome
+, gobject-introspection
+, vala
+, fetchpatch
+, withQt5 ? false
+, qtbase
+, yelp-tools
 }:
 
-let
-  ver_branch = "1.19";
-  version = "1.19.5";
-in
 stdenv.mkDerivation rec {
-  name = "lightdm-${version}";
+  pname = "lightdm";
+  version = "1.32.0";
 
-  src = fetchurl {
-    url = "${meta.homepage}/${ver_branch}/${version}/+download/${name}.tar.xz";
-    sha256 = "0gbz8jk1ljh8rwgvldkiqma1k61sd27yh008228ahdqd5i2v1r1z";
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitHub {
+    owner = "canonical";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-ttNlhWD0Ran4d3QvZ+PxbFbSUGMkfrRm+hJdQxIDJvM=";
   };
 
-  patches = [ ./fix-paths.patch ];
+  nativeBuildInputs = [
+    autoconf
+    automake
+    yelp-tools
+    gnome.yelp-xsl
+    gobject-introspection
+    gtk-doc
+    intltool
+    itstool
+    libtool
+    pkg-config
+    vala
+  ];
 
   buildInputs = [
-    pkgconfig pam libxcb glib libXdmcp itstool libxml2 intltool libxklavier libgcrypt
-    qt4 libaudit
-  ] ++ stdenv.lib.optional withQt5 qtbase;
+    accountsservice
+    audit
+    glib
+    libXdmcp
+    libgcrypt
+    libxcb
+    libxklavier
+    pam
+    polkit
+  ] ++ lib.optional withQt5 qtbase;
+
+  patches = [
+    # Adds option to disable writing dmrc files
+    (fetchpatch {
+      url = "https://src.fedoraproject.org/rpms/lightdm/raw/4cf0d2bed8d1c68970b0322ccd5dbbbb7a0b12bc/f/lightdm-1.25.1-disable_dmrc.patch";
+      sha256 = "06f7iabagrsiws2l75sx2jyljknr9js7ydn151p3qfi104d1541n";
+    })
+
+    # Hardcode plymouth to fix transitions.
+    # For some reason it can't find `plymouth`
+    # even when it's in PATH in environment.systemPackages.
+    (substituteAll {
+      src = ./fix-paths.patch;
+      plymouth = "${plymouth}/bin/plymouth";
+    })
+  ];
+
+  dontWrapQtApps = true;
+
+  preConfigure = "NOCONFIGURE=1 ./autogen.sh";
 
   configureFlags = [
     "--localstatedir=/var"
     "--sysconfdir=/etc"
     "--disable-tests"
-  ] ++ stdenv.lib.optional (qt4 != null) "--enable-liblightdm-qt"
-    ++ stdenv.lib.optional withQt5 "--enable-liblightdm-qt5";
+    "--disable-dmrc"
+  ] ++ lib.optional withQt5 "--enable-liblightdm-qt5";
 
   installFlags = [
-    "sysconfdir=\${out}/etc"
+    "sysconfdir=${placeholder "out"}/etc"
     "localstatedir=\${TMPDIR}"
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://launchpad.net/lightdm;
+  prePatch = ''
+    substituteInPlace autogen.sh \
+      --replace "which" "${buildPackages.busybox}/bin/which"
+
+    substituteInPlace src/shared-data-manager.c \
+      --replace /bin/rm ${busybox}/bin/rm
+  '';
+
+  postInstall = ''
+    rm -rf $out/etc/apparmor.d $out/etc/init $out/etc/pam.d
+  '';
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+
+  meta = with lib; {
+    homepage = "https://github.com/canonical/lightdm";
+    description = "A cross-desktop display manager";
     platforms = platforms.linux;
     license = licenses.gpl3;
-    maintainers = with maintainers; [ ocharles wkennington ];
+    maintainers = with maintainers; [ ] ++ teams.pantheon.members;
   };
 }

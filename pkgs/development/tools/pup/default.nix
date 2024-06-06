@@ -1,15 +1,23 @@
-{ stdenv, lib, buildGoPackage, fetchgit, fetchhg, fetchbzr, fetchsvn }:
+{ lib, buildGoModule, fetchFromGitHub }:
 
-buildGoPackage rec {
-  name = "pup-${version}";
-  version = "20160425-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "e76307d03d4d2e0f01fb7ab51dee09f2671c3db6";
-  
-  goPackagePath = "github.com/ericchiang/pup";
+buildGoModule rec {
+  pname = "pup";
+  version = "unstable-2022-03-06";
 
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/ericchiang/pup";
-    sha256 = "15lwas4cjchlwhrwnd5l4gxcwqdfgazdyh466hava5qzxacqxrm5";
+  src = fetchFromGitHub {
+    owner = "ericchiang";
+    repo = "pup";
+    rev = "5a57cf111366c7c08999a34b2afd7ba36d58a96d";
+    hash = "sha256-Ledg3xPbu71L5qUY033bru/lw03jws3s4YlAarIuqaA=";
+  };
+
+  vendorHash = "sha256-/MDSWIuSYNxKbTslqIooI2qKA8Pye0yJF2dY8g8qbWI=";
+
+  meta = with lib; {
+    description = "Parsing HTML at the command line";
+    mainProgram = "pup";
+    homepage = "https://github.com/ericchiang/pup";
+    license = licenses.mit;
+    maintainers = with maintainers; [ yana ];
   };
 }

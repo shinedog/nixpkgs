@@ -1,33 +1,29 @@
-{ stdenv, fetchurl, perl }:
+{ lib, stdenv, fetchFromGitHub, perl }:
 
-let
-  version = "1.9.9";
-in
 stdenv.mkDerivation rec {
-  name = "uthash-${version}";
+  pname = "uthash";
+  version = "2.3.0";
 
-  src = fetchurl {
-    url = "https://github.com/troydhanson/uthash/archive/v${version}.tar.gz";
-    sha256 = "035z3cs5ignywgh4wqxx358a2nhn3lj0x1ifij6vj0yyyhah3wgj";
+  src = fetchFromGitHub {
+    owner = "troydhanson";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-F0M5ENT3bMn3dD16Oaq9mBFYOWzVliVWupAIrLc2nkQ=";
   };
 
-  dontBuild = false;
-
-  buildInputs = stdenv.lib.optional doCheck perl;
-
   doCheck = true;
-  checkTarget = "-C tests/";
+  nativeCheckInputs = [ perl ];
+  checkTarget = "all";
+  preCheck = "cd tests";
 
   installPhase = ''
-    mkdir -p "$out/include"
-    cp ./src/* "$out/include/"
+    install -Dm644 $src/include/*.h -t $out/include
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A hash table for C structures";
-    homepage    = http://troydhanson.github.io/uthash;
+    homepage    = "http://troydhanson.github.io/uthash";
     license     = licenses.bsd2; # it's one-clause, actually, as it's source-only
     platforms   = platforms.all;
   };
 }
-

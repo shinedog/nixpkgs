@@ -1,22 +1,32 @@
-{ stdenv, fetchurl }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation {
-  name = "source-sans-pro-2.010";
-  src = fetchurl {
-    url = "https://github.com/adobe-fonts/source-sans-pro/archive/2.010R-ro/1.065R-it.tar.gz";
-    sha256 = "1s3rgia6x9fxc2pvlwm203grqkb49px6q0xnh8kbqxqsgna615p2";
+# Source Sans Pro got renamed to Source Sans 3 (see
+# https://github.com/adobe-fonts/source-sans/issues/192). This is the
+# last version named "Pro". It is useful for backward compatibility
+# with older documents/templates/etc.
+
+stdenvNoCC.mkDerivation rec {
+  name = "source-sans-pro-${version}";
+  version = "3.006";
+
+  src = fetchzip {
+    url = "https://github.com/adobe-fonts/source-sans/archive/${version}R.zip";
+    hash = "sha256-1Savijgq3INuUN89MR0t748HOuGseXVw5Kd4hYwuVas=";
   };
 
-  phases = "unpackPhase installPhase";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    find . -name "*.otf" -exec cp {} $out/share/fonts/opentype \;
+    runHook preInstall
+
+    install -Dm444 OTF/*.otf -t $out/share/fonts/opentype
+    install -Dm444 TTF/*.ttf -t $out/share/fonts/truetype
+    install -Dm444 VAR/*.otf -t $out/share/fonts/variable
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://sourceforge.net/adobe/sourcesans;
-    description = "A set of OpenType fonts designed by Adobe for UIs";
+  meta = with lib; {
+    homepage = "https://adobe-fonts.github.io/source-sans/";
+    description = "Sans serif font family for user interface environments";
     license = licenses.ofl;
     platforms = platforms.all;
     maintainers = with maintainers; [ ttuegel ];

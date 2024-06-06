@@ -1,31 +1,30 @@
-{ stdenv, fetchFromGitHub, linuxHeaders }:
+{ lib, stdenv, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "trinity-${version}";
-  version = "1.6";
+  pname = "trinity";
+  version = "1.9-unstable-2023-07-10";
 
   src = fetchFromGitHub {
     owner = "kernelslacker";
     repo = "trinity";
-    rev = "v${version}";
-    sha256 = "1jwgsjjbngn2dsnkflyigy3ajd0szksl30dlaiy02jc6mqi3nr0p";
+    rev = "e71872454d26baf37ae1d12e9b04a73d64179555";
+    hash = "sha256-Zy+4L1CuB2Ul5iF+AokDkAW1wheDzoCTNkvRZFGRNps=";
   };
 
-  patchPhase = ''
-    patchShebangs ./configure.sh
-    patchShebangs ./scripts/
-    substituteInPlace Makefile --replace '/usr/bin/wc' 'wc'
-    substituteInPlace configure.sh --replace '/usr/include/linux' '${linuxHeaders}/include/linux'
+  postPatch = ''
+    patchShebangs configure
+    patchShebangs scripts
   '';
 
-  configurePhase = "./configure.sh";
+  enableParallelBuilding = true;
 
-  installPhase = "make DESTDIR=$out install";
+  installFlags = [ "DESTDIR=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Linux System call fuzz tester";
-    homepage = http://codemonkey.org.uk/projects/trinity/;
-    license = licenses.gpl2;
+    mainProgram = "trinity";
+    homepage = "https://github.com/kernelslacker/trinity";
+    license = licenses.gpl2Only;
     maintainers = [ maintainers.dezgeg ];
     platforms = platforms.linux;
   };

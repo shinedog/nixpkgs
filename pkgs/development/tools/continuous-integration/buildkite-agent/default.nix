@@ -1,32 +1,54 @@
-{ stdenv, fetchurl, makeWrapper, coreutils, git, openssh, bash, gnused, gnugrep }:
+{ fetchFromGitHub
+, lib
+, buildGoModule
+, makeWrapper
+, coreutils
+, git
+, openssh
+, bash
+, gnused
+, gnugrep
+, gitUpdater
+, nixosTests
+}:
+buildGoModule rec {
+  pname = "buildkite-agent";
+  version = "3.59.0";
 
-stdenv.mkDerivation rec {
-  version = "2.1.13";
-  name = "buildkite-agent-${version}";
-  dontBuild = true;
-
-  src = fetchurl {
-    url = "https://github.com/buildkite/agent/releases/download/v${version}/buildkite-agent-linux-386-${version}.tar.gz";
-    sha256 = "bd40c2ba37b3b54b875241a32b62190a4cf4c15e2513c573f1626a3ca35c8657";
+  src = fetchFromGitHub {
+    owner = "buildkite";
+    repo = "agent";
+    rev = "v${version}";
+    sha256 = "sha256-pYaxjXoNn6MOE2oHUSKrBzP5oKhtfJwSHFCkcpkyzas=";
   };
 
+  vendorHash = "sha256-JSuam9Tn+ZekfLrj78tBncH7Q2aP4CaUgaaDkJ/azEw=";
+
+  postPatch = ''
+    substituteInPlace clicommand/agent_start.go --replace /bin/bash ${bash}/bin/bash
+  '';
+
   nativeBuildInputs = [ makeWrapper ];
-  sourceRoot = ".";
-  installPhase = ''
-    install -Dt "$out/bin/" buildkite-agent
 
-    mkdir -p $out/share
-    mv hooks bootstrap.sh $out/share/
-  '';
+  doCheck = false;
 
-  postFixup = ''
-    substituteInPlace $out/share/bootstrap.sh \
-      --replace "#!/bin/bash" "#!$(type -P bash)"
+  postInstall = ''
+    # Fix binary name
+    mv $out/bin/{agent,buildkite-agent}
+
+    # These are runtime dependencies
     wrapProgram $out/bin/buildkite-agent \
-      --set PATH '"${stdenv.lib.makeBinPath [ openssh git coreutils gnused gnugrep ]}:$PATH"'
+      --prefix PATH : '${lib.makeBinPath [ openssh git coreutils gnused gnugrep ]}'
   '';
 
-  meta = {
+  passthru = {
+    tests.smoke-test = nixosTests.buildkite-agents;
+    updateScript = gitUpdater {
+      rev-prefix = "v";
+    };
+  };
+
+  meta = with lib; {
     description = "Build runner for buildkite.com";
     longDescription = ''
       The buildkite-agent is a small, reliable, and cross-platform build runner
@@ -35,9 +57,9 @@ stdenv.mkDerivation rec {
       build jobs, reporting back the status code and output log of the job,
       and uploading the job's artifacts.
     '';
-    homepage = https://buildkite.com/docs/agent;
-    license = stdenv.lib.licenses.mit;
-    maintainers = [ stdenv.lib.maintainers.pawelpacana ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://buildkite.com/docs/agent";
+    license = licenses.mit;
+    maintainers = with maintainers; [ pawelpacana zimbatm jsoo1 techknowlogick ];
+    platforms = with platforms; unix ++ darwin;
   };
 }

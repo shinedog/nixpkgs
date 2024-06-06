@@ -1,12 +1,18 @@
-{ stdenv, fetchurl, fetchpatch, python3, which }:
+{ lib, stdenv
+, fetchFromGitHub
+, python3
+, which
+}:
 
 stdenv.mkDerivation rec {
-  name = "fatrace-${version}";
-  version = "0.12";
+  pname = "fatrace";
+  version = "0.17.0";
 
-  src = fetchurl {
-    url = "http://launchpad.net/fatrace/trunk/${version}/+download/${name}.tar.bz2";
-    sha256 = "0szn86rbbvmjcw192vjhhgc3v99s5lm2kg93gk1yzm6ay831grsh";
+  src = fetchFromGitHub {
+    owner = "martinpitt";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-MRHM+hyuRevK4L3u6dGw1S3O7w+BJBsprJVcSz6Q9xg=";
   };
 
   buildInputs = [ python3 which ];
@@ -18,9 +24,9 @@ stdenv.mkDerivation rec {
 
   makeFlags = [ "PREFIX=$(out)" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Report system-wide file access events";
-    homepage = https://launchpad.net/fatrace/;
+    homepage = "https://github.com/martinpitt/fatrace";
     license = licenses.gpl3Plus;
     longDescription = ''
       fatrace reports file access events from all running processes.
@@ -29,7 +35,6 @@ stdenv.mkDerivation rec {
       Requires a Linux kernel with the FANOTIFY configuration option enabled.
       Enabling X86_MSR is also recommended for power-usage-report on x86.
     '';
-    maintainers = with maintainers; [ nckx ];
     platforms = platforms.linux;
   };
 }

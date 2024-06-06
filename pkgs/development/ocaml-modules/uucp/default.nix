@@ -1,41 +1,53 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opam }:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uchar, uutf, uunf, uucd }:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast;
-
   pname = "uucp";
-  version = "1.1.0";
-  webpage = "http://erratique.ch/software/${pname}";
+  version = "15.1.0";
+  webpage = "https://erratique.ch/software/${pname}";
+  minimalOCamlVersion = "4.03";
+  doCheck = true;
 in
 
-assert versionAtLeast (getVersion ocaml) "4.00";
+if lib.versionOlder ocaml.version minimalOCamlVersion
+then builtins.throw "${pname} needs at least OCaml ${minimalOCamlVersion}"
+else
 
 stdenv.mkDerivation {
 
-  name = "ocaml-${pname}-${version}";
+  name = "ocaml${ocaml.version}-${pname}-${version}";
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "1vm5f2ppdrnk19j0ppjiqz56qf5bzyk26gs0lz071s7iblk459jz";
+    hash = "sha256-qR5LiAZHt4oD3ak0x17GqbYXNaJmJxFk/WGoxT+yWYc=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [ topkg uutf uunf uucd ];
 
-  createFindlibDestdir = true;
+  propagatedBuildInputs = [ uchar ];
 
-  unpackCmd = "tar xjf $src";
+  strictDeps = true;
 
-  buildPhase = "ocaml pkg/build.ml native=true native-dynlink=true";
-
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install | sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${getVersion ocaml}/site-lib/${pname}
+  buildPhase = ''
+    runHook preBuild
+    ${topkg.buildPhase} --with-cmdliner false --tests ${lib.boolToString doCheck}
+    runHook postBuild
   '';
 
-  meta = with stdenv.lib; {
+  inherit (topkg) installPhase;
+
+  inherit doCheck;
+  checkPhase = ''
+    runHook preCheck
+    ${topkg.run} test
+    runHook postCheck
+  '';
+  checkInputs = [ uucd ];
+
+  meta = with lib; {
     description = "An OCaml library providing efficient access to a selection of character properties of the Unicode character database";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = webpage;
+    inherit (ocaml.meta) platforms;
     license = licenses.bsd3;
     maintainers = [ maintainers.vbgl ];
   };

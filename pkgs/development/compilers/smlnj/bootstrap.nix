@@ -1,19 +1,24 @@
-{ stdenv, fetchurl, cpio, rsync, makeWrapper }:
+# This derivation should be redundant, now that regular smlnj works on Darwin,
+# and is preserved only for pre-existing direct usage. New use cases should
+# just use the regular smlnj derivation.
+
+{ lib, stdenv, fetchurl, cpio, rsync, xar, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "smlnj-bootstrap-${version}";
+  pname = "smlnj-bootstrap";
 
-  version = "110.80";
+  version = "110.91";
 
   src = fetchurl {
     url = "http://smlnj.cs.uchicago.edu/dist/working/${version}/smlnj-x86-${version}.pkg";
-    sha256 = "1709xpgmxa6v73h77y7vn9wf5vlfdk75p61w28nzgfdsdc8f8l65";
+    sha256 = "12jn50h5jz0ac1vzld2mb94p1dyc8h0mk0hip2wj5xqk1dbzwxl4";
   };
 
-  buildInputs = [ cpio rsync makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ cpio rsync ];
 
   unpackPhase = ''
-    /usr/bin/xar -xf $src
+    ${xar}/bin/xar -xf $src
     cd smlnj.pkg
   '';
 
@@ -35,9 +40,10 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Compiler for the Standard ML '97 programming language";
-    homepage    = http://www.smlnj.org;
-    license     = stdenv.lib.licenses.free;
-    platforms   = stdenv.lib.platforms.darwin;
-    maintainers = [ stdenv.lib.maintainers.jwiegley ];
+    homepage    = "http://www.smlnj.org";
+    license     = lib.licenses.free;
+    platforms   = lib.platforms.darwin;
+    maintainers = [ lib.maintainers.jwiegley ];
+    mainProgram = "sml";
   };
 }

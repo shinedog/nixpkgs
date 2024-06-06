@@ -1,18 +1,19 @@
-{stdenv, fetchurl}:
+{lib, stdenv, fetchurl}:
 
 stdenv.mkDerivation rec {
-  name = "enet-1.3.13";
+  pname = "enet";
+  version = "1.3.18";
 
   src = fetchurl {
-    url = "http://enet.bespin.org/download/${name}.tar.gz";
-    sha256 = "0p53mnmjbm56wizwraznynx13fcibcxiqny110dp6a5a3w174q73";
+    url = "http://enet.bespin.org/download/${pname}-${version}.tar.gz";
+    sha256 = "sha256-KooMU2DWi7T80R8uTEfGmXbo0shbEJ3X1gsRgaT4XTY=";
   };
 
   meta = {
-    homepage = http://enet.bespin.org/;
+    homepage = "http://enet.bespin.org/";
     description = "Simple and robust network communication layer on top of UDP";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.mit;
+    maintainers = with lib.maintainers; [ ];
+    platforms = lib.platforms.unix;
   };
 }

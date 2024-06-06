@@ -1,39 +1,33 @@
-{ stdenv, fetchurl, puredata }:
+{ lib, stdenv, fetchFromGitHub, puredata }:
 
 stdenv.mkDerivation rec {
-  name = "cyclone-${version}";
-  version = "0.1-alpha55";
+  pname = "cyclone";
+  version = "unstable-2023-09-12";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/project/pure-data/libraries/cyclone/${name}.tar.gz";
-    sha256 = "1yys9xrlz09xgnqk2gqdl8vw6xj6l9d7km2lkihidgjql0jx5b5i";
+  src = fetchFromGitHub {
+    owner = "porres";
+    repo = "pd-cyclone";
+    rev = "7c470fb03db66057a2198843b635ac3f1abde84d";
+    hash = "sha256-ixfnmeoRzV0qEOOIxCV1361t3d59fwxjHWhz9uXQ2ps=";
   };
 
   buildInputs = [ puredata ];
 
-  hardeningDisable = [ "format" ];
+  makeFlags = [
+    "pdincludepath=${puredata}/include/pd"
+    "prefix=$(out)"
+  ];
 
-  patchPhase = ''
-    for file in `grep -r -l g_canvas.h`
-      do
-        sed -i 's|#include "g_canvas.h"|#include "${puredata}/include/pd/g_canvas.h"|g' $file
-      done
-    for file in `grep -r -l m_imp.h`
-      do
-        sed -i 's|#include "m_imp.h"|#include "${puredata}/include/pd/m_imp.h"|g' $file
-      done
+  postInstall = ''
+    mv "$out/lib/pd-externals/cyclone" "$out/"
+    rm -rf $out/lib
   '';
 
-  installPhase = ''
-    mkdir -p $out/cyclone
-    cp -r bin/* $out/cyclone
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "A library of PureData classes, bringing some level of compatibility between Max/MSP and Pd environments";
-    homepage = http://puredata.info/downloads/cyclone;
-    license = stdenv.lib.licenses.tcltk;
-    maintainers = [ stdenv.lib.maintainers.magnetophon ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "http://puredata.info/downloads/cyclone";
+    license = licenses.tcltk;
+    maintainers = with maintainers; [ magnetophon carlthome ];
+    platforms = platforms.linux;
   };
 }

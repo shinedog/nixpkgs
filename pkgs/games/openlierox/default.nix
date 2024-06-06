@@ -1,40 +1,79 @@
-{ stdenv, fetchurl, libX11, xproto, gd, SDL, SDL_image, SDL_mixer, zlib
-, libxml2, pkgconfig, curl, cmake, libzip }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  pkg-config,
+  curl,
+  gd,
+  libX11,
+  libxml2,
+  libzip,
+  SDL,
+  SDL_image,
+  SDL_mixer,
+  zlib,
+}:
 
-stdenv.mkDerivation {
-  name = "openlierox-0.58rc3";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "openlierox";
+  version = "0.58_rc5";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/openlierox/OpenLieroX_0.58_rc3.src.tar.bz2";
-    sha256 = "1k35xppfqi3qfysv81xq3hj4qdy9j2ciinbkfdcmwclcsf3nh94z";
+  src = fetchFromGitHub {
+    owner = "albertz";
+    repo = "openlierox";
+    rev = finalAttrs.version;
+    hash = "sha256-4ofjroEHlfrQitc7M+YTNWut0LGgntgQoOeBWU8nscY=";
   };
 
-  NIX_CFLAGS_COMPILE = "-I${libxml2.dev}/include/libxml2";
-
-  # The breakpad fails to build on x86_64, and it's only to report bugs upstream
-  cmakeFlags = [ "-DBREAKPAD=0" ];
-
-  preConfigure = ''
-    cmakeFlags="$cmakeFlags -DSYSTEM_DATA_DIR=$out/share"
+  postPatch = ''
+    sed 1i'#include <cstdint>' -i src/common/s*x.cpp
+    sed 1i'#include <libxml/parser.h>' -i include/XMLutils.h
+    substituteInPlace src/common/StringUtils.cpp \
+        --replace-fail "xmlErrorPtr" "const xmlError*"
   '';
 
-  patchPhase = ''
-    sed -i s,curl/types.h,curl/curl.h, include/HTTP.h src/common/HTTP.cpp
-  '';
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    SDL
+  ];
+
+  buildInputs = [
+    curl
+    gd
+    libX11
+    libxml2
+    libzip
+    SDL
+    SDL_image
+    SDL_mixer
+    zlib
+  ];
+
+  cmakeFlags = [ "-DSYSTEM_DATA_DIR=${placeholder "out"}/share" ];
+
+  env.NIX_CFLAGS_COMPILE = "-I${lib.getDev libxml2}/include/libxml2";
 
   installPhase = ''
-    mkdir -p $out/bin $out/share/OpenLieroX
-    cp bin/* $out/bin
-    cp -R ../share/gamedir/* $out/share/OpenLieroX
+    runHook preInstall
+
+    install -Dm755 bin/* -t $out/bin
+
+    mkdir -p $out/share/OpenLieroX
+    cp -r ../share/gamedir/* $out/share/OpenLieroX
+
+    runHook postInstall
   '';
 
-  buildInputs = [ libX11 xproto gd SDL SDL_image SDL_mixer zlib libxml2
-    pkgconfig curl cmake libzip ];
-
   meta = {
-    homepage = http://openlierox.net;
     description = "Real-time game with Worms-like shooting";
-    license = stdenv.lib.licenses.lgpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "http://openlierox.net";
+    license = lib.licenses.lgpl2Plus;
+    mainProgram = "openlierox";
+    maintainers = with lib.maintainers; [ tomasajt ];
+    platforms = lib.platforms.linux;
   };
-}
+})

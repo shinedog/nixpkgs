@@ -1,93 +1,82 @@
-{ stdenv, fetchgit, git,  espeak, SDL, udev, doxygen, cmake
-  , qtbase, qtlocation, qtserialport, qtdeclarative, qtconnectivity, qtxmlpatterns
-  , qtsvg, qtquick1, qtquickcontrols, qtgraphicaleffects, qmakeHook
-  , makeQtWrapper, lndir
-  , gst_all_1, qt_gstreamer1, pkgconfig, glibc
-  , version ? "2.9.4"
-}:
+{ lib, stdenv, fetchFromGitHub, SDL2, qtbase, qtcharts, qtlocation, qtserialport
+, qtsvg, qtquickcontrols2, qtgraphicaleffects, qtspeech, qtx11extras, qmake
+, qttools, gst_all_1, wayland, pkg-config, wrapQtAppsHook }:
 
 stdenv.mkDerivation rec {
-  name = "qgroundcontrol-${version}";
-  buildInputs = [
-   SDL udev doxygen git
-  ] ++ gstInputs;
+  pname = "qgroundcontrol";
+  version = "4.3.0";
 
-  qtInputs = [
-    qtbase qtlocation qtserialport qtdeclarative qtconnectivity qtxmlpatterns qtsvg 
-    qtquick1 qtquickcontrols qtgraphicaleffects
+  propagatedBuildInputs = [
+    qtbase qtcharts qtlocation qtserialport qtsvg qtquickcontrols2
+    qtgraphicaleffects qtspeech qtx11extras
   ];
 
   gstInputs = with gst_all_1; [
-    gstreamer gst-plugins-base
+    gstreamer
+    gst-plugins-base
+    (gst-plugins-good.override { qt5Support = true; })
+    gst-plugins-bad
+    gst-libav
+    wayland
   ];
 
-  enableParallelBuilding = true;
-  nativeBuildInputs = [
-    pkgconfig makeQtWrapper qmakeHook
- ] ++ qtInputs;
-
-  patches = [ ./0001-fix-gcc-cmath-namespace-issues.patch ];
-  postPatch = ''
-    sed '1i#include <cmath>' -i src/Vehicle/Vehicle.cc \
-      -i src/comm/{QGCFlightGearLink,QGCJSBSimLink}.cc \
-      -i src/{uas/UAS,ui/QGCDataPlot2D}.cc
-  '';
+  buildInputs = [ SDL2 ] ++ gstInputs ++ propagatedBuildInputs;
+  nativeBuildInputs = [ pkg-config qmake qttools wrapQtAppsHook ];
 
   preConfigure = ''
     mkdir build
     cd build
   '';
 
-  qmakeFlags = [ "../qgroundcontrol.pro" ];
+  qmakeFlags = [
+    "CONFIG+=StableBuild"
+    # Default install tries to copy Qt files into package
+    "CONFIG+=QGC_DISABLE_BUILD_SETUP"
+    # Tries to download x86_64-only prebuilt binaries
+    "DEFINES+=DISABLE_AIRMAP"
+    "../qgroundcontrol.pro"
+  ];
 
   installPhase = ''
+    runHook preInstall
+
     cd ..
+
     mkdir -p $out/share/applications
-    cp -v qgroundcontrol.desktop $out/share/applications
-    
+    sed 's/Exec=.*$/Exec=QGroundControl/g' --in-place deploy/qgroundcontrol.desktop
+    cp -v deploy/qgroundcontrol.desktop $out/share/applications
+
     mkdir -p $out/bin
-    cp -v build/release/qgroundcontrol "$out/bin/"
-    
+    cp -v build/staging/QGroundControl "$out/bin/"
+
     mkdir -p $out/share/qgroundcontrol
     cp -rv resources/ $out/share/qgroundcontrol
-    
+
     mkdir -p $out/share/pixmaps
     cp -v resources/icons/qgroundcontrol.png $out/share/pixmaps
 
-    # we need to link to our Qt deps in our own output if we want
-    # this package to work without being installed as a system pkg
-    mkdir -p $out/lib/qt5 $out/etc/xdg
-    for pkg in $qtInputs; do
-      if [[ -d $pkg/lib/qt5 ]]; then
-        for dir in lib/qt5 share etc/xdg; do
-          if [[ -d $pkg/$dir ]]; then
-            ${lndir}/bin/lndir "$pkg/$dir" "$out/$dir"
-          fi
-        done
-      fi
-    done
+    runHook postInstall
   '';
-
 
   postInstall = ''
-    wrapQtProgram "$out/bin/qgroundcontrol" \
-      --prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH"
+    qtWrapperArgs+=(--prefix GST_PLUGIN_SYSTEM_PATH_1_0 : "$GST_PLUGIN_SYSTEM_PATH_1_0")
   '';
-  
 
   # TODO: package mavlink so we can build from a normal source tarball
-  src = fetchgit {
-    url = "https://github.com/mavlink/qgroundcontrol.git";
-    rev = "refs/tags/v${version}";
-    sha256 = "0isr0zamhvr853c94lblazkilil6zzmvf7afs3mxgn07jn9wrqz3";
+  src = fetchFromGitHub {
+    owner = "mavlink";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-a0+cpT413qi88PvaWQPxKABHfK7vbPE7B42n84n/SAk=";
     fetchSubmodules = true;
   };
 
-  meta = {
+  meta = with lib; {
     description = "Provides full ground station support and configuration for the PX4 and APM Flight Stacks";
-    homepage = http://qgroundcontrol.org/;
-    license = stdenv.lib.licenses.gpl3Plus;
-    platforms = with stdenv.lib.platforms; linux;
-    maintainers = with stdenv.lib.maintainers; [ pxc ];
+    homepage = "http://qgroundcontrol.com/";
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ lopsided98 ];
+    mainProgram = "QGroundControl";
   };
 }

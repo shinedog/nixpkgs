@@ -1,76 +1,159 @@
-{ stdenv, fetchurl, flac, gtk2, libvorbis, libvpx, makeDesktopItem, mesa, nasm
-, pkgconfig, SDL2, SDL2_mixer }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, makeWrapper
+, pkg-config
+, nasm
+, makeDesktopItem
+, copyDesktopItems
+, alsa-lib
+, flac
+, gtk2
+, libvorbis
+, libvpx
+, libGL
+, SDL2
+, SDL2_mixer
+, AGL
+, Cocoa
+, GLUT
+, OpenGL
+, graphicsmagick
+}:
 
 let
-  year = "2015";
-  date = "20150420";
-  rev = "5160";
-in stdenv.mkDerivation rec {
-  name = "eduke32-${version}";
-  version = "${date}-${rev}";
+  wrapper = "eduke32-wrapper";
+  swWrapper = "voidsw-wrapper";
 
-  src = fetchurl {
-    url = "http://dukeworld.duke4.net/eduke32/synthesis/old/${year}/${version}/eduke32_src_${version}.tar.xz";
-    sha256 = "1nlq5jbglg00c1z1vsyl627fh0mqfxvk5qyxav5vzla2b4svik2v";
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "eduke32";
+  version = "0-unstable-2024-02-17";
+
+  src = fetchFromGitLab {
+    domain = "voidpoint.io";
+    owner = "terminx";
+    repo = "eduke32";
+    rev = "8afa42e388e0434b38979fdddc763363717a2727";
+    hash = "sha256-dyZ4JtDBxsTDe9uQDWxJe7M74X7m+5wpEHm+i+s9hwo=";
   };
 
-  buildInputs = [ flac gtk2 libvorbis libvpx mesa SDL2 SDL2_mixer ]
-    ++ stdenv.lib.optional (stdenv.system == "i686-linux") nasm;
-  nativeBuildInputs = [ pkgconfig ];
-
-  postPatch = ''
-    substituteInPlace build/src/glbuild.c \
-      --replace libGL.so	${mesa}/lib/libGL.so \
-      --replace libGLU.so	${mesa}/lib/libGLU.so
-  '';
-
-  NIX_CFLAGS_COMPILE = "-I${SDL2}/include/SDL";
-  NIX_LDFLAGS = "-L${SDL2}/lib";
-
-  makeFlags = [
-    "LINKED_GTK=1"
-    "SDLCONFIG=${SDL2}/bin/sdl2-config"
-    "VC_REV=${rev}"
+  patches = [
+    # gdk-pixbuf-csource no longer supports bmp so convert to png
+    # patch GNUMakefile to use graphicsmagick to convert bmp -> png
+    ./convert-bmp-to-png.diff
   ];
 
-  desktopItem = makeDesktopItem {
-    name = "eduke32";
-    exec = "eduke32-wrapper";
-    comment = "Duke Nukem 3D port";
-    desktopName = "Enhanced Duke Nukem 3D";
-    genericName = "Duke Nukem 3D port";
-    categories = "Application;Game;";
-  };
+  buildInputs = [
+    flac
+    libvorbis
+    libvpx
+    SDL2
+    SDL2_mixer
+  ] ++ lib.optionals stdenv.isLinux [
+    alsa-lib
+    gtk2
+    libGL
+  ] ++ lib.optionals stdenv.isDarwin [
+    AGL
+    Cocoa
+    GLUT
+    OpenGL
+  ];
 
-  installPhase = ''
-    # Make wrapper script
-    cat > eduke32-wrapper <<EOF
-    #!/bin/sh
+  nativeBuildInputs = [
+    makeWrapper
+    pkg-config
+    copyDesktopItems
+    graphicsmagick
+  ] ++ lib.optionals (stdenv.hostPlatform.system == "i686-linux") [
+    nasm
+  ];
 
-    if [ "$EDUKE32_DATA_DIR" = "" ]; then
-        EDUKE32_DATA_DIR=/var/lib/games/eduke32
-    fi
-    if [ "$EDUKE32_GRP_FILE" = "" ]; then
-        EDUKE32_GRP_FILE=\$EDUKE32_DATA_DIR/DUKE3D.GRP
-    fi
-
-    cd \$EDUKE32_DATA_DIR
-    exec $out/bin/eduke32 -g \$EDUKE32_GRP_FILE
-    EOF
-
-    # Install binaries
-    mkdir -p $out/bin
-    install -Dm755 eduke32{,-wrapper} mapster32 $out/bin
-
-    # Install desktop item
-    cp -rv ${desktopItem}/share $out
+  postPatch = ''
+    substituteInPlace source/imgui/src/imgui_impl_sdl2.cpp \
+      --replace-fail '#include <SDL.h>' '#include <SDL2/SDL.h>' \
+      --replace-fail '#include <SDL_syswm.h>' '#include <SDL2/SDL_syswm.h>' \
+      --replace-fail '#include <SDL_vulkan.h>' '#include <SDL2/SDL_vulkan.h>'
+  '' + lib.optionalString stdenv.isLinux ''
+    for f in glad.c glad_wgl.c ; do
+      substituteInPlace source/glad/src/$f \
+        --replace-fail libGL.so ${libGL}/lib/libGL.so
+    done
   '';
 
-  meta = with stdenv.lib; {
+  makeFlags = [
+    "SDLCONFIG=${SDL2}/bin/sdl2-config"
+  ] ++ lib.optionals stdenv.isDarwin [
+    # broken, see: https://github.com/NixOS/nixpkgs/issues/19098
+    "LTO=0"
+  ];
+
+  buildFlags = [
+    "duke3d"
+    "sw"
+  ];
+
+  desktopItems = [
+    (makeDesktopItem {
+      name = "eduke32";
+      icon = "eduke32";
+      exec = "${wrapper}";
+      comment = "Duke Nukem 3D port";
+      desktopName = "Enhanced Duke Nukem 3D";
+      genericName = "Duke Nukem 3D port";
+      categories = [ "Game" ];
+    })
+    (makeDesktopItem {
+      name = "voidsw";
+      icon = "voidsw";
+      exec = "${swWrapper}";
+      comment = "Shadow Warrior eduke32 source port";
+      desktopName = "VoidSW";
+      genericName = "Shadow Warrior source port";
+      categories = [ "Game" ];
+    })
+  ];
+
+  enableParallelBuilding = true;
+
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm755 -t $out/bin eduke32 mapster32 voidsw wangulator
+  '' + lib.optionalString stdenv.isLinux ''
+    makeWrapper $out/bin/eduke32 $out/bin/${wrapper} \
+      --set-default EDUKE32_DATA_DIR /var/lib/games/eduke32 \
+      --add-flags '-g "$EDUKE32_DATA_DIR/DUKE3D.GRP"'
+    makeWrapper $out/bin/voidsw $out/bin/${swWrapper} \
+      --set-default EDUKE32_DATA_DIR /var/lib/games/eduke32 \
+      --add-flags '-g"$EDUKE32_DATA_DIR/SW.GRP"'
+    mkdir -p $out/share/icons/hicolor/scalable/apps
+    gm convert "./source/duke3d/rsrc/game_icon.ico[10]" $out/share/icons/hicolor/scalable/apps/eduke32.png
+    install -Dm644 ./source/sw/rsrc/game_icon.svg $out/share/icons/hicolor/scalable/apps/voidsw.svg
+  '' + lib.optionalString stdenv.isDarwin ''
+    mkdir -p $out/Applications/EDuke32.app/Contents/MacOS
+    mkdir -p $out/Applications/Mapster32.app/Contents/MacOS
+    mkdir -p $out/Applications/VoidSW.app/Contents/MacOS
+    mkdir -p $out/Applications/Wangulator.app/Contents/MacOS
+
+    cp -r platform/Apple/bundles/EDuke32.app/* $out/Applications/EDuke32.app/
+    cp -r platform/Apple/bundles/Mapster32.app/* $out/Applications/Mapster32.app/
+    cp -r platform/Apple/bundles/VoidSW.app/* $out/Applications/VoidSW.app/
+    cp -r platform/Apple/bundles/Wangulator.app/* $out/Applications/Wangulator.app/
+
+    ln -sf $out/bin/eduke32 $out/Applications/EDuke32.app/Contents/MacOS/eduke32
+    ln -sf $out/bin/mapster32 $out/Applications/Mapster32.app/Contents/MacOS/mapster32
+    ln -sf $out/bin/voidsw $out/Applications/VoidSW.app/Contents/MacOS/voidsw
+    ln -sf $out/bin/wangulator $out/Applications/Wangulator.app/Contents/MacOS/wangulator
+  '' + ''
+    runHook postInstall
+  '';
+
+  meta = {
     description = "Enhanched port of Duke Nukem 3D for various platforms";
-    license = licenses.gpl2Plus;
-    homepage = http://eduke32.com;
-    maintainers = with maintainers; [ nckx sander ];
-    platforms = with platforms; linux;
+    homepage = "http://eduke32.com";
+    license = with lib.licenses; [ gpl2Plus ];
+    maintainers = with lib.maintainers; [ mikroskeem sander ];
+    platforms = lib.platforms.all;
   };
-}
+})

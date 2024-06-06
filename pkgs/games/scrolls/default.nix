@@ -1,8 +1,9 @@
-{ stdenv, fetchurl, gcc
-, mesa_glu, libX11, libXext, libXcursor, libpulseaudio
+{ lib, stdenv, fetchurl, gcc
+, libGLU, libX11, libXext, libXcursor, libpulseaudio
 }:
 stdenv.mkDerivation {
-  name = "scrolls-2015-10-13";
+  pname = "scrolls";
+  version = "2015-10-13";
 
   meta = {
     description = "A strategy collectible card game";
@@ -11,24 +12,23 @@ stdenv.mkDerivation {
 
     platforms = [ "x86_64-linux" ];
 
-    license = stdenv.lib.licenses.unfree;
+    license = lib.licenses.unfree;
   };
 
   src = fetchurl {
-    url = "http://download.scrolls.com/client/linux.tar.gz";
+    url = "https://download.scrolls.com/client/linux.tar.gz";
     sha256 = "ead1fd14988aa07041fedfa7f845c756cd5077a5a402d85bfb749cb669ececec";
   };
 
-  libPath = stdenv.lib.makeLibraryPath [
+  libPath = lib.makeLibraryPath [
     gcc
-    mesa_glu
+    libGLU
     libX11
     libXext
     libXcursor
     libpulseaudio
   ];
 
-  phases = [ "unpackPhase" "installPhase" ];
   installPhase = ''
     mkdir -p "$out/opt/Scrolls"
     cp -r ../Scrolls "$out/opt/Scrolls/"

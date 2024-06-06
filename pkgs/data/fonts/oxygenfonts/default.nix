@@ -1,24 +1,26 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "oxygenfonts-20160824";
+stdenvNoCC.mkDerivation rec {
+  pname = "oxygenfonts";
+  version = "20160824";
 
   src = fetchFromGitHub {
     owner = "vernnobile";
     repo = "oxygenFont";
     rev = "62db0ebe3488c936406685485071a54e3d18473b";
-    sha256 = "134kx3d0g3zdkw8kl8p6j37fzw3bl163jv2dx4dk1451f3ramcnh";
+    hash = "sha256-0LKq8nChkDAb6U1sOUyga/DvzpDmIjoRn+2PB9rok4w=";
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype/
-    cp OxygenSans-version-0.4/*/*.ttf $out/share/fonts/truetype/
-    cp Oxygen-Monospace/*.ttf $out/share/fonts/truetype/
+    runHook preInstall
+
+    mkdir -p $out/share/fonts/truetype
+    cp */Oxygen-Sans.ttf */Oxygen-Sans-Bold.ttf */OxygenMono-Regular.ttf $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Desktop/gui font for integrated use with the KDE desktop";
     longDescription = ''
       Oxygen Font is a font family originally aimed as a desktop/gui

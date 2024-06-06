@@ -1,76 +1,108 @@
-{ stdenv, fetchurl, ncurses, ocamlPackages, graphviz
-, ltl2ba, coq, alt-ergo, why3 }:
+{ lib, stdenv, fetchurl, writeText
+, graphviz, doxygen
+, ocamlPackages, ltl2ba, coq, why3
+, gdk-pixbuf, wrapGAppsHook3
+}:
+
+let
+  mkocamlpath = p: "${p}/lib/ocaml/${ocamlPackages.ocaml.version}/site-lib";
+  runtimeDeps = with ocamlPackages; [
+    apron.dev
+    bigarray-compat
+    biniou
+    camlzip
+    easy-format
+    menhirLib
+    mlgmpidl
+    num
+    ocamlgraph
+    ppx_deriving
+    ppx_deriving_yojson
+    ppx_import
+    stdlib-shims
+    why3.dev
+    re
+    result
+    seq
+    sexplib
+    sexplib0
+    parsexp
+    base
+    unionFind
+    yojson
+    zarith
+  ];
+  ocamlpath = lib.concatMapStringsSep ":" mkocamlpath runtimeDeps;
+in
 
 stdenv.mkDerivation rec {
-  name    = "frama-c-${version}";
-  version = "20160501";
-  slang   = "Aluminium";
+  pname = "frama-c";
+  version = "28.1";
+  slang   = "Nickel";
 
   src = fetchurl {
-    url    = "http://frama-c.com/download/frama-c-${slang}-${version}.tar.gz";
-    sha256 = "02z4d1lg2cs4hgbjx74crfrabv39dyhdrq5lvhv0q3hx5c8w7p90";
+    url  = "https://frama-c.com/download/frama-c-${version}-${slang}.tar.gz";
+    hash = "sha256-AiC8dDt9okaM65JvMx7cfd+qfGA7pHli3j4zyOHj9ZM=";
   };
 
-  why2 = fetchurl {
-    url    = "http://why.lri.fr/download/why-2.34.tar.gz";
-    sha256 = "1335bhq9v3h46m8aba2c5myi9ghm87q41in0m15xvdrwq5big1jg";
-  };
+  preConfigure = ''
+    substituteInPlace src/dune --replace " bytes " " "
+  '';
+
+  postConfigure = "patchShebangs src/plugins/eva/gen-api.sh";
+
+  strictDeps = true;
+
+  nativeBuildInputs = [ wrapGAppsHook3 ] ++ (with ocamlPackages; [ ocaml findlib dune_3 menhir ]);
 
   buildInputs = with ocamlPackages; [
-    ncurses ocaml findlib alt-ergo ltl2ba ocamlgraph
-    lablgtk coq graphviz zarith why3 zarith
+    dune-site dune-configurator
+    ltl2ba ocamlgraph yojson menhirLib camlzip
+    lablgtk3 lablgtk3-sourceview3 coq graphviz zarith apron why3 mlgmpidl doxygen
+    ppx_deriving ppx_import ppx_deriving_yaml ppx_deriving_yojson
+    gdk-pixbuf
+    unionFind
   ];
 
-
-  enableParallelBuilding = true;
-
-  unpackPhase = ''
-    tar xf $src
-    tar xf $why2
-  '';
-
   buildPhase = ''
-    cd frama*
-    ./configure --prefix=$out
-    make -j$NIX_BUILD_CORES
-    make install
-    cd ../why*
-    FRAMAC=$out/bin/frama-c ./configure --prefix=$out
-    make
-    make install
+    runHook preBuild
+    dune build -j$NIX_BUILD_CORES --release @install
+    runHook postBuild
   '';
 
+  installFlags = [ "PREFIX=$(out)" ];
 
-  # Enter frama-c directory before patching
-  prePatch = ''cd frama*'';
-  postPatch = ''
-    # strip absolute paths to /usr/bin
-    for file in ./configure ./share/Makefile.common ./src/*/configure; do
-      substituteInPlace $file  --replace '/usr/bin/' ""
-    done
-
-    substituteInPlace ./src/plugins/aorai/aorai_register.ml --replace '"ltl2ba' '"${ltl2ba}/bin/ltl2ba'
-
-    cd ../why*
-    substituteInPlace ./frama-c-plugin/Makefile --replace 'shell frama-c' "shell $out/bin/frama-c"
-    substituteInPlace ./jc/jc_make.ml --replace ' why-dp '       " $out/bin/why-dp "
-    substituteInPlace ./jc/jc_make.ml --replace "?= why@\n"      "?= $out/bin/why@\n"
-    substituteInPlace ./jc/jc_make.ml --replace ' gwhy-bin@'     " $out/bin/gwhy-bin@"
-    substituteInPlace ./jc/jc_make.ml --replace ' why3 '         " ${why3}/bin/why3 "
-    substituteInPlace ./jc/jc_make.ml --replace ' why3ide '      " ${why3}/bin/why3ide "
-    substituteInPlace ./jc/jc_make.ml --replace ' why3replayer ' " ${why3}/bin/why3replayer "
-    substituteInPlace ./jc/jc_make.ml --replace ' why3ml '       " ${why3}/bin/why3ml "
-    substituteInPlace ./jc/jc_make.ml --replace ' coqdep@'       " ${coq}/bin/coqdep@"
-    substituteInPlace ./jc/jc_make.ml --replace 'coqc'           " ${coq}/bin/coqc"
-    substituteInPlace ./frama-c-plugin/register.ml --replace ' jessie ' " $out/bin/jessie "
-    cd ..
+  preFixup = ''
+     gappsWrapperArgs+=(--prefix OCAMLPATH ':' ${ocamlpath}:$out/lib/)
   '';
+
+  # Allow loading of external Frama-C plugins
+  setupHook = writeText "setupHook.sh" ''
+    addFramaCPath () {
+      if test -d "''$1/lib/frama-c/plugins"; then
+        export FRAMAC_PLUGIN="''${FRAMAC_PLUGIN-}''${FRAMAC_PLUGIN:+:}''$1/lib/frama-c/plugins"
+        export OCAMLPATH="''${OCAMLPATH-}''${OCAMLPATH:+:}''$1/lib/frama-c/plugins"
+      fi
+
+      if test -d "''$1/lib/frama-c"; then
+        export OCAMLPATH="''${OCAMLPATH-}''${OCAMLPATH:+:}''$1/lib/frama-c"
+      fi
+
+      if test -d "''$1/share/frama-c/"; then
+        export FRAMAC_EXTRA_SHARE="''${FRAMAC_EXTRA_SHARE-}''${FRAMAC_EXTRA_SHARE:+:}''$1/share/frama-c"
+      fi
+
+    }
+
+    addEnvHooks "$targetOffset" addFramaCPath
+  '';
+
 
   meta = {
     description = "An extensible and collaborative platform dedicated to source-code analysis of C software";
-    homepage    = http://frama-c.com/;
-    license     = stdenv.lib.licenses.lgpl21;
-    maintainers = with stdenv.lib.maintainers; [ thoughtpolice amiddelk ];
-    platforms   = stdenv.lib.platforms.unix;
+    homepage    = "http://frama-c.com/";
+    license     = lib.licenses.lgpl21;
+    maintainers = with lib.maintainers; [ thoughtpolice amiddelk ];
+    platforms   = lib.platforms.unix;
   };
 }

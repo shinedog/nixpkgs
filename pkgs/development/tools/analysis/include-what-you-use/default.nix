@@ -1,23 +1,40 @@
-{ stdenv, fetchurl, cmake, llvmPackages }:
+{ lib, stdenv, fetchurl, cmake, llvmPackages, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "include-what-you-use-${version}";
+  pname = "include-what-you-use";
   # Also bump llvmPackages in all-packages.nix to the supported version!
-  version = "0.6";
+  version = "0.22";
 
   src = fetchurl {
-    sha256 = "0n3z4pfbby0rl338irbs4yvcmjfnza82xg9a8r9amyl0bkfasbxb";
-    url = "${meta.homepage}/downloads/${name}.src.tar.gz";
+    url = "${meta.homepage}/downloads/${pname}-${version}.src.tar.gz";
+    hash = "sha256-hZB0tGHqS4MlpzQYwgfKM7XmVmsI5rWH65FkQWVppt0=";
   };
 
-  buildInputs = with llvmPackages; [ clang llvm ];
-  nativeBuildInputs = [ cmake ];
+  postPatch = ''
+    patchShebangs .
+  '';
 
-  cmakeFlags = [ "-DIWYU_LLVM_ROOT_PATH=${llvmPackages.clang-unwrapped}" ];
+  nativeBuildInputs = with llvmPackages; [ cmake llvm.dev llvm python3 ];
+  buildInputs = with llvmPackages; [ libclang clang-unwrapped python3 ];
 
-  enableParallelBuilding = true;
+  clang = llvmPackages.clang;
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [ "-DCMAKE_PREFIX_PATH=${llvmPackages.llvm.dev}" ];
+
+  postInstall = ''
+    substituteInPlace $out/bin/iwyu_tool.py \
+      --replace-fail "'include-what-you-use'" "'$out/bin/include-what-you-use'"
+
+
+    mv $out/bin/include-what-you-use $out/bin/.include-what-you-use-unwrapped
+    mv $out/bin/iwyu_tool.py $out/bin/.iwyu_tool.py-unwrapped
+    substituteAll ${./wrapper} $out/bin/include-what-you-use
+    ln -s $out/bin/include-what-you-use $out/bin/iwyu_tool.py
+    chmod +x $out/bin/include-what-you-use
+    patchShebangs $out/bin/include-what-you-use
+  '';
+
+  meta = with lib; {
     description = "Analyze #includes in C/C++ source files with clang";
     longDescription = ''
       For every symbol (type, function variable, or macro) that you use in
@@ -27,9 +44,8 @@ stdenv.mkDerivation rec {
       actually needed for this file (for both .cc and .h files), and by
       replacing #includes with forward-declares when possible.
     '';
-    homepage = http://include-what-you-use.org;
+    homepage = "https://include-what-you-use.org";
     license = licenses.bsd3;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
+    platforms = platforms.unix;
   };
 }

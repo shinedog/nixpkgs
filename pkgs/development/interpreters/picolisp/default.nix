@@ -1,53 +1,49 @@
-{ stdenv, fetchurl, jdk }:
-with stdenv.lib;
+{
+  clang,
+  fetchurl,
+  lib,
+  libffi,
+  llvm,
+  makeWrapper,
+  openssl,
+  pkg-config,
+  readline,
+  stdenv
+}:
 
-stdenv.mkDerivation rec {
-  name = "picoLisp-${version}";
-  version = "16.6";
+stdenv.mkDerivation {
+  pname = "PicoLisp";
+  version = "24.3.30";
   src = fetchurl {
-    url = "http://www.software-lab.de/${name}.tgz";
-    sha256 = "0y9b4wqpgx0j0igbp4h7k0bw3hvp7dnrhl3fsaagjpp305b003z3";
+    url = "https://www.software-lab.de/picoLisp-24.3.tgz";
+    sha256 = "sha256-FB43DAjHBFgxdysoLzBXLxii52a2CCh1skZP/RTzfdc=";
   };
-  buildInputs = optional stdenv.is64bit jdk;
-  patchPhase = optionalString stdenv.isArm ''
-    sed -i s/-m32//g Makefile
-    cat >>Makefile <<EOF
-    ext.o: ext.c
-    	\$(CC) \$(CFLAGS) -fPIC -D_OS='"\$(OS)"' \$*.c
-    ht.o: ht.c
-    	\$(CC) \$(CFLAGS) -fPIC -D_OS='"\$(OS)"' \$*.c
-    EOF
+
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ clang libffi llvm openssl pkg-config readline ];
+  sourceRoot = ''pil21'';
+  buildPhase = ''
+    cd src
+    make
   '';
-  sourceRoot = ''picoLisp/src${optionalString stdenv.is64bit "64"}'';
+
   installPhase = ''
     cd ..
-
-    mkdir -p "$out/share/picolisp" "$out/lib" "$out/bin"
-    cp -r . "$out/share/picolisp/build-dir"
-    ln -s "$out/share/picolisp/build-dir" "$out/lib/picolisp"
+    mkdir -p "$out/lib" "$out/bin" "$out/man"
+    cp -r . "$out/lib/picolisp/"
     ln -s "$out/lib/picolisp/bin/picolisp" "$out/bin/picolisp"
-
-    cat >"$out/bin/pil" <<EOF
-    #! /bin/sh
-    exec $out/bin/picolisp $out/lib/picolisp/lib.l @lib/misc.l @lib/btree.l @lib/db.l @lib/pilog.l
-    EOF
-    chmod +x "$out/bin/pil"
-
-    mkdir -p "$out/share/emacs"
-    ln -s "$out/lib/picolisp/lib/el" "$out/share/emacs/site-lisp"
+    ln -s "$out/lib/picolisp/bin/pil" "$out/bin/pil"
+    ln -s "$out/lib/picolisp/man/man1/pil.1" "$out/man/pil.1"
+    ln -s "$out/lib/picolisp/man/man1/picolisp.1" "$out/man/picolisp.1"
+    substituteInPlace $out/bin/pil --replace /usr $out
   '';
 
-  meta = {
-    description = "A simple Lisp with an integrated database";
-    homepage = http://picolisp.com/;
+  meta = with lib; {
+    description = "A pragmatic programming language.";
+    homepage = "https://picolisp.com/";
     license = licenses.mit;
+    maintainers = with maintainers; [ nat-418 ];
     platforms = platforms.all;
-    maintainers = with maintainers; [ raskin tohl ];
-  };
-
-  passthru = {
-    updateInfo = {
-      downloadPage = "http://www.software-lab.de/down.html";
-    };
   };
 }
+

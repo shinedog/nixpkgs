@@ -1,39 +1,38 @@
-{ stdenv, fetchurl, fftw, gtk, lv2, libsamplerate, libsndfile, pkgconfig, zita-convolver }:
+{ lib, stdenv, fetchgit, fftw, gtk2, lv2, libsamplerate, libsndfile, pkg-config, zita-convolver }:
 
 stdenv.mkDerivation rec {
-  name = "ir.lv2-${version}";
-  version = "1.2.2";
+  pname = "ir.lv2";
+  version = "0-unstable-2018-06-21";
 
-  src = fetchurl {
-    url = "http://factorial.hu/system/files/${name}.tar.gz";
-    sha256 = "17a6h2mv9xv41jpbx6bdakkngin4kqzh2v67l4076ddq609k5a7v";
+  src = fetchgit {
+    url = "https://git.hq.sig7.se/ir.lv2.git";
+    rev = "38bf3ec7d370d8234dd55be99c14cf9533b43c60";
+    sha256 = "sha256-5toZYQX2oIAfQ5XPMMN+HGNE4FOE/t6mciih/OpU1dw=";
   };
 
-  buildInputs = [ fftw gtk lv2 libsamplerate libsndfile pkgconfig zita-convolver ];
+  buildInputs = [ fftw gtk2 lv2 libsamplerate libsndfile zita-convolver ];
 
-  buildPhase = ''
-    make
-    make convert4chan
-  '';
+  nativeBuildInputs = [  pkg-config ];
+
+  env.NIX_CFLAGS_COMPILE = "-fpermissive";
+
+  postBuild = "make convert4chan";
 
   installPhase = ''
     mkdir -p "$out/bin"
     mkdir "$out/include"
     mkdir -p "$out/share/doc"
 
-    make PREFIX="$out" install
+    make PREFIX="$out" INSTDIR="$out/lib/lv2" install
     install -Dm755 convert4chan "$out/bin/convert4chan"
-    # fixed location
-    sed -i 's/, but seem like its gone://' README
-    sed -i  's@rhythminmind.net/1313@rhythminmind.net/STN@' README
-    install -Dm644 README "$out/share/doc/README"
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://factorial.hu/plugins/lv2/ir;
+  meta = with lib; {
+    homepage = "http://factorial.hu/plugins/lv2/ir";
     description = "Zero-latency, realtime, high performance signal convolver especially for creating reverb effects";
     license = licenses.gpl2;
     maintainers = [ maintainers.magnetophon ];
     platforms = platforms.linux;
+    mainProgram = "convert4chan";
   };
 }

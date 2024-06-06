@@ -1,8 +1,11 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, options, pkgs, ... }:
 
 with lib;
 
-let cfg = config.services.subsonic; in {
+let
+  cfg = config.services.subsonic;
+  opt = options.services.subsonic;
+in {
   options = {
     services.subsonic = {
       enable = mkEnableOption "Subsonic daemon";
@@ -17,7 +20,7 @@ let cfg = config.services.subsonic; in {
       };
 
       listenAddress = mkOption {
-        type = types.string;
+        type = types.str;
         default = "0.0.0.0";
         description = ''
           The host name or IP address on which to bind Subsonic.
@@ -28,7 +31,7 @@ let cfg = config.services.subsonic; in {
       };
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 4040;
         description = ''
           The port on which Subsonic will listen for
@@ -37,7 +40,7 @@ let cfg = config.services.subsonic; in {
       };
 
       httpsPort = mkOption {
-        type = types.int;
+        type = types.port;
         default = 0;
         description = ''
           The port on which Subsonic will listen for
@@ -93,10 +96,11 @@ let cfg = config.services.subsonic; in {
       transcoders = mkOption {
         type = types.listOf types.path;
         default = [ "${pkgs.ffmpeg.bin}/bin/ffmpeg" ];
+        defaultText = literalExpression ''[ "''${pkgs.ffmpeg.bin}/bin/ffmpeg" ]'';
         description = ''
           List of paths to transcoder executables that should be accessible
           from Subsonic. Symlinks will be created to each executable inside
-          ${cfg.home}/transcoders.
+          ''${config.${opt.home}}/transcoders.
         '';
       };
     };
@@ -105,10 +109,10 @@ let cfg = config.services.subsonic; in {
   config = mkIf cfg.enable {
     systemd.services.subsonic = {
       description = "Personal media streamer";
-      after = [ "local-fs.target" "network.target" ];
+      after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       script = ''
-        ${pkgs.jre}/bin/java -Xmx${toString cfg.maxMemory}m \
+        ${pkgs.jre8}/bin/java -Xmx${toString cfg.maxMemory}m \
           -Dsubsonic.home=${cfg.home} \
           -Dsubsonic.host=${cfg.listenAddress} \
           -Dsubsonic.port=${toString cfg.port} \
@@ -130,7 +134,7 @@ let cfg = config.services.subsonic; in {
                 ! [ -e "${cfg.home}" ] &&
                 [ -d "$oldHome" ] &&
                 [ $(${pkgs.coreutils}/bin/stat -c %u "$oldHome") -eq \
-                    ${toString config.users.extraUsers.subsonic.uid} ]; then
+                    ${toString config.users.users.subsonic.uid} ]; then
             logger Moving "$oldHome" to "${cfg.home}"
             ${pkgs.coreutils}/bin/mv -T "$oldHome" "${cfg.home}"
         fi
@@ -152,7 +156,7 @@ let cfg = config.services.subsonic; in {
       };
     };
 
-    users.extraUsers.subsonic = {
+    users.users.subsonic = {
       description = "Subsonic daemon user";
       home = cfg.home;
       createHome = true;
@@ -160,6 +164,6 @@ let cfg = config.services.subsonic; in {
       uid = config.ids.uids.subsonic;
     };
 
-    users.extraGroups.subsonic.gid = config.ids.gids.subsonic;
+    users.groups.subsonic.gid = config.ids.gids.subsonic;
   };
 }

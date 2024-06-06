@@ -1,19 +1,20 @@
-{ stdenv, fetchurl, ppp, libevent, openssl }:
+{ lib, stdenv, fetchFromGitLab, pkg-config, ppp, libevent, openssl, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "sstp-client-${version}";
-  version = "1.0.10";
+  pname = "sstp-client";
+  version = "unstable-2023-03-25";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/sstp-client/sstp-client/${version}/sstp-client-${version}.tar.gz";
-    sha256 = "096lw3a881hjqnffms3bl077pjyq77870kjaf83chhjcakc8942z";
+  src = fetchFromGitLab {
+    owner = "sstp-project";
+    repo = pname;
+    rev = "3f7835df9ac5e84729903ca536cf65e4a7b04c6c";
+    hash = "sha256-8VF5thSABqf5SXEDCa+0dyDt7kVrQcs6deWLlYWM8dg=";
   };
 
-  patchPhase =
-    ''
-      sed 's,/usr/sbin/pppd,${ppp}/sbin/pppd,' -i src/sstp-pppd.c
-      sed "s,sstp-pppd-plugin.so,$out/lib/pppd/sstp-pppd-plugin.so," -i src/sstp-pppd.c
-    '';
+  postPatch = ''
+    sed 's,/usr/sbin/pppd,${ppp}/sbin/pppd,' -i src/sstp-pppd.c
+    sed "s,sstp-pppd-plugin.so,$out/lib/pppd/sstp-pppd-plugin.so," -i src/sstp-pppd.c
+  '';
 
   configureFlags = [
     "--with-openssl=${openssl.dev}"
@@ -21,12 +22,16 @@ stdenv.mkDerivation rec {
     "--with-pppd-plugin-dir=$(out)/lib/pppd"
   ];
 
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
+
   buildInputs = [ libevent openssl ppp ];
 
-  meta = {
+  meta = with lib; {
     description = "SSTP client for Linux";
-    homepage = http://sstp-client.sourceforge.net/;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.ktosiek ];
+    homepage = "https://sstp-client.sourceforge.net/";
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ ];
+    license = licenses.gpl2Plus;
+    mainProgram = "sstpc";
   };
 }

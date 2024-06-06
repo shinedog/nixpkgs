@@ -1,31 +1,33 @@
-{stdenv, fetchFromGitHub, openssl, libpcap}:
+{ lib, stdenv, fetchFromGitHub, libpcap }:
 
 stdenv.mkDerivation rec {
-  name = "bully-${version}";
-  version = "1.0-22";
-  src = fetchFromGitHub {
-    sha256 = "0wk9jmcibd03gspnnr2qvfkw57rg94cwmi0kjpy1mgi05s6vlw1y";
-    rev = "v${version}";
-    repo = "bully";
-    owner = "HorayNarea";
-  };
-  buildInputs = [ openssl libpcap ];
+  pname = "bully";
+  version = "1.4-00";
 
-  buildPhase = ''
-    cd src
-    make
-  '';
+  src = fetchFromGitHub {
+    owner = "kimocoder";
+    repo = "bully";
+    rev = version;
+    sha256 = "1n2754a5z44g414a0hj3cmi9q5lwnzyvmvzskrj2nci8c8m2kgnf";
+  };
+
+  buildInputs = [ libpcap ];
+
+  enableParallelBuilding = true;
+
+  sourceRoot = "${src.name}/src";
 
   installPhase = ''
-    mkdir -p $out/bin
-    mv bully $out/bin
+    install -Dm555 -t $out/bin bully
+    install -Dm444 -t $out/share/doc/${pname} ../*.md
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Retrieve WPA/WPA2 passphrase from a WPS enabled access point";
-    homepage = https://github.com/Lrs121/bully;
-    maintainers = [ stdenv.lib.maintainers.edwtjo ];
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/kimocoder/bully";
+    license = licenses.gpl3;
+    maintainers = with maintainers; [ edwtjo ];
+    platforms = platforms.linux;
+    mainProgram = "bully";
   };
 }

@@ -1,27 +1,40 @@
-{ stdenv, fetchFromGitHub, go, bash }:
+{ lib, stdenv, fetchFromGitHub, buildGoModule, bash, fish, zsh }:
 
-stdenv.mkDerivation rec {
-  name = "direnv-${version}";
-  version = "2.9.0";
+buildGoModule rec {
+  pname = "direnv";
+  version = "2.34.0";
 
   src = fetchFromGitHub {
     owner = "direnv";
     repo = "direnv";
     rev = "v${version}";
-    sha256 = "1zi4i2ds8xkbhfcpi52hca4lcwan9gf93bdmd2vwdsry16kn3f6k";
+    sha256 = "sha256-EvzqLS/FiWrbIXDkp0L/T8QNKnRGuQkbMWajI3X3BDw=";
   };
 
-  buildInputs = [ go ];
+  vendorHash = "sha256-FfKvLPv+jUT5s2qQ7QlzBMArI+acj7nhpE8FGMPpp5E=";
 
+  # we have no bash at the moment for windows
+  BASH_PATH =
+    lib.optionalString (!stdenv.hostPlatform.isWindows)
+    "${bash}/bin/bash";
+
+  # replace the build phase to use the GNUMakefile instead
   buildPhase = ''
-    make BASH_PATH=${bash}/bin/bash
+    make BASH_PATH=$BASH_PATH
   '';
 
   installPhase = ''
-    make install DESTDIR=$out
+    make install PREFIX=$out
   '';
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = [ fish zsh ];
+
+  checkPhase = ''
+    export HOME=$(mktemp -d)
+    make test-go test-bash test-fish test-zsh
+  '';
+
+  meta = with lib; {
     description = "A shell extension that manages your environment";
     longDescription = ''
       Once hooked into your shell direnv is looking for an .envrc file in your
@@ -34,9 +47,9 @@ stdenv.mkDerivation rec {
       In short, this little tool allows you to have project-specific
       environment variables.
     '';
-    homepage = http://direnv.net;
+    homepage = "https://direnv.net";
     license = licenses.mit;
-    maintainers = with maintainers; [ zimbatm ];
-    inherit (go.meta) platforms;
+    maintainers = [ maintainers.zimbatm ];
+    mainProgram = "direnv";
   };
 }

@@ -1,39 +1,53 @@
-{ stdenv, fetchFromGitHub, python3Packages
-}:
+{ lib, stdenv, fetchFromGitHub, python3Packages, wrapQtAppsHook }:
 
 python3Packages.buildPythonPackage rec {
-  name = "qnotero-${version}";
+  pname = "qnotero";
 
-  version = "1.0.0";
+  version = "2.3.1";
 
   src = fetchFromGitHub {
-    owner = "smathot";
-    repo = "qnotero";
-    rev = "release/${version}";
-    name = "qnotero-${version}-src";
-    sha256 = "1d5a9k1llzn9q1qv1bfwc7gfflabh4riplz9jj0hf04b279y1bj0";
+    owner = "ealbiter";
+    repo = pname;
+    rev = "refs/tags/v${version}";
+    sha256 = "sha256-Rym7neluRbYCpuezRQyLc6gSl3xbVR9fvhOxxW5+Nzo=";
   };
 
-  propagatedBuildInputs = [ python3Packages.pyqt4 ];
+  propagatedBuildInputs = [ python3Packages.pyqt5 wrapQtAppsHook ];
 
   patchPhase = ''
       substituteInPlace ./setup.py \
-        --replace "/usr/share" "$out/usr/share"
+        --replace "/usr/share" "usr/share"
 
-      substituteInPlace ./libqnotero/_themes/default.py \
-        --replace "/usr/share" "$out/usr/share"
+      substituteInPlace ./libqnotero/_themes/light.py \
+         --replace "/usr/share" "$out/usr/share"
+  '';
+
+  preFixup = ''
+    wrapQtApp "$out"/bin/qnotero
   '';
 
   postInstall = ''
-      mkdir -p "$out/usr/share/qnotero"
-      mv resources "$out/usr/share/qnotero"
+    mkdir $out/share
+    mv $out/usr/share/applications $out/share/applications
+
+    substituteInPlace $out/share/applications/qnotero.desktop \
+      --replace "Icon=/usr/share/qnotero/resources/light/qnotero.png" "Icon=qnotero"
+
+    mkdir -p $out/share/icons/hicolor/64x64/apps
+    ln -s $out/usr/share/qnotero/resources/light/qnotero.png \
+      $out/share/icons/hicolor/64x64/apps/qnotero.png
   '';
+
+  # no tests executed
+  doCheck = false;
 
   meta = {
     description = "Quick access to Zotero references";
-    homepage = http://www.cogsci.nl/software/qnotero;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.nico202 ];
+    mainProgram = "qnotero";
+    homepage = "https://www.cogsci.nl/software/qnotero";
+    license = lib.licenses.gpl2;
+    platforms = lib.platforms.unix;
+    broken = stdenv.isDarwin; # Build fails even after adding cx-freeze to `buildInputs`
+    maintainers = [ lib.maintainers.nico202 ];
   };
 }

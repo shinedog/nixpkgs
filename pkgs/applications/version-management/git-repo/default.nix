@@ -1,24 +1,61 @@
-{ stdenv, fetchurl, python }:
+{ lib, stdenv, fetchFromGitHub, makeWrapper, nix-update-script
+, python3, git, gnupg, less, openssh
+}:
 
-stdenv.mkDerivation {
-  name = "git-repo-1.23";
-  src = fetchurl {
-    # I could not find a versioned url for the 1.21 version. In case
-    # the sha mismatches, check the homepage for new version and sha.
-    url = "http://commondatastorage.googleapis.com/git-repo-downloads/repo";
-    sha256 = "1i8xymxh630a7d5nkqi49nmlwk77dqn36vsygpyhri464qwz0iz1";
+stdenv.mkDerivation rec {
+  pname = "git-repo";
+  version = "2.45";
+
+  src = fetchFromGitHub {
+    owner = "android";
+    repo = "tools_repo";
+    rev = "v${version}";
+    hash = "sha256-f765TcOHL8wdPa9qSmGegofjCXx1tF/K5bRQnYQcYVc=";
   };
 
-  unpackPhase = "true";
-  installPhase = ''
-    mkdir -p $out/bin
-    sed -e 's,!/usr/bin/env python,!${python}/bin/python,' < $src > $out/bin/repo
-    chmod +x $out/bin/repo
+  # Fix 'NameError: name 'ssl' is not defined'
+  patches = [ ./import-ssl-module.patch ];
+
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ python3 ];
+
+  postPatch = ''
+    substituteInPlace repo --replace \
+      'urllib.request.urlopen(url)' \
+      'urllib.request.urlopen(url, context=ssl.create_default_context())'
   '';
 
-  meta = {
-    homepage = "http://source.android.com/source/downloading.html";
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/bin
+    cp repo $out/bin/repo
+
+    runHook postInstall
+  '';
+
+  # Important runtime dependencies
+  postFixup = ''
+    wrapProgram $out/bin/repo --prefix PATH ":" \
+      "${lib.makeBinPath [ git gnupg less openssh ]}"
+  '';
+
+  passthru = {
+    updateScript = nix-update-script { };
+  };
+
+  meta = with lib; {
     description = "Android's repo management tool";
-    platforms = stdenv.lib.platforms.unix;
+    longDescription = ''
+      Repo is a Python script based on Git that helps manage many Git
+      repositories, does the uploads to revision control systems, and automates
+      parts of the development workflow. Repo is not meant to replace Git, only
+      to make it easier to work with Git.
+    '';
+    homepage = "https://android.googlesource.com/tools/repo";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ otavio ];
+    platforms = platforms.unix;
+    mainProgram = "repo";
   };
 }

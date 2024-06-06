@@ -1,25 +1,32 @@
-{ stdenv, fetchsvn, pkgconfig, autoreconfHook, gnutls33, freetype
-, SDL, SDL_gfx, SDL_ttf, liblo, libxml2, alsaLib, libjack2, libvorbis
-, libSM, libsndfile, libogg
+{ lib, stdenv, fetchFromGitHub, pkg-config, autoreconfHook, gnutls, freetype, fluidsynth
+, SDL, SDL_gfx, SDL_ttf, liblo, libxml2, alsa-lib, libjack2, libvorbis
+, libSM, libsndfile, libogg, libtool
 }:
+let
+  makeSDLFlags = map (p: "-I${lib.getDev p}/include/SDL");
+in
 
 stdenv.mkDerivation rec {
-  name = "freewheeling-${version}";
-  version = "100";
+  pname = "freewheeling";
+  version = "0.6.6";
 
-  src = fetchsvn {
-    url = svn://svn.code.sf.net/p/freewheeling/code;
-    rev = version;
-    sha256 = "1m6z7p93xyha25qma9bazpzbp04pqdv5h3yrv6851775xsyvzksv";
+  src = fetchFromGitHub {
+    owner = "free-wheeling";
+    repo = "freewheeling";
+    rev = "v${version}";
+    sha256 = "1xff5whr02cixihgd257dc70hnyf22j3zamvhsvg4lp7zq9l2in4";
   };
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+  nativeBuildInputs = [ pkg-config autoreconfHook libtool ];
   buildInputs = [
-    gnutls33 freetype SDL SDL_gfx SDL_ttf
-    liblo libxml2 libjack2 alsaLib libvorbis libsndfile libogg libSM
+    freetype fluidsynth SDL SDL_gfx SDL_ttf
+    liblo libxml2 libjack2 alsa-lib libvorbis libsndfile libogg libSM
+    (gnutls.overrideAttrs (oldAttrs: {
+      configureFlags = oldAttrs.configureFlags ++ [ "--enable-openssl-compatibility" ];
+    }))
   ];
-
-  patches = [ ./am_path_sdl.patch ./xml.patch ];
+  env.NIX_CFLAGS_COMPILE = toString
+    (makeSDLFlags [ SDL SDL_ttf SDL_gfx ] ++ [ "-I${libxml2.dev}/include/libxml2" ]);
 
   hardeningDisable = [ "format" ];
 
@@ -33,13 +40,14 @@ stdenv.mkDerivation rec {
         improv. We leave mice and menus, and dive into our own process
         of making sound.
 
-        Freewheeling runs under Mac OS X and Linux, and is open source
+        Freewheeling runs under macOS and Linux, and is open source
         software, released under the GNU GPL license.
     '' ;
 
-    homepage = "http://freewheeling.sourceforge.net";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.sepi ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://freewheeling.sourceforge.net";
+    license = lib.licenses.gpl2;
+    maintainers = [ lib.maintainers.sepi ];
+    platforms = lib.platforms.linux;
+    mainProgram = "fweelin";
   };
 }

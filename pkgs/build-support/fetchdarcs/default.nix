@@ -1,13 +1,21 @@
-{stdenv, darcs, nix}: {url, rev ? null, context ? null, md5 ? "", sha256 ? ""}:
+{stdenvNoCC, darcs, cacert, lib}:
 
-stdenv.mkDerivation {
-  name = "fetchdarcs";
+lib.makeOverridable (
+{ url
+, rev ? null
+, context ? null
+, sha256 ? ""
+, name ? "fetchdarcs"
+}:
+
+stdenvNoCC.mkDerivation {
   builder = ./builder.sh;
-  buildInputs = [darcs];
+  nativeBuildInputs = [cacert darcs];
 
-  outputHashAlgo = if sha256 == "" then "md5" else "sha256";
+  outputHashAlgo = "sha256";
   outputHashMode = "recursive";
-  outputHash = if sha256 == "" then md5 else sha256;
-  
-  inherit url rev context;
+  outputHash = sha256;
+
+  inherit url rev context name;
 }
+)

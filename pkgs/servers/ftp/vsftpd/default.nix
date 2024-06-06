@@ -1,50 +1,48 @@
-{ stdenv, fetchurl, openssl, sslEnable ? false, libcap, pam }:
+{ lib, stdenv, fetchurl, libcap, libseccomp, openssl, pam, libxcrypt, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "vsftpd-3.0.3";
+  pname = "vsftpd";
+  version = "3.0.5";
 
   src = fetchurl {
-    url = "https://security.appspot.com/downloads/${name}.tar.gz";
-    sha256 = "1xsyjn68k3fgm2incpb3lz2nikffl9by2safp994i272wvv2nkcx";
+    url = "https://security.appspot.com/downloads/vsftpd-${version}.tar.gz";
+    sha256 = "sha256-JrYCrkVLC6bZnvRKCba54N+n9nIoEGc23x8njHC8kdM=";
   };
+
+  buildInputs = [ libcap openssl libseccomp pam libxcrypt ];
 
   patches = [ ./CVE-2015-1419.patch ];
 
-  preConfigure = stdenv.lib.optionalString sslEnable ''
-    echo "Will enable SSL"
+  postPatch = ''
     sed -i "/VSF_BUILD_SSL/s/^#undef/#define/" builddefs.h
+
+    substituteInPlace Makefile \
+      --replace -dirafter "" \
+      --replace /usr $out \
+      --replace /etc $out/etc \
+      --replace "-Werror" ""
+
+
+    mkdir -p $out/sbin $out/man/man{5,8}
   '';
 
-  # The gcc-wrappers use -idirafter for glibc, and vsftpd also, and
-  # their dummyinc come before those of glibc, then the build works bad.
-  prePatch = ''
-    sed -i -e 's/-idirafter.*//' Makefile
-  '';
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+  ];
 
-  preBuild =
-    let
-      sslLibs = if sslEnable then "-lcrypt -lssl -lcrypto" else "";
-    in ''
-      makeFlagsArray=( "LIBS=${sslLibs} -lpam -lcap -fstack-protector" )
-    '';
+  NIX_LDFLAGS = "-lcrypt -lssl -lcrypto -lpam -lcap -lseccomp";
 
-  # It won't link without this flag, used in CFLAGS
+  enableParallelBuilding = true;
 
-  buildInputs = [ openssl libcap pam ];
+  passthru = {
+    tests = { inherit (nixosTests) vsftpd; };
+  };
 
-  installPhase = ''
-    mkdir -pv $out/sbin
-    install -v -m 755 vsftpd $out/sbin/vsftpd
-
-    mkdir -pv $out/share/man/man{5,8}
-    install -v -m 644 vsftpd.8 $out/share/man/man8/vsftpd.8
-    install -v -m 644 vsftpd.conf.5 $out/share/man/man5/vsftpd.conf.5
-
-    mkdir -pv $out/etc/xinetd.d
-    install -v -m 644 xinetd.d/vsftpd $out/etc/xinetd.d/vsftpd
-  '';
-
-  meta = {
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    description = "A very secure FTP daemon";
+    mainProgram = "vsftpd";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = platforms.linux;
   };
 }

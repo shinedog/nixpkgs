@@ -1,24 +1,63 @@
-{ stdenv, fetchurl, cmake, gengetopt, libX11, libXext, cppcheck}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, pkg-config
+, glew
+, glm
+, libGLU
+, libGL
+, libX11
+, libXext
+, libXrender
+, icu
+, libSM
+}:
 
 stdenv.mkDerivation rec {
-  name = "slop-${version}";
-  version = "4.1.16";
+  pname = "slop";
+  version = "7.6";
 
-  src = fetchurl {
-    url = "https://github.com/naelstrof/slop/archive/v${version}.tar.gz";
-    sha256 = "0679ax0jr97x91hmp9qrspdka8cvl3xa77z92k4qgicbnb6hr7y2";
+  src = fetchFromGitHub {
+    owner = "naelstrof";
+    repo = "slop";
+    rev = "v${version}";
+    sha256 = "sha256-LdBQxw8K8WWSfm4E2QpK4GYTuYvI+FX5gLOouVFSU/U=";
   };
 
-  buildInputs = [ cmake gengetopt libX11 libXext ]
-                ++ stdenv.lib.optional doCheck cppcheck;
+  patches = [
+    (fetchpatch {
+      # From Upstream PR#135: https://github.com/naelstrof/slop/pull/135
+      name = "Fix-linking-of-GLEW-library.patch";
+      url = "https://github.com/naelstrof/slop/commit/811b7e44648b9dd6c1da1554e70298cf4157e5fe.patch";
+      sha256 = "sha256-LNUrAeVZUJFNOt1csOaIid7gLBdtqRxp8AcC7f3cnIQ=";
+    })
+  ];
 
-  doCheck = false;
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/naelstrof/slop;
+  buildInputs = [
+    glew
+    glm
+    libGLU
+    libGL
+    libX11
+    libXext
+    libXrender
+    icu
+    libSM
+  ];
+
+  meta = with lib; {
+    inherit (src.meta) homepage;
     description = "Queries a selection from the user and prints to stdout";
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = with maintainers; [ mbakke ];
+    platforms = lib.platforms.linux;
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ ];
+    mainProgram = "slop";
   };
 }

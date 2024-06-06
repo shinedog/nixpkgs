@@ -1,33 +1,40 @@
-{ stdenv, fetchurl, desktop_file_utils, file, python3Packages }:
+{ lib, fetchurl, desktop-file-utils, file, python3Packages }:
 
-python3Packages.buildPythonApplication rec {
-  name = "mimeo-${version}";
-  version = "2016.11";
+let version = "2023";
+in python3Packages.buildPythonApplication {
+  pname = "mimeo";
+  inherit version;
 
   src = fetchurl {
-    url = "http://xyne.archlinux.ca/projects/mimeo/src/${name}.tar.xz";
-    sha256 = "1yygdxqnkh506fknxsp9xa3rnxn0901dzqc7c7qjjj80lk6xnfxb";
+    url = "https://xyne.dev/projects/mimeo/src/mimeo-${version}.tar.xz";
+    hash = "sha256-CahvSypwR1aHVDHTdtty1ZfaKBWPolxc73uZ5OyeqZA=";
   };
 
-  buildInputs = [ file desktop_file_utils ];
+  buildInputs = [ file desktop-file-utils ];
 
   propagatedBuildInputs = [ python3Packages.pyxdg ];
 
   preConfigure = ''
     substituteInPlace Mimeo.py \
       --replace "EXE_UPDATE_DESKTOP_DATABASE = 'update-desktop-database'" \
-                "EXE_UPDATE_DESKTOP_DATABASE = '${desktop_file_utils}/bin/update-desktop-database'" \
+                "EXE_UPDATE_DESKTOP_DATABASE = '${desktop-file-utils}/bin/update-desktop-database'" \
       --replace "EXE_FILE = 'file'" \
                 "EXE_FILE = '${file}/bin/file'"
   '';
 
   installPhase = "install -Dm755 Mimeo.py $out/bin/mimeo";
 
-  meta = with stdenv.lib; {
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/mimeo --help > /dev/null
+  '';
+
+  meta = with lib; {
     description = "Open files by MIME-type or file name using regular expressions";
-    homepage = http://xyne.archlinux.ca/projects/mimeo/;
-    license = [ licenses.gpl2 ];
+    homepage = "https://xyne.dev/projects/mimeo/";
+    license = [ licenses.gpl2Only ];
     maintainers = [ maintainers.rycee ];
     platforms = platforms.unix;
+    mainProgram = "mimeo";
   };
 }

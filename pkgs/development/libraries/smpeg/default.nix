@@ -1,22 +1,46 @@
-{ stdenv, fetchsvn, SDL, autoconf, automake, libtool, gtk2, m4, pkgconfig, mesa, makeWrapper }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, SDL, autoconf, automake, libtool, gtk2, m4, pkg-config, libGLU, libGL, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "smpeg-svn${version}";
-  version = "390";
+  pname = "smpeg";
+  version = "0.4.5";
 
-  src = fetchsvn {
-    url = svn://svn.icculus.org/smpeg/trunk;
-    rev = version;
-    sha256 = "0ynwn7ih5l2b1kpzpibns9bb9wzfjak7mgrb1ji0dkn2q5pv6lr0";
+  src = fetchFromGitHub {
+    owner = "icculus";
+    repo = "smpeg";
+    rev = "release_${builtins.replaceStrings ["."] ["_"] version}";
+    sha256 = "sha256-nq/i7cFGpJXIuTwN/ScLMX7FN8NMdgdsRM9xOD3uycs=";
   };
+
+  patches = [
+    ./format.patch
+    ./gcc6.patch
+    ./libx11.patch
+    ./gtk.patch
+    # These patches remove use of the `register` storage class specifier,
+    # allowing smpeg to build with clang 16, which defaults to C++17.
+    (fetchpatch {
+      url = "https://github.com/icculus/smpeg/commit/cc114ba0dd8644c0d6205bbce2384781daeff44b.patch";
+      hash = "sha256-GxSD82j05pw0r2SxmPYAe/BXX4iUc+iHWhB9Ap4GzfA=";
+    })
+    (fetchpatch {
+      url = "https://github.com/icculus/smpeg/commit/b369feca5bf99d6cff50d8eb316395ef48acf24f.patch";
+      hash = "sha256-U+a6dbc5cm249KlUcf4vi79yUiT4hgEvMv522K4PqUc=";
+    })
+  ];
+
+  postPatch = ''
+    substituteInPlace video/gdith.cpp \
+      --replace 'register int' 'int' \
+      --replace 'register Uint16' 'Uint16'
+  '';
 
   enableParallelBuilding = true;
 
-  hardeningDisable = [ "format" ];
+  nativeBuildInputs = [ autoconf automake libtool m4 pkg-config makeWrapper ];
 
-  buildInputs = [ SDL gtk2 mesa ];
+  buildInputs = [ SDL ] ++ lib.optionals (!stdenv.isDarwin) [ gtk2 libGLU libGL ];
 
-  nativeBuildInputs = [ autoconf automake libtool m4 pkgconfig makeWrapper ];
+  outputs = [ "out" "dev" ];
 
   preConfigure = ''
     touch NEWS AUTHORS ChangeLog
@@ -29,17 +53,21 @@ stdenv.mkDerivation rec {
     -e 's,"SDL_audio.h",<SDL/SDL_audio.h>,' \
     -e 's,"SDL_thread.h",<SDL/SDL_thread.h>,' \
     -e 's,"SDL_types.h",<SDL/SDL_types.h>,' \
-      $out/include/smpeg/*.h
+      $dev/include/smpeg/*.h
 
-    wrapProgram $out/bin/smpeg-config \
-      --prefix PATH ":" "${pkgconfig}/bin" \
-      --prefix PKG_CONFIG_PATH ":" "${SDL.dev}/lib/pkgconfig"
+    moveToOutput bin/smpeg-config "$dev"
+
+    wrapProgram $dev/bin/smpeg-config \
+      --prefix PATH ":" "${pkg-config}/bin" \
+      --prefix PKG_CONFIG_PATH ":" "${lib.getDev SDL}/lib/pkgconfig"
   '';
 
+  NIX_LDFLAGS = "-lX11";
+
   meta = {
-    homepage = http://icculus.org/smpeg/;
+    homepage = "http://icculus.org/smpeg/";
     description = "MPEG decoding library";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
   };
 }

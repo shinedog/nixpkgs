@@ -1,23 +1,23 @@
 { stdenv, fetchurl, lib }:
 
 stdenv.mkDerivation rec {
-  name = "kmod-debian-aliases-${version}.conf";
-  version = "22-1.1";
+  pname = "kmod-debian-aliases.conf";
+  version = "30+20230601-2";
 
   src = fetchurl {
-    url = "mirror://debian/pool/main/k/kmod/kmod_${version}.debian.tar.xz";
-    sha256 = "0daap2n4bvjqcnksaayy6csmdb1px4r02w3xp36bcp6w3lbnqamh";
+    url = "https://snapshot.debian.org/archive/debian/20231117T085632Z/pool/main/k/kmod/kmod_${version}.debian.tar.xz";
+    hash = "sha256-xJMGKht8hu0aQjN9TER87Rv5EYkVMeDfX/jJ8+UjAqM=";
   };
 
   installPhase = ''
-    patch -i patches/aliases_conf
-    cp aliases.conf $out
+    cp extra/aliases.conf $out
   '';
 
-  meta = {
-    homepage = https://packages.debian.org/source/sid/kmod;
+  meta = with lib; {
+    homepage = "https://packages.debian.org/source/sid/kmod";
     description = "Linux configuration file for modprobe";
-    maintainers = with lib.maintainers; [ mathnerd314 ];
-    platforms = with lib.platforms; linux;
+    maintainers = with maintainers; [ mathnerd314 ];
+    platforms = with platforms; linux;
+    license = with licenses; [ gpl2Plus lgpl21Plus ];
   };
 }

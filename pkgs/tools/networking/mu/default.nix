@@ -1,42 +1,84 @@
-{ fetchurl, stdenv, sqlite, pkgconfig, autoreconfHook
-, xapian, glib, gmime, texinfo , emacs, guile
-, gtk3, webkitgtk24x, libsoup, icu }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, glibcLocales
+, meson
+, ninja
+, pkg-config
+, python3
+, cld2
+, coreutils
+, emacs
+, glib
+, gmime3
+, texinfo
+, xapian
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.9.16";
-  name = "mu-${version}";
+  pname = "mu";
+  version = "1.12.5";
 
-  src = fetchurl {
-    url = "https://github.com/djcb/mu/archive/v${version}.tar.gz";
-    sha256 = "0p7hqri1r1x6750x138cc29mh81kdav2dcim26y58s8an206h25g";
+  outputs = [ "out" "mu4e" ];
+
+  src = fetchFromGitHub {
+    owner = "djcb";
+    repo = "mu";
+    rev = "v${version}";
+    hash = "sha256-dQeXL+CcysmlV6VYSuZtWGSgIhoqP6Y20Qora4l0iP8=";
   };
 
-  buildInputs = [
-    sqlite pkgconfig xapian glib gmime texinfo emacs guile libsoup icu
-    autoreconfHook
-    gtk3 webkitgtk24x ];
-
-  preBuild = ''
-    # Fix mu4e-builddir (set it to $out)
-    substituteInPlace mu4e/mu4e-meta.el.in \
-      --replace "@abs_top_builddir@" "$out"
-
-    # We install msg2pdf to bin/msg2pdf, fix its location in elisp
-    substituteInPlace mu4e/mu4e-actions.el \
-      --replace "/toys/msg2pdf/msg2pdf" "/bin/msg2pdf"
+  postPatch = ''
+    substituteInPlace lib/utils/mu-utils-file.cc \
+      --replace-fail "/bin/rm" "${coreutils}/bin/rm"
+    substituteInPlace lib/tests/bench-indexer.cc \
+      --replace-fail "/bin/rm" "${coreutils}/bin/rm"
+    substituteInPlace lib/mu-maildir.cc \
+      --replace-fail "/bin/mv" "${coreutils}/bin/mv"
+    patchShebangs build-aux/date.py
   '';
 
-  # Install mug and msg2pdf
   postInstall = ''
-    cp -v toys/msg2pdf/msg2pdf $out/bin/
-    cp -v toys/mug/mug $out/bin/
+    rm --verbose $mu4e/share/emacs/site-lisp/mu4e/*.elc
   '';
 
-  meta = with stdenv.lib; {
-    description = "A collection of utilties for indexing and searching Maildirs";
+  # move only the mu4e info manual
+  # this has to be after preFixup otherwise the info manual may be moved back by _multioutDocs()
+  # we manually move the mu4e info manual instead of setting
+  # outputInfo to mu4e because we do not want to move the mu-guile
+  # info manual (if it exists)
+  postFixup = ''
+    moveToOutput share/info/mu4e.info.gz $mu4e
+    install-info $mu4e/share/info/mu4e.info.gz $mu4e/share/info/dir
+    if [[ -a ''${!outputInfo}/share/info/mu-guile.info.gz ]]; then
+      install-info --delete $mu4e/share/info/mu4e.info.gz ''${!outputInfo}/share/info/dir
+    else
+      rm --verbose --recursive ''${!outputInfo}/share/info
+    fi
+  '';
+
+  buildInputs = [ cld2 emacs glib gmime3 texinfo xapian ];
+
+  mesonFlags = [
+    "-Dguile=disabled"
+    "-Dreadline=disabled"
+    "-Dlispdir=${placeholder "mu4e"}/share/emacs/site-lisp"
+  ];
+
+  nativeBuildInputs = [ pkg-config meson ninja python3 glibcLocales ];
+
+  doCheck = true;
+
+  # Tests need a UTF-8 aware locale configured
+  env.LANG = "C.UTF-8";
+
+  meta = with lib; {
+    description = "A collection of utilities for indexing and searching Maildirs";
     license = licenses.gpl3Plus;
-    homepage = "http://www.djcbsoftware.nl/code/mu/";
-    platforms = platforms.mesaPlatforms;
-    maintainers = with maintainers; [ antono the-kenny ];
+    homepage = "https://www.djcbsoftware.nl/code/mu/";
+    changelog = "https://github.com/djcb/mu/releases/tag/v${version}";
+    maintainers = with maintainers; [ antono chvp peterhoeg ];
+    mainProgram = "mu";
+    platforms = platforms.unix;
   };
 }

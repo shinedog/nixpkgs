@@ -1,11 +1,48 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild }:
+{ lib, stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild
+, buildDunePackage
+}:
+
 let
   pname = "cppo";
-  version = "1.3.2";
-  webpage = "http://mjambon.com/${pname}.html";
+
+  meta = with lib; {
+    description = "The C preprocessor for OCaml";
+    mainProgram = "cppo";
+    longDescription = ''
+      Cppo is an equivalent of the C preprocessor targeted at the OCaml language and its variants.
+    '';
+    homepage = "https://github.com/ocaml-community/${pname}";
+    maintainers = [ maintainers.vbgl ];
+    license = licenses.bsd3;
+  };
+
 in
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "3.12";
-stdenv.mkDerivation rec {
+
+if lib.versionAtLeast ocaml.version "4.02" then
+
+buildDunePackage rec {
+  inherit pname;
+  version = "1.6.9";
+
+  duneVersion = "3";
+
+  src = fetchFromGitHub {
+    owner = "ocaml-community";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-NdN2QnVRfRq9hEcSAnO2Wha7icDlf2Zg4JQqoEWmErE=";
+  };
+
+  doCheck = true;
+
+  inherit meta;
+}
+
+else
+
+let version = "1.5.0"; in
+
+stdenv.mkDerivation {
 
   name = "${pname}-${version}";
 
@@ -13,26 +50,21 @@ stdenv.mkDerivation rec {
     owner = "mjambon";
     repo = pname;
     rev = "v${version}";
-    sha256 = "06j0zr78f04ahxi2459vjn61z25hkvs4dfj76200ydg3g6ifb3k1";
+    sha256 = "1xqldjz9risndnabvadw41fdbi5sa2hl4fnqls7j9xfbby1izbg8";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  strictDeps = true;
+
+  nativeBuildInputs = [ ocaml findlib ocamlbuild ];
+
+  inherit meta;
 
   createFindlibDestdir = true;
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [ "PREFIX=$(out)" ];
 
   preBuild = ''
-    mkdir $out/bin
+    mkdir -p $out/bin
   '';
 
-  meta = with stdenv.lib; {
-    description = "The C preprocessor for OCaml";
-    longDescription = ''
-      Cppo is an equivalent of the C preprocessor targeted at the OCaml language and its variants.
-    '';
-    homepage = "${webpage}";
-    maintainers = [ maintainers.vbgl ];
-    license = licenses.bsd3;
-  };
 }

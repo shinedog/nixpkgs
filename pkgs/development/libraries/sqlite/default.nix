@@ -1,22 +1,42 @@
-{ lib, stdenv, fetchurl, interactive ? false, readline ? null, ncurses ? null }:
+{ lib, stdenv, fetchurl, zlib, readline, ncurses
 
-assert interactive -> readline != null && ncurses != null;
+# for tests
+, python3Packages, sqldiff, sqlite-analyzer, tracker
 
-stdenv.mkDerivation {
-  name = "sqlite-3.15.0";
+# uses readline & ncurses for a better interactive experience if set to true
+, interactive ? false
 
+, gitUpdater
+}:
+
+let
+  archiveVersion = import ./archive-version.nix lib;
+in
+
+stdenv.mkDerivation rec {
+  pname = "sqlite${lib.optionalString interactive "-interactive"}";
+  version = "3.45.3";
+
+  # nixpkgs-update: no auto update
+  # NB! Make sure to update ./tools.nix src (in the same directory).
   src = fetchurl {
-    url = "http://sqlite.org/2016/sqlite-autoconf-3150000.tar.gz";
-    sha256 = "09zdipkrvavlbw9dj4kwnii0z1b20rljn9fmfxz6scx0njljs5kp";
+    url = "https://sqlite.org/2024/sqlite-autoconf-${archiveVersion version}.tar.gz";
+    hash = "sha256-soCcpTEkwZxg9Cv2J3NurgEa/cwgW7SCcKXumjgZFTE=";
   };
 
   outputs = [ "bin" "dev" "out" ];
+  separateDebugInfo = stdenv.isLinux;
 
-  buildInputs = lib.optionals interactive [ readline ncurses ];
+  buildInputs = [ zlib ] ++ lib.optionals interactive [ readline ncurses ];
+
+  # required for aarch64 but applied for all arches for simplicity
+  preConfigure = ''
+    patchShebangs configure
+  '';
 
   configureFlags = [ "--enable-threadsafe" ] ++ lib.optional interactive "--enable-readline";
 
-  NIX_CFLAGS_COMPILE = [
+  env.NIX_CFLAGS_COMPILE = toString ([
     "-DSQLITE_ENABLE_COLUMN_METADATA"
     "-DSQLITE_ENABLE_DBSTAT_VTAB"
     "-DSQLITE_ENABLE_JSON1"
@@ -30,7 +50,9 @@ stdenv.mkDerivation {
     "-DSQLITE_ENABLE_UNLOCK_NOTIFY"
     "-DSQLITE_SOUNDEX"
     "-DSQLITE_SECURE_DELETE"
-  ];
+    "-DSQLITE_MAX_VARIABLE_NUMBER=250000"
+    "-DSQLITE_MAX_EXPR_DEPTH=10000"
+  ]);
 
   # Test for features which may not be available at compile time
   preBuild = ''
@@ -55,10 +77,36 @@ stdenv.mkDerivation {
     echo ""
   '';
 
-  meta = {
-    homepage = http://www.sqlite.org/;
+  postInstall = ''
+    # Do not contaminate dependent libtool-based projects with sqlite dependencies.
+    sed -i $out/lib/libsqlite3.la -e "s/dependency_libs=.*/dependency_libs='''/"
+  '';
+
+  doCheck = false; # fails to link against tcl
+
+  passthru = {
+    tests = {
+      inherit (python3Packages) sqlalchemy;
+      inherit sqldiff sqlite-analyzer tracker;
+    };
+
+    updateScript = gitUpdater {
+      # No nicer place to look for patest version.
+      url = "https://github.com/sqlite/sqlite.git";
+      # Expect tags like "version-3.43.0".
+      rev-prefix = "version-";
+    };
+  };
+
+  meta = with lib; {
+    changelog = "https://www.sqlite.org/releaselog/${lib.replaceStrings [ "." ] [ "_" ] version}.html";
     description = "A self-contained, serverless, zero-configuration, transactional SQL database engine";
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = with stdenv.lib.maintainers; [ eelco np ];
+    downloadPage = "https://sqlite.org/download.html";
+    homepage = "https://www.sqlite.org/";
+    license = licenses.publicDomain;
+    mainProgram = "sqlite3";
+    maintainers = with maintainers; [ eelco np ];
+    platforms = platforms.unix ++ platforms.windows;
+    pkgConfigModules = [ "sqlite3" ];
   };
 }

@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, unzip, love, lua, makeWrapper, makeDesktopItem }:
+{ lib, stdenv, fetchurl, love, lua, makeWrapper, makeDesktopItem }:
 
 let
   pname = "mrrescue";
@@ -11,17 +11,17 @@ let
 
   desktopItem = makeDesktopItem {
     name = "mrrescue";
-    exec = "${pname}";
-    icon = "${icon}";
-    comment = "Arcade-style fire fighting game"; 
+    exec = pname;
+    icon = icon;
+    comment = "Arcade-style fire fighting game";
     desktopName = "Mr. Rescue";
     genericName = "mrrescue";
-    categories = "Game;";
+    categories = [ "Game" ];
   };
 
-in 
+in
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   name = "${pname}-${version}";
 
   src = fetchurl {
@@ -29,17 +29,16 @@ stdenv.mkDerivation rec {
     sha256 = "0kzahxrgpb4vsk9yavy7f8nc34d62d1jqjrpsxslmy9ywax4yfpi";
   };
 
-  nativeBuildInputs = [ lua love ];
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ lua love makeWrapper ];
 
-  phases = "installPhase";
+  dontUnpack = true;
 
   installPhase =
   ''
     mkdir -p $out/bin
     mkdir -p $out/share/games/lovegames
 
-    cp -v $src $out/share/${pname}.love
+    cp -v $src $out/share/games/lovegames/${pname}.love
 
     makeWrapper ${love}/bin/love $out/bin/${pname} --add-flags $out/share/games/lovegames/${pname}.love
 
@@ -48,12 +47,13 @@ stdenv.mkDerivation rec {
     ln -s ${desktopItem}/share/applications/* $out/share/applications/
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Arcade-style fire fighting game";
+    mainProgram = "mrrescue";
     maintainers = with maintainers; [ ];
     platforms = platforms.linux;
     license = licenses.zlib;
-    downloadPage = http://tangramgames.dk/games/mrrescue;
+    downloadPage = "http://tangramgames.dk/games/mrrescue";
   };
 
 }

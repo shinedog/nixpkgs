@@ -1,15 +1,26 @@
-{ stdenv, lib, bundlerEnv, ruby_2_2, curl }:
+{ lib
+, bundlerApp
+, bundlerUpdateScript
+}:
 
-bundlerEnv rec {
+bundlerApp {
   pname = "asciidoctor";
-  ruby = ruby_2_2;
   gemdir = ./.;
+
+  exes = [
+    "asciidoctor"
+    "asciidoctor-pdf"
+  ];
+
+  passthru = {
+    updateScript = bundlerUpdateScript "asciidoctor";
+  };
 
   meta = with lib; {
     description = "A faster Asciidoc processor written in Ruby";
-    homepage = http://asciidoctor.org/;
+    homepage = "https://asciidoctor.org/";
     license = licenses.mit;
-    maintainers = with maintainers; [ gpyh ];
+    maintainers = with maintainers; [ gpyh nicknovitski ];
     platforms = platforms.unix;
   };
 }

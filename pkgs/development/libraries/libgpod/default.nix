@@ -1,38 +1,79 @@
-{stdenv, lib, fetchurl, gettext, perl, perlXMLParser, intltool, pkgconfig, glib,
-  libxml2, sqlite, libusb1, zlib, sg3_utils, gdk_pixbuf, taglib,
-  libimobiledevice, pythonPackages, mutagen,
-  monoSupport ? true, mono, gtk-sharp-2_0
+{ stdenv
+, lib
+, fetchurl
+, fetchpatch
+, perlPackages
+, intltool
+, autoreconfHook
+, pkg-config
+, glib
+, libxml2
+, sqlite
+, zlib
+, sg3_utils
+, gdk-pixbuf
+, taglib
+, libimobiledevice
+, monoSupport ? false
+, mono
+, gtk-sharp-2_0
 }:
 
-let
-  inherit (pythonPackages) python pygobject2;
-in stdenv.mkDerivation rec {
-  name = "libgpod-0.8.3";
+stdenv.mkDerivation rec {
+  pname = "libgpod";
+  version = "0.8.3";
+
   src = fetchurl {
-    url = "mirror://sourceforge/gtkpod/${name}.tar.bz2";
-    sha256 = "0pcmgv1ra0ymv73mlj4qxzgyir026z9jpl5s5bkg35afs1cpk2k3";
+    url = "mirror://sourceforge/gtkpod/libgpod-${version}.tar.bz2";
+    hash = "sha256-Y4p5WdBOlfHmKrrQK9M3AuTo3++YSFrH2dUDlcN+lV0=";
   };
 
-  preConfigure = "configureFlagsArray=( --with-udev-dir=$out/lib/udev )";
+  outputs = [ "out" "dev" ];
+
+  patches = [
+    (fetchpatch {
+      name = "libplist-2.3.0-compatibility.patch";
+      url = "https://sourceforge.net/p/gtkpod/patches/48/attachment/libplist-2.3.0-compatibility.patch";
+      hash = "sha256-aVkuYE1N/jdEhVhiXEVhApvOC+8csIMMpP20rAJwEVQ=";
+    })
+  ];
+
+  postPatch = ''
+    # support libplist 2.2
+    substituteInPlace configure.ac --replace 'libplist >= 1.0' 'libplist-2.0 >= 2.2'
+  '';
 
   configureFlags = [
     "--without-hal"
     "--enable-udev"
+    "--with-udev-dir=${placeholder "out"}/lib/udev"
   ] ++ lib.optionals monoSupport [ "--with-mono" ];
 
-  dontStrip = true;
+  dontStrip = monoSupport;
 
-  propagatedBuildInputs = [ glib libxml2 sqlite zlib sg3_utils
-    gdk_pixbuf taglib libimobiledevice python pygobject2 mutagen ];
+  nativeBuildInputs = [ autoreconfHook intltool pkg-config ]
+    ++ (with perlPackages; [ perl XMLParser ])
+    ++ lib.optional monoSupport mono;
 
-  nativeBuildInputs = [ gettext perlXMLParser intltool pkgconfig perl
-    libimobiledevice.swig ] ++ lib.optionals monoSupport [ mono gtk-sharp-2_0 ];
+  buildInputs = [
+    libxml2
+    sg3_utils
+    sqlite
+    taglib
+  ] ++ lib.optional monoSupport gtk-sharp-2_0;
 
-  meta = {
-    homepage = http://gtkpod.sourceforge.net/;
+  propagatedBuildInputs = [
+    gdk-pixbuf
+    glib
+    libimobiledevice
+  ];
+
+  meta = with lib; {
+    homepage = "https://sourceforge.net/projects/gtkpod/";
     description = "Library used by gtkpod to access the contents of an ipod";
-    license = "LGPL";
-    platforms = stdenv.lib.platforms.gnu;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    mainProgram = "ipod-read-sysinfo-extended";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
+    maintainers = [ ];
   };
 }

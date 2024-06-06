@@ -4,15 +4,17 @@ with lib;
 
 let
 
-  inherit (pkgs) cups cups-pk-helper cups-filters gutenprint;
+  inherit (pkgs) cups-pk-helper cups-filters xdg-utils;
 
   cfg = config.services.printing;
+  cups = cfg.package;
 
   avahiEnabled = config.services.avahi.enable;
   polkitEnabled = config.security.polkit.enable;
 
-  additionalBackends = pkgs.runCommand "additional-cups-backends" { }
-    ''
+  additionalBackends = pkgs.runCommand "additional-cups-backends" {
+      preferLocalBuild = true;
+    } ''
       mkdir -p $out
       if [ ! -e ${cups.out}/lib/cups/backend/smb ]; then
         mkdir -p $out/lib/cups/backend
@@ -30,14 +32,13 @@ let
   # part of CUPS itself, e.g. the SMB backend is part of Samba.  Since
   # we can't update ${cups.out}/lib/cups itself, we create a symlink tree
   # here and add the additional programs.  The ServerBin directive in
-  # cupsd.conf tells cupsd to use this tree.
+  # cups-files.conf tells cupsd to use this tree.
   bindir = pkgs.buildEnv {
     name = "cups-progs";
     paths =
       [ cups.out additionalBackends cups-filters pkgs.ghostscript ]
-      ++ optional cfg.gutenprint gutenprint
       ++ cfg.drivers;
-    pathsToLink = [ "/lib/cups" "/share/cups" "/bin" ];
+    pathsToLink = [ "/lib" "/share/cups" "/bin" ];
     postBuild = cfg.bindirCmds;
     ignoreCollisions = true;
   };
@@ -52,12 +53,15 @@ let
 
     ServerBin ${bindir}/lib/cups
     DataDir ${bindir}/share/cups
+    DocumentRoot ${cups.out}/share/doc/cups
 
     AccessLog syslog
     ErrorLog syslog
     PageLog syslog
 
     TempDir ${cfg.tempDir}
+
+    SetEnv PATH /var/lib/cups/path/lib/cups/filter:/var/lib/cups/path/bin
 
     # User and group used to run external programs, including
     # those that actually send the job to the printer.  Note that
@@ -73,15 +77,15 @@ let
     ${concatMapStrings (addr: ''
       Listen ${addr}
     '') cfg.listenAddresses}
-    Listen /var/run/cups/cups.sock
-
-    SetEnv PATH ${bindir}/lib/cups/filter:${bindir}/bin
+    Listen /run/cups/cups.sock
 
     DefaultShared ${if cfg.defaultShared then "Yes" else "No"}
 
     Browsing ${if cfg.browsing then "Yes" else "No"}
 
     WebInterface ${if cfg.webInterface then "Yes" else "No"}
+
+    LogLevel ${cfg.logLevel}
 
     ${cfg.extraConf}
   '';
@@ -96,15 +100,33 @@ let
       (writeConf "client.conf" cfg.clientConf)
       (writeConf "snmp.conf" cfg.snmpConf)
     ] ++ optional avahiEnabled browsedFile
-      ++ optional cfg.gutenprint gutenprint
       ++ cfg.drivers;
     pathsToLink = [ "/etc/cups" ];
     ignoreCollisions = true;
   };
 
+  filterGutenprint = filter (pkg: pkg.meta.isGutenprint or false == true);
+  containsGutenprint = pkgs: length (filterGutenprint pkgs) > 0;
+  getGutenprint = pkgs: head (filterGutenprint pkgs);
+
+  parsePorts = addresses: let
+    splitAddress = addr: strings.splitString ":" addr;
+    extractPort = addr: builtins.foldl' (a: b: b) "" (splitAddress addr);
+  in
+    builtins.map (address: strings.toInt (extractPort address)) addresses;
+
 in
 
 {
+
+  imports = [
+    (mkChangedOptionModule [ "services" "printing" "gutenprint" ] [ "services" "printing" "drivers" ]
+      (config:
+        let enabled = getAttrFromPath [ "services" "printing" "gutenprint" ] config;
+        in if enabled then [ pkgs.gutenprint ] else [ ]))
+    (mkRemovedOptionModule [ "services" "printing" "cupsFilesConf" ] "")
+    (mkRemovedOptionModule [ "services" "printing" "cupsdConf" ] "")
+  ];
 
   ###### interface
 
@@ -119,12 +141,52 @@ in
         '';
       };
 
+      package = lib.mkPackageOption pkgs "cups" {};
+
+      stateless = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          If set, all state directories relating to CUPS will be removed on
+          startup of the service.
+        '';
+      };
+
+      startWhenNeeded = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          If set, CUPS is socket-activated; that is,
+          instead of having it permanently running as a daemon,
+          systemd will start it on the first incoming connection.
+        '';
+      };
+
       listenAddresses = mkOption {
         type = types.listOf types.str;
-        default = [ "127.0.0.1:631" ];
+        default = [ "localhost:631" ];
         example = [ "*:631" ];
         description = ''
           A list of addresses and ports on which to listen.
+        '';
+      };
+
+      allowFrom = mkOption {
+        type = types.listOf types.str;
+        default = [ "localhost" ];
+        example = [ "all" ];
+        apply = concatMapStringsSep "\n" (x: "Allow ${x}");
+        description = ''
+          From which hosts to allow unconditional access.
+        '';
+      };
+
+      openFirewall = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether to open the firewall for TCP/UDP ports specified in
+          listenAdrresses option.
         '';
       };
 
@@ -162,12 +224,21 @@ in
         '';
       };
 
+      logLevel = mkOption {
+        type = types.str;
+        default = "info";
+        example = "debug";
+        description = ''
+          Specifies the cupsd logging verbosity.
+        '';
+      };
+
       extraFilesConf = mkOption {
         type = types.lines;
         default = "";
         description = ''
           Extra contents of the configuration file of the CUPS daemon
-          (<filename>cups-files.conf</filename>).
+          ({file}`cups-files.conf`).
         '';
       };
 
@@ -177,11 +248,11 @@ in
         example =
           ''
             BrowsePoll cups.example.com
-            LogLevel debug
+            MaxCopies 42
           '';
         description = ''
           Extra contents of the configuration file of the CUPS daemon
-          (<filename>cupsd.conf</filename>).
+          ({file}`cupsd.conf`).
         '';
       };
 
@@ -195,7 +266,7 @@ in
           '';
         description = ''
           The contents of the client configuration.
-          (<filename>client.conf</filename>)
+          ({file}`client.conf`)
         '';
       };
 
@@ -208,7 +279,7 @@ in
           '';
         description = ''
           The contents of the configuration. file of the CUPS Browsed daemon
-          (<filename>cups-browsed.conf</filename>)
+          ({file}`cups-browsed.conf`)
         '';
       };
 
@@ -218,28 +289,22 @@ in
           Address @LOCAL
         '';
         description = ''
-          The contents of <filename>/etc/cups/snmp.conf</filename>. See "man
+          The contents of {file}`/etc/cups/snmp.conf`. See "man
           cups-snmp.conf" for a complete description.
-        '';
-      };
-
-      gutenprint = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Whether to enable Gutenprint drivers for CUPS. This includes auto-updating
-          Gutenprint PPD files.
         '';
       };
 
       drivers = mkOption {
         type = types.listOf types.path;
         default = [];
-        example = literalExample "[ pkgs.splix ]";
+        example = literalExpression "with pkgs; [ gutenprint hplip splix ]";
         description = ''
-          CUPS drivers to use. Drivers provided by CUPS, cups-filters, Ghostscript
-          and Samba are added unconditionally. For adding Gutenprint, see
-          <literal>gutenprint</literal>.
+          CUPS drivers to use. Drivers provided by CUPS, cups-filters,
+          Ghostscript and Samba are added unconditionally. If this list contains
+          Gutenprint (i.e. a derivation with
+          `meta.isGutenprint = true`) the PPD files in
+          {file}`/var/lib/cups/ppd` will be updated automatically
+          to avoid errors due to incompatible versions.
         '';
       };
 
@@ -260,39 +325,66 @@ in
 
   config = mkIf config.services.printing.enable {
 
-    users.extraUsers = singleton
-      { name = "cups";
-        uid = config.ids.uids.cups;
+    users.users.cups =
+      { uid = config.ids.uids.cups;
         group = "lp";
         description = "CUPS printing services";
       };
 
-    environment.systemPackages = [ cups.out ] ++ optional polkitEnabled cups-pk-helper;
-    environment.etc."cups".source = "/var/lib/cups";
+    # We need xdg-open (part of xdg-utils) for the desktop-file to proper open the users default-browser when opening "Manage Printing"
+    # https://github.com/NixOS/nixpkgs/pull/237994#issuecomment-1597510969
+    environment.systemPackages = [ cups.out xdg-utils ] ++ optional polkitEnabled cups-pk-helper;
+    environment.etc.cups.source = "/var/lib/cups";
 
     services.dbus.packages = [ cups.out ] ++ optional polkitEnabled cups-pk-helper;
+    services.udev.packages = cfg.drivers;
+
+    # Allow asswordless printer admin for members of wheel group
+    security.polkit.extraConfig = mkIf polkitEnabled ''
+      polkit.addRule(function(action, subject) {
+          if (action.id == "org.opensuse.cupspkhelper.mechanism.all-edit" &&
+              subject.isInGroup("wheel")){
+              return polkit.Result.YES;
+          }
+      });
+    '';
 
     # Cups uses libusb to talk to printers, and does not use the
     # linux kernel driver. If the driver is not in a black list, it
     # gets loaded, and then cups cannot access the printers.
     boot.blacklistedKernelModules = [ "usblp" ];
 
+    # Some programs like print-manager rely on this value to get
+    # printer test pages.
+    environment.sessionVariables.CUPS_DATADIR = "${bindir}/share/cups";
+
     systemd.packages = [ cups.out ];
 
+    systemd.sockets.cups = mkIf cfg.startWhenNeeded {
+      wantedBy = [ "sockets.target" ];
+      listenStreams = [ "" "/run/cups/cups.sock" ]
+        ++ map (x: replaceStrings ["localhost"] ["127.0.0.1"] (removePrefix "*:" x)) cfg.listenAddresses;
+    };
+
     systemd.services.cups =
-      { wantedBy = [ "multi-user.target" ];
+      { wantedBy = optionals (!cfg.startWhenNeeded) [ "multi-user.target" ];
         wants = [ "network.target" ];
         after = [ "network.target" ];
 
         path = [ cups.out ];
 
-        preStart =
-          ''
+        preStart = lib.optionalString cfg.stateless ''
+          rm -rf /var/cache/cups /var/lib/cups /var/spool/cups
+        '' + ''
             mkdir -m 0700 -p /var/cache/cups
             mkdir -m 0700 -p /var/spool/cups
             mkdir -m 0755 -p ${cfg.tempDir}
 
             mkdir -m 0755 -p /var/lib/cups
+            # While cups will automatically create self-signed certificates if accessed via TLS,
+            # this directory to store the certificates needs to be created manually.
+            mkdir -m 0700 -p /var/lib/cups/ssl
+
             # Backwards compatibility
             if [ ! -L /etc/cups ]; then
               mv /etc/cups/* /var/lib/cups
@@ -310,22 +402,31 @@ in
             for i in *; do
               [ ! -e "/var/lib/cups/$i" ] && ln -s "${rootdir}/etc/cups/$i" "/var/lib/cups/$i"
             done
-            ${optionalString cfg.gutenprint ''
+
+            #update path reference
+            [ -L /var/lib/cups/path ] && \
+              rm /var/lib/cups/path
+            [ ! -e /var/lib/cups/path ] && \
+              ln -s ${bindir} /var/lib/cups/path
+
+            ${optionalString (containsGutenprint cfg.drivers) ''
               if [ -d /var/lib/cups/ppd ]; then
-                ${gutenprint}/bin/cups-genppdupdate -p /var/lib/cups/ppd
+                ${getGutenprint cfg.drivers}/bin/cups-genppdupdate -p /var/lib/cups/ppd
               fi
             ''}
           '';
+
+          serviceConfig.PrivateTmp = true;
       };
 
     systemd.services.cups-browsed = mkIf avahiEnabled
       { description = "CUPS Remote Printer Discovery";
 
         wantedBy = [ "multi-user.target" ];
-        wants = [ "cups.service" "avahi-daemon.service" ];
-        bindsTo = [ "cups.service" "avahi-daemon.service" ];
-        partOf = [ "cups.service" "avahi-daemon.service" ];
-        after = [ "cups.service" "avahi-daemon.service" ];
+        wants = [ "avahi-daemon.service" ] ++ optional (!cfg.startWhenNeeded) "cups.service";
+        bindsTo = [ "avahi-daemon.service" ] ++ optional (!cfg.startWhenNeeded) "cups.service";
+        partOf = [ "avahi-daemon.service" ] ++ optional (!cfg.startWhenNeeded) "cups.service";
+        after = [ "avahi-daemon.service" ] ++ optional (!cfg.startWhenNeeded) "cups.service";
 
         path = [ cups ];
 
@@ -336,25 +437,23 @@ in
 
     services.printing.extraConf =
       ''
-        LogLevel info
-
         DefaultAuthType Basic
 
         <Location />
           Order allow,deny
-          Allow localhost
+          ${cfg.allowFrom}
         </Location>
 
         <Location /admin>
           Order allow,deny
-          Allow localhost
+          ${cfg.allowFrom}
         </Location>
 
         <Location /admin/conf>
           AuthType Basic
           Require user @SYSTEM
           Order allow,deny
-          Allow localhost
+          ${cfg.allowFrom}
         </Location>
 
         <Policy default>
@@ -382,5 +481,15 @@ in
 
     security.pam.services.cups = {};
 
+    networking.firewall = let
+      listenPorts = parsePorts cfg.listenAddresses;
+    in mkIf cfg.openFirewall {
+      allowedTCPPorts = listenPorts;
+      allowedUDPPorts = listenPorts;
+    };
+
   };
+
+  meta.maintainers = with lib.maintainers; [ matthewbauer ];
+
 }

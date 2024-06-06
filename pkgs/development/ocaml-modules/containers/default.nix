@@ -1,57 +1,31 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, cppo, gen, sequence, qtest, ounit, ocaml_oasis, result
-, qcheck }:
+{ lib, fetchFromGitHub, buildDunePackage, ocaml
+, dune-configurator
+, either, seq
+, gen, iter, qcheck-core, uutf, yojson
+}:
 
-let
+buildDunePackage rec {
+  version = "3.13.1";
+  pname = "containers";
 
-  mkpath = p:
-      "${p}/lib/ocaml/${ocaml.version}/site-lib";
-
-  version = "0.20";
-
-in
-
-stdenv.mkDerivation {
-  name = "ocaml-containers-${version}";
+  minimalOCamlVersion = "4.08";
 
   src = fetchFromGitHub {
     owner = "c-cube";
     repo = "ocaml-containers";
-    rev = "${version}";
-    sha256 = "1gwflgdbvj293cwi434aafrsgpdgj2sv7r1ghm4l4k5xn17l0qzg";
+    rev = "v${version}";
+    hash = "sha256-jkXh/dBRotWXvA77M/+tm39qsCiBsH/HSs+Y9D9QCek=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild cppo gen sequence qtest ounit ocaml_oasis qcheck ];
+  buildInputs = [ dune-configurator ];
+  propagatedBuildInputs = [ either seq ];
 
-  propagatedBuildInputs = [ result ];
+  checkInputs = [ gen iter qcheck-core uutf yojson ];
 
-  preConfigure = ''
-    # The following is done so that the '#use "topfind"' directive works in the ocaml top-level
-    export HOME="$(mktemp -d)"
-    export OCAML_TOPLEVEL_PATH="${mkpath findlib}"
-    cat <<EOF > $HOME/.ocamlinit
-let () =
-  try Topdirs.dir_directory (Sys.getenv "OCAML_TOPLEVEL_PATH")
-  with Not_found -> ()
-;;
-EOF
-  '';
-
-  configureFlags = [
-    "--enable-unix"
-    "--enable-thread"
-    "--enable-bigarray"
-    "--enable-advanced"
-    "--enable-tests"
-    "--disable-bench"
-  ];
-
-  doCheck = true;
-  checkTarget = "test";
-
-  createFindlibDestdir = true;
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
 
   meta = {
-    homepage = https://github.com/c-cube/ocaml-containers;
+    homepage = "https://github.com/c-cube/ocaml-containers";
     description = "A modular standard library focused on data structures";
     longDescription = ''
       Containers is a standard library (BSD license) focused on data structures,
@@ -63,7 +37,6 @@ EOF
       It also features optional libraries for dealing with strings, and
       helpers for unix and threads.
     '';
-    license = stdenv.lib.licenses.bsd2;
-    platforms = ocaml.meta.platforms or [];
+    license = lib.licenses.bsd2;
   };
 }

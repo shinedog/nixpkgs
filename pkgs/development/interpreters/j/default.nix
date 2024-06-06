@@ -1,64 +1,87 @@
-{ stdenv, fetchurl, readline }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, which
+, gmp
+, avx2Support ? stdenv.hostPlatform.avx2Support
+}:
 
 stdenv.mkDerivation rec {
-  name = "j-${version}";
-  version = "701_b";
-  src = fetchurl {
-    url = "http://www.jsoftware.com/download/j${version}_source.tar.gz";
-    sha256 = "1gmjlpxcd647x690c4dxnf8h6ays8ndir6cib70h3zfnkrc34cys";
-  };
-  buildInputs = [ readline ];
-  bits = if stdenv.is64bit then "64" else "32";
+  pname = "j";
+  version = "9.5.1";
 
-  doCheck = true;
+  src = fetchFromGitHub {
+    owner = "jsoftware";
+    repo = "jsource";
+    rev = "${version}";
+    hash = "sha256-QRQhE8138+zaGQOdq9xUOrifkVIprzbJWbmMK+WhEOU=";
+  };
+
+  nativeBuildInputs = [ which ];
+  buildInputs = [ gmp ];
+
+  patches = [
+    ./fix-install-path.patch
+  ];
+
+  enableParallelBuilding = true;
+
+  dontConfigure = true;
+
+  # Emulate jplatform64.sh configuration variables
+  jplatform =
+    if stdenv.isDarwin then "darwin"
+    else if stdenv.hostPlatform.isAarch then "raspberry"
+    else if stdenv.isLinux then "linux"
+    else "unsupported";
+
+  j64x =
+    if stdenv.is32bit then "j32"
+    else if stdenv.isx86_64 then
+      if stdenv.isLinux && avx2Support then "j64avx2" else "j64"
+    else if stdenv.isAarch64 then
+      if stdenv.isDarwin then "j64arm" else "j64"
+    else "unsupported";
+
+  env.NIX_LDFLAGS = "-lgmp";
 
   buildPhase = ''
-    sed -i bin/jconfig -e '
-        s@bits=32@bits=${bits}@g;
-        s@readline=0@readline=1@;
-        s@LIBREADLINE=""@LIBREADLINE=" -lreadline "@;
-        s@-W1,soname,libj.so@-Wl,-soname,libj.so@
-        '
-    sed -i bin/build_libj -e 's@>& make.txt@ 2>\&1 | tee make.txt@'
-
-    sed -i f2.c -e 's/_isnan(\*wv)/_isnan(y)/'
-
-    touch *.c *.h
-    sh -o errexit bin/build_jconsole
-    [ -e j/bin/jconsole ]
-    sh -o errexit bin/build_libj
-    [ -e j/bin/libj.so ]
-    sh -o errexit bin/build_defs
-    [ -e defs/hostdefs.ijs ] && [ -e defs/netdefs.ijs ]
-    sh -o errexit bin/build_tsdll
-    [ -x libtsdll.so ]
-
-    sed -i j/bin/profile.ijs -e "
-        s@userx=[.] *'.j'@userx=. '/.j'@;
-        s@bin,'/profilex.ijs'@user,'/profilex.ijs'@ ;
-        /install=./ainstall=. install,'/share/j'
-        "
-  '';
-
-  checkPhase = ''
-    echo 'i. 5' | j/bin/jconsole | fgrep "0 1 2 3 4"
+    runHook preBuild
+    MAKEFLAGS+=" ''${enableParallelBuilding:+-j$NIX_BUILD_CORES}" \
+      jplatform=${jplatform} j64x=${j64x} make2/build_all.sh
+    cp -v bin/${jplatform}/${j64x}/* jlibrary/bin/
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p "$out"
-    cp -r j/bin "$out/bin"
-    rm "$out/bin/profilex_template.ijs"
-
-    mkdir -p "$out/share/j"
-
-    cp -r docs j/addons j/system "$out/share/j"
+    runHook preInstall
+    mkdir -p $out/share/j
+    cp -r jlibrary/{addons,system} $out/share/j/
+    cp -r jlibrary/bin $out/
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  doInstallCheck = false; # The "gregex" test fails due to not finding PCRE2
+
+  installCheckPhase = ''
+    runHook preInstallCheck
+    HOME="$TMPDIR" $out/bin/jconsole -lib $out/bin/libj* script/testga.ijs
+    runHook postInstallCheck
+  '';
+
+  meta = with lib; {
+    homepage = "https://jsoftware.com/";
     description = "J programming language, an ASCII-based APL successor";
-    maintainers = with maintainers; [ raskin ];
-    platforms = platforms.linux;
-    license = licenses.gpl3Plus;
-    homepage = http://jsoftware.com/;
+    longDescription = ''
+      J is a high-level, general-purpose programming language that is
+      particularly suited to the mathematical, statistical, and logical analysis
+      of data. It is a powerful tool for developing algorithms and exploring
+      problems that are not already well understood.
+    '';
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ raskin synthetica AndersonTorres ];
+    broken = stdenv.isDarwin;
+    platforms = platforms.all;
+    mainProgram = "jconsole";
   };
 }

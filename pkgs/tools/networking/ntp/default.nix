@@ -1,30 +1,25 @@
-{ stdenv, lib, fetchurl, openssl, perl, libcap ? null, libseccomp ? null }:
-
-assert stdenv.isLinux -> libcap != null;
-assert stdenv.isLinux -> libseccomp != null;
-
-let
-  withSeccomp = stdenv.isLinux && (stdenv.isi686 || stdenv.isx86_64);
-in
+{ stdenv, lib, fetchurl, openssl, perl, pps-tools, libcap }:
 
 stdenv.mkDerivation rec {
-  name = "ntp-4.2.8p9";
+  pname = "ntp";
+  version = "4.2.8p17";
 
   src = fetchurl {
-    url = "http://www.eecis.udel.edu/~ntp/ntp_spool/ntp4/ntp-4.2/${name}.tar.gz";
-    sha256 = "0whbyf82lrczbri4adbsa4hg1ppfa6c7qcj7nhjwdfp1g1vjh95p";
+    url = "https://archive.ntp.org/ntp4/ntp-${lib.versions.majorMinor version}/ntp-${version}.tar.gz";
+    hash = "sha256-ED3ScuambFuN8H3OXpoCVV/NbxOXvft4IjcyjonTqGY=";
   };
 
   configureFlags = [
     "--sysconfdir=/etc"
     "--localstatedir=/var"
-    "--with-openssl-libdir=${openssl.out}/lib"
+    "--with-openssl-libdir=${lib.getLib openssl}/lib"
     "--with-openssl-incdir=${openssl.dev}/include"
     "--enable-ignore-dns-errors"
-  ] ++ stdenv.lib.optional stdenv.isLinux "--enable-linuxcaps"
-    ++ stdenv.lib.optional withSeccomp "--enable-libseccomp";
+    "--with-yielding-select=yes"
+  ] ++ lib.optional stdenv.isLinux "--enable-linuxcaps";
 
-  buildInputs = [ libcap openssl perl ] ++ lib.optional withSeccomp libseccomp;
+  buildInputs = [ openssl perl ]
+    ++ lib.optionals stdenv.isLinux [ pps-tools libcap ];
 
   hardeningEnable = [ "pie" ];
 
@@ -32,10 +27,14 @@ stdenv.mkDerivation rec {
     rm -rf $out/share/doc
   '';
 
-  meta = {
-    homepage = http://www.ntp.org/;
+  meta = with lib; {
+    homepage = "https://www.ntp.org/";
     description = "An implementation of the Network Time Protocol";
-    maintainers = [ stdenv.lib.maintainers.eelco ];
-    platforms = stdenv.lib.platforms.linux;
+    license = {
+      # very close to isc and bsd2
+      url = "https://www.eecis.udel.edu/~mills/ntp/html/copyright.html";
+    };
+    maintainers = with maintainers; [ eelco thoughtpolice ];
+    platforms = platforms.unix;
   };
 }

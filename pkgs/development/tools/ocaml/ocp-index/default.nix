@@ -1,45 +1,28 @@
-{ stdenv, fetchFromGitHub, fetchpatch, ocaml, findlib, ocpBuild, ocpIndent, opam, cmdliner, ncurses, re, lambdaTerm, libev }:
+{ lib, fetchFromGitHub, buildDunePackage, cppo, ocp-indent, cmdliner, re }:
 
-let inherit (stdenv.lib) getVersion versionAtLeast optional; in
+buildDunePackage rec {
+  pname = "ocp-index";
+  version = "1.3.6";
 
-assert versionAtLeast (getVersion ocaml) "4";
-assert versionAtLeast (getVersion ocpBuild) "1.99.13-beta";
-assert versionAtLeast (getVersion ocpIndent) "1.4.2";
-
-let
-  version = "1.1.5";
-in
-
-stdenv.mkDerivation {
-
-  name = "ocp-index-${version}";
+  minimalOCamlVersion = "4.08";
 
   src = fetchFromGitHub {
     owner = "OCamlPro";
     repo = "ocp-index";
     rev = version;
-    sha256 = "0gir0fm8mq609371kmwpsqfvpfx2b26ax3f9rg5fjf5r0bjk9pqd";
+    hash = "sha256-EgRpC58NBVFO1w0xx11CnonatU2H7bECsEk6Y4c/odY=";
   };
 
-  patches = [ (fetchpatch {
-    url = https://github.com/OCamlPro/ocp-index/commit/618872a0980d077857a63d502eadbbf0d1b05c0f.diff;
-    sha256 = "07snnydczkzapradh1c22ggv9vaff67nc36pi3218azb87mb1p7z";
-  }) ];
+  nativeBuildInputs = [ cppo ];
+  buildInputs = [ cmdliner re ];
 
-  buildInputs = [ ocaml findlib ocpBuild opam cmdliner ncurses re libev ]
-  ++ optional (versionAtLeast (getVersion lambdaTerm) "1.7") lambdaTerm;
-  propagatedBuildInputs = [ ocpIndent ];
-
-  createFindlibDestdir = true;
-
-  preBuild = "export TERM=xterm";
-  postInstall = "mv $out/lib/{ocp-index,ocaml/${getVersion ocaml}/site-lib/}";
+  propagatedBuildInputs = [ ocp-indent ];
 
   meta = {
-    homepage = http://typerex.ocamlpro.com/ocp-index.html;
+    homepage = "https://www.typerex.org/ocp-index.html";
     description = "A simple and light-weight documentation extractor for OCaml";
-    license = stdenv.lib.licenses.lgpl3;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    changelog = "https://github.com/OCamlPro/ocp-index/raw/${version}/CHANGES.md";
+    license = lib.licenses.lgpl3;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
 }

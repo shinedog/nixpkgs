@@ -1,51 +1,88 @@
-{ stdenv, fetchFromGitHub, php, flex, makeWrapper }:
+{ bison
+, cacert
+, fetchFromGitHub
+, flex
+, php
+, lib, stdenv
+, installShellFiles
+, which
+, python3
+}:
 
-let
-  libphutil = fetchFromGitHub {
-    owner = "phacility";
-    repo = "libphutil";
-    rev = "5fd1af8b4f2b9631e2ceb06bd88d21f2416123c2";
-    sha256 = "06zkfkgwni8prr3cnsbf1h4s30k4v00y8ll1bcl6282xynnh3gf6";
-  };
-  arcanist = fetchFromGitHub {
+# Make a custom wrapper. If `wrapProgram` is used, arcanist thinks .arc-wrapped is being
+# invoked and complains about it being an unknown toolset. We could use `makeWrapper`, but
+# then we’d need to still craft a script that does the `php libexec/arcanist/bin/...` dance
+# anyway... So just do everything at once.
+let makeArcWrapper = toolset: ''
+  cat << WRAPPER > $out/bin/${toolset}
+  #!$shell -e
+  export PATH='${php}/bin:${which}/bin'\''${PATH:+':'}\$PATH
+  exec ${php}/bin/php $out/libexec/arcanist/bin/${toolset} "\$@"
+  WRAPPER
+  chmod +x $out/bin/${toolset}
+'';
+
+in
+stdenv.mkDerivation {
+  pname = "arcanist";
+  version = "20230530";
+
+  src = fetchFromGitHub {
     owner = "phacility";
     repo = "arcanist";
-    rev = "9e82ef979e8148c43b9b8439025d505b1219e213";
-    sha256 = "0h7ny8wr3cjn105gyzhd4qmhhccd0ilalslsdjj10nxxw2cgn193";
+    rev = "e50d1bc4eabac9c37e3220e9f3fb8e37ae20b957";
+    hash = "sha256-u+HRsaCuAAyLrEihrZtLrdZ6NTVjPshieJATK3t5Fo4=";
   };
-in
-stdenv.mkDerivation rec {
-  name    = "arcanist-${version}";
-  version = "20160825";
 
-  src = [ arcanist libphutil ];
-  buildInputs = [ php makeWrapper flex ];
+  patches = [
+    ./dont-require-python3-in-path.patch
+    ./shellcomplete-strlen-null.patch
+  ];
 
-  unpackPhase = "true";
-  buildPhase = ''
-    cp -R ${libphutil} libphutil
-    cp -R ${arcanist} arcanist
-    chmod +w -R libphutil arcanist
-    (
-      cd libphutil/support/xhpast
-      make clean all install
-    )
+  buildInputs = [ php python3 ];
+
+  nativeBuildInputs = [ bison flex installShellFiles ];
+
+  postPatch = lib.optionalString stdenv.isAarch64 ''
+    substituteInPlace support/xhpast/Makefile \
+      --replace "-minline-all-stringops" ""
   '';
-  installPhase = ''
-    mkdir -p $out/bin $out/libexec
-    cp -R libphutil $out/libexec/libphutil
-    cp -R arcanist  $out/libexec/arcanist
 
-    ln -s $out/libexec/arcanist/bin/arc $out/bin
-    wrapProgram $out/bin/arc \
-      --prefix PATH : "${php}/bin"
+  buildPhase = ''
+    runHook preBuild
+    make cleanall -C support/xhpast $makeFlags "''${makeFlagsArray[@]}" -j $NIX_BUILD_CORES
+    make xhpast   -C support/xhpast $makeFlags "''${makeFlagsArray[@]}" -j $NIX_BUILD_CORES
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+    mkdir -p $out/bin $out/libexec
+    make install  -C support/xhpast $makeFlags "''${makeFlagsArray[@]}" -j $NIX_BUILD_CORES
+    make cleanall -C support/xhpast $makeFlags "''${makeFlagsArray[@]}" -j $NIX_BUILD_CORES
+    cp -R . $out/libexec/arcanist
+    ln -sf ${cacert}/etc/ssl/certs/ca-bundle.crt $out/libexec/arcanist/resources/ssl/default.pem
+
+    ${makeArcWrapper "arc"}
+    ${makeArcWrapper "phage"}
+
+    $out/bin/arc shell-complete --generate --
+    installShellCompletion --cmd arc --bash $out/libexec/arcanist/support/shell/rules/bash-rules.sh
+    installShellCompletion --cmd phage --bash $out/libexec/arcanist/support/shell/rules/bash-rules.sh
+    runHook postInstall
+  '';
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/arc help diff -- > /dev/null
+    $out/bin/phage help alias -- > /dev/null
   '';
 
   meta = {
     description = "Command line interface to Phabricator";
-    homepage    = "http://phabricator.org";
-    license     = stdenv.lib.licenses.asl20;
-    platforms   = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    homepage = "https://www.phacility.com/";
+    license = lib.licenses.asl20;
+    platforms = lib.platforms.unix;
+    maintainers = [ lib.maintainers.thoughtpolice ];
   };
 }

@@ -1,44 +1,86 @@
-{stdenv, fetchurl, perl}: 
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, cmake
+, perl
+, enableGui ? false
+, qtbase
+, wrapQtAppsHook
+, qtwebengine
+, enableJupyter ? true
+, boost
+, jsoncpp
+, openssl
+, zmqpp
+, enableJava ? false
+, openjdk
+, gtest
+}:
 
 stdenv.mkDerivation rec {
-  name = "yacas-1.2.2";
+  pname = "yacas";
+  version = "1.9.1";
 
-  src = fetchurl {
-    url = "http://yacas.sourceforge.net/backups/${name}.tar.gz";
-    sha256 = "1dmafm3w0lm5w211nwkfzaid1rvvmgskz7k4500pjhgdczi5sd78";
+  src = fetchFromGitHub {
+    owner = "grzegorzmazur";
+    repo = "yacas";
+    rev = "v${version}";
+    sha256 = "0dqgqvsb6ggr8jb3ngf0jwfkn6xwj2knhmvqyzx3amc74yd3ckqx";
   };
 
   hardeningDisable = [ "format" ];
 
-  # Perl is only for the documentation
-  nativeBuildInputs = [ perl ];
+  cmakeFlags = [
+    "-DENABLE_CYACAS_GUI=${if enableGui then "ON" else "OFF"}"
+    "-DENABLE_CYACAS_KERNEL=${if enableJupyter then "ON" else "OFF"}"
+    "-DENABLE_JYACAS=${if enableJava then "ON" else "OFF"}"
+    "-DENABLE_CYACAS_UNIT_TESTS=ON"
+  ];
+  patches = [
+    # upstream issue: https://github.com/grzegorzmazur/yacas/issues/340
+    # Upstream patch which doesn't apply on 1.9.1 is:
+    # https://github.com/grzegorzmazur/yacas/pull/342
+    ./jsoncpp-fix-include.patch
+    # Fixes testing - https://github.com/grzegorzmazur/yacas/issues/339
+    # PR: https://github.com/grzegorzmazur/yacas/pull/343
+    (fetchpatch {
+      url = "https://github.com/grzegorzmazur/yacas/commit/8bc22d517ecfdde3ac94800dc8506f5405564d48.patch";
+      sha256 = "sha256-aPO5T8iYNkGtF8j12YxNJyUPJJPKrXje1DmfCPt317A=";
+    })
+  ];
+  preCheck = ''
+    patchShebangs ../tests/test-yacas
+  '';
+  nativeCheckInputs = [
+    gtest
+  ];
+  doCheck = true;
 
-  patches = [ ./gcc43.patch ];
-
-  crossAttrs = {
-    # Trick to get host-built programs needed for the cross-build.
-    # If yacas had proper makefiles, this would not be needed.
-    preConfigure = ''
-      ./configure
-      pushd src
-      make mkfastprimes 
-      cp mkfastprimes ../..
-      popd
-      pushd manmake
-      make manripper removeduplicates
-      cp manripper removeduplicates ../..
-      popd
-    '';
-    preBuild = ''
-      cp ../mkfastprimes ../manripper ../removeduplicates src
-    '';
-  };
+  nativeBuildInputs = [
+    cmake
+    # Perl is only for the documentation
+    perl
+  ] ++ lib.optionals enableJava [
+    openjdk
+  ];
+  buildInputs = [
+  ] ++ lib.optionals enableGui [
+    qtbase
+    wrapQtAppsHook
+    qtwebengine
+  ] ++ lib.optionals enableJupyter [
+    boost
+    jsoncpp
+    openssl
+    zmqpp
+  ];
 
   meta = {
-      description = "Easy to use, general purpose Computer Algebra System";
-      homepage = http://yacas.sourceforge.net/;
-      license = stdenv.lib.licenses.gpl2Plus;
-      maintainers = with stdenv.lib.maintainers; [viric];
-      platforms = with stdenv.lib.platforms; linux;
+    description = "Easy to use, general purpose Computer Algebra System${lib.optionalString enableGui ", built with GUI."}";
+    homepage = "http://www.yacas.org/";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ viric ];
+    platforms = with lib.platforms; linux;
   };
 }

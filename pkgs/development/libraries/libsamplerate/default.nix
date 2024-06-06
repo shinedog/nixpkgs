@@ -1,40 +1,36 @@
-{ stdenv, fetchurl, pkgconfig, libsndfile, ApplicationServices, Carbon, CoreServices }:
+{ lib, stdenv, fetchurl, pkg-config, libsndfile, ApplicationServices, Carbon, CoreServices }:
 
 let
-  inherit (stdenv.lib) optionals optionalString;
+  inherit (lib) optionals optionalString;
 
 in stdenv.mkDerivation rec {
-  name = "libsamplerate-0.1.9";
+  pname = "libsamplerate";
+  version = "0.2.2";
 
   src = fetchurl {
-    url = "http://www.mega-nerd.com/SRC/${name}.tar.gz";
-    sha256 = "1ha46i0nbibq0pl0pjwcqiyny4hj8lp1bnl4dpxm64zjw9lb2zha";
+    url = "https://github.com/libsndfile/libsamplerate/releases/download/${version}/libsamplerate-${version}.tar.xz";
+    hash = "sha256-MljaKAUR0ktJ1rCGFbvoJNDKzJhCsOTK8RxSzysEOJM=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [ libsndfile ]
     ++ optionals stdenv.isDarwin [ ApplicationServices CoreServices ];
 
   configureFlags = [ "--disable-fftw" ];
 
-  outputs = [ "bin" "dev" "out" ];
+  outputs = [ "dev" "out" ];
 
   postConfigure = optionalString stdenv.isDarwin ''
     # need headers from the Carbon.framework in /System/Library/Frameworks to
     # compile this on darwin -- not sure how to handle
     NIX_CFLAGS_COMPILE+=" -I${Carbon}/Library/Frameworks/Carbon.framework/Headers"
-
-    substituteInPlace examples/Makefile --replace "-fpascal-strings" ""
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Sample Rate Converter for audio";
-    homepage    = http://www.mega-nerd.com/SRC/index.html;
-    # you can choose one of the following licenses:
-    # GPL or a commercial-use license (available at
-    # http://www.mega-nerd.com/SRC/libsamplerate-cul.pdf)
-    licenses    = with licenses; [ gpl3.shortName unfree ];
-    maintainers = with maintainers; [ lovek323 wkennington ];
+    homepage    = "https://libsndfile.github.io/libsamplerate/";
+    license     = licenses.bsd2;
+    maintainers = with maintainers; [ lovek323 ];
     platforms   = platforms.all;
   };
 }

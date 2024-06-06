@@ -1,139 +1,83 @@
-{ stdenv
-, coreutils
-, patchelf
-, requireFile
-, alsaLib
-, fontconfig
-, freetype
-, gcc
-, glib
-, libpng
-, ncurses
-, opencv
-, openssl
-, unixODBC
-, xorg
-, zlib
-, libxml2
-, libuuid
+{ callPackage
+, config
+, lib
+, cudaPackages
+, cudaSupport ? config.cudaSupport
+, lang ? "en"
+, webdoc ? false
+, version ? null
+/*
+If you wish to completely override the src, use:
+my_mathematica = mathematica.override {
+  source = pkgs.requireFile {
+    name = "Mathematica_XX.X.X_BNDL_LINUX.sh";
+    # Get this hash via a command similar to this:
+    # nix-store --query --hash \
+    # $(nix store add-path Mathematica_XX.X.X_BNDL_LINUX.sh --name 'Mathematica_XX.X.X_BNDL_LINUX.sh')
+    sha256 = "0000000000000000000000000000000000000000000000000000";
+    message = ''
+      Your override for Mathematica includes a different src for the installer,
+      and it is missing.
+    '';
+    hashMode = "recursive";
+  };
+}
+*/
+, source ? null
 }:
 
-let
-  platform =
-    if stdenv.system == "i686-linux" || stdenv.system == "x86_64-linux" then
-      "Linux"
-    else
-      throw "Mathematica requires i686-linux or x86_64 linux";
+let versions = callPackage ./versions.nix { };
+
+    matching-versions =
+      lib.sort (v1: v2: lib.versionAtLeast v1.version v2.version) (lib.filter
+        (v: v.lang == lang
+            && (version == null || isMatching v.version version)
+            && matchesDoc v)
+        versions);
+
+    found-version =
+      if matching-versions == []
+      then throw ("No registered Mathematica version found to match"
+                  + " version=${toString version} and language=${lang},"
+                  + " ${if webdoc
+                        then "using web documentation"
+                        else "and with local documentation"}")
+      else lib.head matching-versions;
+
+    specific-drv = ./. + "/${lib.versions.major found-version.version}.nix";
+
+    real-drv = if lib.pathExists specific-drv
+               then specific-drv
+               else ./generic.nix;
+
+    isMatching = v1: v2:
+      let as      = lib.splitVersion v1;
+          bs      = lib.splitVersion v2;
+          n       = lib.min (lib.length as) (lib.length bs);
+          sublist = l: lib.sublist 0 n l;
+      in lib.compareLists lib.compare (sublist as) (sublist bs) == 0;
+
+    matchesDoc = v:
+      builtins.match (if webdoc
+                      then ".*[0-9]_LINUX.sh"
+                      else ".*[0-9]_BNDL_LINUX.sh") v.src.name != null;
+
 in
-stdenv.mkDerivation rec {
-  version = "11.0.1";
 
-  name = "mathematica-${version}";
-
-  src = requireFile rec {
-    name = "Mathematica_${version}_LINUX.sh";
-    message = '' 
-      This nix expression requires that ${name} is
-      already part of the store. Find the file on your Mathematica CD
-      and add it to the nix store with nix-store --add-fixed sha256 <FILE>.
-    '';
-    sha256 = "1qqwz8gbw74rnnyirpbdanwx3d25s4x0i4zc7bs6kp959x66cdkw";
-  };
-
-  buildInputs = [
-    coreutils
-    patchelf
-    alsaLib
-    coreutils
-    fontconfig
-    freetype
-    gcc.cc
-    gcc.libc
-    glib
-    ncurses
-    opencv
-    openssl
-    unixODBC
-    libxml2
-    libuuid
-  ] ++ (with xorg; [
-    libX11
-    libXext
-    libXtst
-    libXi
-    libXmu
-    libXrender
-    libxcb
-    libXcursor
-    libXfixes
-    libXrandr
-    libICE
-    libSM
-  ]);
-
-  ldpath = stdenv.lib.makeLibraryPath buildInputs
-    + stdenv.lib.optionalString (stdenv.system == "x86_64-linux")
-      (":" + stdenv.lib.makeSearchPathOutput "lib" "lib64" buildInputs);
-
-  phases = "unpackPhase installPhase fixupPhase";
-
-  unpackPhase = ''
-    echo "=== Extracting makeself archive ==="
-    # find offset from file
-    offset=$(${stdenv.shell} -c "$(grep -axm1 -e 'offset=.*' $src); echo \$offset" $src)
-    dd if="$src" ibs=$offset skip=1 | tar -xf -
-    cd Unix
-  '';
-
-  installPhase = ''
-    cd Installer
-    # don't restrict PATH, that has already been done
-    sed -i -e 's/^PATH=/# PATH=/' MathInstaller
-    sed -i -e 's/\/bin\/bash/\/bin\/sh/' MathInstaller
-
-    echo "=== Running MathInstaller ==="
-    ./MathInstaller -auto -createdir=y -execdir=$out/bin -targetdir=$out/libexec/Mathematica -silent
-  '';
-
-  preFixup = ''
-    echo "=== PatchElfing away ==="
-    # This code should be a bit forgiving of errors, unfortunately
-    set +e
-    find $out/libexec/Mathematica/SystemFiles -type f -perm -0100 | while read f; do
-      type=$(readelf -h "$f" 2>/dev/null | grep 'Type:' | sed -e 's/ *Type: *\([A-Z]*\) (.*/\1/')
-      if [ -z "$type" ]; then
-        :
-      elif [ "$type" == "EXEC" ]; then
-        echo "patching $f executable <<"
-        patchelf --shrink-rpath "$f"
-        patchelf \
-	  --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-          --set-rpath "$(patchelf --print-rpath "$f"):${ldpath}" \
-          "$f" \
-          && patchelf --shrink-rpath "$f" \
-          || echo unable to patch ... ignoring 1>&2
-      elif [ "$type" == "DYN" ]; then
-        echo "patching $f library <<"
-        patchelf \
-          --set-rpath "$(patchelf --print-rpath "$f"):${ldpath}" \
-          "$f" \
-          && patchelf --shrink-rpath "$f" \
-          || echo unable to patch ... ignoring 1>&2
-      else
-        echo "not patching $f <<: unknown elf type"
-      fi
-    done
-  '';
-
-  # all binaries are already stripped
-  dontStrip = true;
-
-  # we did this in prefixup already
-  dontPatchELF = true;
-
-  meta = {
+callPackage real-drv {
+  inherit cudaSupport cudaPackages;
+  inherit (found-version) version lang;
+  src = if source == null then found-version.src else source;
+  name = ("mathematica"
+          + lib.optionalString cudaSupport "-cuda"
+          + "-${found-version.version}"
+          + lib.optionalString (lang != "en") "-${lang}");
+  meta = with lib; {
     description = "Wolfram Mathematica computational software system";
     homepage = "http://www.wolfram.com/mathematica/";
-    license = stdenv.lib.licenses.unfree;
+    license = licenses.unfree;
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    maintainers = with maintainers; [ herberteuler rafaelrc ];
+    platforms = [ "x86_64-linux" ];
   };
 }

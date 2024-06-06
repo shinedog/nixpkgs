@@ -1,30 +1,22 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib }:
+{ lib, buildDunePackage, fetchurl }:
 
-let version = "1.1"; in
+buildDunePackage rec {
+  pname = "result";
+  version = "1.5";
 
-stdenv.mkDerivation {
-  name = "ocaml-result-${version}";
-
-  src = fetchFromGitHub {
-    owner = "janestreet";
-    repo = "result";
-    rev = "${version}";
-    sha256 = "05y07rxdbkaxsc8cy458y00gq05i8gp35hhwg1b757mam21ccxxz";
+  src = fetchurl {
+    url = "https://github.com/janestreet/result/releases/download/${version}/result-${version}.tbz";
+    sha256 = "0cpfp35fdwnv3p30a06wd0py3805qxmq3jmcynjc3x2qhlimwfkw";
   };
 
-  buildInputs = [ ocaml findlib ];
-
-  createFindlibDestdir = true;
-
   meta = {
-    homepage = https://github.com/janestreet/result;
+    homepage = "https://github.com/janestreet/result";
     description = "Compatibility Result module";
     longDescription = ''
       Projects that want to use the new result type defined in OCaml >= 4.03
       while staying compatible with older version of OCaml should use the
       Result module defined in this library.
     '';
-    license = stdenv.lib.licenses.bsd3;
-    platforms = ocaml.meta.platforms or [];
+    license = lib.licenses.bsd3;
   };
 }

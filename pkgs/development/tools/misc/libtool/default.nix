@@ -1,18 +1,21 @@
-{stdenv, fetchurl, m4, perl}:
+{lib, stdenv, fetchurl, m4, perl}:
 
 stdenv.mkDerivation rec {
-  name = "libtool-1.5.26";
-  
+  pname = "libtool";
+  version = "1.5.26";
+
   src = fetchurl {
-    url = "mirror://gnu/libtool/${name}.tar.gz";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
     sha256 = "029ggq5kri1gjn6nfqmgw4w920gyfzscjjxbsxxidal5zqsawd8w";
   };
-  
-  buildInputs = [m4 perl];
+
+  nativeBuildInputs = [m4];
+  buildInputs = [perl];
 
   # Don't fixup "#! /bin/sh" in Libtool, otherwise it will use the
   # "fixed" path in generated files!
   dontPatchShebangs = true;
+  dontFixLibtool = true;
 
   meta = {
     description = "Generic library support script";
@@ -27,9 +30,11 @@ stdenv.mkDerivation rec {
       documentation for details.
     '';
 
-    homepage = http://www.gnu.org/software/libtool/;
+    homepage = "https://www.gnu.org/software/libtool/";
 
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
+
+    mainProgram = "libtool";
   };
 }

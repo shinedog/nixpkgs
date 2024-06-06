@@ -1,38 +1,39 @@
-{ stdenv, fetchFromGitHub, pythonPackages }:
+{ lib, fetchFromGitHub, python3Packages }:
 
-let honcho = pythonPackages.buildPythonApplication rec {
-  name = "honcho-${version}";
-  version = "0.6.6";
-  namePrefix = "";
+let
+  pname = "honcho";
+in
+
+python3Packages.buildPythonApplication rec {
+  name = "${pname}-${version}";
+  version = "1.1.0";
 
   src = fetchFromGitHub {
     owner = "nickstenning";
     repo = "honcho";
     rev = "v${version}";
-    sha256 = "0lawwcyrrsd9z9jcr94qn1yabl9bzc529jkpc51jq720fhdlfcr0";
+    sha256 = "1y0r8dw4pqcq7r4n58ixjdg1iy60lp0gxsd7d2jmhals16ij71rj";
   };
 
-  buildInputs = with pythonPackages; [ nose mock jinja2 ];
+  propagatedBuildInputs = [ python3Packages.setuptools ];
+
+  nativeCheckInputs = with python3Packages; [ jinja2 pytest mock coverage ];
+
+  # missing plugins
+  doCheck = false;
+
   checkPhase = ''
     runHook preCheck
-    nosetests
+    PATH=$out/bin:$PATH coverage run -m pytest
     runHook postCheck
   '';
 
-  doCheck = false;
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A Python clone of Foreman, a tool for managing Procfile-based applications";
     license = licenses.mit;
-    homepage = https://github.com/nickstenning/honcho;
+    homepage = "https://github.com/nickstenning/honcho";
     maintainers = with maintainers; [ benley ];
     platforms = platforms.unix;
+    mainProgram = "honcho";
   };
-};
-
-in
-
-# Some of honcho's tests require that honcho be installed in the environment in
-# order to work. This is a trick to build it without running tests, then pass
-# it to itself as a buildInput so the tests work.
-honcho.overrideDerivation (x: { buildInputs = [ honcho ]; doCheck = true; })
+}

@@ -1,28 +1,30 @@
-{ stdenv, fetchFromGitHub, pkgconfig, glib, notmuch }:
+{ lib, stdenv, fetchFromGitHub, pkg-config, glib, notmuch }:
 
-stdenv.mkDerivation rec {
-  name = "notmuch-addrlookup-${version}";
-  version = "7";
+let
+  version = "10";
+in
+stdenv.mkDerivation {
+  pname = "notmuch-addrlookup";
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "aperezdc";
     repo = "notmuch-addrlookup-c";
     rev ="v${version}";
-    sha256 = "0mz0llf1ggl1k46brgrqj3i8qlg1ycmkc5a3a0kg8fg4s1c1m6xk";
+    sha256 = "sha256-Z59MAptJw95azdK0auOuUyxBrX4PtXwnRNPkhjgI6Ro=";
   };
 
-  buildInputs = [ pkgconfig glib notmuch ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ glib notmuch ];
 
-  installPhase = ''
-    mkdir -p "$out/bin"
-    cp notmuch-addrlookup "$out/bin"
-  '';
+  installPhase = "install -D notmuch-addrlookup $out/bin/notmuch-addrlookup";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Address lookup tool for Notmuch in C";
-    homepage = https://github.com/aperezdc/notmuch-addrlookup-c;
-    maintainers = with maintainers; [ mog garbas ];
-    platforms = platforms.linux;
+    homepage = "https://github.com/aperezdc/notmuch-addrlookup-c";
+    maintainers = with maintainers; [ mog ];
+    platforms = platforms.unix;
     license = licenses.mit;
+    mainProgram = "notmuch-addrlookup";
   };
 }

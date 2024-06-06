@@ -1,52 +1,168 @@
-{ stdenv, fetchurl, pkgconfig, autoreconfHook, makeWrapper
-, ncurses, cpio, gperf, perl, cdrkit, flex, bison, qemu, pcre, augeas, libxml2
-, acl, libcap, libcap_ng, libconfig, systemd, fuse, yajl, libvirt, hivex
-, gmp, readline, file, libintlperl, GetoptLong, SysVirt, numactl, xen }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, autoreconfHook
+, makeWrapper
+, libxcrypt
+, ncurses
+, cpio
+, gperf
+, cdrkit
+, flex
+, bison
+, qemu
+, pcre2
+, augeas
+, libxml2
+, acl
+, libcap
+, libcap_ng
+, libconfig
+, systemd
+, fuse
+, yajl
+, libvirt
+, hivex
+, db
+, gmp
+, readline
+, file
+, numactl
+, libapparmor
+, jansson
+, getopt
+, perlPackages
+, ocamlPackages
+, libtirpc
+, appliance ? null
+, javaSupport ? false
+, jdk
+, zstd
+}:
+
+assert appliance == null || lib.isDerivation appliance;
 
 stdenv.mkDerivation rec {
-  name = "libguestfs-${version}";
-  version = "1.29.5";
-
-  appliance = fetchurl {
-    url = "http://libguestfs.org/download/binaries/appliance/appliance-1.26.0.tar.xz";
-    sha256 = "1kzvgmy845kclvr93y6rdpss2q0p8yfqg14r0i1pi5r4zc68yvj4";
-  };
+  pname = "libguestfs";
+  version = "1.50.1";
 
   src = fetchurl {
-    url = "http://libguestfs.org/download/1.29-development/libguestfs-${version}.tar.gz";
-    sha256 = "1il0p3irwcyfdm83935hj4bvxsx0kdfn8dvqmg2lbzap17jvzj8h";
+    url = "https://libguestfs.org/download/${lib.versions.majorMinor version}-stable/${pname}-${version}.tar.gz";
+    sha256 = "sha256-Xmhx6I+C5SHjHUQt5qELZJcCN8t5VumdEXsSO1hWWm8=";
   };
 
+  strictDeps = true;
+  nativeBuildInputs = [
+    autoreconfHook
+    bison
+    cdrkit
+    cpio
+    flex
+    getopt
+    gperf
+    makeWrapper
+    pkg-config
+    qemu
+    zstd
+  ] ++ (with perlPackages; [ perl libintl-perl GetoptLong ModuleBuild ])
+  ++ (with ocamlPackages; [ ocaml findlib ]);
   buildInputs = [
-    makeWrapper pkgconfig autoreconfHook ncurses cpio gperf perl
-    cdrkit flex bison qemu pcre augeas libxml2 acl libcap libcap_ng libconfig
-    systemd fuse yajl libvirt gmp readline file hivex libintlperl GetoptLong
-    SysVirt numactl xen
+    libxcrypt
+    ncurses
+    jansson
+    pcre2
+    augeas
+    libxml2
+    acl
+    libcap
+    libcap_ng
+    libconfig
+    systemd
+    fuse
+    yajl
+    libvirt
+    gmp
+    readline
+    file
+    hivex
+    db
+    numactl
+    libapparmor
+    perlPackages.ModuleBuild
+    libtirpc
+  ] ++ (with ocamlPackages; [ ocamlbuild ocaml_libvirt gettext-stub ounit ])
+  ++ lib.optional javaSupport jdk;
+
+  prePatch = ''
+    # build-time scripts
+    substituteInPlace run.in        --replace '#!/bin/bash' '#!${stdenv.shell}'
+    substituteInPlace ocaml-link.sh.in --replace '#!/bin/bash' '#!${stdenv.shell}'
+
+    # $(OCAMLLIB) is read-only "${ocamlPackages.ocaml}/lib/ocaml"
+    substituteInPlace ocaml/Makefile.am            --replace '$(DESTDIR)$(OCAMLLIB)' '$(out)/lib/ocaml'
+    substituteInPlace ocaml/Makefile.in            --replace '$(DESTDIR)$(OCAMLLIB)' '$(out)/lib/ocaml'
+
+    # some scripts hardcore /usr/bin/env which is not available in the build env
+    patchShebangs .
+  '';
+  configureFlags = [
+    "--disable-appliance"
+    "--disable-daemon"
+    "--with-distro=NixOS"
+    "--with-guestfs-path=${placeholder "out"}/lib/guestfs"
+  ] ++ lib.optionals (!javaSupport) [ "--without-java" ];
+  patches = [
+    ./libguestfs-syms.patch
   ];
 
-  configureFlags = "--disable-appliance --disable-daemon";
-  patches = [ ./libguestfs-syms.patch ];
-  NIX_CFLAGS_COMPILE="-I${libxml2.dev}/include/libxml2/";
+  createFindlibDestdir = true;
+
+  installFlags = [ "REALLY_INSTALL=yes" ];
+  enableParallelBuilding = true;
 
   postInstall = ''
+    mv "$out/lib/ocaml/guestfs" "$OCAMLFIND_DESTDIR/guestfs"
     for bin in $out/bin/*; do
       wrapProgram "$bin" \
-        --prefix "PATH" : "$out/bin:${hivex}/bin" \
-        --prefix "PERL5LIB" : "$PERL5LIB:$out/lib/perl5/site_perl"
+        --prefix PATH     : "$out/bin:${hivex}/bin:${qemu}/bin" \
+        --prefix PERL5LIB : "$out/${perlPackages.perl.libPrefix}"
     done
   '';
 
-  postFixup = ''
-    mkdir -p "$out/lib/guestfs"
-    tar -Jxvf "$appliance" --strip 1 -C "$out/lib/guestfs"
+  postFixup = lib.optionalString (appliance != null) ''
+    mkdir -p $out/{lib,lib64}
+    ln -s ${appliance} $out/lib64/guestfs
+    ln -s ${appliance} $out/lib/guestfs
   '';
 
-  meta = with stdenv.lib; {
+  doInstallCheck = appliance != null;
+  installCheckPhase = ''
+    runHook preInstallCheck
+
+    export HOME=$(mktemp -d) # avoid access to /homeless-shelter/.guestfish
+
+    ${qemu}/bin/qemu-img create -f qcow2 disk1.img 10G
+
+    $out/bin/guestfish <<'EOF'
+    add-drive disk1.img
+    run
+    list-filesystems
+    part-disk /dev/sda mbr
+    mkfs ext2 /dev/sda1
+    list-filesystems
+    EOF
+
+    runHook postInstallCheck
+  '';
+
+  meta = with lib; {
     description = "Tools for accessing and modifying virtual machine disk images";
-    license = licenses.gpl2;
-    homepage = http://libguestfs.org/;
-    maintainers = with maintainers; [offline];
+    license = with licenses; [ gpl2Plus lgpl21Plus ];
+    homepage = "https://libguestfs.org/";
+    maintainers = with maintainers; [ offline ];
     platforms = platforms.linux;
-    hydraPlatforms = [];
+    # this is to avoid "output size exceeded"
+    hydraPlatforms = if appliance != null then appliance.meta.hydraPlatforms else platforms.linux;
   };
 }

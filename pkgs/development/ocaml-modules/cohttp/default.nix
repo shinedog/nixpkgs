@@ -1,30 +1,35 @@
-{ stdenv, buildOcaml, fetchurl, ocaml, cmdliner, re, uri, fieldslib_p4
-, sexplib_p4, conduit , stringext, base64, magic-mime, ounit, alcotest
-, asyncSupport ? stdenv.lib.versionAtLeast ocaml.version "4.02"
-, lwt ? null, async_p4 ? null, async_ssl_p4 ? null
+{ lib, fetchurl, buildDunePackage
+, ppx_sexp_conv, base64, jsonm, re, stringext, uri-sexp
+, ocaml, fmt, alcotest
+, crowbar
 }:
 
-buildOcaml rec {
-  name = "cohttp";
-  version = "0.19.3";
+buildDunePackage rec {
+  pname = "cohttp";
+  version = "5.3.1";
 
-  minimumSupportedOcamlVersion = "4.01";
+  minimalOCamlVersion = "4.08";
 
   src = fetchurl {
-    url = "https://github.com/mirage/ocaml-cohttp/archive/v${version}.tar.gz";
-    sha256 = "1nrzpd4h52c1hnzcgsz462676saj9zss708ng001h54dglk8i1iv";
+    url = "https://github.com/mirage/ocaml-cohttp/releases/download/v${version}/cohttp-${version}.tbz";
+    hash = "sha256-9eJz08Lyn/R71+Ftsj4fPWzQGkC+ACCJhbxDTIjUV2s=";
   };
 
-  buildInputs = [ alcotest cmdliner conduit magic-mime ounit lwt ]
-  ++ stdenv.lib.optionals asyncSupport [ async_p4 async_ssl_p4 ];
-  propagatedBuildInputs = [ re stringext uri fieldslib_p4 sexplib_p4 base64 ];
+  postPatch = ''
+    substituteInPlace cohttp/src/dune --replace 'bytes base64' 'base64'
+  '';
 
-  buildFlags = "PREFIX=$(out)";
+  buildInputs = [ jsonm ppx_sexp_conv ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mirage/ocaml-cohttp;
-    description = "Very lightweight HTTP server using Lwt or Async";
-    license = licenses.mit;
-    maintainers = [ maintainers.ericbmerritt ];
+  propagatedBuildInputs = [ base64 re stringext uri-sexp ];
+
+  doCheck = true;
+  checkInputs = [ fmt alcotest crowbar ];
+
+  meta = {
+    description = "HTTP(S) library for Lwt, Async and Mirage";
+    license = lib.licenses.isc;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/mirage/ocaml-cohttp";
   };
 }

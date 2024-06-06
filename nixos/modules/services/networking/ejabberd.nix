@@ -11,7 +11,7 @@ let
     ${cfg.ctlConfig}
   '';
 
-  ectl = ''${cfg.package}/bin/ejabberdctl ${if cfg.configFile == null then "" else "--config ${cfg.configFile}"} --ctl-config "${ctlcfg}" --spool "${cfg.spoolDir}" --logs "${cfg.logsDir}"'';
+  ectl = ''${cfg.package}/bin/ejabberdctl ${optionalString (cfg.configFile != null) "--config ${cfg.configFile}"} --ctl-config "${ctlcfg}" --spool "${cfg.spoolDir}" --logs "${cfg.logsDir}"'';
 
   dumps = lib.escapeShellArgs cfg.loadDumps;
 
@@ -29,12 +29,7 @@ in {
         description = "Whether to enable ejabberd server";
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.ejabberd;
-        defaultText = "pkgs.ejabberd";
-        description = "ejabberd server package to use";
-      };
+      package = mkPackageOption pkgs "ejabberd" { };
 
       user = mkOption {
         type = types.str;
@@ -76,7 +71,7 @@ in {
         type = types.listOf types.path;
         default = [];
         description = "Configuration dumps that should be loaded on the first startup";
-        example = literalExample "[ ./myejabberd.dump ]";
+        example = literalExpression "[ ./myejabberd.dump ]";
       };
 
       imagemagick = mkOption {
@@ -94,47 +89,42 @@ in {
   config = mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
 
-    users.extraUsers = optionalAttrs (cfg.user == "ejabberd") (singleton
-      { name = "ejabberd";
+    users.users = optionalAttrs (cfg.user == "ejabberd") {
+      ejabberd = {
         group = cfg.group;
         home = cfg.spoolDir;
         createHome = true;
         uid = config.ids.uids.ejabberd;
-      });
+      };
+    };
 
-    users.extraGroups = optionalAttrs (cfg.group == "ejabberd") (singleton
-      { name = "ejabberd";
-        gid = config.ids.gids.ejabberd;
-      });
+    users.groups = optionalAttrs (cfg.group == "ejabberd") {
+      ejabberd.gid = config.ids.gids.ejabberd;
+    };
 
     systemd.services.ejabberd = {
       description = "ejabberd server";
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
-      path = [ pkgs.findutils pkgs.coreutils pkgs.runit ] ++ lib.optional cfg.imagemagick pkgs.imagemagick;
+      path = [ pkgs.findutils pkgs.coreutils ] ++ lib.optional cfg.imagemagick pkgs.imagemagick;
 
       serviceConfig = {
-        ExecStart = ''${ectl} foreground'';
-        # FIXME: runit is used for `chpst` -- can we get rid of this?
-        ExecStop = ''${pkgs.runit}/bin/chpst -u "${cfg.user}:${cfg.group}" ${ectl} stop'';
-        ExecReload = ''${pkgs.runit}/bin/chpst -u "${cfg.user}:${cfg.group}" ${ectl} reload_config'';
         User = cfg.user;
         Group = cfg.group;
-        PermissionsStartOnly = true;
+        ExecStart = "${ectl} foreground";
+        ExecStop = "${ectl} stop";
+        ExecReload = "${ectl} reload_config";
       };
 
       preStart = ''
-        mkdir -p -m750 "${cfg.logsDir}"
-        chown "${cfg.user}:${cfg.group}" "${cfg.logsDir}"
-
-        mkdir -p -m750 "/var/lock/ejabberdctl"
-        chown "${cfg.user}:${cfg.group}" "/var/lock/ejabberdctl"
-
-        mkdir -p -m750 "${cfg.spoolDir}"
-        chown -R "${cfg.user}:${cfg.group}" "${cfg.spoolDir}"
-
         if [ -z "$(ls -A '${cfg.spoolDir}')" ]; then
           touch "${cfg.spoolDir}/.firstRun"
+        fi
+
+        if ! test -e ${cfg.spoolDir}/.erlang.cookie; then
+          touch ${cfg.spoolDir}/.erlang.cookie
+          chmod 600 ${cfg.spoolDir}/.erlang.cookie
+          dd if=/dev/random bs=16 count=1 | base64 > ${cfg.spoolDir}/.erlang.cookie
         fi
       '';
 
@@ -149,12 +139,17 @@ in {
           for src in ${dumps}; do
             find "$src" -type f | while read dump; do
               echo "Loading configuration dump at $dump"
-              chpst -u "${cfg.user}:${cfg.group}" ${ectl} load "$dump"
+              ${ectl} load "$dump"
             done
           done
         fi
       '';
     };
+
+    systemd.tmpfiles.rules = [
+      "d '${cfg.logsDir}' 0750 ${cfg.user} ${cfg.group} -"
+      "d '${cfg.spoolDir}' 0700 ${cfg.user} ${cfg.group} -"
+    ];
 
     security.pam.services.ejabberd = {};
 

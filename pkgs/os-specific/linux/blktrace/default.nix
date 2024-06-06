@@ -1,24 +1,27 @@
-{ stdenv, fetchurl, libaio }:
+{ lib, stdenv, fetchurl, libaio }:
 
-stdenv.mkDerivation {
-  name = "blktrace-1.1.0";
+stdenv.mkDerivation rec {
+  pname = "blktrace";
+  version = "1.3.0";
 
   # Official source
-  # "git://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git"
+  # "https://git.kernel.org/pub/scm/linux/kernel/git/axboe/blktrace.git"
   src = fetchurl {
-    url = "http://brick.kernel.dk/snaps/blktrace-1.1.0.tar.bz2";
-    sha256 = "15cj9aki7z5i5y6bnchqry6yp40r4lmgmam6ar5gslnx0smgm8jl";
+    url = "https://brick.kernel.dk/snaps/blktrace-${version}.tar.bz2";
+    sha256 = "sha256-1t7aA4Yt4r0bG5+6cpu7hi2bynleaqf3yoa2VoEacNY=";
   };
 
   buildInputs = [ libaio ];
 
-  preConfigure = ''
-    sed s,/usr/local,$out, -i Makefile
-  '';
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+    "CC:=$(CC)"
+  ];
 
-  meta = {
+  meta = with lib; {
     description = "Block layer IO tracing mechanism";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ nickcao ];
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
   };
 }

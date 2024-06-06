@@ -1,30 +1,58 @@
-{ stdenv, fetchurl, pkgconfig, telepathy_glib, libxslt, makeWrapper, upower }:
+{ lib, stdenv
+, fetchurl
+, pkg-config
+, dconf
+, telepathy-glib
+, python3
+, libxslt
+, makeWrapper
+, autoreconfHook
+, gtk-doc
+}:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-5.16.3";
   pname = "telepathy-mission-control";
+  version = "5.16.6";
+
+  outputs = [ "out" "lib" "dev" ];
 
   src = fetchurl {
-    url = "http://telepathy.freedesktop.org/releases/${pname}/${name}.tar.gz";
-    sha256 = "0zcbx69k0d3p2pjh3g7sa3q2zkd5xchxkqsmlfn3fwxaz0pmsmvi";
+    url = "https://telepathy.freedesktop.org/releases/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "0ibs575pfr0wmhfcw6ln6iz7gw2y45l3bah11rksf6g9jlwsxy1d";
   };
 
-  buildInputs = [ telepathy_glib telepathy_glib.python makeWrapper /*upower*/ ]; # ToDo: optional stuff missing
-  # 5.16.3 won't build with upower-0.99. Arch and Debian choose to disable it
+  buildInputs = [
+    python3
+  ]; # ToDo: optional stuff missing
 
-  nativeBuildInputs = [ pkgconfig libxslt ];
+  nativeBuildInputs = [
+    pkg-config
+    libxslt
+    makeWrapper
+  ] ++ lib.optionals (stdenv.isDarwin && stdenv.isAarch64) [
+    autoreconfHook
+    gtk-doc
+  ];
+
+  propagatedBuildInputs = [
+    telepathy-glib
+  ];
 
   doCheck = true;
 
+  enableParallelBuilding = true;
+
   preFixup = ''
-    wrapProgram "$out/libexec/mission-control-5" \
+    wrapProgram "$lib/libexec/mission-control-5" \
+      --prefix GIO_EXTRA_MODULES : "${lib.getLib dconf}/lib/gio/modules" \
       --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An account manager and channel dispatcher for the Telepathy framework";
-    homepage = http://telepathy.freedesktop.org/wiki/;
-    license = licenses.lgpl21;
+    homepage = "https://telepathy.freedesktop.org/components/telepathy-mission-control/";
+    license = licenses.lgpl21Only;
+    maintainers = with maintainers; [ ];
     platforms = platforms.unix;
   };
 }

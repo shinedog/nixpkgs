@@ -1,40 +1,63 @@
-{ stdenv, fetchgit, autoreconfHook, openssl, libpcap, dpdk }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, dpdk
+, libbpf
+, libconfig
+, libpcap
+, numactl
+, openssl
+, zlib
+, zstd
+, libbsd
+, elfutils
+, jansson
+, libnl
+}:
 
 stdenv.mkDerivation rec {
-  name = "odp-dpdk-${version}";
-  version = "2016-08-16";
+  pname = "odp-dpdk";
+  version = "1.44.0.0_DPDK_22.11";
 
-  src = fetchgit {
-    url = "https://git.linaro.org/lng/odp-dpdk.git";
-    rev = "7068593f600e2b5a23ee1780d5c722c54e966df1";
-    sha256 = "0pz0zkxqaac193x21wmj3x88gfza6bvhmv5yf8fzkpm9zxnl2sy4";
+  src = fetchFromGitHub {
+    owner = "OpenDataPlane";
+    repo = "odp-dpdk";
+    rev = "v${version}";
+    hash = "sha256-hYtQ7kKB08BImkTYXqtnv1Ny1SUPCs6GX7WOYks8iKA=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
-  buildInputs = [ openssl dpdk libpcap ];
-
-  RTE_SDK = "${dpdk}";
-  RTE_TARGET = "x86_64-native-linuxapp-gcc";
-
-  patchPhase = ''
-    substituteInPlace scripts/git_hash.sh --replace /bin/bash /bin/sh
-    substituteInPlace scripts/get_impl_str.sh --replace /bin/bash /bin/sh
-    echo -n ${version} > .scmversion
-  '';
-
-  dontDisableStatic = true;
-
-  configureFlags = [
-    "--with-platform=linux-dpdk"
-    "--disable-shared"
-    "--with-sdk-install-path=${dpdk}/${RTE_TARGET}"
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
   ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    dpdk
+    libconfig
+    libpcap
+    numactl
+    openssl
+    zlib
+    zstd
+    libbsd
+    elfutils
+    jansson
+    libbpf
+    libnl
+  ];
+
+  # binaries will segfault otherwise
+  dontStrip = true;
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Open Data Plane optimized for DPDK";
-    homepage = http://www.opendataplane.org;
+    homepage = "https://www.opendataplane.org";
     license = licenses.bsd3;
-    platforms =  [ "x86_64-linux" ];
+    platforms = platforms.linux;
     maintainers = [ maintainers.abuibrahim ];
   };
 }

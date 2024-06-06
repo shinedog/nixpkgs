@@ -1,38 +1,78 @@
-{ stdenv, fetchFromGitHub, cmake, qhull, flann, boost, vtk, eigen, pkgconfig, qt4
-, libusb1, libpcap, libXt, libpng, Cocoa, AGL, cf-private, OpenGL
+{ lib
+, stdenv
+, fetchFromGitHub
+, wrapQtAppsHook
+, cmake
+, qhull
+, flann
+, boost
+, vtk
+, eigen
+, pkg-config
+, qtbase
+, libusb1
+, libpcap
+, libtiff
+, libXt
+, libpng
+, Cocoa
+, AGL
+, OpenGL
+, config
+, cudaSupport ? config.cudaSupport, cudaPackages
 }:
 
 stdenv.mkDerivation rec {
-  name = "pcl-1.8.0";
+  pname = "pcl";
+  version = "1.13.0";
 
   src = fetchFromGitHub {
     owner = "PointCloudLibrary";
     repo = "pcl";
-    rev = name;
-    sha256 = "1pki4y7mc2dryxc8wa7rs4hg74qab80rpy90jnw3j8fzf09kxcll";
+    rev = "${pname}-${version}";
+    sha256 = "sha256-JDiDAmdpwUR3Sff63ehyvetIFXAgGOrI+HEaZ5lURps=";
   };
 
-  enableParallelBuilding = true;
-
-  buildInputs = [ cmake qhull flann boost eigen pkgconfig libusb1 libpcap
-                  libpng vtk qt4 libXt ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ Cocoa AGL cf-private ];
-  cmakeFlags = stdenv.lib.optionals stdenv.isDarwin [
-    "-DCMAKE_OSX_SYSROOT=" "-DCMAKE_OSX_DEPLOYMENT_TARGET="
-    "-DOPENGL_INCLUDE_DIR=${OpenGL}/Library/Frameworks"
-  ];
-
-  preConfigure = stdenv.lib.optionalString stdenv.isDarwin ''
-    NIX_CFLAGS_COMPILE=$(echo "$NIX_CFLAGS_COMPILE" | sed "s,[[:space:]]*-F$NIX_STORE/[[:alnum:]]*-CF-osx-[[:digit:].]*/Library/Frameworks,,g")
-    sed -i 's,^\(      target_link_libraries("''${LIB_NAME}" "-framework Cocoa")\),\1\n      target_link_libraries("''${LIB_NAME}" "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation"),' visualization/CMakeLists.txt
-    sed -i 's,^\(set(SUBSYS_DEPS common io kdtree geometry search)\),\1\nset(CMAKE_OSX_SYSROOT "")\nset(CMAKE_OSX_DEPLOYMENT_TARGET ""),' visualization/CMakeLists.txt
+  # remove attempt to prevent (x86/x87-specific) extended precision use
+  # when SSE not detected
+  postPatch = lib.optionalString (!stdenv.hostPlatform.isx86) ''
+    sed -i '/-ffloat-store/d' cmake/pcl_find_sse.cmake
   '';
 
+  nativeBuildInputs = [
+    pkg-config
+    cmake
+    wrapQtAppsHook
+  ]
+  ++ lib.optionals cudaSupport [ cudaPackages.cuda_nvcc ];
+
+  buildInputs = [
+    eigen
+    libusb1
+    libpcap
+    qtbase
+    libXt
+  ]
+  ++ lib.optionals stdenv.isDarwin [ Cocoa AGL ];
+
+  propagatedBuildInputs = [
+    boost
+    flann
+    libpng
+    libtiff
+    qhull
+    vtk
+  ];
+
+  cmakeFlags = lib.optionals stdenv.isDarwin [
+    "-DOPENGL_INCLUDE_DIR=${OpenGL}/Library/Frameworks"
+  ] ++ lib.optionals cudaSupport [ "-DWITH_CUDA=true" ];
+
   meta = {
-    homepage = http://pointclouds.org/;
+    homepage = "https://pointclouds.org/";
     description = "Open project for 2D/3D image and point cloud processing";
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ viric ];
+    platforms = with lib.platforms; linux ++ darwin;
   };
 }

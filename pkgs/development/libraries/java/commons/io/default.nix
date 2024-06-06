@@ -1,12 +1,12 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  version = "2.4";
-  name    = "commons-io-${version}";
+  version = "2.16.1";
+  pname = "commons-io";
 
   src = fetchurl {
-    url    = "mirror://apache/commons/io/binaries/${name}-bin.tar.gz";
-    sha256 = "0m5xmjfr9k2zmbrz425q530jd0lm6368c4wm3jsjlsrqmqjpsvz1";
+    url    = "mirror://apache/commons/io/binaries/${pname}-${version}-bin.tar.gz";
+    sha256 = "sha256-4+YYSDyCHwUwlw71nAnGy4g9GOl1Z8qr3gHQEyv8EPo=";
   };
 
   installPhase = ''
@@ -16,10 +16,11 @@ stdenv.mkDerivation rec {
   '';
 
   meta = {
-    homepage    = "http://commons.apache.org/proper/commons-io";
+    homepage    = "https://commons.apache.org/proper/commons-io";
     description = "A library of utilities to assist with developing IO functionality";
-    maintainers = with stdenv.lib.maintainers; [ copumpkin ];
-    license     = stdenv.lib.licenses.asl20;
-    platforms = with stdenv.lib.platforms; unix;
+    maintainers = with lib.maintainers; [ copumpkin ];
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license     = lib.licenses.asl20;
+    platforms = with lib.platforms; unix;
   };
 }

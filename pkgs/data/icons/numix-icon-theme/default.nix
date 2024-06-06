@@ -1,31 +1,61 @@
-{ stdenv, fetchFromGitHub }:
+{ lib
+, stdenvNoCC
+, fetchFromGitHub
+, gtk3
+, adwaita-icon-theme
+, breeze-icons
+, gnome-icon-theme
+, hicolor-icon-theme
+, gitUpdater
+}:
 
-stdenv.mkDerivation rec {
-  version = "2016-11-13";
-
-  package-name = "numix-icon-theme";
-
-  name = "${package-name}-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "numix-icon-theme";
+  version = "24.04.22";
 
   src = fetchFromGitHub {
     owner = "numixproject";
-    repo = package-name;
-    rev = "45878a1195abd997341c91d51381625644f9a356";
-    sha256 = "0in7vx8mdwbfkgylh9p95kcsnn7dnv2vpmv788n0bbgldxmrldga";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-hFUsj0nODUVbzKyN6ud3HsaoTZBLGW+jjwc6kFFH02c=";
   };
 
-  dontBuild = true;
+  nativeBuildInputs = [
+    gtk3
+  ];
+
+  propagatedBuildInputs = [
+    adwaita-icon-theme
+    breeze-icons
+    gnome-icon-theme
+    hicolor-icon-theme
+  ];
+
+  dontDropIconThemeCache = true;
 
   installPhase = ''
-    install -dm 755 $out/share/icons
-    cp -dr --no-preserve='ownership' Numix{,-Light} $out/share/icons/
+    runHook preInstall
+
+    substituteInPlace Numix/index.theme --replace Breeze breeze
+
+    mkdir -p $out/share/icons
+    cp -a Numix{,-Light} $out/share/icons/
+
+    for theme in $out/share/icons/*; do
+      gtk-update-icon-cache $theme
+    done
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
     description = "Numix icon theme";
-    homepage = https://numixproject.org;
-    license = licenses.gpl3;
-    platforms = platforms.all;
-    maintainers = with maintainers; [ romildo jgeerds ];
+    homepage = "https://numixproject.github.io";
+    license = licenses.gpl3Only;
+    # darwin cannot deal with file names differing only in case
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ romildo ];
   };
 }

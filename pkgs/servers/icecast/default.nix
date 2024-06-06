@@ -1,13 +1,14 @@
-{stdenv, fetchurl
+{lib, stdenv, fetchurl
 , libxml2, libxslt, curl
 , libvorbis, libtheora, speex, libkate, libopus }:
 
 stdenv.mkDerivation rec {
-  name = "icecast-2.4.1";
+  pname = "icecast";
+  version = "2.4.4";
 
   src = fetchurl {
-    url = "http://downloads.xiph.org/releases/icecast/${name}.tar.gz";
-    sha256 = "0js5lylrgklhvvaksx46zc8lc975qb1bns8h1ms545nv071rxy23";
+    url = "http://downloads.xiph.org/releases/icecast/icecast-${version}.tar.gz";
+    sha256 = "0i2d9rhav0x6js2qhjf5iy6j2a7f0d11ail0lfv40hb1kygrgda9";
   };
 
   buildInputs = [ libxml2 libxslt curl libvorbis libtheora speex libkate libopus ];
@@ -16,6 +17,7 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Server software for streaming multimedia";
+    mainProgram = "icecast";
 
     longDescription = ''
       Icecast is a streaming media server which currently supports
@@ -26,10 +28,10 @@ stdenv.mkDerivation rec {
       open standards for commuincation and interaction.
     '';
 
-    homepage = http://www.icecast.org;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [ jcumming ];
-    platforms = with stdenv.lib.platforms; unix;
+    homepage = "https://www.icecast.org";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [ jcumming ];
+    platforms = with lib.platforms; unix;
   };
 }
 

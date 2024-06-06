@@ -1,28 +1,22 @@
-{ stdenv
+{ lib, stdenv
 , fetchFromGitHub
 , libseccomp
 , perl
 , which
 }:
 
-stdenv.mkDerivation rec {
-  name = "syscall_limiter-${version}";
-  version = "${date}-${stdenv.lib.strings.substring 0 7 rev}";
-  date = "20160105";
-  rev = "b02c0316a2aaff496f712f1467e20337006655cc";
+stdenv.mkDerivation {
+  pname = "syscall_limiter";
+  version = "2017-01-23";
 
   src = fetchFromGitHub {
-    owner = "vi";
-    repo = "syscall_limiter";
-    inherit rev;
-    sha256 = "14q5k5c8hk7gnxhgwaamwbibasb3pwj6jnqsxa1bdp16n6jdajxd";
+    owner  = "vi";
+    repo   = "syscall_limiter";
+    rev    = "481c8c883f2e1260ebc83b352b63bf61a930a341";
+    sha256 = "0z5arj1kq1xczgrbw1b8m9kicbv3vs9bd32wvgfr4r6ndingsp5m";
   };
 
-  configurePhase = "";
-
-  buildPhase = ''
-    make CC="gcc -I${libseccomp}/include -L${libseccomp}/lib"
-  '';
+  buildInputs = [ libseccomp ];
 
   installPhase = ''
     mkdir -p $out/bin
@@ -33,11 +27,11 @@ stdenv.mkDerivation rec {
       --replace which ${which}/bin/which
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Start Linux programs with only selected syscalls enabled";
-    homepage = https://github.com/vi/syscall_limiter;
-    license = licenses.mit;
+    homepage    = "https://github.com/vi/syscall_limiter";
+    license     = licenses.mit;
     maintainers = with maintainers; [ obadz ];
-    platforms = platforms.linux;
+    platforms   = platforms.linux;
   };
 }

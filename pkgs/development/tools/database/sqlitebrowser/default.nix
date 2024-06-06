@@ -1,24 +1,36 @@
-{ stdenv, fetchFromGitHub, qt4, sqlite, cmake }:
+{ lib, stdenv, mkDerivation, fetchFromGitHub, cmake
+, qtbase, qttools, sqlcipher, wrapGAppsHook3, qtmacextras
+}:
 
-stdenv.mkDerivation rec {
-  version = "3.8.0";
-  name = "sqlitebrowser-${version}";
+mkDerivation rec {
+  pname = "sqlitebrowser";
+  version = "3.12.2";
 
   src = fetchFromGitHub {
-    repo   = "sqlitebrowser";
-    owner  = "sqlitebrowser";
-    rev    = "v${version}";
-    sha256 = "009yaamf6f654dl796f1gmj3rb34d55w87snsfgk33gpy6x19ccp";
+    owner = pname;
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-33iVic0kxemWld+SiHOWGlKFSi5fpk1RtLUiNDr7WNI=";
   };
 
-  buildInputs = [ qt4 sqlite cmake ];
+  # We should be using qscintilla from nixpkgs instead of the vendored version,
+  # but qscintilla is currently in a bit of a mess as some consumers expect a
+  # -qt4 or -qt5 prefix while others do not.
+  # We *really* should get that cleaned up.
+  buildInputs = [ qtbase sqlcipher ] ++ lib.optionals stdenv.isDarwin [ qtmacextras ];
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ cmake qttools wrapGAppsHook3 ];
+
+  cmakeFlags = [
+    "-Dsqlcipher=1"
+  ];
+
+  meta = with lib; {
     description = "DB Browser for SQLite";
-    homepage = "http://sqlitebrowser.org/";
+    mainProgram = "sqlitebrowser";
+    homepage = "https://sqlitebrowser.org/";
     license = licenses.gpl3;
-    maintainers = [ maintainers.matthiasbeyer ];
-    platforms = platforms.linux; # can only test on linux
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = platforms.unix;
   };
 }
-

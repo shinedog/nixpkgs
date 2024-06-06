@@ -1,15 +1,22 @@
-with import <nixpkgs> {};
+with import ../../.. {};
 
 stdenv.mkDerivation {
   name = "generate-r-packages-shell";
 
   buildCommand = "exit 1";
 
-  nativeBuildInputs = [ 
+  buildInputs = [
+    wget
+    cacert
+    nix
+  ];
+
+  nativeBuildInputs = [
     (rWrapper.override {
       packages = with rPackages; [
         data_table
         parallel
+        BiocManager
       ];
     })
   ];

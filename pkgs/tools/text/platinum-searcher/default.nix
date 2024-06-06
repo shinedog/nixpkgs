@@ -1,25 +1,32 @@
-{ stdenv, lib, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, fetchpatch }:
 
-buildGoPackage rec {
-  name = "the_platinum_searcher-${version}";
-  version = "2.1.3";
-  rev = "v2.1.3";
-
-  goPackagePath = "github.com/monochromegane/the_platinum_searcher";
+buildGoModule rec {
+  pname = "the_platinum_searcher";
+  version = "2.2.0";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "monochromegane";
     repo = "the_platinum_searcher";
-    sha256 = "09pkdfh7fqn3x4l9zaw5wzk20k7nfdwry7br9vfy3vv3fwv61ynp";
+    rev = "v${version}";
+    hash = "sha256-FNHlALFwMbajaHWOehdSFeQmvZSuCZLdqGqLZ7DF+pI=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-GIjPgu0e+duN5MeWcRaF5xUFCkqe2aZJCwGbLUMko08=";
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/monochromegane/the_platinum_searcher;
-    description = "A code search tool similar to ack and the_silver_searcher(ag).";
-    platforms = platforms.all;
+  patches = [
+    # Add Go Modules support. See https://github.com/monochromegane/the_platinum_searcher/pull/217.
+    (fetchpatch {
+      url = "https://github.com/monochromegane/the_platinum_searcher/pull/217/commits/69064d11c57d5fd5f66ddd95f0e789786183d3c6.patch";
+      hash = "sha256-qQ7kZYb2MWSUV6T1frIPT9nMfb20SI7lbG8YhqyQEi8=";
+    })
+  ];
+
+  ldflags = [ "-s" "-w" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/monochromegane/the_platinum_searcher";
+    description = "A code search tool similar to ack and the_silver_searcher(ag)";
+    mainProgram = "pt";
     license = licenses.mit;
   };
 }

@@ -1,27 +1,35 @@
-{ stdenv, fetchFromGitHub, libX11, imlib2, giflib, libexif }:
+{ lib, stdenv, fetchFromGitHub, libXft, imlib2, giflib, libexif, conf ? null }:
+
+with lib;
 
 stdenv.mkDerivation rec {
-  name = "sxiv-${version}";
-  version = "v1.3.2";
-  #https://github.com/muennich/sxiv/archive/v1.3.2.zip
+  pname = "sxiv";
+  version = "26";
+
   src = fetchFromGitHub {
     owner = "muennich";
-    repo = "sxiv";
-    rev = version;
-    sha256 = "1f4gz1qjhb44bbb3q5fqk439zyipkwnr19zhg89yq2pgmzzzqr2h";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "0xaawlfdy7b277m38mgg4423kd7p1ffn0dq4hciqs6ivbb3q9c4f";
   };
 
-  postUnpack = ''
-    substituteInPlace $sourceRoot/Makefile \
-      --replace /usr/local $out
+  configFile = optionalString (conf!=null) (builtins.toFile "config.def.h" conf);
+  preBuild = optionalString (conf!=null) "cp ${configFile} config.def.h";
+
+  buildInputs = [ libXft imlib2 giflib libexif ];
+
+  makeFlags = [ "PREFIX=${placeholder "out"}" ];
+
+  postInstall = ''
+    install -Dt $out/share/applications sxiv.desktop
   '';
 
-  buildInputs = [ libX11 imlib2 giflib libexif ];
   meta = {
     description = "Simple X Image Viewer";
     homepage = "https://github.com/muennich/sxiv";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.linux;
+    maintainers = with maintainers; [ h7x4 ];
+    mainProgram = "sxiv";
   };
 }

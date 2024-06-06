@@ -1,8 +1,6 @@
-{ stdenv, appleDerivation }:
+{ appleDerivation, darwin-stubs }:
 
 appleDerivation {
-  phases = [ "unpackPhase" "installPhase" ];
-
   # Not strictly necessary, since libSystem depends on it, but it's nice to be explicit so we
   # can easily find out what's impure.
   __propagatedImpureHostDeps = [
@@ -14,10 +12,12 @@ appleDerivation {
 
   installPhase = ''
     mkdir -p $out/include/objc $out/lib
-    ln -s /usr/lib/libobjc.dylib $out/lib/libobjc.dylib
+    cp ${darwin-stubs}/usr/lib/libobjc.A.tbd $out/lib/libobjc.A.tbd
+    ln -s libobjc.A.tbd $out/lib/libobjc.tbd
     cp runtime/OldClasses.subproj/List.h $out/include/objc/List.h
     cp runtime/NSObjCRuntime.h $out/include/objc/NSObjCRuntime.h
     cp runtime/NSObject.h $out/include/objc/NSObject.h
+    cp runtime/Object.h $out/include/objc/Object.h
     cp runtime/Protocol.h $out/include/objc/Protocol.h
     cp runtime/hashtable.h $out/include/objc/hashtable.h
     cp runtime/hashtable2.h $out/include/objc/hashtable2.h

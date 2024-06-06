@@ -1,38 +1,86 @@
-{ stdenv, fetchurl, python, pkgconfig, readline, tdb, talloc, tevent
-, popt, libxslt, docbook_xsl, docbook_xml_dtd_42
+{ lib, stdenv
+, fetchurl
+, python3
+, pkg-config
+, readline
+, tdb
+, talloc
+, tevent
+, popt
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_42
+, cmocka
+, wafHook
+, libxcrypt
+, testers
 }:
 
-stdenv.mkDerivation rec {
-  name = "ldb-1.1.27";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "ldb";
+  version = "2.9.0";
 
   src = fetchurl {
-    url = "mirror://samba/ldb/${name}.tar.gz";
-    sha256 = "1b1mkl5p8swb67s9aswavhzswlib34hpgsv66zgns009paf2df6d";
+    url = "mirror://samba/ldb/${finalAttrs.pname}-${finalAttrs.version}.tar.gz";
+    hash = "sha256-EFqv9xrYgaf661gv1BauKCIbb94zj/+CgoBlBiwlB6U=";
   };
 
   outputs = [ "out" "dev" ];
 
-  buildInputs = [
-    python pkgconfig readline tdb talloc tevent popt
-    libxslt docbook_xsl docbook_xml_dtd_42
+  nativeBuildInputs = [
+    pkg-config
+    python3
+    wafHook
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_42
+    tdb
+    tevent
   ];
 
+  buildInputs = [
+    python3
+    readline # required to build python
+    tdb
+    talloc
+    tevent
+    popt
+    cmocka
+    libxcrypt
+  ];
+
+  # otherwise the configure script fails with
+  # PYTHONHASHSEED=1 missing! Don't use waf directly, use ./configure and make!
   preConfigure = ''
-    sed -i 's,#!/usr/bin/env python,#!${python}/bin/python,g' buildtools/bin/waf
+    export PKGCONFIG="$PKG_CONFIG"
+    export PYTHONHASHSEED=1
   '';
 
-  configureFlags = [
+  wafPath = "buildtools/bin/waf";
+
+  wafConfigureFlags = [
     "--bundled-libraries=NONE"
     "--builtin-libraries=replace"
+    "--without-ldb-lmdb"
   ];
 
-  stripDebugList = "bin lib modules";
+  # python-config from build Python gives incorrect values when cross-compiling.
+  # If python-config is not found, the build falls back to using the sysconfig
+  # module, which works correctly in all cases.
+  PYTHON_CONFIG = "/invalid";
 
-  meta = with stdenv.lib; {
+  stripDebugList = [ "bin" "lib" "modules" ];
+
+  passthru.tests.pkg-config = testers.hasPkgConfigModules {
+    package = finalAttrs.finalPackage;
+  };
+
+  meta = with lib; {
+    broken = stdenv.isDarwin;
     description = "A LDAP-like embedded database";
-    homepage = http://ldb.samba.org/;
+    homepage = "https://ldb.samba.org/";
     license = licenses.lgpl3Plus;
-    maintainers = with maintainers; [ wkennington ];
+    pkgConfigModules = [ "ldb" ];
     platforms = platforms.all;
   };
-}
+})

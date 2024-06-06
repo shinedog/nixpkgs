@@ -1,20 +1,25 @@
-{ stdenv, lib, copyPathsToStore, src, version, cmake }:
+{ mkDerivation, lib, fetchpatch, cmake, pkg-config }:
 
-stdenv.mkDerivation {
-  name = "extra-cmake-modules-${version}";
+mkDerivation {
+  pname = "extra-cmake-modules";
 
-  inherit src;
-
-  patches = copyPathsToStore (lib.readPathsFromFile ./. ./series);
+  patches = [
+    # https://invent.kde.org/frameworks/extra-cmake-modules/-/merge_requests/268
+    (fetchpatch {
+      url = "https://invent.kde.org/frameworks/extra-cmake-modules/-/commit/5862a6f5b5cd7ed5a7ce2af01e44747c36318220.patch";
+      sha256 = "10y36fc3hnpmcsmjgfxn1rp4chj5yrhgghj7m8gbmcai1q5jr0xj";
+    })
+  ];
 
   outputs = [ "out" ];  # this package has no runtime components
 
-  nativeBuildInputs = [ cmake ];
+  propagatedBuildInputs = [ cmake pkg-config ];
+
+  setupHook = ./setup-hook.sh;
 
   meta = with lib; {
-    platforms = lib.platforms.linux;
-    homepage = "http://www.kde.org";
+    platforms = platforms.linux ++ platforms.darwin;
+    homepage = "https://invent.kde.org/frameworks/extra-cmake-modules";
     license = licenses.bsd2;
-    maintainers = [ maintainers.ttuegel ];
   };
 }

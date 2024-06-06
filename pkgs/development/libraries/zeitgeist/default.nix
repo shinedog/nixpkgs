@@ -1,48 +1,81 @@
-{ stdenv, fetchurl, pkgconfig, glib, sqlite, gnome3, vala_0_23
-, intltool, libtool, dbus_libs, telepathy_glib
-, gtk3, json_glib, librdf_raptor2, dbus_glib
-, pythonSupport ? true, python2Packages
+{ stdenv
+, lib
+, fetchFromGitLab
+, pkg-config
+, glib
+, sqlite
+, gobject-introspection
+, vala
+, autoconf
+, automake
+, libtool
+, gettext
+, dbus
+, gtk3
+, json-glib
+, librdf_raptor2
+, pythonSupport ? true
+, python3
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.9.15";
-  name = "zeitgeist-${version}";
+  pname = "zeitgeist";
+  version = "1.0.4";
 
-  src = fetchurl {
-    url = "https://github.com/seiflotfy/zeitgeist/archive/v${version}.tar.gz";
-    sha256 = "07pnc7kmjpd0ncm32z6s3ny5p4zl52v9lld0n0f8sp6cw87k12p0";
+  outputs = [ "out" "lib" "dev" "man" ] ++ lib.optional pythonSupport "py";
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = pname;
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "kG1N8DXgjYAJ8fbrGHsp7eTqB20H5smzRnW0PSRUYR0=";
   };
 
-  NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";
+  nativeBuildInputs = [
+    autoconf
+    automake
+    libtool
+    pkg-config
+    gettext
+    gobject-introspection
+    vala
+    python3
+  ];
 
-  configureScript = "./autogen.sh";
+  buildInputs = [
+    glib
+    sqlite
+    dbus
+    gtk3
+    json-glib
+    librdf_raptor2
+    python3.pkgs.rdflib
+  ];
 
-  configureFlags = [ "--with-session-bus-services-dir=$(out)/share/dbus-1/services" ];
-
-  buildInputs = [ pkgconfig glib sqlite gnome3.gnome_common intltool
-                  libtool dbus_libs telepathy_glib vala_0_23 dbus_glib
-                  gtk3 json_glib librdf_raptor2 python2Packages.rdflib ];
-
-  prePatch = "patchShebangs .";
-
-  patches = [ ./dbus_glib.patch ];
-
-  patchFlags = [ "-p0" ];
+  configureFlags = [
+    "--disable-telepathy"
+  ];
 
   enableParallelBuilding = true;
 
-  postFixup = ''
-  '' + stdenv.lib.optionalString pythonSupport ''
-    moveToOutput lib/${python2Packages.python.libPrefix} "$py"
+  postPatch = ''
+    patchShebangs data/ontology2code
   '';
 
-  outputs = [ "out" ] ++ stdenv.lib.optional pythonSupport "py";
+  preConfigure = ''
+    NOCONFIGURE=1 ./autogen.sh
+  '';
 
-  meta = with stdenv.lib; {
-    description = "A service which logs the users's activities and events";
-    homepage = https://launchpad.net/zeitgeist;
-    maintainers = with maintainers; [ lethalman ];
-    license = licenses.gpl2;
+  postFixup = lib.optionalString pythonSupport ''
+    moveToOutput lib/${python3.libPrefix} "$py"
+  '';
+
+  meta = with lib; {
+    description = "A service which logs the users’s activities and events";
+    homepage = "https://zeitgeist.freedesktop.org/";
+    maintainers = teams.freedesktop.members ++ (with maintainers; [ ]);
+    license = licenses.lgpl21Plus;
     platforms = platforms.linux;
   };
 }

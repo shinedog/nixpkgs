@@ -1,25 +1,31 @@
-{ stdenv, fetchFromGitHub, talloc, docutils
-, enableStatic ? false }:
+{ lib, stdenv, fetchFromGitHub
+, talloc
+, pkg-config
+, ncurses
+, docutils, swig, python3, coreutils, enablePython ? true }:
 
 stdenv.mkDerivation rec {
-  name = "proot-${version}";
-  version = "5.1.0";
+  pname = "proot";
+  version = "5.4.0";
 
   src = fetchFromGitHub {
-    sha256 = "0azsqis99gxldmbcg43girch85ysg4hwzf0h1b44bmapnsm89fbz";
-    rev = "v${version}";
     repo = "proot";
-    owner = "cedric-vincent";
+    owner = "proot-me";
+    rev = "v${version}";
+    sha256 = "sha256-Z9Y7ccWp5KEVuo9xfHcgo58XqYVdFo7ck1jH7cnT2KA=";
   };
 
-  buildInputs = [ talloc ] ++ stdenv.lib.optional enableStatic stdenv.cc.libc.static;
-  nativeBuildInputs = [ docutils ];
+  postPatch = ''
+    substituteInPlace src/GNUmakefile \
+      --replace /bin/echo ${coreutils}/bin/echo
+    # our cross machinery defines $CC and co just right
+    sed -i /CROSS_COMPILE/d src/GNUmakefile
+  '';
+
+  buildInputs = [ ncurses talloc ] ++ lib.optional enablePython python3;
+  nativeBuildInputs = [ pkg-config docutils ] ++ lib.optional enablePython swig;
 
   enableParallelBuilding = true;
-
-  preBuild = stdenv.lib.optionalString enableStatic ''
-    export LDFLAGS="-static"
-  '';
 
   makeFlags = [ "-C src" ];
 
@@ -27,18 +33,21 @@ stdenv.mkDerivation rec {
     make -C doc proot/man.1
   '';
 
-  installFlags = [ "PREFIX=$(out)" ];
+  installFlags = [ "PREFIX=${placeholder "out"}" ];
 
   postInstall = ''
     install -Dm644 doc/proot/man.1 $out/share/man/man1/proot.1
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://proot.me;
+  # proot provides tests with `make -C test` however they do not run in the sandbox
+  doCheck = false;
+
+  meta = with lib; {
+    homepage = "https://proot-me.github.io";
     description = "User-space implementation of chroot, mount --bind and binfmt_misc";
     platforms = platforms.linux;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ ianwookim nckx ];
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ianwookim makefu veprbl dtzWill ];
+    mainProgram = "proot";
   };
 }
-

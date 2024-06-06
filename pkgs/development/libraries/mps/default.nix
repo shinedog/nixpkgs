@@ -1,21 +1,37 @@
-{ stdenv, fetchurl, autoreconfHook, sqlite }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, sqlite
+}:
 
 stdenv.mkDerivation rec {
-  name = "mps-${version}";
-  version = "1.115.0";
+  pname = "mps";
+  version = "1.118.0";
 
-  src = fetchurl {
-    url    = "http://www.ravenbrook.com/project/mps/release/${version}/mps-kit-${version}.tar.gz";
-    sha256 = "156xdl16r44nn8svnrgfaklwrgpc3y0rxzqyp0jbdp55c6rlfl6l";
+  src = fetchFromGitHub {
+    owner = "Ravenbrook";
+    repo = "mps";
+    rev = "refs/tags/release-${version}";
+    hash = "sha256-3ql3jWLccgnQHKf23B1en+nJ9rxqmHcWd7aBr93YER0=";
   };
 
-  buildInputs = [ autoreconfHook sqlite ];
+  postPatch = ''
+    # Disable -Werror to avoid biuld failure on fresh toolchains like
+    # gcc-13.
+    substituteInPlace code/gc.gmk --replace-fail '-Werror ' ' '
+    substituteInPlace code/gp.gmk --replace-fail '-Werror ' ' '
+    substituteInPlace code/ll.gmk --replace-fail '-Werror ' ' '
+  '';
+
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ sqlite ];
 
   meta = {
     description = "A flexible memory management and garbage collection library";
-    homepage    = "http://www.ravenbrook.com/project/mps";
-    license     = stdenv.lib.licenses.sleepycat;
-    platforms   = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    homepage    = "https://www.ravenbrook.com/project/mps";
+    license     = lib.licenses.sleepycat;
+    platforms   = lib.platforms.linux;
+    maintainers = [ lib.maintainers.thoughtpolice ];
   };
 }

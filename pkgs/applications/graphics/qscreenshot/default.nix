@@ -1,24 +1,38 @@
-{ stdenv, fetchurl, dos2unix, which, qt }:
+{ stdenv
+, lib
+, fetchgit
+, dos2unix
+, qtbase
+, qttools
+, qtx11extras
+, wrapQtAppsHook
+, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "qscreenshot-1.0";
+  pname = "qscreenshot";
+  version = "unstable-2021-10-18";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/qscreenshot/${name}-src.tar.gz";
-    sha256 = "1spj5fg2l8p5bk81xsv6hqn1kcrdiy54w19jsfb7g5i94vcb1pcx";
+  src = fetchgit {
+    url = "https://git.code.sf.net/p/qscreenshot/code";
+    rev = "e340f06ae2f1a92a353eaa68e103d1c840adc12d";
+    sha256 = "0mdiwn74vngiyazr3lq72f3jnv5zw8wyd2dw6rik6dbrvfs69jig";
   };
 
-  buildInputs = [ dos2unix which qt ];
+  preConfigure = "cd qScreenshot";
 
-  # Remove carriage returns that cause /bin/sh to abort
-  preConfigure = ''
-    dos2unix configure
-    sed -i "s|lrelease-qt4|lrelease|" src/src.pro
-  '';
-
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    cmake
+    qttools
+    wrapQtAppsHook
+  ];
+  buildInputs = [
+    qtbase
+    qtx11extras
+  ];
+  meta = with lib; {
     description = "Simple creation and editing of screenshots";
-    homepage = https://sourceforge.net/projects/qscreenshot/;
+    mainProgram = "qScreenshot";
+    homepage = "https://sourceforge.net/projects/qscreenshot/";
     license = licenses.gpl2;
     platforms = platforms.all;
     maintainers = [ maintainers.bjornfor ];

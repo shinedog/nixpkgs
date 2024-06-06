@@ -1,19 +1,27 @@
-{ stdenv, lib, fetchurl, pkgconfig
-, curl, apacheHttpd, pcre, apr, aprutil, libxml2 }:
+{ stdenv, lib, fetchFromGitHub, pkg-config, autoreconfHook
+, curl, apacheHttpd, pcre, apr, aprutil, libxml2
+, luaSupport ? false, lua5, perl
+}:
 
-with lib;
+let luaValue = if luaSupport then lua5 else "no";
+    optional = lib.optional;
+in
 
 stdenv.mkDerivation rec {
-  name = "modsecurity-${version}";
-  version = "2.9.0";
+  pname = "modsecurity";
+  version = "2.9.7";
 
-  src = fetchurl {
-    url = "https://www.modsecurity.org/tarball/${version}/${name}.tar.gz";
-    sha256 = "e2bbf789966c1f80094d88d9085a81bde082b2054f8e38e0db571ca49208f434";
+  src = fetchFromGitHub {
+    owner = "owasp-modsecurity";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-hJ8wYeC83dl85bkUXGZKHpHzw9QRgtusj1/+Coxsx0k=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ curl apacheHttpd pcre apr aprutil libxml2 ];
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
+  buildInputs = [  curl apacheHttpd pcre apr aprutil libxml2 ] ++
+    optional luaSupport lua5;
+
   configureFlags = [
     "--enable-standalone-module"
     "--enable-static"
@@ -23,24 +31,27 @@ stdenv.mkDerivation rec {
     "--with-apr=${apr.dev}"
     "--with-apu=${aprutil.dev}/bin/apu-1-config"
     "--with-libxml=${libxml2.dev}"
+    "--with-lua=${luaValue}"
   ];
 
   outputs = ["out" "nginx"];
+  # by default modsecurity's install script copies compiled output to httpd's modules folder
+  # this patch removes those lines
+  patches = [ ./Makefile.am.patch ];
 
-  preBuild = ''
-    substituteInPlace apache2/Makefile.in --replace "install -D " "# install -D"
-  '';
+  doCheck = true;
+  nativeCheckInputs = [ perl ];
 
   postInstall = ''
     mkdir -p $nginx
     cp -R * $nginx
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Open source, cross-platform web application firewall (WAF)";
     license = licenses.asl20;
-    homepage = https://www.modsecurity.org/;
+    homepage = "https://github.com/owasp-modsecurity/ModSecurity";
     maintainers = with maintainers; [offline];
-    platforms = platforms.linux;
+    platforms   = lib.platforms.linux ++ lib.platforms.darwin;
   };
 }

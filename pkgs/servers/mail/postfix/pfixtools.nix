@@ -1,4 +1,4 @@
-{ stdenv, lib, fetchFromGitHub, git, gperf, pcre, unbound, libev, tokyocabinet, pkgconfig, bash, libsrs2 }:
+{ stdenv, lib, fetchFromGitHub, git, gperf, pcre, unbound, libev, tokyocabinet, pkg-config, bash, libsrs2 }:
 
 let
   version = "0.9";
@@ -10,7 +10,7 @@ let
     sha256 = "1vmbrw686f41n6xfjphfshn96vl07ynvnsyjdw9yfn9bfnldcjcq";
   };
 
-  srcRoot = "pfixtools-${pfixtoolsSrc.rev}-src";
+  srcRoot = pfixtoolsSrc.name;
 
   libCommonSrc = fetchFromGitHub {
     owner = "Fruneau";
@@ -22,11 +22,15 @@ let
 in
 
 stdenv.mkDerivation {
-  name = "pfixtools-${version}";
+  pname = "pfixtools";
+  inherit version;
 
   src = pfixtoolsSrc;
 
-  buildInputs = [git gperf pcre unbound libev tokyocabinet pkgconfig bash libsrs2];
+  patches = [ ./0001-Fix-build-with-unbound-1.6.1.patch ];
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [git gperf pcre unbound libev tokyocabinet bash libsrs2];
 
   postUnpack = ''
     cp -Rp ${libCommonSrc}/* ${srcRoot}/common;
@@ -36,16 +40,20 @@ stdenv.mkDerivation {
   postPatch = ''
     substituteInPlace postlicyd/policy_tokens.sh \
                       --replace /bin/bash ${bash}/bin/bash;
+
+    substituteInPlace postlicyd/*_tokens.sh \
+      --replace "unsigned int" "size_t"
   '';
 
-  NIX_CFLAGS_COMPILE = "-Wno-error=unused-result";
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=unused-result -Wno-error=nonnull-compare -Wno-error=format-truncation";
 
-  makeFlags = "DESTDIR=$(out) prefix=";
+  makeFlags = [ "DESTDIR=$(out)" "prefix=" ];
 
   meta = {
     description = "A collection of postfix-related tools";
     license = with lib.licenses; [ bsd3 ];
-    homepage = https://github.com/Fruneau/pfixtools;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://github.com/Fruneau/pfixtools";
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ jerith666 ];
   };
 }

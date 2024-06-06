@@ -1,18 +1,34 @@
-{stdenv, fetchurl}:
+{ lib, stdenv, fetchurl, makeWrapper, jdk }:
 
 stdenv.mkDerivation rec {
-  name = "lombok-1.16.8";
+  pname = "lombok";
+  version = "1.18.32";
+
   src = fetchurl {
-    url = "https://projectlombok.org/downloads/${name}.jar";
-    sha256 = "0s7ak6gx1h04da2rdhvc0fk896cwqm2m7g3chqcjpsrkgfdv4cpy";
+    url = "https://projectlombok.org/downloads/lombok-${version}.jar";
+    sha256 = "sha256-l1dGdOKiX1Z6MTc2rOAN+Hh9RD3jFkB9V/yHfZ8Zpl0=";
   };
-  phases = [ "installPhase" ];
-  installPhase = "mkdir -p $out/share/java; cp $src $out/share/java/lombok.jar";
+
+  nativeBuildInputs = [ makeWrapper ];
+
+  outputs = [ "out" "bin" ];
+
+  buildCommand = ''
+    mkdir -p $out/share/java
+    cp $src $out/share/java/lombok.jar
+
+    makeWrapper ${jdk}/bin/java $bin/bin/lombok \
+      --add-flags "-cp ${jdk}/lib/openjdk/lib/tools.jar:$out/share/java/lombok.jar" \
+      --add-flags lombok.launch.Main
+  '';
+
   meta = {
     description = "A library that can write a lot of boilerplate for your Java project";
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.mit;
-    homepage = https://projectlombok.org/;
-    maintainers = [ stdenv.lib.maintainers.CrystalGamma ];
+    mainProgram = "lombok";
+    platforms = lib.platforms.all;
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = lib.licenses.mit;
+    homepage = "https://projectlombok.org/";
+    maintainers = [ lib.maintainers.CrystalGamma ];
   };
 }

@@ -1,7 +1,7 @@
-{ stdenv, appleDerivation, fetchurl, fetchpatch, makeWrapper }:
+{ lib, appleDerivation, makeWrapper }:
 
 appleDerivation {
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   patchPhase = ''
     substituteInPlace mk/bsd.prog.mk \
@@ -20,6 +20,12 @@ appleDerivation {
       --replace '-o ''${''${group}OWN_''${.ALLSRC:T}}' "" \
       --replace '-g ''${''${group}GRP_''${.ALLSRC:T}}' "" \
       --replace '-o ''${''${group}OWN} -g ''${''${group}GRP}' ""
+
+    # Workaround for https://github.com/NixOS/nixpkgs/issues/103172
+    # Prevents bsdmake from failing on systems that already had default limits
+    # increased.
+    substituteInPlace main.c \
+      --replace 'err(2, "setrlimit");' 'warn("setrlimit");'
   '';
 
   buildPhase = ''
@@ -27,9 +33,9 @@ appleDerivation {
     for file in $(find . -name '*.c'); do
       obj="$(basename "$file" .c).o"
       objs+=("$obj")
-      cc -c "$file" -o "$obj" -DDEFSHELLNAME='"sh"' -D__FBSDID=__RCSID -mdynamic-no-pic -g
+      $CC -c "$file" -o "$obj" -DDEFSHELLNAME='"sh"' -D__FBSDID=__RCSID -mdynamic-no-pic -g
     done
-    cc "''${objs[@]}" -o bsdmake
+    $CC "''${objs[@]}" -o bsdmake
   '';
 
   installPhase = ''
@@ -42,4 +48,8 @@ appleDerivation {
   preFixup = ''
     wrapProgram "$out/bin/bsdmake" --add-flags "-m $out/share/mk"
   '';
+
+  meta = {
+    platforms = lib.platforms.darwin;
+  };
 }

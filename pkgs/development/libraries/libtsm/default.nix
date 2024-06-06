@@ -1,30 +1,32 @@
-{ stdenv, lib, fetchurl, libxkbcommon, pkgconfig, autoconf, automake }:
+{ lib, stdenv, fetchFromGitHub, libxkbcommon, pkg-config, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "libtsm-3";
+  pname = "libtsm";
+  version = "4.0.2";
 
-  src = fetchurl {
-    url = "http://freedesktop.org/software/kmscon/releases/${name}.tar.xz";
-    sha256 = "01ygwrsxfii0pngfikgqsb4fxp8n1bbs47l7hck81h9b9bc1ah8i";
+  src = fetchFromGitHub {
+    owner = "Aetf";
+    repo = "libtsm";
+    rev = "v${version}";
+    sha256 = "sha256-BYMRPjGRVSnYzkdbxypkuE0YkeVLPJ32iGZ1b0R6wto=";
   };
 
-  buildInputs = [ libxkbcommon pkgconfig ] ++ lib.optionals stdenv.isDarwin [
-    autoconf automake
-   ];
+  buildInputs = [ libxkbcommon ];
 
-  preConfigure = lib.optionalString stdenv.isDarwin ''
-    aclocal
+  nativeBuildInputs = [ cmake pkg-config ];
+
+  # https://github.com/Aetf/libtsm/issues/20
+  postPatch = ''
+    substituteInPlace etc/libtsm.pc.in \
+      --replace '$'{exec_prefix}/@CMAKE_INSTALL_LIBDIR@ @CMAKE_INSTALL_FULL_LIBDIR@ \
+      --replace '$'{prefix}/@CMAKE_INSTALL_INCLUDEDIR@ @CMAKE_INSTALL_FULL_INCLUDEDIR@
   '';
-
-  configureFlags = [ "--disable-debug" ];
-
-  patches = lib.optional stdenv.isDarwin ./darwin.patch;
 
   meta = with lib; {
     description = "Terminal-emulator State Machine";
-    homepage = "http://www.freedesktop.org/wiki/Software/kmscon/libtsm/";
+    homepage = "https://www.freedesktop.org/wiki/Software/kmscon/libtsm/";
     license = licenses.mit;
-    maintainers = with maintainers; [ cstrahan ];
-    platforms = with platforms; unix;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
   };
 }

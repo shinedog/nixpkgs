@@ -1,7 +1,8 @@
-{ kdeFramework, lib, ecm }:
+{ mkDerivation, extra-cmake-modules, qtbase }:
 
-kdeFramework {
-  name = "attica";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
+mkDerivation {
+  pname = "attica";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

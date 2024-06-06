@@ -1,36 +1,43 @@
-{ stdenv, fetchFromGitHub, cmake, doxygen }:
+{ lib, stdenv, fetchFromGitHub, cmake, doxygen }:
 
-stdenv.mkDerivation {
-  name = "uri-2016-09-04";
+stdenv.mkDerivation rec {
+  pname = "uri";
+  version = "1.1.0";
 
   src = fetchFromGitHub {
     owner = "cpp-netlib";
     repo = "uri";
-    rev = "8b1eec80621ea7be1db3b28f1621e531cc72855c";
-    sha256 = "0f77y79b11pp31y0qpydki2nnxd6gpycp24fmrapi70fsni2ah0d";
+    rev = "v${version}";
+    sha256 = "148361pixrm94q6v04k13s1msa04bx9yc3djb0lxpa7dlw19vhcd";
   };
 
-  buildInputs = [ cmake doxygen ];
+  env.NIX_CFLAGS_COMPILE = toString ([
+    "-Wno-error=parentheses"
+    # Needed with GCC 12
+    "-Wno-error=deprecated-declarations"
+    "-Wno-error=nonnull"
+  ] ++ lib.optionals stdenv.cc.isClang [
+    # Needed with Clang 16
+    "-Wno-error=deprecated-builtins"
+  ]);
 
-  cmakeFlags = [ "-DUri_BUILD_TESTS=OFF" "-DBUILD_SHARED_LIBS=ON" ];
+  nativeBuildInputs = [ cmake doxygen ];
 
-  postBuild = ''
-    make doc
-  '';
+  cmakeFlags = [
+    "-DUri_BUILD_TESTS=OFF" "-DUri_BUILD_DOCS=ON" "-DBUILD_SHARED_LIBS=ON"
+  ];
 
-  # https://github.com/cpp-netlib/uri/issues/90
+  postBuild = "make doc";
+
   postInstall = ''
-    mv $out/include $out/include2
-    mv $out/include2/include $out/
-    rmdir $out/include2
-    mkdir -p $out/share/doc
-    mv html $out/share/doc/uri
+    install -vd $out/share/doc
+    cp -vR html $out/share/doc
   '';
 
   meta = {
     description = "C++ URI library";
-    homepage = http://cpp-netlib.org;
-    license = stdenv.lib.licenses.boost;
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://cpp-netlib.org";
+    license = lib.licenses.boost;
+    platforms = lib.platforms.all;
   };
 }

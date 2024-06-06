@@ -1,26 +1,37 @@
-{ stdenv, fetchurl, fuse, pkgconfig }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, fuse
+, fuse3
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.12.6";
-  name    = "bindfs-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  version = "1.17.7";
+  pname = "bindfs";
 
   src = fetchurl {
-    url    = "http://bindfs.org/downloads/${name}.tar.gz";
-    sha256 = "0s90n1n4rvpcg51ixr5wx8ixml1xnc7w28xlbnms34v19pzghm59";
+    url = "https://bindfs.org/downloads/bindfs-${finalAttrs.version}.tar.gz";
+    hash = "sha256-wLBg6Uw6IxodSqC88mb/GJmBpO845C++IylqfYFxm3o=";
   };
 
-  dontStrip = true;
+  nativeBuildInputs = [
+    pkg-config
+  ];
 
-  buildInputs = [ fuse pkgconfig ];
+  buildInputs = if stdenv.isDarwin then [ fuse ] else [ fuse3 ];
+
   postFixup = ''
     ln -s $out/bin/bindfs $out/bin/mount.fuse.bindfs
   '';
 
   meta = {
+    changelog = "https://github.com/mpartel/bindfs/raw/${finalAttrs.version}/ChangeLog";
     description = "A FUSE filesystem for mounting a directory to another location";
-    homepage    = http://bindfs.org;
-    license     = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [ lovek323 ];
-    platforms   = stdenv.lib.platforms.unix;
+    homepage = "https://bindfs.org";
+    license = lib.licenses.gpl2Only;
+    maintainers = with lib.maintainers; [ lovek323 lovesegfault ];
+    platforms = lib.platforms.unix;
+    broken = stdenv.isDarwin; # last successful build 2023-11-17
   };
-}
+})

@@ -1,33 +1,50 @@
-{ stdenv, fetchurl, pkgconfig, libcap, readline, texinfo, nss, nspr }:
-
-assert stdenv.isLinux -> libcap != null;
+{ lib, stdenv, fetchurl, pkg-config
+, gnutls, libedit, nspr, nss, readline, texinfo
+, libcap, libseccomp, pps-tools
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "chrony-${version}";
-
-  version = "2.4";
+  pname = "chrony";
+  version = "4.5";
 
   src = fetchurl {
-    url = "http://download.tuxfamily.org/chrony/${name}.tar.gz";
-    sha256 = "07rrys5axrz4grfy7fj3ds0r9ny1qcwiswsb2318jciklb6yf14d";
+    url = "https://download.tuxfamily.org/chrony/${pname}-${version}.tar.gz";
+    hash = "sha256-Gf4dn0Zk1EWmmpbHHo/bYLzY3yTHPROG4CKH9zZq1CI=";
   };
 
-  buildInputs = [ readline texinfo nss nspr ] ++ stdenv.lib.optional stdenv.isLinux libcap;
-  nativeBuildInputs = [ pkgconfig ];
+  outputs = [ "out" "man" ];
+
+  nativeBuildInputs = [ pkg-config ];
+
+  buildInputs = [ gnutls libedit nspr nss readline texinfo ]
+    ++ lib.optionals stdenv.isLinux [ libcap libseccomp pps-tools ];
+
+  configureFlags = [
+    "--enable-ntp-signd"
+    "--sbindir=$(out)/bin"
+    "--chronyrundir=/run/chrony"
+  ] ++ lib.optional stdenv.isLinux "--enable-scfilter";
+
+  patches = [
+    # Cleanup the installation script
+    ./makefile.patch
+  ];
+
+  postPatch = ''
+    patchShebangs test
+  '';
 
   hardeningEnable = [ "pie" ];
 
-  configureFlags = [
-    "--chronyvardir=$(out)/var/lib/chrony"
-  ];
+  passthru.tests = { inherit (nixosTests) chrony chrony-ptp; };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Sets your computer's clock from time servers on the Net";
-    homepage = http://chrony.tuxfamily.org/;
-    repositories.git = git://git.tuxfamily.org/gitroot/chrony/chrony.git;
-    license = licenses.gpl2;
+    homepage = "https://chrony.tuxfamily.org/";
+    license = licenses.gpl2Only;
     platforms = with platforms; linux ++ freebsd ++ openbsd;
-    maintainers = with maintainers; [ rickynils fpletz ];
+    maintainers = with maintainers; [ fpletz thoughtpolice ];
 
     longDescription = ''
       Chronyd is a daemon which runs in background on the system. It obtains

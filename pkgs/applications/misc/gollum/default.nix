@@ -1,18 +1,24 @@
-{ stdenv, lib, bundlerEnv, ruby_2_2, icu, zlib }:
+{ lib, bundlerApp, bundlerUpdateScript, ruby, makeWrapper, git, docutils, nixosTests }:
 
-bundlerEnv rec {
-  name = "gollum-${version}";
-  version = "4.0.1";
+bundlerApp rec {
+  pname = "gollum";
+  exes = [ "gollum" ];
 
-  ruby = ruby_2_2;
-  gemfile = ./Gemfile;
-  lockfile = ./Gemfile.lock;
-  gemset = ./gemset.nix;
+  inherit ruby;
+  gemdir = ./.;
+
+  nativeBuildInputs = [ makeWrapper ];
+
+  passthru.updateScript = bundlerUpdateScript "gollum";
+  passthru.tests.gollum = nixosTests.gollum;
 
   meta = with lib; {
-    description = "A simple, Git-powered wiki";
+    description = "A simple, Git-powered wiki with a sweet API and local frontend";
+    homepage = "https://github.com/gollum/gollum";
+    changelog = "https://github.com/gollum/gollum/blob/HEAD/HISTORY.md";
     license = licenses.mit;
-    maintainers = with maintainers; [ jgillich ];
+    maintainers = with maintainers; [ erictapen jgillich nicknovitski bbenno ];
     platforms = platforms.unix;
+    mainProgram = "gollum";
   };
 }

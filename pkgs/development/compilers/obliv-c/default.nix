@@ -1,15 +1,32 @@
-{stdenv, fetchurl, ocaml, libgcrypt, fetchFromGitHub, ocamlPackages, perl}:
+{ lib, stdenv, libgcrypt, fetchFromGitHub, ocamlPackages, perl }:
 stdenv.mkDerivation rec {
-  name = "obliv-c-${version}";
-  version = "0.0pre20161001";
-  buildInputs = [ ocaml ocamlPackages.findlib perl ];
+  pname = "obliv-c";
+
+  version = "0.0pre20210621";
+
+  strictDeps = true;
+  nativeBuildInputs = [ perl ]
+  ++ (with ocamlPackages; [ ocaml findlib ocamlbuild ]);
+  buildInputs = [ ocamlPackages.num ];
   propagatedBuildInputs = [ libgcrypt ];
   src = fetchFromGitHub {
     owner = "samee";
     repo = "obliv-c";
-    rev = "32d71fb46983aded604045e8cda7874d8fb160a2";
-    sha256 = "05bicvalsfabngvf41q02bcyzkibmyihj7naqd53kdq75xa1yf37";
+    rev = "e02e5c590523ef4dae06e167a7fa00037bb3fdaf";
+    sha256 = "sha256:02vyr4689f4dmwqqs0q1mrack9h3g8jz3pj8zqiz987dk0r5mz7a";
   };
+
+  hardeningDisable = [ "fortify" ];
+
+  patches = [ ./ignore-complex-float128.patch ];
+
+  # https://github.com/samee/obliv-c/issues/76#issuecomment-438958209
+  env.OCAMLBUILD = "ocamlbuild -package num -ocamlopt 'ocamlopt -dontlink num' -ocamlc 'ocamlc -dontlink num'";
+
+  preBuild = ''
+    patchShebangs .
+  '';
+
   preInstall = ''
     mkdir -p "$out/bin"
     cp bin/* "$out/bin"
@@ -23,11 +40,11 @@ stdenv.mkDerivation rec {
     gcc $(ar t _build/libobliv.a | sed -e 's@^@_build/@') --shared -o _build/libobliv.so
     cp _build/lib*.a _build/lib*.so* "$out/lib"
   '';
+
   meta = {
-    inherit version;
-    description = ''A GCC wrapper that makes it easy to embed secure computation protocols inside regular C programs'';
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+    description = "A GCC wrapper that makes it easy to embed secure computation protocols inside regular C programs";
+    license = lib.licenses.bsd3;
+    maintainers = [lib.maintainers.raskin];
+    platforms = lib.platforms.linux;
   };
 }

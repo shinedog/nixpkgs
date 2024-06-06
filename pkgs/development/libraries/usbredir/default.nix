@@ -1,26 +1,54 @@
-{ stdenv, fetchurl, pkgconfig, libusb }:
+{ lib
+, stdenv
+, cmake
+, fetchFromGitLab
+, pkg-config
+, meson
+, ninja
+, glib
+, libusb1
+}:
 
 stdenv.mkDerivation rec {
-  name = "usbredir-${version}";
-  version = "0.7.1";
+  pname = "usbredir";
+  version = "0.13.0";
 
-  src = fetchurl {
-    url = "http://spice-space.org/download/usbredir/${name}.tar.bz2";
-    sha256 = "1wsnmk4wjpdhbn1zaxg6bmyxspcki2zgy0am9lk037rnl4krwzj0";
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "spice";
+    repo = "usbredir";
+    rev = "${pname}-${version}";
+    sha256 = "sha256-zehf0DkqSSvmatbk/UB1oySjyqiFUYTuIhqb5xKeK7I=";
   };
 
-  # Works around bunch of "format '%lu' expects argument of type 'long unsigned int', but argument 4 has type 'uint64_t {aka long long unsigned int}'" warnings
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isi686 "-Wno-error=format";
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+  ];
 
-  buildInputs = [ pkgconfig libusb ];
-  propagatedBuildInputs = [ libusb ];
+  buildInputs = [
+    glib
+  ];
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    libusb1
+  ];
+
+  mesonFlags = [
+    "-Dgit_werror=disabled"
+    "-Dtools=enabled"
+    "-Dfuzzing=disabled"
+  ];
+
+  outputs = [ "out" "dev" ];
+
+  meta = with lib; {
     description = "USB traffic redirection protocol";
-    homepage = http://spice-space.org/page/UsbRedir;
-    license = licenses.lgpl21;
-
-    maintainers = [ maintainers.offline ];
-    platforms = platforms.linux;
+    mainProgram = "usbredirect";
+    homepage = "https://www.spice-space.org/usbredir.html";
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ offline ];
+    platforms = platforms.unix;
   };
 }

@@ -1,39 +1,54 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opam }:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uutf, cmdliner
+, cmdlinerSupport ? lib.versionAtLeast cmdliner.version "1.1"
+, version ? if lib.versionAtLeast ocaml.version "4.14" then "15.1.0" else "15.0.0"
+}:
+
 let
   pname = "uunf";
-  webpage = "http://erratique.ch/software/${pname}";
+  webpage = "https://erratique.ch/software/${pname}";
+  hash = {
+    "15.0.0" = "sha256-B/prPAwfqS8ZPS3fyDDIzXWRbKofwOCyCfwvh9veuug=";
+    "15.1.0" = "sha256-D8yvb7hVWaYxMqMZ5089/5tWDfvyGXKUOjhfU/4zSeQ=";
+  }."${version}";
 in
 
-assert stdenv.lib.versionAtLeast ocaml.version "3.12";
+if lib.versionOlder ocaml.version "4.03"
+then throw "${pname} is not available for OCaml ${ocaml.version}"
+else
 
-stdenv.mkDerivation rec {
-  name = "ocaml-${pname}-${version}";
-  version = "0.9.3";
+stdenv.mkDerivation {
+  name = "ocaml${ocaml.version}-${pname}-${version}";
+  inherit version;
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "16cgjy1m0m61srv1pmlc3gr0y40kd4724clvpagdnz68raz4zmn0";
+    inherit hash;
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [ topkg uutf ]
+  ++ lib.optional cmdlinerSupport cmdliner;
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  unpackCmd = "tar xjf $src";
+  prePatch = lib.optionalString stdenv.isAarch64 "ulimit -s 16384";
 
-  buildPhase = "./pkg/build true false";
-
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install > install.sh
-    sh install.sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${ocaml.version}/site-lib/
+  buildPhase = ''
+    runHook preBuild
+    ${topkg.run} build \
+      --with-uutf true \
+      --with-cmdliner ${lib.boolToString cmdlinerSupport}
+    runHook postBuild
   '';
 
-  meta = with stdenv.lib; {
+  inherit (topkg) installPhase;
+
+  meta = with lib; {
     description = "An OCaml module for normalizing Unicode text";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = webpage;
     license = licenses.bsd3;
     maintainers = [ maintainers.vbgl ];
+    mainProgram = "unftrip";
+    inherit (ocaml.meta) platforms;
   };
 }

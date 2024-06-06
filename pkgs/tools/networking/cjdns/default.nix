@@ -1,36 +1,75 @@
-{ stdenv, fetchurl, nodejs, which, python27, utillinux }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, rustPlatform
+, nodejs
+, which
+, python39
+, libuv
+, util-linux
+, nixosTests
+, libsodium
+, pkg-config
+, substituteAll
+}:
 
-let version = "18"; in
-stdenv.mkDerivation {
-  name = "cjdns-"+version;
+rustPlatform.buildRustPackage rec {
+  pname = "cjdns";
+  version = "21.4";
 
-  src = fetchurl {
-    url = "https://github.com/cjdelisle/cjdns/archive/cjdns-v${version}.tar.gz";
-    sha256 = "1as7n730ppn93cpal7s6r6iq1qx46m0c45iwy8baypbpp42zxrap";
+  src = fetchFromGitHub {
+    owner = "cjdelisle";
+    repo = "cjdns";
+    rev = "cjdns-v${version}";
+    sha256 = "sha256-vI3uHZwmbFqxGasKqgCl0PLEEO8RNEhwkn5ZA8K7bxU=";
   };
 
-  buildInputs = [ which python27 nodejs ] ++
+  patches = [
+    (substituteAll {
+      src = ./system-libsodium.patch;
+      libsodium_include_dir = "${libsodium.dev}/include";
+    })
+  ];
+
+  cargoLock = {
+    lockFile = ./Cargo.lock;
+    outputHashes = {
+      "libsodium-sys-0.2.6" = "sha256-yr6wh0njbCFZViLROcqSSoRFj7ZAMYG5lo1g0j75SN0=";
+    };
+  };
+
+  nativeBuildInputs = [
+    which
+    python39
+    nodejs
+    pkg-config
+  ] ++
     # for flock
-    stdenv.lib.optional stdenv.isLinux utillinux;
+    lib.optional stdenv.isLinux util-linux;
 
-  buildPhase =
-    stdenv.lib.optionalString stdenv.isArm "Seccomp_NO=1 "
-    + "bash do";
-  installPhase = ''
-    install -Dt "$out/bin/" cjdroute makekeys privatetopublic publictoip6
-    sed -i 's,/usr/bin/env node,'$(type -P node), \
-      $(find contrib -name "*.js")
-    sed -i 's,/usr/bin/env python,'$(type -P python), \
-      $(find contrib -type f)
-    mkdir -p $out/share/cjdns
-    cp -R contrib tools node_build node_modules $out/share/cjdns/
-  '';
+  buildInputs = [
+    libuv
+    libsodium
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/cjdelisle/cjdns;
+  env.SODIUM_USE_PKG_CONFIG = 1;
+  env.NIX_CFLAGS_COMPILE = toString ([
+    "-O2"
+    "-Wno-error=array-bounds"
+    "-Wno-error=stringop-overflow"
+    "-Wno-error=stringop-truncation"
+  ] ++ lib.optionals (stdenv.cc.isGNU && lib.versionAtLeast stdenv.cc.version "11") [
+    "-Wno-error=stringop-overread"
+  ]);
+
+  passthru.tests.basic = nixosTests.cjdns;
+
+  meta = with lib; {
+    homepage = "https://github.com/cjdelisle/cjdns";
     description = "Encrypted networking for regular people";
-    license = licenses.gpl3;
+    license = licenses.gpl3Plus;
     maintainers = with maintainers; [ ehmry ];
-    platforms = platforms.unix;
+    platforms = platforms.linux;
+    broken = stdenv.isAarch64;
   };
 }

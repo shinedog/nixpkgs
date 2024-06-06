@@ -1,8 +1,10 @@
 { config, pkgs, lib, ... }:
 let
-  inherit (lib) mkOption types mkIf optionalString;
+  inherit (lib) mapAttrs mkIf mkOption optional optionals types;
 
   cfg = config.services.kmscon;
+
+  autologinArg = lib.optionalString (cfg.autologinUser != null) "-f ${cfg.autologinUser}";
 
   configDir = pkgs.writeTextFile { name = "kmscon-config"; destination = "/kmscon.conf"; text = cfg.extraConfig; };
 in {
@@ -26,6 +28,19 @@ in {
         default = false;
       };
 
+      fonts = mkOption {
+        description = "Fonts used by kmscon, in order of priority.";
+        default = null;
+        example = lib.literalExpression ''[ { name = "Source Code Pro"; package = pkgs.source-code-pro; } ]'';
+        type = with types;
+          let fontType = submodule {
+                options = {
+                  name = mkOption { type = str; description = "Font name, as used by fontconfig."; };
+                  package = mkOption { type = package; description = "Package providing the font."; };
+                };
+          }; in nullOr (nonEmptyListOf fontType);
+      };
+
       extraConfig = mkOption {
         description = "Extra contents of the kmscon.conf file.";
         type = types.lines;
@@ -38,6 +53,15 @@ in {
         type = types.separatedString " ";
         default = "";
         example = "--term xterm-256color";
+      };
+
+      autologinUser = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Username of the account that will be automatically logged in at the console.
+          If unspecified, a login prompt is shown as usual.
+        '';
       };
     };
   };
@@ -60,7 +84,8 @@ in {
       ConditionPathExists=/dev/tty0
 
       [Service]
-      ExecStart=${pkgs.kmscon}/bin/kmscon "--vt=%I" ${cfg.extraOptions} --seats=seat0 --no-switchvt --configdir ${configDir} --login -- ${pkgs.shadow}/bin/login -p
+      ExecStart=
+      ExecStart=${pkgs.kmscon}/bin/kmscon "--vt=%I" ${cfg.extraOptions} --seats=seat0 --no-switchvt --configdir ${configDir} --login -- ${pkgs.shadow}/bin/login -p ${autologinArg}
       UtmpIdentifier=%I
       TTYPath=/dev/%I
       TTYReset=yes
@@ -70,19 +95,23 @@ in {
       X-RestartIfChanged=false
     '';
 
-    systemd.units."autovt@.service".unit = pkgs.runCommand "unit" { }
-        ''
-          mkdir -p $out
-          ln -s ${config.systemd.units."kmsconvt@.service".unit}/kmsconvt@.service $out/autovt@.service
-        '';
+    systemd.suppressedSystemUnits = [ "autovt@.service" ];
+    systemd.units."kmsconvt@.service".aliases = [ "autovt@.service" ];
 
-    systemd.services.systemd-vconsole-setup.restartIfChanged = false;
+    systemd.services.systemd-vconsole-setup.enable = false;
+    systemd.services.reload-systemd-vconsole-setup.enable = false;
 
-    services.kmscon.extraConfig = mkIf cfg.hwRender ''
-      drm
-      hwaccel
-    '';
+    services.kmscon.extraConfig =
+      let
+        render = optionals cfg.hwRender [ "drm" "hwaccel" ];
+        fonts = optional (cfg.fonts != null) "font-name=${lib.concatMapStringsSep ", " (f: f.name) cfg.fonts}";
+      in lib.concatStringsSep "\n" (render ++ fonts);
 
     hardware.opengl.enable = mkIf cfg.hwRender true;
+
+    fonts = mkIf (cfg.fonts != null) {
+      fontconfig.enable = true;
+      packages = map (f: f.package) cfg.fonts;
+    };
   };
 }

@@ -1,59 +1,156 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, gtk_doc, gobjectIntrospection
-, libgsystem, xz, e2fsprogs, libsoup, gpgme, which, autoconf, automake, libtool, fuse
-, libcap, yacc, libxslt, docbook_xsl, docbook_xml_dtd_42
+{ stdenv
+, lib
+, fetchurl
+, fetchpatch
+, substituteAll
+, pkg-config
+, gtk-doc
+, gobject-introspection
+, gjs
+, nixosTests
+, pkgsCross
+, curl
+, glib
+, systemd
+, xz
+, e2fsprogs
+, libsoup
+, glib-networking
+, wrapGAppsNoGuiHook
+, gpgme
+, which
+, makeWrapper
+, autoconf
+, automake
+, libtool
+, fuse3
+, util-linuxMinimal
+, libselinux
+, libsodium
+, libarchive
+, libcap
+, bzip2
+, bison
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_42
+, openssl
+, python3
 }:
 
 let
-  libglnx-src = fetchFromGitHub {
-    owner  = "GNOME";
-    repo   = "libglnx";
-    rev    = "36396b49ad6636c9959f3dfac5e04d41584b1a92";
-    sha256 = "146flrpzybm2s12wg05rnglnfd2f2jx3xzvns2pq28kvg09bgcfn";
+  testPython = python3.withPackages (p: with p; [
+    pyyaml
+  ]);
+in stdenv.mkDerivation rec {
+  pname = "ostree";
+  version = "2024.4";
+
+  outputs = [ "out" "dev" "man" "installedTests" ];
+
+  src = fetchurl {
+    url = "https://github.com/ostreedev/ostree/releases/download/v${version}/libostree-${version}.tar.xz";
+    sha256 = "sha256-Y8kZCCEzOsc3Pg2SPkwnZrJevc/fTvtEy1koxlidn8s=";
   };
 
-  bsdiff-src = fetchFromGitHub {
-    owner  = "mendsley";
-    repo   = "bsdiff";
-    rev    = "1edf9f656850c0c64dae260960fabd8249ea9c60";
-    sha256 = "1h71d2h2d3anp4msvpaff445rnzdxii3id2yglqk7af9i43kdsn1";
-  };
-
-  version = "2016.11";
-in stdenv.mkDerivation {
-  name = "ostree-${version}";
-
-  src = fetchFromGitHub {
-    rev    = "v${version}";
-    owner  = "ostreedev";
-    repo   = "ostree";
-    sha256 = "19xmg01mxdykx74r9ra11hc15qd1fjqbxdn23jrn2pcvz8dw9zgc";
-  };
-
-  nativeBuildInputs = [
-    autoconf automake libtool pkgconfig gtk_doc gobjectIntrospection which yacc
-    libxslt docbook_xsl docbook_xml_dtd_42
+  patches = lib.optionals stdenv.hostPlatform.isMusl [
+    # > I guess my inclination here is to recommend that musl users
+    # > carry a downstream patch to revert the commits in #3175 until
+    # > such time as they can update to the new musl.
+    # https://github.com/ostreedev/ostree/issues/3200#issuecomment-1974819192
+    (fetchpatch {
+      name = "revert-statx.diff";
+      url = "https://github.com/ostreedev/ostree/commit/f46cc0cd85b564e40e03c7438a41c8e57f6b836c.diff";
+      excludes = [ "ci/*" ];
+      revert = true;
+      hash = "sha256-LsXbRYh4hfjNdt1S384IPlSvtC5f2rgSTZEkIIBkT0g=";
+    })
   ];
 
-  buildInputs = [ libgsystem xz e2fsprogs libsoup gpgme fuse libcap ];
+  nativeBuildInputs = [
+    autoconf
+    automake
+    libtool
+    pkg-config
+    gtk-doc
+    gobject-introspection
+    which
+    makeWrapper
+    bison
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_42
+    wrapGAppsNoGuiHook
+  ];
 
-  prePatch = ''
-    rmdir libglnx bsdiff
-    cp --no-preserve=mode -r ${libglnx-src} libglnx
-    cp --no-preserve=mode -r ${bsdiff-src} bsdiff
-  '';
+  buildInputs = [
+    curl
+    glib
+    systemd
+    e2fsprogs
+    libsoup
+    glib-networking
+    gpgme
+    fuse3
+    libselinux
+    libsodium
+    libcap
+    libarchive
+    bzip2
+    xz
+    util-linuxMinimal # for libmount
+
+    # for installed tests
+    testPython
+    gjs
+  ];
+
+  enableParallelBuilding = true;
+
+  configureFlags = [
+    "--with-curl"
+    "--with-systemdsystemunitdir=${placeholder "out"}/lib/systemd/system"
+    "--with-systemdsystemgeneratordir=${placeholder "out"}/lib/systemd/system-generators"
+    "--enable-installed-tests"
+    "--with-ed25519-libsodium"
+  ];
+
+  makeFlags = [
+    "installed_testdir=${placeholder "installedTests"}/libexec/installed-tests/libostree"
+    "installed_test_metadir=${placeholder "installedTests"}/share/installed-tests/libostree"
+    # Setting this flag was required as workaround for a clang bug, but seems not relevant anymore.
+    # https://github.com/ostreedev/ostree/commit/fd8795f3874d623db7a82bec56904648fe2c1eb7
+    # See also Makefile-libostree.am
+    "INTROSPECTION_SCANNER_ENV="
+  ];
 
   preConfigure = ''
     env NOCONFIGURE=1 ./autogen.sh
-
-    configureFlags+="--with-systemdsystemunitdir=$out/lib/systemd/system"
   '';
 
-  meta = with stdenv.lib; {
+  postFixup = let
+    typelibPath = lib.makeSearchPath "/lib/girepository-1.0" [
+      (placeholder "out")
+      gobject-introspection
+    ];
+  in ''
+    for test in $installedTests/libexec/installed-tests/libostree/*.js; do
+      wrapProgram "$test" --prefix GI_TYPELIB_PATH : "${typelibPath}"
+    done
+  '';
+
+  passthru = {
+    tests = {
+      musl = pkgsCross.musl64.ostree;
+      installedTests = nixosTests.installed-tests.ostree;
+    };
+  };
+
+  meta = with lib; {
     description = "Git for operating system binaries";
-    homepage    = "http://live.gnome.org/OSTree/";
-    license     = licenses.lgpl2Plus;
-    platforms   = platforms.linux;
+    homepage = "https://ostreedev.github.io/ostree/";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.linux;
     maintainers = with maintainers; [ copumpkin ];
   };
 }
-

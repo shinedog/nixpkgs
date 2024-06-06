@@ -1,23 +1,32 @@
-{ stdenv, fetchFromGitHub, gtk2, pkgconfig, intltool }:
+{ lib, stdenv, fetchFromGitHub, gtk3, pkg-config, intltool, libxslt, makeWrapper,
+  coreutils, zip, unzip, p7zip, unar, gnutar, bzip2, gzip, lhasa, wrapGAppsHook3 }:
 
 stdenv.mkDerivation rec {
-  version = "0.5.4.7";
-  name = "xarchiver-${version}";
+  version = "0.5.4.23";
+  pname = "xarchiver";
 
   src = fetchFromGitHub {
     owner = "ib";
     repo = "xarchiver";
-    rev = "${name}";
-    sha256 = "0w9lx8d8r50j48qfhn2r0dlcnwy3pjyy6xjvgpr0qagy5l1q1qj4";
+    rev = version;
+    hash = "sha256-aNUpuePU6nmrralp+j8GgVPuxv9ayRVoKicPZkC4nTE=";
   };
 
-  buildInputs = [ gtk2 pkgconfig intltool ];
+  nativeBuildInputs = [ intltool pkg-config makeWrapper wrapGAppsHook3 ];
+  buildInputs = [ gtk3 libxslt ];
+
+  postFixup = ''
+    wrapProgram $out/bin/xarchiver \
+    --prefix PATH : ${lib.makeBinPath [ zip unzip p7zip unar gnutar bzip2 gzip lhasa coreutils ]}
+  '';
 
   meta = {
-    description = "GTK+ frontend to 7z,zip,rar,tar,bzip2, gzip,arj, lha, rpm and deb (open and extract only)";
-    homepage = https://github.com/ib/xarchiver;
-    maintainers = [ stdenv.lib.maintainers.domenkozar ];
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.all;
+    broken = stdenv.isDarwin;
+    description = "GTK frontend to 7z,zip,rar,tar,bzip2, gzip,arj, lha, rpm and deb (open and extract only)";
+    homepage = "https://github.com/ib/xarchiver";
+    maintainers = [ lib.maintainers.domenkozar ];
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.all;
+    mainProgram = "xarchiver";
   };
 }

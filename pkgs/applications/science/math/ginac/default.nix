@@ -1,25 +1,34 @@
-{ stdenv, fetchurl, cln, pkgconfig, readline, gmp }:
+{ lib, stdenv, fetchurl, cln, pkg-config, readline, gmp, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "ginac-1.6.2";
+  pname = "ginac";
+  version = "1.8.7";
 
   src = fetchurl {
-    url    = "${meta.homepage}/${name}.tar.bz2";
-    sha256 = "1pivcqqaf142l6vrj2azq6dxrcyzhag4za2dwicb4gsb09ax4d0g";
+    url = "https://www.ginac.de/ginac-${version}.tar.bz2";
+    sha256 = "sha256-cf9PLYoA5vB86P7mm3bcweu7cnvmdgtYfB+7XM97Yeo=";
   };
 
   propagatedBuildInputs = [ cln ];
 
-  buildInputs = [ readline ] ++ stdenv.lib.optional stdenv.isDarwin gmp;
+  buildInputs = [ readline ]
+    ++ lib.optional stdenv.isDarwin gmp;
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config python3 ];
 
-  configureFlags = "--disable-rpath";
+  strictDeps = true;
 
-  meta = with stdenv.lib; {
+  preConfigure = ''
+    patchShebangs ginsh
+  '';
+
+  configureFlags = [ "--disable-rpath" ];
+
+  meta = with lib; {
     description = "GiNaC is Not a CAS";
-    homepage    = http://www.ginac.de/;
-    maintainers = with maintainers; [ lovek323 urkud ];
-    platforms   = platforms.all;
+    homepage = "https://www.ginac.de/";
+    maintainers = with maintainers; [ lovek323 ];
+    license = licenses.gpl2;
+    platforms = platforms.all;
   };
 }

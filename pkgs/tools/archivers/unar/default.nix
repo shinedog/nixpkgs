@@ -1,63 +1,95 @@
-{ stdenv, fetchurl, gnustep, unzip, bzip2, zlib, icu, openssl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, installShellFiles
+, gnustep
+, bzip2
+, zlib
+, icu
+, openssl
+, wavpack
+, xcbuildHook
+, Foundation
+, AppKit
+}:
 
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "unar";
-  version = "1.10.1";
+  version = "1.10.7";
 
-  src = fetchurl {
-    url = "http://unarchiver.c3.cx/downloads/${pname}${version}_src.zip";
-    sha256 = "0aq9zlar5vzr5qxphws8dm7ax60bsfsw77f4ciwa5dq5lla715j0";
+  src = fetchFromGitHub {
+    owner = "MacPaw";
+    # the unar repo contains a shallow clone of both XADMaster and universal-detector
+    repo = "unar";
+    rev = "v${version}";
+    sha256 = "0p846q1l66k3rnd512sncp26zpv411b8ahi145sghfcsz9w8abc4";
   };
 
-  buildInputs = [
-    gnustep.make unzip gnustep.base bzip2.dev
-    zlib.dev icu.dev openssl.dev
+  postPatch =
+    if stdenv.isDarwin then ''
+      substituteInPlace "./XADMaster.xcodeproj/project.pbxproj" \
+        --replace "libstdc++.6.dylib" "libc++.1.dylib"
+    '' else ''
+      for f in Makefile.linux ../UniversalDetector/Makefile.linux ; do
+        substituteInPlace $f \
+          --replace "= gcc" "=${stdenv.cc.targetPrefix}cc" \
+          --replace "= g++" "=${stdenv.cc.targetPrefix}c++" \
+          --replace "-DGNU_RUNTIME=1" "" \
+          --replace "-fgnu-runtime" "-fobjc-runtime=gnustep-2.0"
+      done
+
+      # we need to build inside this directory as well, so we have to make it writeable
+      chmod +w ../UniversalDetector -R
+    '';
+
+  buildInputs = [ bzip2 icu openssl wavpack zlib ] ++
+    lib.optionals stdenv.isLinux [ gnustep.base ] ++
+    lib.optionals stdenv.isDarwin [ Foundation AppKit ];
+
+  nativeBuildInputs = [ installShellFiles ] ++
+    lib.optionals stdenv.isLinux [ gnustep.make ] ++
+    lib.optionals stdenv.isDarwin [ xcbuildHook ];
+
+  xcbuildFlags = lib.optionals stdenv.isDarwin [
+    "-target unar"
+    "-target lsar"
+    "-configuration Release"
+    "MACOSX_DEPLOYMENT_TARGET=${stdenv.hostPlatform.darwinMinVersion}"
   ];
 
-  postPatch = ''
-    substituteInPlace Makefile.linux \
-      --replace "CC = gcc" "CC=cc" \
-      --replace "CXX = g++" "CXX=c++" \
-      --replace "OBJCC = gcc" "OBJCC=cc" \
-      --replace "OBJCXX = g++" "OBJCXX=c++"
+  makefile = lib.optionalString (!stdenv.isDarwin) "Makefile.linux";
 
-    substituteInPlace ../UniversalDetector/Makefile.linux \
-      --replace "CC = gcc" "CC=cc" \
-      --replace "CXX = g++" "CXX=c++" \
-      --replace "OBJCC = gcc" "OBJCC=c" \
-      --replace "OBJCXX = g++" "OBJCXX=c++"
-  '';
+  enableParallelBuilding = true;
 
-  makefile = "Makefile.linux";
+  dontConfigure = true;
 
-  sourceRoot = "./The Unarchiver/XADMaster";
+  sourceRoot = "${src.name}/XADMaster";
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp lsar $out/bin
-    cp unar $out/bin
+    runHook preInstall
 
-    mkdir -p $out/share/man/man1
-    cp ../Extra/lsar.1 $out/share/man/man1
-    cp ../Extra/unar.1 $out/share/man/man1
+    install -Dm555 -t $out/bin ${lib.optionalString stdenv.isDarwin "Products/Release/"}{lsar,unar}
+    for f in lsar unar; do
+      installManPage ./Extra/$f.?
+      installShellCompletion --bash --name $f ./Extra/$f.bash_completion
+    done
 
-    mkdir -p $out/etc/bash_completion.d
-    cp ../Extra/lsar.bash_completion $out/etc/bash_completion.d/lsar
-    cp ../Extra/unar.bash_completion $out/etc/bash_completion.d/unar
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://unarchiver.c3.cx/unarchiver;
+  meta = with lib; {
+    homepage = "https://theunarchiver.com";
     description = "An archive unpacker program";
     longDescription = ''
-      The Unarchiver is an archive unpacker program with support for the popular \
-      zip, RAR, 7z, tar, gzip, bzip2, LZMA, XZ, CAB, MSI, NSIS, EXE, ISO, BIN, \
-      and split file formats, as well as the old Stuffit, Stuffit X, DiskDouble, \
-      Compact Pro, Packit, cpio, compress (.Z), ARJ, ARC, PAK, ACE, ZOO, LZH, \
-      ADF, DMS, LZX, PowerPacker, LBR, Squeeze, Crunch, and other old formats. 
+      The Unarchiver is an archive unpacker program with support for the popular
+      zip, RAR, 7z, tar, gzip, bzip2, LZMA, XZ, CAB, MSI, NSIS, EXE, ISO, BIN,
+      and split file formats, as well as the old Stuffit, Stuffit X, DiskDouble,
+      Compact Pro, Packit, cpio, compress (.Z), ARJ, ARC, PAK, ACE, ZOO, LZH,
+      ADF, DMS, LZX, PowerPacker, LBR, Squeeze, Crunch, and other old formats.
     '';
-    license = with licenses; [ lgpl21Plus ];
-    platforms = with platforms; linux;
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "unar";
+    platforms = platforms.unix;
   };
 }

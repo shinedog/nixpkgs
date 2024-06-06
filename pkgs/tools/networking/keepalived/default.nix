@@ -1,39 +1,56 @@
-{ stdenv, fetchurl, openssl, net_snmp, libnl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, nixosTests
+, file
+, libmnl
+, libnftnl
+, libnl
+, net-snmp
+, openssl
+, pkg-config
+, autoreconfHook
+, withNetSnmp ? stdenv.buildPlatform.canExecute stdenv.hostPlatform
+}:
 
 stdenv.mkDerivation rec {
-  name = "keepalived-1.2.19";
+  pname = "keepalived";
+  version = "2.3.0";
 
-  src = fetchurl {
-    url = "http://keepalived.org/software/${name}.tar.gz";
-    sha256 = "0lrq963pxhgh74qmxjyy5hvxdfpm4r50v4vsrp559n0w5irsxyrj";
+  src = fetchFromGitHub {
+    owner = "acassen";
+    repo = "keepalived";
+    rev = "v${version}";
+    sha256 = "sha256-FAmHhMBCG9sezCfp+WvY1klta2BvnGjztQ87arvJTE0=";
   };
 
-  buildInputs = [ openssl net_snmp libnl ];
+  buildInputs = [
+    file
+    libmnl
+    libnftnl
+    libnl
+    openssl
+  ] ++ lib.optionals withNetSnmp [
+    net-snmp
+  ];
 
-  postPatch = ''
-    sed -i 's,$(DESTDIR)/usr/share,$out/share,g' Makefile.in
-  '';
+  enableParallelBuilding = true;
 
-  # It doesn't know about the include/libnl<n> directory
-  NIX_CFLAGS_COMPILE="-I${libnl.dev}/include/libnl3";
-  NIX_LDFLAGS="-lnl-3 -lnl-genl-3";
+  passthru.tests.keepalived = nixosTests.keepalived;
+
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
 
   configureFlags = [
-    "--sysconfdir=/etc"
-    "--localstatedir=/var"
-    "--enable-snmp"
     "--enable-sha1"
+  ] ++ lib.optionals withNetSnmp [
+    "--enable-snmp"
   ];
 
-  installFlags = [
-    "sysconfdir=\${out}/etc"
-  ];
-
-  meta = with stdenv.lib; {
-    homepage = http://keepalived.org;
+  meta = with lib; {
+    homepage = "https://keepalived.org";
     description = "Routing software written in C";
-    license = licenses.gpl2;
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = [ maintainers.raitobezarius ];
   };
 }

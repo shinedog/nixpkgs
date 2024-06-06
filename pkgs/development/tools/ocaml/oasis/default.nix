@@ -1,38 +1,47 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, camlp4
-, ocaml_data_notation, type_conv, ocamlmod, ocamlify, ounit, expect
-}:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, ocamlmod, ocamlify }:
 
-stdenv.mkDerivation rec {
-  version = "0.4.7";
-  name = "ocaml-oasis-${version}";
+stdenv.mkDerivation {
+  version = "0.4.11";
+  pname = "ocaml-oasis";
 
-  # You must manually update the url, not just the version. OCamlforge keys off
-  # the number after download.php, not the filename.
   src = fetchurl {
-    url = "http://forge.ocamlcore.org/frs/download.php/1635/oasis-${version}.tar.gz";
-    sha256 = "13crvqiy0hhlnm4qfyxq2jjvs11ldxf15c4g9q91k1x3wj04pg2l";
+    url = "https://download.ocamlcore.org/oasis/oasis/0.4.11/oasis-0.4.11.tar.gz";
+    hash = "sha256-GLc97vTtbpqDM38ks7vi3tZSaLP/cwn8wA0l5X4dwS4=";
   };
 
   createFindlibDestdir = true;
 
-  buildInputs =
+  strictDeps = true;
+
+  nativeBuildInputs =
     [
-      ocaml findlib ocamlbuild type_conv ocamlmod ocamlify ounit camlp4
+      ocaml findlib ocamlbuild ocamlmod ocamlify
     ];
 
-  propagatedBuildInputs = [ ocaml_data_notation ];
+  buildInputs = [ ocamlbuild ];
 
-  configurePhase = "ocaml setup.ml -configure --prefix $out";
-  buildPhase     = "ocaml setup.ml -build";
-  installPhase   = "ocaml setup.ml -install";
+  configurePhase = ''
+    runHook preConfigure
+    ocaml setup.ml -configure --prefix $out
+    runHook postConfigure
+  '';
+  buildPhase = ''
+    runHook preBuild
+    ocaml setup.ml -build
+    runHook postBuild
+  '';
+  installPhase = ''
+    runHook preInstall
+    ocaml setup.ml -install
+    runHook postInstall
+  '';
 
-  meta = with stdenv.lib; {
-    homepage = http://oasis.forge.ocamlcore.org/;
+  meta = with lib; {
     description = "Configure, build and install system for OCaml projects";
+    homepage = "https://github.com/ocaml/oasis";
     license = licenses.lgpl21;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [
-      vbgl z77z
-    ];
+    maintainers = with maintainers; [ vbgl maggesi ];
+    mainProgram = "oasis";
+    inherit (ocaml.meta) platforms;
   };
 }

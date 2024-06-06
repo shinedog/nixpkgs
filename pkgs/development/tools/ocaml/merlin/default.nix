@@ -1,39 +1,32 @@
-{ stdenv, fetchzip, ocaml, findlib, yojson, menhir, lib
-, withEmacsMode ? false, emacs }:
+{ lib, fetchurl, buildDunePackage, substituteAll
+, dot-merlin-reader, dune_2, yojson, csexp, result, menhirSdk }:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.00";
+buildDunePackage rec {
+  pname = "merlin";
+  version = "3.8.0";
 
-let
-  version = if lib.versionOlder (lib.getVersion ocaml) "4.02.0"
-  then
-    "2.3.1"
-  else
-    "2.5.3";
-  hashes = {
-    "2.3.1" = "192jamcc7rmvadlqqsjkzsl6hlgwhg9my1qc89fxh1lmd4qdsrpn";
-    "2.5.3" = "0qljklgcrpqdxzvcqj7b4785zcz322pjvw9cddbmzla33hagglha";
-  };
-in
-
-stdenv.mkDerivation {
-
-  name = "merlin-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/the-lambda-church/merlin/archive/v${version}.tar.gz";
-    sha256 = hashes."${version}";
+  src = fetchurl {
+    url = "https://github.com/ocaml/merlin/releases/download/v${version}/merlin-${version}.tbz";
+    sha256 = "sha256-wmBGNwXL3BduF4o1sUXtAOUHJ4xmMvsWAxl/QdNj/28=";
   };
 
-  buildInputs = [ ocaml findlib yojson menhir ]
-    ++ stdenv.lib.optional withEmacsMode emacs;
+  minimalOCamlVersion = "4.02.3";
 
-  preConfigure = "mkdir -p $out/bin";
-  prefixKey = "--prefix ";
-  configureFlags = stdenv.lib.optional withEmacsMode "--enable-compiled-emacs-mode";
+  patches = [
+    (substituteAll {
+      src = ./fix-paths.patch;
+      dot_merlin_reader = "${dot-merlin-reader}/bin/dot-merlin-reader";
+      dune = "${dune_2}/bin/dune";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  strictDeps = true;
+
+  buildInputs = [ dot-merlin-reader yojson csexp result menhirSdk ];
+
+  meta = with lib; {
     description = "An editor-independent tool to ease the development of programs in OCaml";
-    homepage = "http://the-lambda-church.github.io/merlin/";
+    homepage = "https://github.com/ocaml/merlin";
     license = licenses.mit;
     maintainers = [ maintainers.vbgl ];
   };

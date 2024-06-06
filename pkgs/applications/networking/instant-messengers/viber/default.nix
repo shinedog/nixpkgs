@@ -1,28 +1,26 @@
-{fetchurl, stdenv, dpkg, makeWrapper,
- alsaLib, cups, curl, dbus, expat, fontconfig, freetype, glib, gst_all_1, harfbuzz, libcap,
- libpulseaudio, mesa, nspr, nss, systemd, wayland, xorg, zlib, ...
+{fetchurl, lib, stdenv, dpkg, makeWrapper,
+ alsa-lib, cups, curl, dbus, expat, fontconfig, freetype, glib, gst_all_1,
+ harfbuzz, libcap, libGL, libGLU, libpulseaudio, libxkbcommon, libxml2, libxslt,
+ nspr, nss, openssl_1_1, systemd, wayland, xorg, zlib, ...
 }:
 
-assert stdenv.system == "x86_64-linux";
-
-# BUG: Viber requires running tray application, segfaulting if it's missing
-# FIX: Start something like `stalonetray` if you DE doesn't provide tray
-
-stdenv.mkDerivation rec {
-  name = "viber-${version}";
-  version = "6.0.1.5";
+stdenv.mkDerivation {
+  pname = "viber";
+  version = "16.1.0.37";
 
   src = fetchurl {
-    url = "http://download.cdn.viber.com/cdn/desktop/Linux/viber.deb";
-    sha256 = "026vp2pv66b2dlwi5w5wk4yjnnmnsqapdww98p7xdnz8n0hnsbbi";
+    # Official link: https://download.cdn.viber.com/cdn/desktop/Linux/viber.deb
+    url = "https://web.archive.org/web/20211119123858/https://download.cdn.viber.com/cdn/desktop/Linux/viber.deb";
+    sha256 = "sha256-hOz+EQc2OOlLTPa2kOefPJMUyWvSvrgqgPgBKjWE3p8=";
   };
 
-  buildInputs = [ dpkg makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ dpkg ];
 
-  unpackPhase = "true";
+  dontUnpack = true;
 
-  libPath = stdenv.lib.makeLibraryPath [
-      alsaLib
+  libPath = lib.makeLibraryPath [
+      alsa-lib
       cups
       curl
       dbus
@@ -34,10 +32,14 @@ stdenv.mkDerivation rec {
       gst_all_1.gstreamer
       harfbuzz
       libcap
+      libGLU libGL
       libpulseaudio
-      mesa
+      libxkbcommon
+      libxml2
+      libxslt
       nspr
       nss
+      openssl_1_1
       stdenv.cc.cc
       systemd
       wayland
@@ -78,9 +80,11 @@ stdenv.mkDerivation rec {
 
     # qt.conf is not working, so override everything using environment variables
     wrapProgram $out/opt/viber/Viber \
+      --set QT_QPA_PLATFORM "xcb" \
       --set QT_PLUGIN_PATH "$out/opt/viber/plugins" \
       --set QT_XKB_CONFIG_ROOT "${xorg.xkeyboardconfig}/share/X11/xkb" \
-      --set QTCOMPOSE "${xorg.libX11.out}/share/X11/locale"
+      --set QTCOMPOSE "${xorg.libX11.out}/share/X11/locale" \
+      --set QML2_IMPORT_PATH "$out/opt/viber/qml"
     ln -s $out/opt/viber/Viber $out/bin/viber
 
     mv $out/usr/share $out/share
@@ -96,11 +100,12 @@ stdenv.mkDerivation rec {
   dontPatchELF = true;
 
   meta = {
-    homepage = http://www.viber.com;
+    homepage = "https://www.viber.com";
     description = "An instant messaging and Voice over IP (VoIP) app";
-    license = stdenv.lib.licenses.unfree;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ jagajaga ];
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
+    license = lib.licenses.unfree;
+    platforms = [ "x86_64-linux" ];
+    maintainers = with lib.maintainers; [ jagajaga ];
   };
 
 }

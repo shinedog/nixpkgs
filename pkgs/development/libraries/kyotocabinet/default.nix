@@ -1,14 +1,15 @@
-{ stdenv, fetchurl, zlib }:
+{ lib, stdenv, fetchurl, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "kyotocabinet-1.2.76";
+  pname = "kyotocabinet";
+  version = "1.2.80";
 
   src = fetchurl {
-    url = "http://fallabs.com/kyotocabinet/pkg/${name}.tar.gz";
-    sha256 = "0g6js20x7vnpq4p8ghbw3mh9wpqksya9vwhzdx6dnlf354zjsal1";
+    url = "https://dbmx.net/kyotocabinet/pkg/kyotocabinet-${version}.tar.gz";
+    sha256 = "sha256-TIXXNmaNgpIL/b25KsPWa32xEI8JWBp2ndkWCgLe80k=";
   };
 
-  prePatch = stdenv.lib.optionalString stdenv.isDarwin ''
+  prePatch = lib.optionalString stdenv.isDarwin ''
     substituteInPlace kccommon.h \
       --replace tr1/unordered_map unordered_map \
       --replace tr1/unordered_set unordered_set \
@@ -17,16 +18,19 @@ stdenv.mkDerivation rec {
       --replace tr1::unordered_set std::unordered_set
 
     substituteInPlace lab/kcdict/Makefile --replace stdc++ c++
-    substituteInPlace configure --replace stdc++ c++
+    substituteInPlace configure \
+        --replace /usr/local/bin:/usr/local/sbin: "" \
+        --replace /usr/bin:/usr/sbin: "" \
+        --replace /bin:/sbin: "" \
+        --replace stdc++ c++
   '';
 
   buildInputs = [ zlib ];
 
-  meta = with stdenv.lib; {
-    homepage = http://fallabs.com/kyotocabinet;
+  meta = with lib; {
+    homepage = "https://dbmx.net/kyotocabinet";
     description = "A library of routines for managing a database";
-    license = licenses.gpl3;
+    license = licenses.gpl3Plus;
     platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
   };
 }

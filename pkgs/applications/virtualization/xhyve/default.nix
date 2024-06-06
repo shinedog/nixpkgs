@@ -1,28 +1,39 @@
-{ stdenv, lib, fetchurl }:
+{ stdenv, lib, fetchFromGitHub, Hypervisor, vmnet, xpc, libobjc, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "xhyve-${version}";
-  version = "0.2.0";
+  pname = "xhyve";
+  version = "20210203";
 
-  src = fetchurl {
-    url = "https://github.com/mist64/xhyve/archive/v${version}.tar.gz";
-    sha256 = "0g1vknnh88kxc8aaqv3j9wqhq45mm9xxxbn1vcrypj3kk9991hrj";
+  src = fetchFromGitHub {
+    owner = "machyve";
+    repo = "xhyve";
+    rev = "83516a009c692ea5d2993d1071e68d05d359b11e";
+    sha256 = "1pjdg4ppy6qh3vr1ls5zyw3jzcvwny9wydnmfpadwij1hvns7lj3";
   };
 
+  buildInputs = [ Hypervisor vmnet xpc libobjc zlib ];
+
   # Don't use git to determine version
-  buildFlags = ''
-    CFLAGS=-DVERSION=\"${version}\"
+  prePatch = ''
+    substituteInPlace Makefile \
+      --replace 'shell git describe --abbrev=6 --dirty --always --tags' "$version"
   '';
+
+
+  makeFlags = [ "CFLAGS+=-Wno-shift-sign-overflow" ''CFLAGS+=-DVERSION=\"${version}\"'' ];
 
   installPhase = ''
     mkdir -p $out/bin
     cp build/xhyve $out/bin
   '';
 
-  meta = {
-    description = "Lightweight Virtualization on OS X Based on bhyve";
+  meta = with lib; {
+    description = "Lightweight Virtualization on macOS Based on bhyve";
     homepage = "https://github.com/mist64/xhyve";
-    maintainers = [ lib.maintainers.lnl7 ];
-    platforms = lib.platforms.darwin;
+    maintainers = [ maintainers.lnl7 ];
+    license = licenses.bsd2;
+    platforms = platforms.darwin;
+    # never built on aarch64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin && stdenv.isAarch64;
   };
 }

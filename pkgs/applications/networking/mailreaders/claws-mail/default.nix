@@ -1,102 +1,162 @@
-{ fetchurl, stdenv, wrapGAppsHook
-, curl, dbus, dbus_glib, enchant, gtk2, gnutls, gnupg, gpgme, hicolor_icon_theme
-, libarchive, libcanberra_gtk2, libetpan, libnotify, libsoup, libxml2, networkmanager
-, openldap , perl, pkgconfig, poppler, python, shared_mime_info, webkitgtk2
-, glib_networking, gsettings_desktop_schemas
+{ stdenv, lib, fetchurl, wrapGAppsHook3, autoreconfHook, bison, flex
+, curl, gtk3, pkg-config, python3, shared-mime-info
+, glib-networking, gsettings-desktop-schemas
 
-# Build options
-# TODO: A flag to build the manual.
-# TODO: Plugins that complain about their missing dependencies, even when
-#       provided:
-#         gdata requires libgdata
-#         geolocation requires libchamplain
-#         python requires python
-, enableLdap ? false
-, enableNetworkManager ? false
+# Package compatibility: old parameters whose name were not directly derived
 , enablePgp ? true
-, enablePluginArchive ? false
-, enablePluginFancy ? false
 , enablePluginNotificationDialogs ? true
 , enablePluginNotificationSounds ? true
-, enablePluginPdf ? false
-, enablePluginRavatar ? false
-, enablePluginRssyl ? false
-, enablePluginSmime ? false
-, enablePluginSpamassassin ? false
-, enablePluginSpamReport ? false
-, enablePluginVcalendar ? false
-, enableSpellcheck ? false
+, enablePluginPdf ? true
+, enablePluginRavatar ? true
+, enableSpellcheck ? true
+
+# Arguments to include external libraries
+, enableLibSM ? true, xorg
+, enableGnuTLS ? true, gnutls
+, enableEnchant ? enableSpellcheck, enchant
+, enableDbus ? true, dbus, dbus-glib
+, enableLdap ? true, openldap
+, enableNetworkManager ? true, networkmanager
+, enableLibetpan ? true, libetpan
+, enableValgrind ? !stdenv.isDarwin && lib.meta.availableOn stdenv.hostPlatform valgrind, valgrind
+, enableSvg ? true, librsvg
+
+# Configure claws-mail's plugins
+, enablePluginAcpiNotifier ? true
+, enablePluginAddressKeeper ? true
+, enablePluginArchive ? true, libarchive
+, enablePluginAttRemover ? true
+, enablePluginAttachWarner ? true
+, enablePluginBogofilter ? true
+, enablePluginBsfilter ? true
+, enablePluginClamd ? true
+, enablePluginDillo ? true
+, enablePluginFancy ? true, webkitgtk
+, enablePluginFetchInfo ? true
+, enablePluginKeywordWarner ? true
+, enablePluginLibravatar ? enablePluginRavatar
+, enablePluginLitehtmlViewer ? true, gumbo
+, enablePluginMailmbox ? true
+, enablePluginManageSieve ? true
+, enablePluginNewMail ? true
+, enablePluginNotification ? (enablePluginNotificationDialogs || enablePluginNotificationSounds), libcanberra-gtk3, libnotify
+, enablePluginPdfViewer ? enablePluginPdf, poppler
+, enablePluginPerl ? true, perl
+, enablePluginPython ? true
+, enablePluginPgp ? enablePgp, gnupg, gpgme
+, enablePluginRssyl ? true, libxml2
+, enablePluginSmime ? true
+, enablePluginSpamassassin ? true
+, enablePluginSpamReport ? true
+, enablePluginTnefParse ? true, libytnef
+, enablePluginVcalendar ? true, libical
 }:
 
-with stdenv.lib;
+let
+  pythonPkgs = with python3.pkgs; [ python3 wrapPython pygobject3 ];
 
-stdenv.mkDerivation rec {
-  name = "claws-mail-${version}";
-  version = "3.14.0";
-
-  meta = {
-    description = "The user-friendly, lightweight, and fast email client";
-    homepage = http://www.claws-mail.org/;
-    license = licenses.gpl3;
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ khumba fpletz ];
-  };
+  features = [
+    { flags = [ "acpi_notifier-plugin" ]; enabled = enablePluginAcpiNotifier; }
+    { flags = [ "address_keeper-plugin" ]; enabled = enablePluginAddressKeeper; }
+    { flags = [ "archive-plugin" ]; enabled = enablePluginArchive; deps = [ libarchive ]; }
+    { flags = [ "att_remover-plugin" ]; enabled = enablePluginAttRemover; }
+    { flags = [ "attachwarner-plugin" ]; enabled = enablePluginAttachWarner; }
+    { flags = [ "bogofilter-plugin" ]; enabled = enablePluginBogofilter; }
+    { flags = [ "bsfilter-plugin" ]; enabled = enablePluginBsfilter; }
+    { flags = [ "clamd-plugin" ]; enabled = enablePluginClamd; }
+    { flags = [ "dbus" ]; enabled = enableDbus; deps = [ dbus dbus-glib ]; }
+    { flags = [ "dillo-plugin" ]; enabled = enablePluginDillo; }
+    { flags = [ "enchant" ]; enabled = enableEnchant; deps = [ enchant ]; }
+    { flags = [ "fancy-plugin" ]; enabled = enablePluginFancy; deps = [ webkitgtk ]; }
+    { flags = [ "fetchinfo-plugin" ]; enabled = enablePluginFetchInfo; }
+    { flags = [ "keyword_warner-plugin" ]; enabled = enablePluginKeywordWarner; }
+    { flags = [ "gnutls" ]; enabled = enableGnuTLS; deps = [ gnutls ]; }
+    { flags = [ "ldap" ]; enabled = enableLdap; deps = [ openldap ]; }
+    { flags = [ "libetpan" ]; enabled = enableLibetpan; deps = [ libetpan ]; }
+    { flags = [ "libravatar-plugin" ]; enabled = enablePluginLibravatar; }
+    { flags = [ "libsm" ]; enabled = enableLibSM; deps = [ xorg.libSM ]; }
+    { flags = [ "litehtml_viewer-plugin" ]; enabled = enablePluginLitehtmlViewer; deps = [ gumbo ]; }
+    { flags = [ "mailmbox-plugin" ]; enabled = enablePluginMailmbox; }
+    { flags = [ "managesieve-plugin" ]; enabled = enablePluginManageSieve; }
+    { flags = [ "networkmanager" ]; enabled = enableNetworkManager; deps = [ networkmanager ]; }
+    { flags = [ "newmail-plugin" ]; enabled = enablePluginNewMail; }
+    { flags = [ "notification-plugin" ]; enabled = enablePluginNotification; deps = [ libnotify ] ++ [libcanberra-gtk3]; }
+    { flags = [ "pdf_viewer-plugin" ]; enabled = enablePluginPdfViewer; deps = [ poppler ]; }
+    { flags = [ "perl-plugin" ]; enabled = enablePluginPerl; deps = [ perl ]; }
+    { flags = [ "pgpcore-plugin" "pgpinline-plugin" "pgpmime-plugin" ]; enabled = enablePluginPgp; deps = [ gnupg gpgme ]; }
+    { flags = [ "python-plugin" ]; enabled = enablePluginPython; }
+    { flags = [ "rssyl-plugin" ]; enabled = enablePluginRssyl; deps = [ libxml2 ]; }
+    { flags = [ "smime-plugin" ]; enabled = enablePluginSmime; }
+    { flags = [ "spam_report-plugin" ]; enabled = enablePluginSpamReport; }
+    { flags = [ "spamassassin-plugin" ]; enabled = enablePluginSpamassassin; }
+    { flags = [ "svg" ]; enabled = enableSvg; deps = [ librsvg ]; }
+    { flags = [ "tnef_parse-plugin" ]; enabled = enablePluginTnefParse; deps = [ libytnef ]; }
+    { flags = [ "valgrind" ]; enabled = enableValgrind; deps = [ valgrind ]; }
+    { flags = [ "vcalendar-plugin" ]; enabled = enablePluginVcalendar; deps = [ libical ]; }
+  ];
+in stdenv.mkDerivation rec {
+  pname = "claws-mail";
+  version = "4.2.0";
 
   src = fetchurl {
-    url = "http://www.claws-mail.org/download.php?file=releases/claws-mail-${version}.tar.xz";
-    sha256 = "0nfchgga3ir91s8rky0a0vnz8cgj2f6h716wh3cmb466a01xfss6";
+    url = "https://claws-mail.org/download.php?file=releases/claws-mail-${version}.tar.xz";
+    hash = "sha256-fIqxcy10GX3wbWGmt+vHxYDs9ukuse9q5bAQdTPxrwc=";
   };
 
-  patches = [ ./mime.patch ];
+  outputs = [ "out" "dev" ];
 
-  postPatch = ''
-    substituteInPlace src/procmime.c \
-        --subst-var-by MIMEROOTDIR ${shared_mime_info}/share
+  patches = [
+    ./mime.patch
+  ];
+
+  preConfigure = ''
+    # autotools check tries to dlopen libpython as a requirement for the python plugin
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH''${LD_LIBRARY_PATH:+:}${python3}/lib
+    # generate version without .git
+    [ -e version ] || echo "echo ${version}" > version
   '';
 
+  postPatch = ''
+    substituteInPlace configure.ac \
+      --replace 'm4_esyscmd([./get-git-version])' '${version}'
+    substituteInPlace src/procmime.c \
+        --subst-var-by MIMEROOTDIR ${shared-mime-info}/share
+  '';
+
+  nativeBuildInputs = [ autoreconfHook pkg-config bison flex wrapGAppsHook3 ];
+  propagatedBuildInputs = pythonPkgs;
+
   buildInputs =
-    [ curl dbus dbus_glib gtk2 gnutls gsettings_desktop_schemas hicolor_icon_theme
-      libetpan perl pkgconfig python wrapGAppsHook glib_networking
-    ]
-    ++ optional enableSpellcheck enchant
-    ++ optionals (enablePgp || enablePluginSmime) [ gnupg gpgme ]
-    ++ optional enablePluginArchive libarchive
-    ++ optional enablePluginNotificationSounds libcanberra_gtk2
-    ++ optional enablePluginNotificationDialogs libnotify
-    ++ optional enablePluginFancy libsoup
-    ++ optional enablePluginRssyl libxml2
-    ++ optional enableNetworkManager networkmanager
-    ++ optional enableLdap openldap
-    ++ optional enablePluginPdf poppler
-    ++ optional enablePluginFancy webkitgtk2;
+    [ curl gsettings-desktop-schemas glib-networking gtk3 ]
+    ++ lib.concatMap (f: lib.optionals f.enabled f.deps) (lib.filter (f: f ? deps) features)
+  ;
 
   configureFlags =
-    optional (!enableLdap) "--disable-ldap"
-    ++ optional (!enableNetworkManager) "--disable-networkmanager"
-    ++ optionals (!enablePgp) [
-      "--disable-pgpcore-plugin"
-      "--disable-pgpinline-plugin"
-      "--disable-pgpmime-plugin"
-    ]
-    ++ optional (!enablePluginArchive) "--disable-archive-plugin"
-    ++ optional (!enablePluginFancy) "--disable-fancy-plugin"
-    ++ optional (!enablePluginPdf) "--disable-pdf_viewer-plugin"
-    ++ optional (!enablePluginRavatar) "--disable-libravatar-plugin"
-    ++ optional (!enablePluginRssyl) "--disable-rssyl-plugin"
-    ++ optional (!enablePluginSmime) "--disable-smime-plugin"
-    ++ optional (!enablePluginSpamassassin) "--disable-spamassassin-plugin"
-    ++ optional (!enablePluginSpamReport) "--disable-spam_report-plugin"
-    ++ optional (!enablePluginVcalendar) "--disable-vcalendar-plugin"
-    ++ optional (!enableSpellcheck) "--disable-enchant";
+    [
+      "--disable-manual"   # Missing docbook-tools, e.g., docbook2html
+      "--disable-compface" # Missing compface library
+      "--disable-jpilot"   # Missing jpilot library
+    ] ++
+    (map (feature: map (flag: lib.strings.enableFeature feature.enabled flag) feature.flags) features);
 
   enableParallelBuilding = true;
 
   preFixup = ''
-    gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "${shared_mime_info}/share")
+    buildPythonPath "$out $pythonPkgs"
+    gappsWrapperArgs+=(--prefix XDG_DATA_DIRS : "${shared-mime-info}/share" --prefix PYTHONPATH : "$program_PYTHONPATH")
   '';
 
   postInstall = ''
     mkdir -p $out/share/applications
     cp claws-mail.desktop $out/share/applications
   '';
+
+  meta = with lib; {
+    description = "The user-friendly, lightweight, and fast email client";
+    mainProgram = "claws-mail";
+    homepage = "https://www.claws-mail.org/";
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ fpletz globin orivej oxzi ajs124 ];
+  };
 }

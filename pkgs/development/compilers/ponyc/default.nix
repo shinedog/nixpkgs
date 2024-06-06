@@ -1,89 +1,115 @@
-{ stdenv, fetchFromGitHub, llvm, makeWrapper, pcre2, coreutils, which, libressl,
-  cc ? stdenv.cc, lto ? !stdenv.isDarwin }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, coreutils
+, libxml2
+, lto ? !stdenv.isDarwin
+, makeWrapper
+, openssl
+, pcre2
+, pony-corral
+, python3
+, substituteAll
+, which
+, z3
+, darwin
+}:
 
-stdenv.mkDerivation ( rec {
-  name = "ponyc-${version}";
-  version = "0.9.0";
+stdenv.mkDerivation (rec {
+  pname = "ponyc";
+  version = "0.54.0";
 
   src = fetchFromGitHub {
     owner = "ponylang";
-    repo = "ponyc";
+    repo = pname;
     rev = version;
-    sha256 = "1g2i3x9k36h5rx7ifx0i6hn78xlj42i86x8apwzvkh0y84y88adi";
+    hash = "sha256-qFPubqGfK0WCun6QA1OveyDJj7Wf6SQpky7pEb7qsf4=";
+    fetchSubmodules = true;
   };
 
-  buildInputs = [ llvm makeWrapper which ];
-  propagatedBuildInputs = [ cc ];
+  ponygbenchmark = fetchFromGitHub {
+    owner = "google";
+    repo = "benchmark";
+    rev = "v1.8.0";
+    hash = "sha256-pUW9YVaujs/y00/SiPqDgK4wvVsaM7QUp/65k0t7Yr0=";
+  };
 
-  # Disable problematic networking tests
-  patches = [ ./disable-tests.patch ];
+  nativeBuildInputs = [ cmake makeWrapper which python3 ]
+    ++ lib.optionals (stdenv.isDarwin) [ darwin.cctools ];
+  buildInputs = [ libxml2 z3 ];
+
+  # Sandbox disallows network access, so disabling problematic networking tests
+  patches = [
+    ./disable-tests.patch
+    (substituteAll {
+      src = ./make-safe-for-sandbox.patch;
+      googletest = fetchFromGitHub {
+        owner = "google";
+        repo = "googletest";
+        # GoogleTest follows Abseil Live at Head philosophy, use latest commit from main branch as often as possible.
+        rev = "1a727c27aa36c602b24bf170a301aec8686b88e8"; # unstable-2023-03-07
+        hash = "sha256-/FWBSxZESwj/QvdNK5BI2EfonT64DP1eGBZR4O8uJww=";
+      };
+    })
+  ] ++ lib.optionals stdenv.isDarwin [
+    (substituteAll {
+      src = ./fix-darwin-build.patch;
+      libSystem = darwin.Libsystem;
+    })
+  ];
+
+  postUnpack = ''
+    mkdir -p source/build/build_libs/gbenchmark-prefix/src
+    cp -r "$ponygbenchmark"/ source/build/build_libs/gbenchmark-prefix/src/benchmark
+    chmod -R u+w source/build/build_libs/gbenchmark-prefix/src/benchmark
+  '';
+
+  dontConfigure = true;
+
+  postPatch = ''
+    substituteInPlace packages/process/_test.pony \
+        --replace '"/bin/' '"${coreutils}/bin/' \
+        --replace '=/bin' "${coreutils}/bin"
+    substituteInPlace src/libponyc/pkg/package.c \
+        --replace "/usr/local/lib" "" \
+        --replace "/opt/local/lib" ""
+  '';
 
   preBuild = ''
-    # Fix tests
-    substituteInPlace packages/process/_test.pony \
-        --replace '"/bin/' '"${coreutils}/bin/'
-    substituteInPlace packages/process/_test.pony \
-        --replace '=/bin' "${coreutils}/bin"
-
-
-    # Fix llvm-ar check for darwin
-    substituteInPlace Makefile \
-        --replace "llvm-ar-3.8" "llvm-ar"
-
-    # Remove impure system refs
-    substituteInPlace src/libponyc/pkg/package.c \
-        --replace "/usr/local/lib" ""
-    substituteInPlace src/libponyc/pkg/package.c \
-        --replace "/opt/local/lib" ""
-
-    for file in `grep -irl '/usr/local/opt/libressl/lib' ./*`; do
-      substituteInPlace $file  --replace '/usr/local/opt/libressl/lib' "${stdenv.lib.getLib libressl}/lib"
-    done
-
-    # Fix ponypath issue
-    substituteInPlace Makefile \
-        --replace "PONYPATH=." "PONYPATH=.:\$(PONYPATH)"
-
-    export LLVM_CONFIG=${llvm}/bin/llvm-config
-  '' + stdenv.lib.optionalString ((!stdenv.isDarwin) && (!cc.isClang) && lto) ''
-    export LTO_PLUGIN=`find ${cc.cc}/ -name liblto_plugin.so`
-  '' + stdenv.lib.optionalString ((!stdenv.isDarwin) && (cc.isClang) && lto) ''
-    export LTO_PLUGIN=`find ${cc.cc}/ -name LLVMgold.so`
+    make libs build_flags=-j$NIX_BUILD_CORES
+    make configure build_flags=-j$NIX_BUILD_CORES
   '';
 
-  makeFlags = [ "config=release" ] ++ stdenv.lib.optionals stdenv.isDarwin [ "bits=64" ]
-              ++ stdenv.lib.optionals (stdenv.isDarwin && (!lto)) [ "lto=no" ];
+  makeFlags = [
+    "PONYC_VERSION=${version}"
+    "prefix=${placeholder "out"}"
+  ] ++ lib.optionals stdenv.isDarwin ([ "bits=64" ] ++ lib.optional (!lto) "lto=no");
 
-  enableParallelBuilding = true;
+  env.NIX_CFLAGS_COMPILE = toString [ "-Wno-error=redundant-move" "-Wno-error=implicit-fallthrough" ];
 
-  doCheck = true;
+  # make: *** [Makefile:222: test-full-programs-release] Killed: 9
+  doCheck = !stdenv.isDarwin;
 
-  checkTarget = "test-ci";
-
-  preCheck = ''
-    export PONYPATH="$out/lib:${stdenv.lib.makeLibraryPath [ pcre2 libressl ]}"
-  '';
-
-  installPhase = ''
-    make config=release prefix=$out ''
-    + stdenv.lib.optionalString stdenv.isDarwin '' bits=64 ''
-    + stdenv.lib.optionalString (stdenv.isDarwin && (!lto)) '' lto=no ''
+  installPhase = "make config=release prefix=$out "
+    + lib.optionalString stdenv.isDarwin ("bits=64 " + (lib.optionalString (!lto) "lto=no "))
     + '' install
-    mv $out/bin/ponyc $out/bin/ponyc.wrapped
-    makeWrapper $out/bin/ponyc.wrapped $out/bin/ponyc \
-      --prefix PONYPATH : "$out/lib" \
-      --prefix PONYPATH : "${stdenv.lib.getLib pcre2}/lib" \
-      --prefix PONYPATH : "${stdenv.lib.getLib libressl}/lib"
+    wrapProgram $out/bin/ponyc \
+      --prefix PATH ":" "${stdenv.cc}/bin" \
+      --set-default CC "$CC" \
+      --prefix PONYPATH : "${lib.makeLibraryPath [ pcre2 openssl (placeholder "out") ]}"
   '';
 
   # Stripping breaks linking for ponyc
   dontStrip = true;
 
-  meta = {
+  passthru.tests.pony-corral = pony-corral;
+
+  meta = with lib; {
     description = "Pony is an Object-oriented, actor-model, capabilities-secure, high performance programming language";
-    homepage = http://www.ponylang.org;
-    license = stdenv.lib.licenses.bsd2;
-    maintainers = with stdenv.lib.maintainers; [ doublec kamilchm ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://www.ponylang.org";
+    license = licenses.bsd2;
+    maintainers = with maintainers; [ kamilchm patternspandemic redvers ];
+    platforms = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" "aarch64-darwin" ];
   };
 })

@@ -1,29 +1,28 @@
-{ stdenv, pkgconfig, fetchFromGitHub, python, glib, vala_0_28, ctpl
+{ lib, stdenv, meson, ninja, pkg-config, fetchFromGitHub, glib, vala, ctpl
 , libgee, libsoup, fcgi }:
 
 stdenv.mkDerivation rec {
-  name = "valum-${version}";
-  version = "0.2.16";
+  pname = "valum";
+  version = "0.3.18";
 
   src = fetchFromGitHub {
     owner = "valum-framework";
     repo = "valum";
     rev = "v${version}";
-    sha256 = "0ca067gg5z1798bazwzgg2yd2mbysvk8i2q2v3i8d0d188y2hj84";
+    sha256 = "sha256-baAv83YiX8HdBm/t++ktB7pmTVlt4aWZ5xnsAs/NrTI=";
   };
 
-  buildInputs = [ python pkgconfig glib vala_0_28 ctpl libgee libsoup fcgi ];
+  nativeBuildInputs = [ meson ninja pkg-config ];
+  buildInputs = [ glib vala ctpl libgee libsoup fcgi ];
 
-  configurePhase = ''python waf configure --prefix=$out'';
-
-  buildPhase = ''python waf build'';
-
-  installPhase = ''python waf install'';
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/valum-framework/valum;
+  meta = with lib; {
+    homepage = "https://github.com/valum-framework/valum";
     description = "Web micro-framework written in Vala";
+    license = licenses.lgpl3;
     platforms = platforms.linux;
-    maintainers = [ maintainers.lethalman ];
+    maintainers = [ ];
+    # Likely broken by GLib 2.74 switch to PCRE 2.
+    # https://github.com/valum-framework/valum/issues/238
+    broken = true;
   };
 }

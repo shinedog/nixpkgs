@@ -1,42 +1,58 @@
-{ stdenv, fetchurl, apr, scons, openssl, aprutil, zlib, kerberos, pkgconfig, gnused }:
+{ lib
+, stdenv
+, fetchurl
+, apr
+, scons
+, openssl
+, aprutil
+, zlib
+, libkrb5
+, pkg-config
+, libiconv
+, fetchpatch
+}:
 
 stdenv.mkDerivation rec {
-  name = "serf-1.3.7";
+  pname = "serf";
+  version = "1.3.10";
 
   src = fetchurl {
-    url = "http://serf.googlecode.com/svn/src_releases/${name}.tar.bz2";
-    sha256 = "1bphz616dv1svc50kkm8xbgyszhg3ni2dqbij99sfvjycr7bgk7c";
+    url = "mirror://apache/serf/${pname}-${version}.tar.bz2";
+    hash = "sha256-voHvCLqiUW7Np2p3rffe97wyJ+61eLmjO0X3tB3AZOY=";
   };
 
-  buildInputs = [ apr scons openssl aprutil zlib ]
-    ++ stdenv.lib.optional (!stdenv.isCygwin) kerberos
-    ++ [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config scons ];
+  buildInputs = [ apr openssl aprutil zlib libiconv ]
+    ++ lib.optional (!stdenv.isCygwin) libkrb5;
 
-  configurePhase = ''
-    ${gnused}/bin/sed -e '/^env[.]Append(BUILDERS/ienv.Append(ENV={"PATH":os.environ["PATH"]})' -i SConstruct
-    ${gnused}/bin/sed -e '/^env[.]Append(BUILDERS/ienv.Append(ENV={"NIX_CFLAGS_COMPILE":os.environ["NIX_CFLAGS_COMPILE"]})' -i SConstruct
-    ${gnused}/bin/sed -e '/^env[.]Append(BUILDERS/ienv.Append(ENV={"NIX_LDFLAGS":os.environ["NIX_LDFLAGS"]})' -i SConstruct
+  patches = [
+    ./scons.patch
+
+    (fetchpatch {
+      url = "https://src.fedoraproject.org/rpms/libserf/raw/rawhide/f/libserf-1.3.9-errgetfunc.patch";
+      hash = "sha256-FQJvXOIZ0iItvbbcu4kR88j74M7fOi7C/0NN3o1/ub4=";
+    })
+  ];
+
+  prefixKey = "PREFIX=";
+
+  preConfigure = ''
+    sconsFlags+=" APR=$(echo ${apr.dev}/bin/*-config)"
+    sconsFlags+=" APU=$(echo ${aprutil.dev}/bin/*-config)"
+    sconsFlags+=" CC=$CC"
+    sconsFlags+=" OPENSSL=${openssl}"
+    sconsFlags+=" ZLIB=${zlib}"
+  '' + lib.optionalString (!stdenv.isCygwin) ''
+    sconsFlags+=" GSSAPI=${libkrb5.dev}"
   '';
 
-  buildPhase = ''
-    scons PREFIX="$out" OPENSSL="${openssl.dev}" ZLIB="${zlib.dev}" APR="$(echo "${apr.dev}"/bin/*-config)" \
-        APU="$(echo "${aprutil.dev}"/bin/*-config)" CC="${
-          if stdenv.cc.isClang then "clang" else "${stdenv.cc}/bin/gcc"
-        }" ${
-          if (stdenv.isDarwin || stdenv.isCygwin) then "" else "GSSAPI=\"${kerberos}\""
-        }
-  '';
+  enableParallelBuilding = true;
 
-  NIX_CFLAGS_COMPILE = stdenv.lib.optionalString stdenv.isDarwin "-L/usr/lib";
-
-  installPhase = ''
-    scons install
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "HTTP client library based on APR";
-    license = stdenv.lib.licenses.asl20;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
+    homepage = "https://serf.apache.org/";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ orivej raskin ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

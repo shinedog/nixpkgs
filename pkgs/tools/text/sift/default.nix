@@ -1,26 +1,39 @@
-{ stdenv, lib, buildGoPackage, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, fetchpatch, installShellFiles }:
 
-buildGoPackage rec {
-  name = "sift-${version}";
-  version = "0.8.0";
-  rev = "v${version}";
-
-  goPackagePath = "github.com/svent/sift";
+buildGoModule rec {
+  pname = "sift";
+  version = "0.9.0";
 
   src = fetchFromGitHub {
-    inherit rev;
     owner = "svent";
     repo = "sift";
-    sha256 = "1nb042k420xr6000ipwhqn41vg8jfp6ghq4z7y1sjnndkrhclzm1";
+    rev = "v${version}";
+    hash = "sha256-IZ4Hwg5NzdSXtrIDNxtkzquuiHQOmLV1HSx8gpwE/i0=";
   };
 
-  goDeps = ./deps.nix;
+  vendorHash = "sha256-y883la4R4jhsS99/ohgBC9SHggybAq9hreda6quG3IY=";
+
+  patches = [
+    # Add Go Modules support
+    (fetchpatch {
+      url = "https://github.com/svent/sift/commit/b56fb3d0fd914c8a6c08b148e15dd8a07c7d8a5a.patch";
+      hash = "sha256-mFCEpkgQ8XDPRQ3yKDZ5qY9tKGSuHs+RnhMeAlx33Ng=";
+    })
+  ];
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  ldflags = [ "-s" "-w" ];
+
+  postInstall = ''
+    installShellCompletion --cmd sift --bash sift-completion.bash
+  '';
 
   meta = with lib; {
-    description = "sift is a fast and powerful alternative to grep";
+    description = "A fast and powerful alternative to grep";
+    mainProgram = "sift";
     homepage = "https://sift-tool.org";
-    maintainers = [ maintainers.carlsverre ];
+    maintainers = with maintainers; [ viraptor ];
     license = licenses.gpl3;
-    platforms = platforms.linux;
   };
 }

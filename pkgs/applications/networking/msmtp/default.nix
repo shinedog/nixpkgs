@@ -1,30 +1,136 @@
-{ stdenv, fetchurl, openssl, pkgconfig, gnutls, gsasl, libidn, Security }:
+{ resholve
+, stdenv
+, symlinkJoin
+, lib
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, bash
+, coreutils
+, gnugrep
+, gnutls
+, gsasl
+, libidn2
+, netcat-gnu
+, texinfo
+, which
+, Security
+, withKeyring ? true
+, libsecret
+, withSystemd ? lib.meta.availableOn stdenv.hostPlatform systemd
+, systemd
+, withScripts ? true
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.6.4";
-  name = "msmtp-${version}";
+let
+  inherit (lib) getBin getExe optionals;
 
-  src = fetchurl {
-    url = "mirror://sourceforge/msmtp/${name}.tar.xz";
-    sha256 = "1kfihblm769s4hv8iah5mqynqd6hfwlyz5rcg2v423a4llic0jcv";
+  version = "1.8.22";
+
+  src = fetchFromGitHub {
+    owner = "marlam";
+    repo = "msmtp-mirror";
+    rev = "msmtp-${version}";
+    hash = "sha256-Jt/uvGBrYYr6ua6LVPiP0nuRiIkxBJASdgHBNHivzxQ=";
   };
 
-  buildInputs = [ openssl pkgconfig gnutls gsasl libidn ]
-    ++ stdenv.lib.optional stdenv.isDarwin Security;
+  meta = with lib; {
+    description = "Simple and easy to use SMTP client with excellent sendmail compatibility";
+    homepage = "https://marlam.de/msmtp/";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = platforms.unix;
+    mainProgram = "msmtp";
+  };
 
-  configureFlags =
-    stdenv.lib.optional stdenv.isDarwin [ "--with-macosx-keyring" ];
+  binaries = stdenv.mkDerivation {
+    pname = "msmtp-binaries";
+    inherit version src meta;
 
-  postInstall = ''
-    cp scripts/msmtpq/msmtp-queue scripts/msmtpq/msmtpq $prefix/bin/
-    chmod +x $prefix/bin/msmtp-queue $prefix/bin/msmtpq
-  '';
+    configureFlags = [ "--sysconfdir=/etc" "--with-libgsasl" ]
+      ++ optionals stdenv.isDarwin [ "--with-macosx-keyring" ];
 
-  meta = {
-      description = "Simple and easy to use SMTP client with excellent sendmail compatibility";
-      homepage = "http://msmtp.sourceforge.net/";
-      license = stdenv.lib.licenses.gpl3;
-      maintainers = [ stdenv.lib.maintainers.garbas ];
-      platforms = stdenv.lib.platforms.unix;
+    buildInputs = [ gnutls gsasl libidn2 ]
+      ++ optionals stdenv.isDarwin [ Security ]
+      ++ optionals withKeyring [ libsecret ];
+
+    nativeBuildInputs = [ autoreconfHook pkg-config texinfo ];
+
+    enableParallelBuilding = true;
+
+    postInstall = ''
+      install -Dm444 -t $out/share/doc/msmtp doc/*.example
+      ln -s msmtp $out/bin/sendmail
+    '';
+  };
+
+  scripts = resholve.mkDerivation {
+    pname = "msmtp-scripts";
+    inherit version src meta;
+
+    patches = [ ./paths.patch ];
+
+    postPatch = ''
+      substituteInPlace scripts/msmtpq/msmtpq \
+        --replace @journal@ ${if withSystemd then "Y" else "N"}
+    '';
+
+    dontConfigure = true;
+    dontBuild = true;
+
+    installPhase = ''
+      runHook preInstall
+
+      install -Dm555 -t $out/bin                     scripts/msmtpq/msmtp*
+      install -Dm444 -t $out/share/doc/msmtp/scripts scripts/msmtpq/README*
+      install -Dm444 -t $out/share/doc/msmtp/scripts scripts/{find_alias,msmtpqueue,set_sendmail}/*
+
+      if grep --quiet -E '@.+@' $out/bin/*; then
+        echo "Unsubstituted variables found. Aborting!"
+        grep -E '@.+@' $out/bin/*
+        exit 1
+      fi
+
+      runHook postInstall
+    '';
+
+    solutions = {
+      msmtpq = {
+        scripts = [ "bin/msmtpq" ];
+        interpreter = getExe bash;
+        inputs = [
+          binaries
+          coreutils
+          gnugrep
+          netcat-gnu
+          which
+        ] ++ optionals withSystemd [ systemd ];
+        execer = [
+          "cannot:${getBin binaries}/bin/msmtp"
+          "cannot:${getBin netcat-gnu}/bin/nc"
+        ] ++ optionals withSystemd [
+          "cannot:${getBin systemd}/bin/systemd-cat"
+        ];
+        fix."$MSMTP" = [ "msmtp" ];
+        fake.external = [ "ping" ]
+          ++ optionals (!withSystemd) [ "systemd-cat" ];
+      };
+
+      msmtp-queue = {
+        scripts = [ "bin/msmtp-queue" ];
+        interpreter = getExe bash;
+        inputs = [ "${placeholder "out"}/bin" ];
+        execer = [ "cannot:${placeholder "out"}/bin/msmtpq" ];
+      };
     };
-}
+  };
+
+in
+if withScripts then
+  symlinkJoin
+  {
+    name = "msmtp-${version}";
+    inherit version meta;
+    paths = [ binaries scripts ];
+    passthru = { inherit binaries scripts; };
+  } else binaries

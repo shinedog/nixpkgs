@@ -1,33 +1,85 @@
-{ stdenv, fetchurl, python }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, python3
+, stanc
+, buildPackages
+, runtimeShell
+, runCommandCC
+, cmdstan
+}:
 
 stdenv.mkDerivation rec {
-  name = "cmdstan-2.9.0";
+  pname = "cmdstan";
+  version = "2.34.1";
 
-  src = fetchurl {
-    url = "https://github.com/stan-dev/cmdstan/releases/download/v2.9.0/cmdstan-2.9.0.tar.gz";
-    sha256 = "08bim6nxgam989152hm0ga1rfb33mr71pwsym1nmfmavma68bwm9";
+  src = fetchFromGitHub {
+    owner = "stan-dev";
+    repo = pname;
+    rev = "v${version}";
+    fetchSubmodules = true;
+    hash = "sha256-gze8kd5zSs9nUlSY7AJwpx+jnc9Y21ahzDJmynlqm1Y=";
   };
 
-  buildFlags = "build";
-  enableParallelBuilding = true;
-  nativeBuildInputs = stdenv.lib.optional doCheck python;
+  postPatch = ''
+    substituteInPlace stan/lib/stan_math/make/libraries \
+      --replace "/usr/bin/env bash" "bash"
+  '';
 
-  doCheck = true;
-  checkPhase = "python ./runCmdStanTests.py src/test/interface";  # see #5368
+  nativeBuildInputs = [
+    python3
+    stanc
+  ];
+
+  preConfigure = ''
+    patchShebangs test-all.sh runCmdStanTests.py stan/
+  ''
+  # Fix inclusion of hardcoded paths in PCH files, by building in the store.
+  + ''
+    mkdir -p $out/opt
+    cp -R . $out/opt/cmdstan
+    cd $out/opt/cmdstan
+    mkdir -p bin
+    ln -s ${buildPackages.stanc}/bin/stanc bin/stanc
+  '';
+
+  makeFlags = [
+    "build"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "arch=${stdenv.hostPlatform.darwinArch}"
+  ];
+
+  # Disable inclusion of timestamps in PCH files when using Clang.
+  env.CXXFLAGS = lib.optionalString stdenv.cc.isClang "-Xclang -fno-pch-timestamp";
+
+  enableParallelBuilding = true;
 
   installPhase = ''
-    mkdir -p $out/opt $out/bin
-    cp -r . $out/opt/cmdstan
+    runHook preInstall
+
+    mkdir -p $out/bin
     ln -s $out/opt/cmdstan/bin/stanc $out/bin/stanc
     ln -s $out/opt/cmdstan/bin/stansummary $out/bin/stansummary
     cat > $out/bin/stan <<EOF
-    #!/bin/sh
+    #!${runtimeShell}
     make -C $out/opt/cmdstan "\$(realpath "\$1")"
     EOF
     chmod a+x $out/bin/stan
+
+    runHook postInstall
   '';
 
-  meta = {
+  passthru.tests = {
+    test = runCommandCC "cmdstan-test" { } ''
+      cp -R ${cmdstan}/opt/cmdstan cmdstan
+      chmod -R +w cmdstan
+      cd cmdstan
+      ./runCmdStanTests.py -j$NIX_BUILD_CORES src/test/interface
+      touch $out
+    '';
+  };
+
+  meta = with lib; {
     description = "Command-line interface to Stan";
     longDescription = ''
       Stan is a probabilistic programming language implementing full Bayesian
@@ -35,8 +87,9 @@ stdenv.mkDerivation rec {
       inference with Variational inference (ADVI) and penalized maximum
       likelihood estimation with Optimization (L-BFGS).
     '';
-    homepage = http://mc-stan.org/interfaces/cmdstan.html;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://mc-stan.org/interfaces/cmdstan.html";
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ wegank ];
+    platforms = platforms.unix;
   };
 }

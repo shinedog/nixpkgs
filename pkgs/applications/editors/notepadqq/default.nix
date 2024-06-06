@@ -1,33 +1,60 @@
-{ stdenv, fetchgit, pkgconfig, which, qtbase }:
+{ mkDerivation
+, lib
+, fetchFromGitHub
+, pkg-config
+, which
+, libuchardet
+, qtbase
+, qtsvg
+, qttools
+, qtwebengine
+, qtwebsockets
+}:
 
-let
-  version = "0.53.0";
-in stdenv.mkDerivation {
-  name = "notepadqq-${version}";
-  src = fetchgit {
-    url = "https://github.com/notepadqq/notepadqq.git";
-    rev = "3b0751277fb268ec72b466b37d0f0977c536bc1b";
-    sha256 = "0hw94mn2xg2r58afvz1xg990jinv9aa33942zgwq54qwj61r93hi";
-    fetchSubmodules = true;
+mkDerivation rec {
+  pname = "notepadqq";
+  # shipping a beta build as there's no proper release which supports qtwebengine
+  version = "2.0.0-beta";
+
+  src = fetchFromGitHub {
+    owner = "notepadqq";
+    repo = "notepadqq";
+    rev = "v${version}";
+    sha256 = "sha256-XA9Ay9kJApY+bDeOf0iPv+BWYFuTmIuqsLEPgRTCZCE=";
   };
 
   nativeBuildInputs = [
-    pkgconfig which
+    pkg-config
+    which
+    qttools
   ];
 
   buildInputs = [
-    qtbase.qtsvg qtbase.qtwebkit qtbase.qttools
+    libuchardet
+    qtbase
+    qtsvg
+    qtwebengine
+    qtwebsockets
   ];
 
   preConfigure = ''
     export LRELEASE="lrelease"
   '';
 
-  meta = {
-    homepage = "http://notepadqq.altervista.org/";
+  dontWrapQtApps = true;
+
+  preFixup = ''
+    wrapQtApp $out/bin/notepadqq
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://notepadqq.com/";
     description = "Notepad++-like editor for the Linux desktop";
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ rszibele ];
+    license = licenses.gpl3;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.rszibele ];
+    mainProgram = "notepadqq";
   };
 }

@@ -1,26 +1,39 @@
-{stdenv, fetchurl}:
+{ lib, stdenv
+, fetchurl
+, makeWrapper
+, pkg-config
+, git
+, perlPackages
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.20151229-1";
-  name = "vcsh-${version}";
+  pname = "vcsh";
+  version = "2.0.8";
 
   src = fetchurl {
-    url = "https://github.com/RichiH/vcsh/archive/v${version}.tar.gz";
-    sha256 = "0wgg5zz11ql2v37vby5gbqvnbs80g1q83b9qbvm8d2pqx8bsb0kn";
+    url = "https://github.com/RichiH/vcsh/releases/download/v${version}/${pname}-${version}.tar.xz";
+    sha256 = "sha256-VgRA3v5PIKwizmXoc8f/YMoMCDGFJK/m2uhq3EsT1xQ=";
   };
 
-  phases = [ "unpackPhase" "installPhase" "fixupPhase" ];
+  nativeBuildInputs = [
+    pkg-config
+    makeWrapper
+  ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp vcsh $out/bin
-  '';
+  buildInputs = [ git ];
 
-  meta = with stdenv.lib; {
+  nativeCheckInputs = []
+    ++ (with perlPackages; [ perl ShellCommand TestMost ]);
+
+  outputs = [ "out" "doc" "man" ];
+
+  meta = with lib; {
     description = "Version Control System for $HOME";
-    homepage = https://github.com/RichiH/vcsh;
+    homepage = "https://github.com/RichiH/vcsh";
+    changelog = "https://github.com/RichiH/vcsh/blob/v${version}/changelog";
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ garbas ttuegel ];
+    maintainers = with maintainers; [ ttuegel alerque ];
     platforms = platforms.unix;
+    mainProgram = "vcsh";
   };
 }

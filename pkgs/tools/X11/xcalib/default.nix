@@ -1,25 +1,29 @@
-{ stdenv, fetchurl, libX11, libXxf86vm, libXext }:
+{ lib, stdenv, fetchFromGitHub, libX11, libXxf86vm, libXext, libXrandr }:
 
 stdenv.mkDerivation rec {
-  name = "xcalib-0.8";
+  pname = "xcalib";
+  version = "0.10";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/xcalib/xcalib-source-0.8.tar.gz";
-    sha256 = "8a112ee710e5446f6c36e62345b2066f10639d500259db8c48bf1716caea06e6";
+  src = fetchFromGitHub {
+    owner = "OpenICC";
+    repo = "xcalib";
+    rev = version;
+    sha256 = "05fzdjmhiafgi2jf0k41i3nm0837a78sb6yv59cwc23nla8g0bhr";
   };
 
-  buildInputs = [ libX11 libXxf86vm libXext ];
+  buildInputs = [ libX11 libXxf86vm libXext libXrandr ];
 
   installPhase = ''
     mkdir -p $out/bin
     cp xcalib $out/bin/
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://xcalib.sourceforge.net/;
+  meta = with lib; {
+    inherit (src.meta) homepage;
     description = "A tiny monitor calibration loader for X and MS-Windows";
-    license = licenses.gpl2;
-    maintainers = [ maintainers.rickynils ];
+    license = licenses.gpl2Plus;
+    maintainers = [];
     platforms = platforms.linux;
+    mainProgram = "xcalib";
   };
 }

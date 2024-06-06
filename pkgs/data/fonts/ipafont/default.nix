@@ -1,22 +1,20 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation {
-  name = "ipafont-003.03";
+stdenvNoCC.mkDerivation {
+  pname = "ipafont";
+  version = "003.03";
 
-  src = fetchurl {
-    url = "http://ipafont.ipa.go.jp/old/ipafont/IPAfont00303.php";
-    sha256 = "f755ed79a4b8e715bed2f05a189172138aedf93db0f465b4e20c344a02766fe5";
+  src = fetchzip {
+    url = "https://moji.or.jp/wp-content/ipafont/IPAfont/IPAfont00303.zip";
+    hash = "sha256-EzUNKuDNHr0NIXiqX09w99wtz1r2pZurR/izdgzTcAs=";
   };
 
-  buildInputs = [ unzip ];
-
-  unpackPhase = ''
-    unzip $src
-  '';
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    cp ./IPAfont00303/*.ttf $out/share/fonts/opentype/
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
   meta = {
@@ -26,9 +24,8 @@ stdenv.mkDerivation {
       Promotion Agency of Japan. It provides both Mincho and Gothic fonts,
       suitable for both display and printing.
     '';
-    homepage = http://ipafont.ipa.go.jp/ipafont/;
-    license = stdenv.lib.licenses.ipa;
-    maintainers = [ stdenv.lib.maintainers.auntie ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://moji.or.jp/ipafont/";
+    license = lib.licenses.ipa;
+    maintainers = [ lib.maintainers.auntie ];
   };
 }

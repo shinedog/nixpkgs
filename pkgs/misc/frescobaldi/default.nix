@@ -1,25 +1,48 @@
-{ stdenv, fetchurl, pythonPackages, lilypond}:
+{ lib, stdenv, buildPythonApplication, fetchFromGitHub, python3Packages, pyqtwebengine, lilypond }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "frescobaldi-${version}";
-  version = "2.0.16";
+buildPythonApplication rec {
+  pname = "frescobaldi";
+  version = "3.3.0";
 
-  src = fetchurl {
-    url = "https://github.com/wbsoft/frescobaldi/releases/download/"
-          + "v2.0.16/${name}.tar.gz";
-    sha256 = "12pabvq5b2lq84q3kx8lh02zh6ali6v4wnin2k2ycnm45mk9ms6q";
+  src = fetchFromGitHub {
+    owner = "wbsoft";
+    repo = "frescobaldi";
+    rev = "refs/tags/v${version}";
+    sha256 = "sha256-Q6ruthNcpjLlYydUetkuTECiCIzu055bw40O8BPGq/A=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [ lilypond
-    pyqt4 poppler-qt4 pygame ];
+  propagatedBuildInputs = with python3Packages; [
+    qpageview
+    lilypond
+    pygame
+    python-ly
+    sip4
+    pyqt5
+    poppler-qt5
+    pyqtwebengine
+  ];
 
-  patches = [ ./setup.cfg.patch ./python-path.patch ];
+  nativeBuildInputs = [ pyqtwebengine.wrapQtAppsHook ];
 
-  meta = with stdenv.lib; {
-    homepage = http://frescobaldi.org/;
-    description = ''Frescobaldi is a LilyPond sheet music text editor'';
+  # Needed because source is fetched from git
+  preBuild = ''
+    make -C i18n
+    make -C linux
+  '';
+
+  # no tests in shipped with upstream
+  doCheck = false;
+
+  dontWrapQtApps = true;
+  makeWrapperArgs = [
+    "\${qtWrapperArgs[@]}"
+  ];
+
+  meta = with lib; {
+    homepage = "https://frescobaldi.org/";
+    description = "A LilyPond sheet music text editor";
     longDescription = ''
-      Powerful text editor with syntax highlighting and automatic completion, 
+      Powerful text editor with syntax highlighting and automatic completion,
       Music view with advanced Point & Click, Midi player to proof-listen
       LilyPond-generated MIDI files, Midi capturing to enter music,
       Powerful Score Wizard to quickly setup a music score, Snippet Manager
@@ -31,7 +54,9 @@ pythonPackages.buildPythonApplication rec {
       fonts and keyboard shortcuts
     '';
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.sepi ];
+    maintainers = with maintainers; [ sepi ];
     platforms = platforms.all;
+    broken = stdenv.isDarwin; # never built on Hydra https://hydra.nixos.org/job/nixpkgs/trunk/frescobaldi.x86_64-darwin
+    mainProgram = "frescobaldi";
   };
 }

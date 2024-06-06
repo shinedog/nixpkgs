@@ -1,18 +1,18 @@
-{ stdenv, fetchurl, makeWrapper, jre }:
+{ lib, stdenv, fetchurl, makeWrapper, jre }:
 
 stdenv.mkDerivation rec {
-  name = "jython-${version}";
+  pname = "jython";
 
-  version = "2.7.0";
+  version = "2.7.3";
 
   src = fetchurl {
     url = "http://search.maven.org/remotecontent?filepath=org/python/jython-standalone/${version}/jython-standalone-${version}.jar";
-    sha256 = "0sk4myh9v7ma7nmzb8khg41na77xfi2zck7876bs7kq18n8nc1nx";
+    sha256 = "sha256-2n89gpsUi8+oawWdyWTjqFVv7bAhCWyNsH4wxm+qubQ=";
   };
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  unpackPhase = ":";
+  dontUnpack = true;
 
   installPhase = ''
      mkdir -pv $out/bin
@@ -22,8 +22,10 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Python interpreter written in Java";
-    homepage = http://jython.org/;
-    license = stdenv.lib.licenses.psfl;
+    mainProgram = "jython";
+    homepage = "https://jython.org/";
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    license = lib.licenses.psfl;
     platforms = jre.meta.platforms;
   };
 }

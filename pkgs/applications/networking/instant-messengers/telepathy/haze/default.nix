@@ -1,29 +1,22 @@
-{ stdenv, fetchurl, fetchpatch, pidgin, telepathy_glib, glib, dbus_glib, pkgconfig, libxslt }:
+{ lib, stdenv, fetchurl, pidgin, telepathy-glib, python3, glib, dbus-glib, pkg-config, libxslt }:
 
 stdenv.mkDerivation rec {
   pname = "telepathy-haze";
-  name = "${pname}-0.8.0";
+  version = "0.8.1";
 
   src = fetchurl {
-    url = "http://telepathy.freedesktop.org/releases/${pname}/${name}.tar.gz";
-    sha256 = "1jgrp32p6rllj089ynbsk3n9xrvsvzmwzhf0ql05kkgj0nf08xiy";
+    url = "https://telepathy.freedesktop.org/releases/telepathy-haze/telepathy-haze-${version}.tar.gz";
+    hash = "sha256-cEvvpC7sIXPspLrAH/0AQBRmXyutRtyJSOVCM2TN4wo=";
   };
 
-  buildInputs = [ glib telepathy_glib dbus_glib pidgin telepathy_glib.python ];
+  buildInputs = [ glib telepathy-glib dbus-glib pidgin ];
 
-  nativeBuildInputs = [ pkgconfig libxslt ];
-
-  patches = [
-    # Patch from Gentoo that helps telepathy-haze build with more
-    # recent versions of pidgin.
-    (fetchpatch {
-      url = https://raw.githubusercontent.com/gentoo/gentoo/master/net-voip/telepathy-haze/files/telepathy-haze-0.8.0-pidgin-2.10.12-compat.patch;
-      sha256 = "0fa1p4n1559qd096w7ya4kvfnc1c98ykarkxzlpkwvzbczwzng3c";
-    })
-  ];
+  nativeBuildInputs = [ pkg-config libxslt python3 ];
 
   meta = {
     description = "A Telepathy connection manager based on libpurple";
-    platforms = stdenv.lib.platforms.gnu; # Random choice
+    homepage = "https://telepathy.freedesktop.org/components/telepathy-haze/";
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
   };
 }

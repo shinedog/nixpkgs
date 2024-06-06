@@ -1,23 +1,48 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, udev, libusb }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, libusb1
+, udev
+, Cocoa
+, IOKit
+, testers
+}:
 
-stdenv.mkDerivation rec {
-  name = "hidapi-0.8.0-rc1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "hidapi";
+  version = "0.14.0";
 
   src = fetchFromGitHub {
-    owner = "signal11";
+    owner = "libusb";
     repo = "hidapi";
-    rev = name;
-    sha256 = "13d5jkmh9nh4c2kjch8k8amslnxapa9vkqzrk1z6rqmw8qgvzbkj";
+    rev = "${finalAttrs.pname}-${finalAttrs.version}";
+    sha256 = "sha256-p3uzBq5VxxQbVuy1lEHEEQdxXwnhQgJDIyAAWjVWNIg=";
   };
 
-  buildInputs = [ autoreconfHook pkgconfig udev libusb ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/signal11/hidapi;
+  buildInputs = lib.optionals stdenv.isLinux [ libusb1 udev ];
+
+  enableParallelBuilding = true;
+
+  propagatedBuildInputs = lib.optionals stdenv.isDarwin [ Cocoa IOKit ];
+
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+
+  meta = with lib; {
     description = "Library for communicating with USB and Bluetooth HID devices";
-    # Actually, you can chose between GPLv3, BSD or HIDAPI license (more liberal)
-    license = licenses.bsd3;
+    homepage = "https://github.com/libusb/hidapi";
+    maintainers = with maintainers; [ prusnak ];
+    # You can choose between GPLv3, BSD or HIDAPI license (even more liberal)
+    license = with licenses; [ bsd3 /* or */ gpl3Only ] ;
+    pkgConfigModules = lib.optionals stdenv.isDarwin [
+      "hidapi"
+    ] ++ lib.optionals stdenv.isLinux [
+      "hidapi-hidraw"
+      "hidapi-libusb"
+    ];
     platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
   };
-}
+})

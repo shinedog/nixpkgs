@@ -1,30 +1,37 @@
-{ stdenv, fetchFromGitHub, qtbase, qmakeHook, exiv2 }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, qmake, wrapQtAppsHook, qtbase, exiv2 }:
 
 stdenv.mkDerivation rec {
-  name = "phototonic-${version}";
-  version = "1.7.1";
+  pname = "phototonic";
+  version = "2.1";
 
   src = fetchFromGitHub {
-    repo = "phototonic";
     owner = "oferkv";
-    # There is currently no tag for 1.7.1 see
-    # https://github.com/oferkv/phototonic/issues/214
-    rev = "c37070e4a068570d34ece8de1e48aa0882c80c5b";
-    sha256 = "1agd3bsrpljd019qrjvlbim5l0bhpx53dhpc0gvyn0wmcdzn92gj";
+    repo = "phototonic";
+    rev = "v${version}";
+    hash = "sha256-BxJgTKblOKIwt88+PT7XZE0mk0t2B4SfsdXpQHttUTM=";
   };
 
+  patches = [
+    (fetchpatch {
+      name = "exiv2-0.28.patch";
+      url = "https://gitlab.archlinux.org/archlinux/packaging/packages/phototonic/-/raw/fcfa17307ad8988750cc09200188c9365c2c0b79/exiv2-0.28.patch";
+      hash = "sha256-EayJYM4qobUWosxV2Ylj+2eiyhk1jM8OfnFZDbVdGII=";
+    })
+  ];
+
+  nativeBuildInputs = [ qmake wrapQtAppsHook ];
   buildInputs = [ qtbase exiv2 ];
-  nativeBuildInputs = [ qmakeHook ];
 
   preConfigure = ''
     sed -i 's;/usr;$$PREFIX/;g' phototonic.pro
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An image viewer and organizer";
-    homepage = http://oferkv.github.io/phototonic/;
-    license = licenses.gpl3;
-    platforms = platforms.linux;
+    mainProgram = "phototonic";
+    homepage = "https://github.com/oferkv/phototonic";
+    license = licenses.gpl3Plus;
     maintainers = with maintainers; [ pSub ];
+    platforms = platforms.linux;
   };
 }

@@ -1,31 +1,49 @@
-{ stdenv, fetchurl, jre, unzip }:
+{ lib, stdenv, fetchurl, makeWrapper, libglvnd, libnotify, jre, zip }:
 
-stdenv.mkDerivation {
-  name = "mediathekview-9";
+stdenv.mkDerivation rec {
+  version = "14.0.0";
+  pname = "mediathekview";
   src = fetchurl {
-    url = "mirror://sourceforge/zdfmediathk/MediathekView_9.zip";
-    sha256 = "1wff0igr33z9p1mjw7yvb6658smdwnp22dv8klz0y8qg116wx7a4";
+    url = "https://download.mediathekview.de/stabil/MediathekView-${version}-linux.tar.gz";
+    sha256 = "sha256-vr0yqKVRodtXalHEIsm5gdEp9wPU9U5nnYhMk7IiPF4=";
   };
-  unpackPhase = "true";
 
-  buildInputs = [ unzip ];
-  
-  # Could use some more love
-  # Maybe we can also preconfigure locations for vlc and the others.
-  installPhase = ''
-    mkdir -p $out/bin
-    mkdir -p $out/opt/mediathekview
-    cd $out/opt/mediathekview
-    unzip $src
-    find . -iname '*.exe' -delete
-    sed -i -e 's, java, ${jre}/bin/java,' MediathekView__Linux.sh
-    ln -s $out/opt/mediathekview/MediathekView__Linux.sh $out/bin/mediathekview
+
+  nativeBuildInputs = [ makeWrapper zip ];
+
+  installPhase =
+  let
+    libraryPath = lib.strings.makeLibraryPath [ libglvnd libnotify ];
+  in
+  ''
+    runHook preInstall
+
+    mkdir -p $out/{bin,lib}
+
+    install -m644 MediathekView.jar $out/lib
+
+    makeWrapper ${jre}/bin/java $out/bin/mediathek \
+      --add-flags "-jar $out/lib/MediathekView.jar" \
+      --suffix LD_LIBRARY_PATH : "${libraryPath}"
+
+    makeWrapper ${jre}/bin/java $out/bin/MediathekView \
+      --add-flags "-jar $out/lib/MediathekView.jar" \
+      --suffix LD_LIBRARY_PATH : "${libraryPath}"
+
+    makeWrapper ${jre}/bin/java $out/bin/MediathekView_ipv4 \
+      --add-flags "-Djava.net.preferIPv4Stack=true -jar $out/lib/MediathekView.jar" \
+      --suffix LD_LIBRARY_PATH : "${libraryPath}"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://zdfmediathk.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ maintainers.chaoflow ];
-    platforms = platforms.linux;  #  also OS X and cygwin, but not investigated, yet
+  meta = with lib; {
+    description = "Offers access to the Mediathek of different tv stations (ARD, ZDF, Arte, etc.)";
+    homepage = "https://mediathekview.de/";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
+    license = licenses.gpl3Plus;
+    mainProgram = "mediathek";
+    maintainers = with maintainers; [ moredread ];
+    platforms = platforms.all;
   };
 }

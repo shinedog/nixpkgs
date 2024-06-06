@@ -1,45 +1,51 @@
-{ stdenv, fetchFromGitHub, pythonPackages, wrapGAppsHook
-, gst_all_1, glib_networking, gobjectIntrospection
-}:
+{ lib, newScope, python }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "mopidy-${version}";
+# Create a custom scope so we are consistent in which python version is used
+lib.makeScope newScope (self: with self; {
+  inherit python;
+  pythonPackages = python.pkgs;
 
-  version = "2.0.1";
+  mopidy = callPackage ./mopidy.nix { };
 
-  src = fetchFromGitHub {
-    owner = "mopidy";
-    repo = "mopidy";
-    rev = "v${version}";
-    sha256 = "15i17rj2bh2kda6d6rwcjhs2m3nfsrcyq3lj9vbgmacg0cdb22pp";
-  };
+  mopidy-bandcamp = callPackage ./bandcamp.nix { };
 
-  nativeBuildInputs = [ wrapGAppsHook ];
+  mopidy-iris = callPackage ./iris.nix { };
 
-  buildInputs = with gst_all_1; [
-    gst-plugins-base gst-plugins-good gst-plugins-ugly
-    glib_networking gobjectIntrospection
-  ];
+  mopidy-jellyfin = callPackage ./jellyfin.nix { };
 
-  propagatedBuildInputs = with pythonPackages; [
-    gst-python pygobject3 pykka tornado requests2 dbus-python
-  ];
+  mopidy-local = callPackage ./local.nix { };
 
-  # There are no tests
-  doCheck = false;
+  mopidy-moped = callPackage ./moped.nix { };
 
-  preFixup = ''
-    gappsWrapperArgs+=(--prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH")
-  '';
+  mopidy-mopify = callPackage ./mopify.nix { };
 
-  meta = with stdenv.lib; {
-    homepage = http://www.mopidy.com/;
-    description = ''
-      An extensible music server that plays music from local disk, Spotify,
-      SoundCloud, Google Play Music, and more
-    '';
-    license = licenses.asl20;
-    maintainers = with maintainers; [ rickynils fpletz ];
-    hydraPlatforms = [];
-  };
-}
+  mopidy-mpd = callPackage ./mpd.nix { };
+
+  mopidy-mpris = callPackage ./mpris.nix { };
+
+  mopidy-muse = callPackage ./muse.nix { };
+
+  mopidy-musicbox-webclient = callPackage ./musicbox-webclient.nix { };
+
+  mopidy-notify = callPackage ./notify.nix { };
+
+  mopidy-podcast = callPackage ./podcast.nix { };
+
+  mopidy-scrobbler = callPackage ./scrobbler.nix { };
+
+  mopidy-somafm = callPackage ./somafm.nix { };
+
+  mopidy-soundcloud = callPackage ./soundcloud.nix { };
+
+  mopidy-spotify = callPackage ./spotify.nix { };
+
+  mopidy-tidal = callPackage ./tidal.nix { };
+
+  mopidy-tunein = callPackage ./tunein.nix { };
+
+  mopidy-youtube = callPackage ./youtube.nix { };
+
+  mopidy-ytmusic = callPackage ./ytmusic.nix { };
+
+  mopidy-subidy = callPackage ./subidy.nix { };
+})

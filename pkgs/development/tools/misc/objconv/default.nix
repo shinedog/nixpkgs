@@ -1,26 +1,40 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchurl, unzip }:
 
 stdenv.mkDerivation rec {
-  name = "objconv-${version}";
-  version = "2.16";
+  pname = "objconv";
+  version = "2.54";
 
-  src = fetchFromGitHub {
-    owner  = "vertis";
-    repo   = "objconv";
-    rev    = "${version}";
-    sha256 = "1by2bbrampwv0qy8vn4hhs49rykczyj7q8g373ym38da3c95bym2";
+  src = fetchurl {
+    # Versioned archive of objconv sources maintained by orivej.
+    url = "https://archive.org/download/objconv/${pname}-${version}.zip";
+    sha256 = "sha256-SDwnpPHc2NyctxKROrhjCDXs36WGj8js5blaQkUibWE=";
   };
 
-  buildPhase = "c++ -o objconv -O2 src/*.cpp";
+  nativeBuildInputs = [ unzip ];
 
-  installPhase = "mkdir -p $out/bin && mv objconv $out/bin";
+  outputs = [ "out" "doc" ];
 
-  meta = with stdenv.lib; {
-    description = "Used for converting object files between COFF/PE, OMF, ELF and Mach-O formats for all 32-bit and 64-bit x86 platforms.";
-    homepage = http://www.agner.org/optimize/;
+  unpackPhase = ''
+    mkdir -p "$name"
+    cd "$name"
+    unpackFile "$src"
+    unpackFile source.zip
+  '';
+
+  buildPhase = "c++ -o objconv -O2 *.cpp";
+
+  installPhase = ''
+    mkdir -p $out/bin $out/doc/objconv
+    mv objconv $out/bin
+    mv objconv-instructions.pdf $out/doc/objconv
+  '';
+
+  meta = with lib; {
+    description = "Object and executable file converter, modifier and disassembler";
+    mainProgram = "objconv";
+    homepage = "https://www.agner.org/optimize/";
     license = licenses.gpl2;
-    maintainers = with maintainers; [ vrthra ];
-    platforms = with platforms; unix;
+    maintainers = with maintainers; [ orivej vrthra ];
+    platforms = platforms.unix;
   };
-
 }

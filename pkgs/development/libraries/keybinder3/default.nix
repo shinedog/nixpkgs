@@ -1,32 +1,44 @@
-{ stdenv, fetchFromGitHub, autoconf, automake, libtool, pkgconfig, gnome3
-, gtk_doc, gtk3, python, lua, libX11, libXext, libXrender, gobjectIntrospection
+{ lib, stdenv, fetchFromGitHub, autoconf, automake, libtool, pkg-config, gnome
+, gtk-doc, gtk3, libX11, libXext, libXrender, gobject-introspection
 }:
 
 stdenv.mkDerivation rec {
-  name = "keybinder3-${version}";
-  version = "0.3.0";
+  pname = "keybinder3";
+  version = "0.3.2";
 
   src = fetchFromGitHub {
-    owner = "engla";
+    owner = "kupferlauncher";
     repo = "keybinder";
     rev = "keybinder-3.0-v${version}";
-    sha256 = "1jdcrfhvqffhc2h69197wkpc5j5synk5mm8rqhz27qfrfhh4vf0q";
+    sha256 = "196ibn86j54fywfwwgyh89i9wygm4vh7ls19fn20vrnm6ijlzh9r";
   };
 
+  strictDeps = true;
+  nativeBuildInputs = [
+    autoconf
+    automake
+    libtool
+    pkg-config
+    gnome.gnome-common
+    gtk-doc
+    gobject-introspection
+  ];
   buildInputs = [
-    autoconf automake libtool pkgconfig gnome3.gnome_common gtk_doc
-    libX11 libXext libXrender gobjectIntrospection gtk3
+    gtk3 libX11 libXext libXrender
   ];
 
   preConfigure = ''
-    ./autogen.sh --prefix="$out"
+    # NOCONFIGURE fixes 'If you meant to cross compile, use `--host'.'
+    NOCONFIGURE=1 ./autogen.sh --prefix="$out"
+    substituteInPlace ./configure \
+      --replace "dummy pkg-config" 'dummy ''${ac_tool_prefix}pkg-config'
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Library for registering global key bindings";
-    homepage = https://github.com/engla/keybinder/;
+    homepage = "https://github.com/kupferlauncher/keybinder/";
     license = licenses.mit;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.cstrahan ];
+    platforms = platforms.unix;
+    maintainers = [ ];
   };
 }

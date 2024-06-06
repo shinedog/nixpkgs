@@ -1,42 +1,32 @@
-{ stdenv, fetchgit
-, guile, pkgconfig, glib, loudmouth, gmp, libidn, readline, libtool
+{ lib, stdenv, fetchurl
+, guile, pkg-config, glib, loudmouth, gmp, libidn, readline, libtool
 , libunwind, ncurses, curl, jansson, texinfo
-, automake, autoconf
-}:
+, argp-standalone }:
+stdenv.mkDerivation rec {
+  pname = "freetalk";
+  version = "4.2";
 
-let
-  s = rec {
-    baseName="freetalk";
-    version="4.0rc6";
-    name="${baseName}-${version}";
-    url="https://github.com/GNUFreetalk/freetalk";
-    rev = "refs/tags/v${version}";
-    sha256="1wr3q40f4gwmr0vm6w07d5vzr65q6llk9xxq75klpcj83va5l3xv";
+  src = fetchurl {
+    url = "mirror://gnu/freetalk/freetalk-${version}.tar.gz";
+    hash = "sha256-u1tPKacGry+JGYeAIgDia3N7zs5EM4FyQZdV8e7htYA=";
   };
+
+  nativeBuildInputs = [ pkg-config texinfo ];
   buildInputs = [
-    guile pkgconfig glib loudmouth gmp libidn readline libtool
-    libunwind ncurses curl jansson texinfo
-    autoconf automake
+    guile glib loudmouth gmp libidn readline libtool
+    libunwind ncurses curl jansson
+  ] ++ lib.optionals stdenv.isDarwin [
+    argp-standalone
   ];
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
-  inherit buildInputs;
-  src = fetchgit {
-    inherit (s) url rev sha256;
-  };
 
-  preConfigure = ''
-    patchShebangs .
-    ./autogen.sh
-  '';
+  env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-largp";
 
-  meta = {
-    inherit (s) version;
+  meta = with lib; {
     description =  "Console XMPP client";
-    license = stdenv.lib.licenses.gpl3Plus ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    downloadPage = "http://www.gnu.org/software/freetalk/";
+    mainProgram = "freetalk";
+    license = licenses.gpl3Plus ;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
+    downloadPage = "https://www.gnu.org/software/freetalk/";
   };
 }

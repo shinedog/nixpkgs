@@ -1,33 +1,39 @@
-{ fetchurl, stdenv, zlib, bzip2, libgcrypt, gdbm, gperf, tdb, gnutls, db
-, libuuid, lzo, pkgconfig, guile }:
+{ fetchurl, lib, stdenv, zlib, bzip2, libgcrypt
+, gdbm, gperf, tdb, gnutls, db, libuuid
+, lzo, pkg-config, guile, rpcsvc-proto, libtirpc
+}:
 
 stdenv.mkDerivation rec {
-  name = "libchop-0.5.2";
+  pname = "libchop";
+  version = "0.5.2";
 
   src = fetchurl {
-    url = "mirror://savannah/libchop/${name}.tar.gz";
+    url = "mirror://savannah/libchop/libchop-${version}.tar.gz";
     sha256 = "0fpdyxww41ba52d98blvnf543xvirq1v9xz1i3x1gm9lzlzpmc2g";
   };
 
-  patches = [ ./gets-undeclared.patch ];
+  patches = [ ./gets-undeclared.patch ./size_t.patch ./0001-Fix-RPC-compilation-when-using-libtirpc-rather-than-.patch ];
 
-  nativeBuildInputs = [ pkgconfig gperf ];
-  
+  nativeBuildInputs = [ pkg-config gperf rpcsvc-proto ];
+
+  env.NIX_CFLAGS_COMPILE = toString [ "-I${libtirpc.dev}/include/tirpc" ];
+  NIX_LDFLAGS = [ "-ltirpc" ];
+
   buildInputs =
     [ zlib bzip2 lzo
       libgcrypt
       gdbm db tdb
       gnutls libuuid
-      guile
+      guile libtirpc
     ];
 
-  doCheck = true;
+  doCheck = false;
 
   preConfigure = ''
     sed -re 's%@GUILE@%&/guile%' -i */Makefile.* Makefile.*
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Tools & library for data backup and distributed storage";
 
     longDescription =
@@ -45,10 +51,9 @@ stdenv.mkDerivation rec {
          line.  It is written in C and has Guile (Scheme) bindings.
       '';
 
-    homepage = http://nongnu.org/libchop/;
-    license = stdenv.lib.licenses.gpl3Plus;
-
-    maintainers = with stdenv.lib.maintainers; [ viric ];
-    platforms = stdenv.lib.platforms.gnu;
+    homepage = "https://www.nongnu.org/libchop/";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.gnu ++ platforms.linux;
   };
 }

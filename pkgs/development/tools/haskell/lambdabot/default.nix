@@ -1,4 +1,4 @@
-{ lib, haskell-lib, fetchpatch, makeWrapper, haskellPackages
+{ lib, haskellLib, makeWrapper, haskellPackages
 , mueval
 , withDjinn ? true
 , aspell ? null
@@ -7,25 +7,23 @@
 , configuration ? "[]"
 }:
 
-# FIXME: fix hoogle search
-
 let allPkgs = pkgs: mueval.defaultPkgs pkgs ++ [ pkgs.lambdabot-trusted ] ++ packages pkgs;
     mueval' = mueval.override {
       inherit haskellPackages;
       packages = allPkgs;
     };
     bins = lib.makeBinPath ([ mueval'
-                              (haskellPackages.ghcWithPackages allPkgs)
+                              (haskellPackages.ghcWithHoogle allPkgs)
                               haskellPackages.unlambda
                               haskellPackages.brainfuck
                             ]
                             ++ lib.optional withDjinn haskellPackages.djinn
                             ++ lib.optional (aspell != null) aspell
                            );
-    modulesStr = lib.replaceChars ["\n"] [" "] modules;
-    configStr = lib.replaceChars ["\n"] [" "] configuration;
+    modulesStr = lib.replaceStrings ["\n"] [" "] modules;
+    configStr = lib.replaceStrings ["\n"] [" "] configuration;
 
-in haskell-lib.overrideCabal haskellPackages.lambdabot (self: {
+in haskellLib.overrideCabal (self: {
   patches = (self.patches or []) ++ [ ./custom-config.patch ];
   postPatch = (self.postPatch or "") + ''
     substituteInPlace src/Main.hs \
@@ -40,4 +38,4 @@ in haskell-lib.overrideCabal haskellPackages.lambdabot (self: {
     wrapProgram $out/bin/lambdabot \
       --prefix PATH ":" '${bins}'
   '';
-})
+}) haskellPackages.lambdabot

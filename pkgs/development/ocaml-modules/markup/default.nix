@@ -1,31 +1,28 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, uutf, lwt }:
+{ lib, buildDunePackage, fetchFromGitHub, ocaml, uchar, uutf, ounit2 }:
 
-stdenv.mkDerivation rec {
-  pname = "ocaml-markup";
-  version = "0.7.2";
-  name = "${pname}-${version}";
+buildDunePackage rec {
+  pname = "markup";
+  version = "1.0.3";
 
-  src = fetchurl {
-    url = "http://github.com/aantron/markup.ml/archive/${version}.tar.gz";
-    sha256 = "0d3wi22v7h0iqzq8dgl0g4fj2wb67gvmbzdckacifghinrx762k3";
-    };
+  useDune2 = true;
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  src = fetchFromGitHub {
+    owner = "aantron";
+    repo = "markup.ml";
+    rev = version;
+    sha256 = "sha256-tsXz39qFSyL6vPYKG7P73zSEiraaFuOySL1n0uFij6k=";
+  };
 
-  installPhase = "make ocamlfind-install";
-  
-  propagatedBuildInputs = [uutf lwt];
+  propagatedBuildInputs = [ uchar uutf ];
 
-  createFindlibDestdir = true;
+  checkInputs = [ ounit2 ];
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/aantron/markup.ml/;
+  meta = with lib; {
+    homepage = "https://github.com/aantron/markup.ml/";
     description = "A pair of best-effort parsers implementing the HTML5 and XML specifications";
-    license = licenses.bsd2;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with maintainers; [
-      gal_bolle
-      ];
+    license = licenses.mit;
+    maintainers = with maintainers; [ gal_bolle ];
   };
 
 }

@@ -1,17 +1,17 @@
-{ stdenv, fetchFromGitHub
-, autoreconfHook, docbook2x, pkgconfig
-, gtk3, dconf, gobjectIntrospection
-, ibus, python3, pygobject3 }:
+{ lib, stdenv, fetchFromGitHub
+, autoreconfHook, docbook2x, pkg-config
+, gtk3, dconf, gobject-introspection
+, ibus, python3, wrapGAppsHook3 }:
 
 stdenv.mkDerivation rec {
-  name = "ibus-table-${version}";
-  version = "1.9.14";
+  pname = "ibus-table";
+  version = "1.17.4";
 
   src = fetchFromGitHub {
     owner  = "kaio";
     repo   = "ibus-table";
     rev    = version;
-    sha256 = "1mkx03iqrq5yq57y7hjqcmxfh41dsjykyyl70d41dflcgp5q2nhw";
+    sha256 = "sha256-XljpwsDsdZkcnXimnN7BzPhOZdUmEEJbBM53Sv/9rIo=";
   };
 
   postPatch = ''
@@ -26,23 +26,41 @@ stdenv.mkDerivation rec {
         -e "/export IBUS_DATAROOTDIR=/ s/^.$//" \
         -e "/export IBUS_LOCALEDIR=/ s/^.$//" \
         -i "setup/ibus-setup-table.in"
+    substituteInPlace engine/tabcreatedb.py --replace '/usr/share/ibus-table' $out/share/ibus-table
+    substituteInPlace engine/ibus_table_location.py \
+      --replace '/usr/libexec' $out/libexec \
+      --replace '/usr/share/ibus-table/' $out/share/ibus-table/
   '';
 
   buildInputs = [
-    dconf gtk3 gobjectIntrospection ibus python3 pygobject3
+    dconf
+    gtk3
+    ibus
+    (python3.withPackages (pypkgs: with pypkgs; [
+      dbus-python
+      pygobject3
+      (toPythonModule ibus)
+    ]))
   ];
 
-  nativeBuildInputs = [ autoreconfHook docbook2x pkgconfig ];
+  nativeBuildInputs = [
+    autoreconfHook
+    docbook2x
+    pkg-config
+    gobject-introspection
+    wrapGAppsHook3
+  ];
 
   postUnpack = ''
     substituteInPlace $sourceRoot/engine/Makefile.am \
       --replace "docbook2man" "docbook2man --sgml"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     isIbusEngine = true;
     description  = "An IBus framework for table-based input methods";
-    homepage     = https://github.com/kaio/ibus-table/wiki;
+    mainProgram = "ibus-table-createdb";
+    homepage     = "https://github.com/kaio/ibus-table/wiki";
     license      = licenses.lgpl21;
     platforms    = platforms.linux;
     maintainers  = with maintainers; [ mudri ];

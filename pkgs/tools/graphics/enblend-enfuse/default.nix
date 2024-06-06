@@ -1,31 +1,43 @@
-{ stdenv, fetchurl
-, boost, freeglut, glew, gsl, lcms2, libpng, libtiff, mesa, vigra
-, help2man, pkgconfig, perl, tetex }:
+{ lib, stdenv, fetchhg
+, autoreconfHook
+, boost
+, freeglut
+, glew
+, gsl
+, lcms2
+, libpng
+, libtiff
+, libGLU
+, libGL
+, vigra
+, help2man
+, pkg-config
+, perl
+, texliveSmall
+}:
 
 stdenv.mkDerivation rec {
-  name = "enblend-enfuse-${version}";
-  version = "4.2";
+  pname = "enblend-enfuse";
+  version = "unstable-2022-03-06";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/enblend/${name}.tar.gz";
-    sha256 = "0j5x011ilalb47ssah50ag0a4phgh1b0wdgxdbbp1gcyjcjf60w7";
+  src = fetchhg {
+    url = "http://hg.code.sf.net/p/enblend/code";
+    rev = "0f423c72e51872698fe2985ca3bd453961ffe4e0";
+    sha256 = "sha256-0gCUSdg3HR3YeIbOByEBCZh2zGlYur6DeCOzUM53fdc=";
   };
 
-  buildInputs = [ boost freeglut glew gsl lcms2 libpng libtiff mesa vigra ];
+  buildInputs = [ boost freeglut glew gsl lcms2 libpng libtiff libGLU libGL vigra ];
 
-  nativeBuildInputs = [ help2man perl pkgconfig tetex ];
+  nativeBuildInputs = [ autoreconfHook help2man perl pkg-config texliveSmall ];
 
   preConfigure = ''
     patchShebangs src/embrace
   '';
 
-  enableParallelBuilding = true;
-
-  meta = with stdenv.lib; {
-    homepage = http://enblend.sourceforge.net/;
+  meta = with lib; {
+    homepage = "https://enblend.sourceforge.net/";
     description = "Blends away the seams in a panoramic image mosaic using a multiresolution spline";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ nckx ];
+    license = licenses.gpl2Plus;
     platforms = with platforms; linux;
   };
 }

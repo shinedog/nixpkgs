@@ -1,23 +1,30 @@
-{ config, lib, pkgs, ... }:
+{ config, options, lib, pkgs, ... }:
 
 with lib;
 
 let
   cfg = config.services.couchdb;
-  configFile = pkgs.writeText "couchdb.ini"
+  opt = options.services.couchdb;
+  configFile = pkgs.writeText "couchdb.ini" (
     ''
       [couchdb]
       database_dir = ${cfg.databaseDir}
       uri_file = ${cfg.uriFile}
       view_index_dir = ${cfg.viewIndexDir}
-
-      [httpd]
+    '' + (optionalString (cfg.adminPass != null) ''
+      [admins]
+      ${cfg.adminUser} = ${cfg.adminPass}
+    '' + ''
+      [chttpd]
+    '') +
+    ''
       port = ${toString cfg.port}
       bind_address = ${cfg.bindAddress}
 
       [log]
       file = ${cfg.logFile}
-    '';
+    '');
+  executable = "${cfg.package}/bin/couchdb";
 
 in {
 
@@ -27,27 +34,30 @@ in {
 
     services.couchdb = {
 
-      enable = mkOption {
-        type = types.bool;
-        default = false;
+      enable = mkEnableOption "CouchDB Server";
+
+      package = mkPackageOption pkgs "couchdb3" { };
+
+      adminUser = mkOption {
+        type = types.str;
+        default = "admin";
         description = ''
-          Whether to run CouchDB Server.
+          Couchdb (i.e. fauxton) account with permission for all dbs and
+          tasks.
         '';
       };
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.couchdb;
-        defaultText = "pkgs.couchdb";
-        example = literalExample "pkgs.couchdb";
+      adminPass = mkOption {
+        type = types.nullOr types.str;
+        default = null;
         description = ''
-          CouchDB package to use.
+          Couchdb (i.e. fauxton) account with permission for all dbs and
+          tasks.
         '';
       };
-
 
       user = mkOption {
-        type = types.string;
+        type = types.str;
         default = "couchdb";
         description = ''
           User account under which couchdb runs.
@@ -55,14 +65,14 @@ in {
       };
 
       group = mkOption {
-        type = types.string;
+        type = types.str;
         default = "couchdb";
         description = ''
           Group account under which couchdb runs.
         '';
       };
 
-      # couchdb options: http://docs.couchdb.org/en/latest/config/index.html
+      # couchdb options: https://docs.couchdb.org/en/latest/config/index.html
 
       databaseDir = mkOption {
         type = types.path;
@@ -76,7 +86,7 @@ in {
 
       uriFile = mkOption {
         type = types.path;
-        default = "/var/run/couchdb/couchdb.uri";
+        default = "/run/couchdb/couchdb.uri";
         description = ''
           This file contains the full URI that can be used to access this
           instance of CouchDB. It is used to help discover the port CouchDB is
@@ -97,7 +107,7 @@ in {
       };
 
       bindAddress = mkOption {
-        type = types.string;
+        type = types.str;
         default = "127.0.0.1";
         description = ''
           Defines the IP address by which CouchDB will be accessible.
@@ -105,7 +115,7 @@ in {
       };
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 5984;
         description = ''
           Defined the port number to listen.
@@ -124,13 +134,21 @@ in {
         type = types.lines;
         default = "";
         description = ''
-          Extra configuration. Overrides any other cofiguration.
+          Extra configuration. Overrides any other configuration.
+        '';
+      };
+
+      argsFile = mkOption {
+        type = types.path;
+        default = "${cfg.package}/etc/vm.args";
+        defaultText = literalExpression ''"config.${opt.package}/etc/vm.args"'';
+        description = ''
+          vm.args configuration. Overrides Couchdb's Erlang VM parameters file.
         '';
       };
 
       configFile = mkOption {
-        type = types.string;
-        default = "/var/lib/couchdb/couchdb.ini";
+        type = types.path;
         description = ''
           Configuration file for persisting runtime changes. File
           needs to be readable and writable from couchdb user/group.
@@ -147,44 +165,54 @@ in {
 
     environment.systemPackages = [ cfg.package ];
 
+    services.couchdb.configFile = mkDefault "/var/lib/couchdb/local.ini";
+
+    systemd.tmpfiles.rules = [
+      "d '${dirOf cfg.uriFile}' - ${cfg.user} ${cfg.group} - -"
+      "f '${cfg.logFile}' - ${cfg.user} ${cfg.group} - -"
+      "d '${cfg.databaseDir}' -  ${cfg.user} ${cfg.group} - -"
+      "d '${cfg.viewIndexDir}' -  ${cfg.user} ${cfg.group} - -"
+    ];
+
     systemd.services.couchdb = {
       description = "CouchDB Server";
       wantedBy = [ "multi-user.target" ];
 
-      preStart =
-        ''
-        mkdir -p `dirname ${cfg.uriFile}`;
-        mkdir -p `dirname ${cfg.logFile}`;
-        mkdir -p ${cfg.databaseDir};
-        mkdir -p ${cfg.viewIndexDir};
+      preStart = ''
         touch ${cfg.configFile}
-        touch -a ${cfg.logFile}
-
-        if [ "$(id -u)" = 0 ]; then
-          chown ${cfg.user}:${cfg.group} `dirname ${cfg.uriFile}`;
-          (-f ${cfg.uriFile} && chown ${cfg.user}:${cfg.group} ${cfg.uriFile}) || true
-          chown ${cfg.user}:${cfg.group} ${cfg.databaseDir}
-          chown ${cfg.user}:${cfg.group} ${cfg.viewIndexDir}
-          chown ${cfg.user}:${cfg.group} ${cfg.configFile}
-          chown ${cfg.user}:${cfg.group} ${cfg.logFile}
+        if ! test -e ${cfg.databaseDir}/.erlang.cookie; then
+          touch ${cfg.databaseDir}/.erlang.cookie
+          chmod 600 ${cfg.databaseDir}/.erlang.cookie
+          dd if=/dev/random bs=16 count=1 | base64 > ${cfg.databaseDir}/.erlang.cookie
         fi
-        '';
+      '';
+
+      environment = {
+        # we are actually specifying 5 configuration files:
+        # 1. the preinstalled default.ini
+        # 2. the module configuration
+        # 3. the extraConfig from the module options
+        # 4. the locally writable config file, which couchdb itself writes to
+        ERL_FLAGS= ''-couch_ini ${cfg.package}/etc/default.ini ${configFile} ${pkgs.writeText "couchdb-extra.ini" cfg.extraConfig} ${cfg.configFile}'';
+        # 5. the vm.args file
+        COUCHDB_ARGS_FILE=''${cfg.argsFile}'';
+        HOME =''${cfg.databaseDir}'';
+      };
 
       serviceConfig = {
-        PermissionsStartOnly = true;
         User = cfg.user;
         Group = cfg.group;
-        ExecStart = "${cfg.package}/bin/couchdb -a ${configFile} -a ${pkgs.writeText "couchdb-extra.ini" cfg.extraConfig} -a ${cfg.configFile}";
+        ExecStart = executable;
       };
     };
 
-    users.extraUsers.couchdb = {
+    users.users.couchdb = {
       description = "CouchDB Server user";
       group = "couchdb";
       uid = config.ids.uids.couchdb;
     };
 
-    users.extraGroups.couchdb.gid = config.ids.gids.couchdb;
+    users.groups.couchdb.gid = config.ids.gids.couchdb;
 
   };
 }

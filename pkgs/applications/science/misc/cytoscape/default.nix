@@ -1,15 +1,25 @@
-{ stdenv, fetchurl, jre, makeWrapper }:
+{ lib, stdenv, fetchurl, jre, makeWrapper, substituteAll, coreutils }:
 
 stdenv.mkDerivation rec {
-  name = "cytoscape-${version}";
-  version = "3.4.0";
+  pname = "cytoscape";
+  version = "3.10.2";
 
   src = fetchurl {
-    url = "http://chianti.ucsd.edu/${name}/${name}.tar.gz";
-    sha256 = "065fsqa01w7j85nljwwc0677lfw112xphnyn1c4hb04166q082p2";
+    url = "https://github.com/cytoscape/cytoscape/releases/download/${version}/${pname}-unix-${version}.tar.gz";
+    sha256 = "sha256-ArT+g3GbtSxq3FvRi1H4z/kpsmcFCmKhzEJI4bCK44E=";
   };
 
-  buildInputs = [jre makeWrapper];
+  patches = [
+    # By default, gen_vmoptions.sh tries to store custom options in $out/share
+    # at run time. This patch makes sure $HOME is used instead.
+    (substituteAll {
+      src = ./gen_vmoptions_to_homedir.patch;
+      inherit coreutils;
+    })
+  ];
+
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ jre ];
 
   installPhase = ''
     mkdir -pv $out/{share,bin}
@@ -17,7 +27,7 @@ stdenv.mkDerivation rec {
 
     ln -s $out/share/cytoscape.sh $out/bin/cytoscape
 
-    wrapProgram $out/share/gen_vmoptions.sh \
+    wrapProgram $out/share/cytoscape.sh \
       --set JAVA_HOME "${jre}" \
       --set JAVA  "${jre}/bin/java"
 
@@ -27,8 +37,9 @@ stdenv.mkDerivation rec {
   meta = {
     homepage = "http://www.cytoscape.org";
     description = "A general platform for complex network analysis and visualization";
-    license = stdenv.lib.licenses.lgpl21;
-    maintainers = [stdenv.lib.maintainers.mimadrid];
-    platforms = stdenv.lib.platforms.unix;
+    mainProgram = "cytoscape";
+    license = lib.licenses.lgpl21;
+    maintainers = [lib.maintainers.mimame];
+    platforms = lib.platforms.unix;
   };
 }

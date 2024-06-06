@@ -1,27 +1,57 @@
-{ stdenv, fetchurl, SDL, eigen, epoxy, fftw, gtest, pkgconfig }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, SDL2
+, fftw
+, gtest
+, darwin
+, eigen
+, libepoxy
+}:
 
 stdenv.mkDerivation rec {
-  name = "movit-${version}";
-  version = "1.2.0";
+  pname = "movit";
+  version = "1.7.1";
 
   src = fetchurl {
-    url = "http://movit.sesse.net/${name}.tar.gz";
-    sha256 = "0wyl5xl4pkw17pkxsdg8idqvsgm4fxapd0r4dw9wlxw250915nmf";
+    url = "https://movit.sesse.net/${pname}-${version}.tar.gz";
+    sha256 = "sha256-szBztwXwzLasSULPURUVFUB7QLtOmi3QIowcLLH7wRo=";
   };
 
   outputs = [ "out" "dev" ];
 
-  GTEST_DIR = "${gtest}";
+  GTEST_DIR = "${gtest.src}/googletest";
 
-  propagatedBuildInputs = [ eigen epoxy ];
+  nativeBuildInputs = [
+    pkg-config
+  ];
 
-  buildInputs = [ SDL fftw gtest pkgconfig ];
+  buildInputs = [
+    SDL2
+    fftw
+    gtest
+  ] ++ lib.optionals stdenv.isDarwin [
+    darwin.apple_sdk.frameworks.OpenGL
+    darwin.libobjc
+  ];
 
-  meta = with stdenv.lib; {
+  propagatedBuildInputs = [
+    eigen
+    libepoxy
+  ];
+
+  env = lib.optionalAttrs stdenv.isDarwin {
+    NIX_LDFLAGS = "-framework OpenGL";
+  };
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "High-performance, high-quality video filters for the GPU";
-    homepage = http://movits.sesse.net;
+    homepage = "https://movit.sesse.net";
     license = licenses.gpl2Plus;
     maintainers = [ maintainers.goibhniu ];
-    platforms = platforms.linux;
+    platforms = platforms.unix;
   };
 }

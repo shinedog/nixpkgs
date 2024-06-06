@@ -1,30 +1,32 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "paratype-pt-sane";
+stdenvNoCC.mkDerivation rec {
+  pname = "paratype-pt-sans";
+  version = "2.005";
 
-  src = fetchurl rec {
-    url = "http://www.paratype.ru/uni/public/PTSans.zip";
-    sha256 = "1j9gkbqyhxx8pih5agr9nl8vbpsfr9vdqmhx73ji3isahqm3bhv5";
+  src = fetchzip {
+    urls = [
+      "https://company.paratype.com/system/attachments/629/original/ptsans.zip"
+      "http://rus.paratype.ru/system/attachments/629/original/ptsans.zip"
+    ];
+    stripRoot = false;
+    hash = "sha256-34TqYXtWzkAstaGQBhJy+/hVk5tg6ZvHZ/kvUroWVLs=";
   };
 
-  buildInputs = [unzip];
-
-  phases = "unpackPhase installPhase";
-  sourceRoot = ".";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    mkdir -p $out/share/doc/paratype
-    cp *.ttf $out/share/fonts/truetype
-    cp *.txt $out/share/doc/paratype
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/truetype
+    install -Dm644 *.txt -t $out/share/doc/paratype
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = "http://www.paratype.ru/public/"; 
+  meta = with lib; {
+    homepage = "http://www.paratype.ru/public/";
     description = "An open Paratype font";
 
-    license = "Open Paratype license"; 
+    license = "Open Paratype license";
     # no commercial distribution of the font on its own
     # must rename on modification
     # http://www.paratype.ru/public/pt_openlicense.asp
@@ -33,4 +35,3 @@ stdenv.mkDerivation rec {
     maintainers = with maintainers; [ raskin ];
   };
 }
-

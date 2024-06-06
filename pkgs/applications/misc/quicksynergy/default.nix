@@ -1,14 +1,15 @@
-{stdenv, fetchurl, pkgconfig, gtk2, synergy}:
+{lib, stdenv, fetchurl, pkg-config, gtk2, synergy}:
 
 stdenv.mkDerivation rec {
-  name = "quicksynergy-${version}";
+  pname = "quicksynergy";
   version = "0.9.0";
   src = fetchurl {
     url = "mirror://sourceforge/project/quicksynergy/Linux/${version}/quicksynergy-${version}.tar.gz";
     sha256 = "1pi8503bg8q1psw50y6d780i33nnvfjqiy9vnr3v52pdcfip8pix";
   };
+
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [
-    pkgconfig
     gtk2
     synergy
   ];
@@ -23,14 +24,15 @@ stdenv.mkDerivation rec {
       keyboard between two or more computers.
 
       Without the need for any external hardware, Synergy2 uses the TCP-IP
-      protocol to share the resources, even between machines with diferent
+      protocol to share the resources, even between machines with different
       operating systems, such as Mac OS, Linux and Windows.
 
       Remember to open port 24800 (used by synergys program) if you want to
       host mouse and keyboard.";
-    homepage = https://code.google.com/p/quicksynergy/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.spinus ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://sourceforge.net/projects/quicksynergy/";
+    license = lib.licenses.gpl2;
+    maintainers = [ lib.maintainers.spinus ];
+    platforms = lib.platforms.linux;
+    mainProgram = "quicksynergy";
   };
 }

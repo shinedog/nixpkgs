@@ -1,31 +1,59 @@
-{ stdenv, fetchurl, pkgconfig, file, glibmm, gst_all_1 }:
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, pkg-config
+, file
+, glibmm
+, gst_all_1
+, gnome
+}:
 
-let
-  ver_maj = "1.8";
-  ver_min = "0";
-in
 stdenv.mkDerivation rec {
-  name = "gstreamermm-${ver_maj}.${ver_min}";
+  pname = "gstreamermm";
+  version = "1.10.0";
 
   src = fetchurl {
-    url    = "mirror://gnome/sources/gstreamermm/${ver_maj}/${name}.tar.xz";
-    sha256 = "0i4sk6ns4dyi4szk45bkm4kvl57l52lgm15p2wg2rhx2gr2w3qry";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "0q4dx9sncqbwgpzma0zvj6zssc279yl80pn8irb95qypyyggwn5y";
   };
+
+  patches = [
+    (fetchpatch {
+      name = "${pname}-${version}.fix-build-against-glib-2.68.patch";
+      url = "https://gitlab.gnome.org/GNOME/gstreamermm/-/commit/37116547fb5f9066978e39b4cf9f79f2154ad425.patch";
+      sha256 = "sha256-YHtmOiOl4POwas3eWHsew3IyGK7Aq22MweBm3JPwyBM=";
+    })
+  ];
 
   outputs = [ "out" "dev" ];
 
-  nativeBuildInputs = [ pkgconfig file ];
+  nativeBuildInputs = [
+    pkg-config
+    file
+  ];
 
-  propagatedBuildInputs = [ glibmm gst_all_1.gst-plugins-base ];
+  propagatedBuildInputs = [
+    glibmm
+    gst_all_1.gst-plugins-base
+  ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = gnome.updateScript {
+      attrPath = "gst_all_1.gstreamermm";
+      packageName = "gstreamermm";
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
     description = "C++ interface for GStreamer";
-    homepage = http://gstreamer.freedesktop.org/bindings/cplusplus.html;
+    homepage = "https://gstreamer.freedesktop.org/bindings/cplusplus.html";
     license = licenses.lgpl21Plus;
+    platforms = platforms.linux;
     maintainers = with maintainers; [ romildo ];
-    platforms = platforms.unix;
   };
 
 }

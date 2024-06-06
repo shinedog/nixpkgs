@@ -1,20 +1,24 @@
-{ stdenv, fetchurl, perl }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, perl }:
 
 stdenv.mkDerivation rec {
-  name = "libchardet-1.0.4";
-  
-  src = fetchurl {
-    url = "http://yupmin.net/wp-content/uploads/2014/03/libchardet-1.0.4.tar.bz2";
-    sha256 = "0cvwba4la25qw70ap8jd5r743a9jshqd26nnbh5ph68zj1imlgzl";
+  pname = "libchardet";
+  version = "1.0.6";
+
+  src = fetchFromGitHub {
+    owner = "Joungkyun";
+    repo = "libchardet";
+    rev = version;
+    sha256 = "sha256-JhEiWM3q8X+eEBHxv8k9yYOaTGoJOzI+/iFYC0gZJJs=";
   };
 
-  nativeBuildInputs = [ perl ];
+  nativeBuildInputs = [ autoreconfHook perl ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Mozilla's Universal Charset Detector C/C++ API";
-    homepage = ftp://ftp.oops.org/pub/oops/libchardet/index.html;
+    mainProgram = "chardet-config";
+    homepage = "ftp://ftp.oops.org/pub/oops/libchardet/index.html";
     license = licenses.mpl11;
     maintainers = [ maintainers.abbradar ];
     platforms = platforms.unix;

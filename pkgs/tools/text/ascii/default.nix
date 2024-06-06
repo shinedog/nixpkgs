@@ -1,12 +1,12 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "ascii-${version}";
-  version = "3.15";
+  pname = "ascii";
+  version = "3.20";
 
   src = fetchurl {
-    url = "http://www.catb.org/~esr/ascii/${name}.tar.gz";
-    sha256 = "0pzzfljg2ijnnys3fzj3f2p288sl5cgk83a2mpcm679pcj5xpqdc";
+    url = "http://www.catb.org/~esr/ascii/${pname}-${version}.tar.gz";
+    sha256 = "sha256-nm5X6mDUGagDoCTOY2YlTvtxYma4Tu3VjNmA2rzBFnQ=";
   };
 
   prePatch = ''
@@ -17,8 +17,9 @@ stdenv.mkDerivation rec {
     mkdir -vp "$out/bin" "$out/share/man/man1"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Interactive ASCII name and synonym chart";
+    mainProgram = "ascii";
     homepage = "http://www.catb.org/~esr/ascii/";
     license = licenses.bsd3;
     platforms = platforms.all;

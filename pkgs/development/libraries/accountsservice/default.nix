@@ -1,45 +1,95 @@
-{ stdenv, fetchurl, pkgconfig, glib, intltool, makeWrapper, shadow
-, libtool, gobjectIntrospection, polkit, systemd, coreutils }:
+{ lib
+, stdenv
+, fetchurl
+, substituteAll
+, pkg-config
+, glib
+, shadow
+, gobject-introspection
+, polkit
+, systemd
+, coreutils
+, meson
+, mesonEmulatorHook
+, dbus
+, ninja
+, python3
+, vala
+, gettext
+, libxcrypt
+}:
 
 stdenv.mkDerivation rec {
-  name = "accountsservice-${version}";
-  version = "0.6.43";
+  pname = "accountsservice";
+  version = "23.13.9";
+
+  outputs = [ "out" "dev" ];
 
   src = fetchurl {
-    url = "http://www.freedesktop.org/software/accountsservice/accountsservice-${version}.tar.xz";
-    sha256 = "1k6n9079001sgcwlkq0bz6mkn4m8y4dwf6hs1qm85swcld5ajfzd";
+    url = "https://www.freedesktop.org/software/accountsservice/accountsservice-${version}.tar.xz";
+    sha256 = "rdpM3q4k+gmS598///nv+nCQvjrCM6Pt/fadWpybkk8=";
   };
 
-  buildInputs = [ pkgconfig glib intltool libtool makeWrapper
-                  gobjectIntrospection polkit systemd ];
-
-  configureFlags = [ "--with-systemdsystemunitdir=$(out)/etc/systemd/system"
-                     "--localstatedir=/var" ];
-  prePatch = ''
-    substituteInPlace src/daemon.c --replace '"/usr/sbin/useradd"' '"${shadow}/bin/useradd"' \
-                                   --replace '"/usr/sbin/userdel"' '"${shadow}/bin/userdel"'
-    substituteInPlace src/user.c   --replace '"/usr/sbin/usermod"' '"${shadow}/bin/usermod"' \
-                                   --replace '"/usr/bin/chage"' '"${shadow}/bin/chage"' \
-                                   --replace '"/usr/bin/passwd"' '"${shadow}/bin/passwd"' \
-                                   --replace '"/bin/cat"' '"${coreutils}/bin/cat"'
-  '';
-
   patches = [
+    # Hardcode dependency paths.
+    (substituteAll {
+      src = ./fix-paths.patch;
+      inherit shadow coreutils;
+    })
+
+    # Do not try to create directories in /var, that will not work in Nix sandbox.
     ./no-create-dirs.patch
+
+    # Disable mutating D-Bus methods with immutable /etc.
     ./Disable-methods-that-change-files-in-etc.patch
+
+    # Do not ignore third-party (e.g Pantheon) extensions not matching FHS path scheme.
+    # Fixes https://github.com/NixOS/nixpkgs/issues/72396
+    ./drop-prefix-check-extensions.patch
+
+    # Detect DM type from config file.
+    # `readlink display-manager.service` won't return any of the candidates.
+    ./get-dm-type-from-config.patch
   ];
 
-  preFixup = ''
-    wrapProgram "$out/libexec/accounts-daemon" \
-      --run "${coreutils}/bin/mkdir -p /var/lib/AccountsService/users" \
-      --run "${coreutils}/bin/mkdir -p /var/lib/AccountsService/icons"
+  nativeBuildInputs = [
+    gettext
+    gobject-introspection
+    meson
+    ninja
+    pkg-config
+    python3
+    vala
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    #  meson.build:88:2: ERROR: Can not run test applications in this cross environment.
+    mesonEmulatorHook
+  ];
+
+  buildInputs = [
+    dbus
+    gettext
+    glib
+    polkit
+    systemd
+    libxcrypt
+  ];
+
+  mesonFlags = [
+    "-Dadmin_group=wheel"
+    "-Dlocalstatedir=/var"
+    "-Dsystemdsystemunitdir=${placeholder "out"}/etc/systemd/system"
+  ];
+
+  postPatch = ''
+    chmod +x meson_post_install.py
+    patchShebangs meson_post_install.py
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "D-Bus interface for user account query and manipulation";
-    homepage = http://www.freedesktop.org/wiki/Software/AccountsService;
-    license = licenses.gpl3;
-    maintainers = with maintainers; [ pSub ];
-    platforms = with platforms; linux;
+    homepage = "https://www.freedesktop.org/wiki/Software/AccountsService";
+    license = licenses.gpl3Plus;
+    maintainers = teams.freedesktop.members ++ (with maintainers; [ pSub ]);
+    platforms = platforms.linux;
   };
 }

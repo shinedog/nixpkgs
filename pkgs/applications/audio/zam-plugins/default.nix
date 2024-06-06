@@ -1,28 +1,32 @@
-{ stdenv, fetchgit , boost, libX11, mesa, liblo, libjack2, ladspaH, lv2, pkgconfig, rubberband, libsndfile }:
+{ lib, stdenv, fetchFromGitHub, boost, libX11, libGL, liblo, libjack2, ladspaH, lv2, pkg-config, rubberband, libsndfile, fftwFloat, libsamplerate }:
 
 stdenv.mkDerivation rec {
-  name = "zam-plugins-${version}";
-  version = "3.7";
+  pname = "zam-plugins";
+  version = "4.3";
 
-  src = fetchgit {
-    url = "https://github.com/zamaudio/zam-plugins.git";
-    deepClone = true;
-    rev = "932046905a57f698406318765a60807a1f81257d";
-    sha256 = "0zgkmq3jgysrsb6cm6sfbgqpgfpwv8nxlgkqm29zzvb97j56bm7z";
+  src = fetchFromGitHub {
+    owner = "zamaudio";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-wT1BXQrcD+TI+trqx0ZVUmVLZMTDQgJI3dAvN54wy6Y=";
+    fetchSubmodules = true;
   };
 
-  buildInputs = [ boost libX11 mesa liblo libjack2 ladspaH lv2 pkgconfig rubberband libsndfile ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ boost libX11 libGL liblo libjack2 ladspaH lv2 rubberband libsndfile fftwFloat libsamplerate ];
 
-  patchPhase = ''
+  postPatch = ''
     patchShebangs ./dpf/utils/generate-ttl.sh
   '';
 
   makeFlags = [
-    "PREFIX=$(out)"
+    "PREFIX=${placeholder "out"}"
   ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.zamaudio.com/?p=976;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://www.zamaudio.com/?p=976";
     description = "A collection of LV2/LADSPA/VST/JACK audio plugins by ZamAudio";
     license = licenses.gpl2Plus;
     maintainers = [ maintainers.magnetophon ];

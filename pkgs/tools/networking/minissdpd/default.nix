@@ -1,14 +1,18 @@
-{ stdenv, fetchurl, libnfnetlink }:
+{ lib, stdenv, fetchurl, libnfnetlink }:
 
 stdenv.mkDerivation rec {
-  name = "minissdpd-${version}";
-  version = "1.5.20160301";
+  pname = "minissdpd";
+  version = "1.6.0";
 
   src = fetchurl {
-    sha256 = "053icnb25jg2vvjxirkznks3ipbbdjxac278y19rk2w9cirgi9lv";
-    url = "http://miniupnp.free.fr/files/download.php?file=${name}.tar.gz";
-    name = "${name}.tar.gz";
+    sha256 = "sha256-9MLepqRy4KXMncotxMH8NrpVOOrPjXk4JSkyUXJVRr0=";
+    url = "http://miniupnp.free.fr/files/download.php?file=${pname}-${version}.tar.gz";
+    name = "${pname}-${version}.tar.gz";
   };
+
+  patches = [
+    ./makefile-install-dir.patch
+  ];
 
   buildInputs = [ libnfnetlink ];
 
@@ -18,7 +22,7 @@ stdenv.mkDerivation rec {
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Small daemon to speed up UPnP device discoveries";
     longDescription = ''
       MiniSSDPd receives NOTIFY packets and stores (caches) that information
@@ -27,10 +31,10 @@ stdenv.mkDerivation rec {
       the machine. Software must be patched in order to take advantage of
       MiniSSDPd, and MiniSSDPd must be started before any other UPnP program.
     '';
-    homepage = http://miniupnp.free.fr/minissdpd.html;
-    downloadPage = http://miniupnp.free.fr/files/;
+    homepage = "http://miniupnp.free.fr/minissdpd.html";
+    downloadPage = "http://miniupnp.free.fr/files/";
     license = licenses.bsd3;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
+    mainProgram = "minissdpd";
   };
 }

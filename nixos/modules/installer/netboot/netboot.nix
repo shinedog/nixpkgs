@@ -8,8 +8,22 @@ with lib;
 {
   options = {
 
+    netboot.squashfsCompression = mkOption {
+      default = with pkgs.stdenv.hostPlatform; "xz -Xdict-size 100% "
+                + lib.optionalString isx86 "-Xbcj x86"
+                # Untested but should also reduce size for these platforms
+                + lib.optionalString isAarch "-Xbcj arm"
+                + lib.optionalString (isPower && is32bit && isBigEndian) "-Xbcj powerpc"
+                + lib.optionalString (isSparc) "-Xbcj sparc";
+      description = ''
+        Compression settings to use for the squashfs nix store.
+      '';
+      example = "zstd -Xcompression-level 6";
+      type = types.str;
+    };
+
     netboot.storeContents = mkOption {
-      example = literalExample "[ pkgs.stdenv ]";
+      example = literalExpression "[ pkgs.stdenv ]";
       description = ''
         This option lists additional derivations to be included in the
         Nix store in the generated netboot image.
@@ -19,48 +33,47 @@ with lib;
   };
 
   config = {
-
-    boot.loader.grub.version = 2;
-
     # Don't build the GRUB menu builder script, since we don't need it
     # here and it causes a cyclic dependency.
     boot.loader.grub.enable = false;
 
     # !!! Hack - attributes expected by other modules.
-    system.boot.loader.kernelFile = "bzImage";
-    environment.systemPackages = [ pkgs.grub2 pkgs.grub2_efi pkgs.syslinux ];
+    environment.systemPackages = [ pkgs.grub2_efi ]
+      ++ (lib.optionals (lib.meta.availableOn pkgs.stdenv.hostPlatform pkgs.syslinux)
+        [pkgs.grub2 pkgs.syslinux]);
 
-    boot.consoleLogLevel = mkDefault 7;
-
-    fileSystems."/" =
+    fileSystems."/" = mkImageMediaOverride
       { fsType = "tmpfs";
         options = [ "mode=0755" ];
       };
 
     # In stage 1, mount a tmpfs on top of /nix/store (the squashfs
     # image) to make this a live CD.
-    fileSystems."/nix/.ro-store" =
+    fileSystems."/nix/.ro-store" = mkImageMediaOverride
       { fsType = "squashfs";
         device = "../nix-store.squashfs";
         options = [ "loop" ];
         neededForBoot = true;
       };
 
-    fileSystems."/nix/.rw-store" =
+    fileSystems."/nix/.rw-store" = mkImageMediaOverride
       { fsType = "tmpfs";
         options = [ "mode=0755" ];
         neededForBoot = true;
       };
 
-    fileSystems."/nix/store" =
-      { fsType = "unionfs-fuse";
-        device = "unionfs";
-        options = [ "allow_other" "cow" "nonempty" "chroot=/mnt-root" "max_files=32768" "hide_meta_files" "dirs=/nix/.rw-store=rw:/nix/.ro-store=ro" ];
+    fileSystems."/nix/store" = mkImageMediaOverride
+      { overlay = {
+          lowerdir = [ "/nix/.ro-store" ];
+          upperdir = "/nix/.rw-store/store";
+          workdir = "/nix/.rw-store/work";
+        };
+        neededForBoot = true;
       };
 
-    boot.initrd.availableKernelModules = [ "squashfs" ];
+    boot.initrd.availableKernelModules = [ "squashfs" "overlay" ];
 
-    boot.initrd.kernelModules = [ "loop" ];
+    boot.initrd.kernelModules = [ "loop" "overlay" ];
 
     # Closures to be copied to the Nix store, namely the init
     # script and the top-level system configuration directory.
@@ -68,14 +81,14 @@ with lib;
       [ config.system.build.toplevel ];
 
     # Create the squashfs image that contains the Nix store.
-    system.build.squashfsStore = import ../../../lib/make-squashfs.nix {
-      inherit (pkgs) stdenv squashfsTools perl pathsFromGraph;
+    system.build.squashfsStore = pkgs.callPackage ../../../lib/make-squashfs.nix {
       storeContents = config.netboot.storeContents;
+      comp = config.netboot.squashfsCompression;
     };
 
 
     # Create the initrd
-    system.build.netbootRamdisk = pkgs.makeInitrd {
+    system.build.netbootRamdisk = pkgs.makeInitrdNG {
       inherit (config.boot.initrd) compressor;
       prepend = [ "${config.system.build.initialRamdisk}/initrd" ];
 
@@ -86,7 +99,45 @@ with lib;
         ];
     };
 
-    system.build.netbootIpxeScript = pkgs.writeTextDir "netboot.ipxe" "#!ipxe\nkernel bzImage init=${config.system.build.toplevel}/init ${toString config.boot.kernelParams}\ninitrd initrd\nboot";
+    system.build.netbootIpxeScript = pkgs.writeTextDir "netboot.ipxe" ''
+      #!ipxe
+      # Use the cmdline variable to allow the user to specify custom kernel params
+      # when chainloading this script from other iPXE scripts like netboot.xyz
+      kernel ${pkgs.stdenv.hostPlatform.linux-kernel.target} init=${config.system.build.toplevel}/init initrd=initrd ${toString config.boot.kernelParams} ''${cmdline}
+      initrd initrd
+      boot
+    '';
+
+    # A script invoking kexec on ./bzImage and ./initrd.gz.
+    # Usually used through system.build.kexecTree, but exposed here for composability.
+    system.build.kexecScript = pkgs.writeScript "kexec-boot" ''
+      #!/usr/bin/env bash
+      if ! kexec -v >/dev/null 2>&1; then
+        echo "kexec not found: please install kexec-tools" 2>&1
+        exit 1
+      fi
+      SCRIPT_DIR=$( cd -- "$( dirname -- "''${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+      kexec --load ''${SCRIPT_DIR}/bzImage \
+        --initrd=''${SCRIPT_DIR}/initrd.gz \
+        --command-line "init=${config.system.build.toplevel}/init ${toString config.boot.kernelParams}"
+      kexec -e
+    '';
+
+    # A tree containing initrd.gz, bzImage and a kexec-boot script.
+    system.build.kexecTree = pkgs.linkFarm "kexec-tree" [
+      {
+        name = "initrd.gz";
+        path = "${config.system.build.netbootRamdisk}/initrd";
+      }
+      {
+        name = "bzImage";
+        path = "${config.system.build.kernel}/${config.system.boot.loader.kernelFile}";
+      }
+      {
+        name = "kexec-boot";
+        path = config.system.build.kexecScript;
+      }
+    ];
 
     boot.loader.timeout = 10;
 

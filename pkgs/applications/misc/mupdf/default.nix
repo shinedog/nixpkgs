@@ -1,88 +1,215 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig
-, zlib, freetype, libjpeg, jbig2dec, openjpeg
-, libX11, libXcursor, libXrandr, libXinerama, libXext, harfbuzz, mesa }:
+{ stdenv
+, lib
+, fetchurl
+, fetchFromGitHub
+, copyDesktopItems
+, makeDesktopItem
+, desktopToDarwinBundle
+, buildPackages
+, pkg-config
+, fixDarwinDylibNames
+, freetype
+, harfbuzz
+, openjpeg
+, jbig2dec
+, libjpeg
+, darwin
+, gumbo
+, enableX11 ? (!stdenv.isDarwin)
+, libX11
+, libXext
+, libXi
+, libXrandr
+, enableCurl ? true
+, curl
+, openssl
+, enableGL ? true
+, freeglut
+, libGLU
+, enableOcr ? false
+, leptonica
+, tesseract
+, enableCxx ? false
+, python3
+, enablePython ? false
+, which
+, swig
+, xcbuild
+, gitUpdater
 
+# for passthru.tests
+, cups-filters
+, zathura
+, mupdf
+}:
+
+assert enablePython -> enableCxx;
+
+let
+
+  freeglut-mupdf = freeglut.overrideAttrs (old: rec {
+    pname = "freeglut-mupdf";
+    version = "3.0.0-r${src.rev}";
+    src = fetchFromGitHub {
+      owner = "ArtifexSoftware";
+      repo = "thirdparty-freeglut";
+      rev = "13ae6aa2c2f9a7b4266fc2e6116c876237f40477";
+      hash = "sha256-0fuE0lm9rlAaok2Qe0V1uUrgP4AjMWgp3eTbw8G6PMM=";
+    };
+  });
+
+in
 stdenv.mkDerivation rec {
-  version = "1.9a";
-  name = "mupdf-${version}";
+  version = "1.23.6";
+  pname = "mupdf";
 
   src = fetchurl {
-    url = "http://mupdf.com/downloads/archive/${name}-source.tar.gz";
-    sha256 = "1k64pdapyj8a336jw3j61fhn0rp4q6az7d0dqp9r5n3d9rgwa5c0";
+    url = "https://mupdf.com/downloads/archive/${pname}-${version}-source.tar.gz";
+    sha256 = "sha256-rBHrhZ3UBEiOUVPNyWUbtDQeW6r007Pyfir8gvmq3Ck=";
   };
 
-  patches = [
-    # http://www.openwall.com/lists/oss-security/2016/08/03/2
-    (fetchpatch {
-      name = "mupdf-fix-CVE-2016-6525.patch";
-      url = "http://git.ghostscript.com/?p=mupdf.git;a=commitdiff_plain;h=39b0f07dd960f34e7e6bf230ffc3d87c41ef0f2e;hp=fa1936405b6a84e5c9bb440912c23d532772f958";
-      sha256 = "1g9fkd1f5rx1z043vr9dj4934qf7i4nkvbwjc61my9azjrrc3jv7";
-    })
-    (fetchpatch {
-      name = "mupdf-696941-fix-use-after-free.patch";
-      url = "http://git.ghostscript.com/?p=mupdf.git;a=patch;h=fa1936405b6a84e5c9bb440912c23d532772f958";
-      sha256 = "02j9b6my1h3rb0sz9yp6gi7c4ldi3mz0z9s5i8g9cl0arxyzys5h";
-    })
-    # Compatibility with new openjpeg
-    (fetchpatch {
-      name = "mupdf-1.9a-openjpeg-2.1.1.patch";
-      url = "https://git.archlinux.org/svntogit/community.git/plain/mupdf/trunk/0001-mupdf-openjpeg.patch?id=9083dac2a398bfe694d31a0c6a0a839c5a756e53";
-      sha256 = "14ndgy3w1sl25km9bcc2zfcxrcihqjw1sdzkpcw5g1mi7gcgxp3g";
-    })
-  ];
+  patches = [ ./0001-Use-command-v-in-favor-of-which.patch
+              ./0002-Add-Darwin-deps.patch
+              ./0003-Fix-cpp-build.patch
+            ];
 
-  makeFlags = [ "prefix=$(out)" ];
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ zlib libX11 libXcursor libXext harfbuzz mesa libXrandr libXinerama freetype libjpeg jbig2dec openjpeg ];
-  outputs = [ "bin" "dev" "out" "doc" ];
+  postPatch = ''
+    substituteInPlace Makerules --replace "(shell pkg-config" "(shell $PKG_CONFIG"
+
+    patchShebangs scripts/mupdfwrap.py
+
+    # slip in makeFlags when building bindings
+    sed -i -e 's/^\( *make_args *=\)/\1 """ $(echo ''${makeFlagsArray[@]@Q})"""/' scripts/wrap/__main__.py
+
+    # fix libclang unnamed struct format
+    for wrapper in ./scripts/wrap/{cpp,state}.py; do
+      substituteInPlace "$wrapper" --replace 'struct (unnamed' '(unnamed struct'
+    done
+  '';
+
+  makeFlags = [
+    "prefix=$(out)"
+    "shared=yes"
+    "USE_SYSTEM_LIBS=yes"
+    "PKG_CONFIG=${buildPackages.pkg-config}/bin/${buildPackages.pkg-config.targetPrefix}pkg-config"
+  ] ++ lib.optionals (!enableX11) [ "HAVE_X11=no" ]
+    ++ lib.optionals (!enableGL) [ "HAVE_GLUT=no" ]
+    ++ lib.optionals (enableOcr) [ "USE_TESSERACT=yes" ];
+
+  nativeBuildInputs = [ pkg-config ]
+    ++ lib.optional (enableGL || enableX11) copyDesktopItems
+    ++ lib.optional (stdenv.isDarwin && (enableGL || enableX11)) desktopToDarwinBundle
+    ++ lib.optionals (enableCxx || enablePython) [ python3 python3.pkgs.setuptools python3.pkgs.libclang ]
+    ++ lib.optionals (enablePython) [ which swig ]
+    ++ lib.optionals stdenv.isDarwin [ fixDarwinDylibNames xcbuild ];
+
+  buildInputs = [ freetype harfbuzz openjpeg jbig2dec libjpeg gumbo ]
+    ++ lib.optionals enableX11 [ libX11 libXext libXi libXrandr ]
+    ++ lib.optionals enableCurl [ curl openssl ]
+    ++ lib.optionals enableGL (
+      if stdenv.isDarwin then
+        with darwin.apple_sdk.frameworks; [ GLUT OpenGL ]
+      else
+        [ freeglut-mupdf libGLU ]
+    )
+    ++ lib.optionals enableOcr [ leptonica tesseract ]
+  ;
+  outputs = [ "bin" "dev" "out" "man" "doc" ];
 
   preConfigure = ''
     # Don't remove mujs because upstream version is incompatible
-    rm -rf thirdparty/{curl,freetype,glfw,harfbuzz,jbig2dec,jpeg,openjpeg,zlib}
+    rm -rf thirdparty/{curl,freetype,glfw,harfbuzz,jbig2dec,libjpeg,openjpeg,zlib}
   '';
 
-  postInstall = ''
-    for i in $out/lib/*.a; do
-      so="''${i%.a}.so"
-      gcc -shared -o $so.${version} -Wl,--whole-archive $i -Wl,--no-whole-archive
-      ln -s $so.${version} $so
-      rm $i
+  postBuild = lib.optionalString (enableCxx || enablePython) ''
+    for dir in build/*; do
+      ./scripts/mupdfwrap.py -d "$dir" -b ${lib.optionalString (enableCxx) "01"}${lib.optionalString (enablePython) "23"}
     done
+  '';
 
+  desktopItems = lib.optionals (enableGL || enableX11) [
+    (makeDesktopItem {
+      name = pname;
+      desktopName = pname;
+      comment = meta.description;
+      icon = "mupdf";
+      exec = "${pname} %f";
+      terminal = false;
+      mimeTypes = [
+        "application/epub+zip"
+        "application/oxps"
+        "application/pdf"
+        "application/vnd.ms-xpsdocument"
+        "application/x-cbz"
+        "application/x-pdf"
+      ];
+      categories = [ "Graphics" "Viewer" ];
+      keywords = [
+        "mupdf" "comic" "document" "ebook" "viewer"
+        "cbz" "epub" "fb2" "pdf" "xps"
+      ];
+    })
+  ];
+
+  postInstall = ''
     mkdir -p "$out/lib/pkgconfig"
     cat >"$out/lib/pkgconfig/mupdf.pc" <<EOF
     prefix=$out
-    libdir=$out/lib
-    includedir=$out/include
+    libdir=\''${prefix}/lib
+    includedir=\''${prefix}/include
 
     Name: mupdf
     Description: Library for rendering PDF documents
     Version: ${version}
-    Libs: -L$out/lib -lmupdf -lmupdfthird
-    Cflags: -I$dev/include
+    Libs: -L\''${libdir} -lmupdf
+    Cflags: -I\''${includedir}
     EOF
 
     moveToOutput "bin" "$bin"
-    mkdir -p $bin/share/applications
-    cat > $bin/share/applications/mupdf.desktop <<EOF
-    [Desktop Entry]
-    Type=Application
-    Version=1.0
-    Name=mupdf
-    Comment=PDF viewer
-    Exec=$bin/bin/mupdf-x11 %f
-    Terminal=false
-    EOF
-  '';
+  '' + (lib.optionalString (stdenv.isDarwin) ''
+    for exe in $bin/bin/*; do
+      install_name_tool -change build/shared-release/libmupdf.dylib $out/lib/libmupdf.dylib "$exe"
+    done
+  '') + (lib.optionalString (enableX11 || enableGL) ''
+    mkdir -p $bin/share/icons/hicolor/48x48/apps
+    cp docs/logo/mupdf.png $bin/share/icons/hicolor/48x48/apps
+  '') + (if enableGL then ''
+    ln -s "$bin/bin/mupdf-gl" "$bin/bin/mupdf"
+  '' else lib.optionalString (enableX11) ''
+    ln -s "$bin/bin/mupdf-x11" "$bin/bin/mupdf"
+  '') + (lib.optionalString (enableCxx) ''
+    cp platform/c++/include/mupdf/*.h $out/include/mupdf
+    cp build/*/libmupdfcpp.so $out/lib
+  '') + (lib.optionalString (enablePython) (''
+    mkdir -p $out/${python3.sitePackages}/mupdf
+    cp build/*/_mupdf.so $out/${python3.sitePackages}
+    cp build/*/mupdf.py $out/${python3.sitePackages}/mupdf/__init__.py
+  '' + lib.optionalString (stdenv.isDarwin) ''
+    install_name_tool -add_rpath $out/lib $out/${python3.sitePackages}/_mupdf.so
+  ''));
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://mupdf.com;
-    repositories.git = git://git.ghostscript.com/mupdf.git;
-    description = "Lightweight PDF viewer and toolkit written in portable C";
-    license = licenses.gpl3Plus;
-    maintainers = with maintainers; [ viric vrthra fpletz ];
-    platforms = platforms.linux;
+  passthru = {
+    tests = {
+      inherit cups-filters zathura;
+      inherit (python3.pkgs) pikepdf pymupdf;
+      mupdf-all = mupdf.override { enableCurl = true; enableGL = true; enableOcr = true; enableCxx = true; enablePython = true; };
+    };
+
+    updateScript = gitUpdater {
+      url = "https://git.ghostscript.com/mupdf.git";
+      ignoredVersions = ".rc.*";
+    };
+  };
+
+  meta = with lib; {
+    homepage = "https://mupdf.com";
+    description = "Lightweight PDF, XPS, and E-book viewer and toolkit written in portable C";
+    changelog = "https://git.ghostscript.com/?p=mupdf.git;a=blob_plain;f=CHANGES;hb=${version}";
+    license = licenses.agpl3Plus;
+    maintainers = with maintainers; [ vrthra fpletz lilyinstarlight ];
+    platforms = platforms.unix;
+    mainProgram = "mupdf";
   };
 }

@@ -1,20 +1,80 @@
-{ stdenv, fetchurl, pkgconfig, glib, gupnp_igd, gst_all_1 }:
+{ lib, stdenv
+, fetchurl
+, fetchpatch
+, meson
+, ninja
+, pkg-config
+, python3
+, gobject-introspection
+, gtk-doc
+, docbook_xsl
+, docbook_xml_dtd_412
+, glib
+, gupnp-igd
+, gst_all_1
+, gnutls
+, graphviz
+}:
 
 stdenv.mkDerivation rec {
-  name = "libnice-0.1.13";
+  pname = "libnice";
+  version = "0.1.22";
+
+  outputs = [ "bin" "out" "dev" ]
+    ++ lib.optionals (stdenv.buildPlatform == stdenv.hostPlatform) [ "devdoc" ];
 
   src = fetchurl {
-    url = "http://nice.freedesktop.org/releases/${name}.tar.gz";
-    sha256 = "1q8rhklbz1zla67r4mw0f7v3m5b32maj0prnr0kshcz97fgjs4b1";
+    url = "https://libnice.freedesktop.org/releases/${pname}-${version}.tar.gz";
+    hash = "sha256-pfckzwnq5QxBp1FxQdidpKYeyerKMtpKAHP67VQXrX4=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ gst_all_1.gstreamer gst_all_1.gst-plugins-base ];
-  propagatedBuildInputs = [ glib gupnp_igd ];
+  patches = [
+    # Fix generating data
+    # Note: upstream is not willing to merge our fix
+    # https://gitlab.freedesktop.org/libnice/libnice/merge_requests/35#note_98871
+    (fetchpatch {
+      url = "https://gitlab.freedesktop.org/libnice/libnice/commit/d470c4bf4f2449f7842df26ca1ce1efb63452bc6.patch";
+      sha256 = "0z74vizf92flfw1m83p7yz824vfykmnm0xbnk748bnnyq186i6mg";
+    })
+  ];
 
-  meta = {
-    homepage = http://nice.freedesktop.org/wiki/;
-    description = "The GLib ICE implementation";
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    python3
+    gobject-introspection
+
+    # documentation
+    gtk-doc
+    docbook_xsl
+    docbook_xml_dtd_412
+    graphviz
+  ];
+
+  buildInputs = [
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gnutls
+    gupnp-igd
+  ];
+
+  propagatedBuildInputs = [
+    glib
+  ];
+
+  mesonFlags = [
+    "-Dgtk_doc=${if (stdenv.buildPlatform == stdenv.hostPlatform) then "enabled" else "disabled"}"
+    "-Dintrospection=${if (stdenv.buildPlatform == stdenv.hostPlatform) then "enabled" else "disabled"}"
+    "-Dexamples=disabled" # requires many dependencies and probably not useful for our users
+  ];
+
+  # Tests are flaky
+  # see https://github.com/NixOS/nixpkgs/pull/53293#issuecomment-453739295
+  doCheck = false;
+
+  meta = with lib; {
+    description = "GLib ICE implementation";
     longDescription = ''
       Libnice is an implementation of the IETF's Interactice Connectivity
       Establishment (ICE) standard (RFC 5245) and the Session Traversal
@@ -22,6 +82,8 @@ stdenv.mkDerivation rec {
 
       It provides a GLib-based library, libnice and a Glib-free library,
       libstun as well as GStreamer elements.'';
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://libnice.freedesktop.org/";
+    platforms = platforms.unix;
+    license = with licenses; [ lgpl21 mpl11 ];
   };
 }

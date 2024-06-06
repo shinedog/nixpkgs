@@ -1,23 +1,23 @@
-{ stdenv, fetchurl, gmp
+{ lib, stdenv, fetchurl, gmp
 , withEmacsSupport ? true
 , withContrib ? true }:
 
 let
-  versionPkg = "0.2.12" ;
+  versionPkg = "0.4.2";
 
   contrib = fetchurl {
-    url = "mirror://sourceforge/ats2-lang/ATS2-Postiats-contrib-${versionPkg}.tgz" ;
-    sha256 = "16jzabmwq5yz72dzlkc2hmvf2lan83gayn21gbl65jgpwdsbh170" ;
+    url = "mirror://sourceforge/ats2-lang/ATS2-Postiats-contrib-${versionPkg}.tgz";
+    hash = "sha256-m0hfBLsaNiLaIktcioK+ZtWUsWht3IDSJ6CzgJmS06c=";
   };
 
-  postInstallContrib = stdenv.lib.optionalString withContrib
+  postInstallContrib = lib.optionalString withContrib
   ''
     local contribDir=$out/lib/ats2-postiats-*/ ;
     mkdir -p $contribDir ;
     tar -xzf "${contrib}" --strip-components 1 -C $contribDir ;
   '';
 
-  postInstallEmacs = stdenv.lib.optionalString withEmacsSupport
+  postInstallEmacs = lib.optionalString withEmacsSupport
   ''
     local siteLispDir=$out/share/emacs/site-lisp/ats2 ;
     mkdir -p $siteLispDir ;
@@ -26,17 +26,30 @@ let
 in
 
 stdenv.mkDerivation rec {
-  name    = "ats2-${version}";
+  pname = "ats2";
   version = versionPkg;
 
   src = fetchurl {
-    url = "mirror://sourceforge/ats2-lang/ATS2-Postiats-${version}.tgz";
-    sha256 = "0m8gmm1pnklixxw76yjjqqqixm2cyp91rnq4sj1k29qp4k9zxpl4";
+    url = "mirror://sourceforge/ats2-lang/ATS2-Postiats-gmp-${version}.tgz";
+    hash = "sha256-UWgDjFojPBYgykrCrJyYvVWY+Gc5d4aRGjTWjc528AM=";
   };
+
+  postPatch = lib.optionalString stdenv.cc.isClang ''
+    sed -i 's/gcc/clang/g' utils/*/DATS/atscc_util.dats
+  '';
 
   buildInputs = [ gmp ];
 
-  setupHook = with stdenv.lib;
+  # Disable parallel build, errors:
+  #  *** No rule to make target 'patscc.dats', needed by 'patscc_dats.c'.  Stop.
+  enableParallelBuilding = false;
+
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "CCOMP=${stdenv.cc.targetPrefix}cc"
+  ];
+
+  setupHook = with lib;
     let
       hookFiles =
         [ ./setup-hook.sh ]
@@ -45,15 +58,13 @@ stdenv.mkDerivation rec {
       builtins.toFile "setupHook.sh"
       (concatMapStringsSep "\n" builtins.readFile hookFiles);
 
-  patches = [ ./installed-lib-directory-version.patch ];
-
   postInstall = postInstallContrib + postInstallEmacs;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Functional programming language with dependent types";
     homepage    = "http://www.ats-lang.org";
     license     = licenses.gpl3Plus;
-    platforms   = platforms.linux;
-    maintainers = with maintainers; [ thoughtpolice ttuegel ];
+    platforms   = platforms.unix;
+    maintainers = with maintainers; [ thoughtpolice ttuegel bbarker ];
   };
 }

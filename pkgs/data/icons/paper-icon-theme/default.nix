@@ -1,28 +1,49 @@
-{ stdenv, fetchFromGitHub, autoreconfHook }:
+{ lib, stdenvNoCC, fetchFromGitHub, meson, ninja, gtk3, gnome, gnome-icon-theme, hicolor-icon-theme, jdupes }:
 
-stdenv.mkDerivation rec {
-  name = "${package-name}-${version}";
-  package-name = "paper-icon-theme";
-  version = "2016-11-05";
+stdenvNoCC.mkDerivation rec {
+  pname = "paper-icon-theme";
+  version = "unstable-2020-03-12";
 
   src = fetchFromGitHub {
     owner = "snwh";
-    repo = package-name;
-    rev = "2a1f25a47fe8fb92e9d4db5537bbddb539586602";
-    sha256 = "0v956wrfraaj5qznz86q7s3zi55xd3gxmg7pzcfsw2ghgfv13swd";
+    repo = pname;
+    rev = "aa3e8af7a1f0831a51fd7e638a4acb077a1e5188";
+    sha256 = "0x6qzch4rrc8firb1dcf926j93gpqxvd7h6dj5wwczxbvxi5bd77";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    gtk3
+    jdupes
+  ];
 
-  postPatch = ''
-    substituteInPlace Makefile.am --replace '$(DESTDIR)'/usr $out
+  propagatedBuildInputs = [
+    gnome.adwaita-icon-theme
+    gnome-icon-theme
+    hicolor-icon-theme
+  ];
+
+  dontDropIconThemeCache = true;
+
+  # These fixup steps are slow and unnecessary for this package
+  dontPatchELF = true;
+  dontRewriteSymlinks = true;
+
+  postInstall = ''
+    # The cache for Paper-Mono-Dark is missing
+    gtk-update-icon-cache "$out"/share/icons/Paper-Mono-Dark;
+
+    # replace duplicate files with symlinks
+    jdupes -l -r $out/share/icons
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Modern icon theme designed around bold colours and simple geometric shapes";
-    homepage = http://snwh.org/paper;
+    homepage = "https://snwh.org/paper";
     license = with licenses; [ cc-by-sa-40 lgpl3 ];
-    platforms = platforms.all;
+    # darwin cannot deal with file names differing only in case
+    platforms = platforms.linux;
     maintainers = with maintainers; [ romildo ];
   };
 }

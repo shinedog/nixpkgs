@@ -1,44 +1,69 @@
-{ stdenv, fetchurl, makeWrapper, glibc, readline, ncurses, utillinux }:
+{ lib
+, stdenv
+, fetchurl
+, makeWrapper
+, ncurses
+, readline
+, unixtools
+, enableReadline ? true
+}:
 
-with stdenv.lib;
-let
-  makeFlags = ''
-    INCDIR=${glibc.dev}/include \
-    BINDIR=$out/bin LIBDIR=$out/lib CALC_INCDIR=$out/include/calc CALC_SHAREDIR=$out/share/calc MANDIR=$out/share/man/man1 \
-    USE_READLINE=-DUSE_READLINE READLINE_LIB=-lreadline READLINE_EXTRAS='-lhistory -lncurses' \
-    TERMCONTROL=-DUSE_TERMIOS \
-  '';
-in
-stdenv.mkDerivation rec {
-
-  name = "calc-${version}";
-  version = "2.12.5.3";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "calc";
+  version = "2.15.0.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/calc/${name}.tar.bz2";
-    sha256 = "14mnz6smhi3a0rgmwvddk9w3vdisi8khq67i8nqsl47vgs8n1kqg";
+    urls = [
+      "https://github.com/lcn2/calc/releases/download/v${finalAttrs.version}/calc-${finalAttrs.version}.tar.bz2"
+      "http://www.isthe.com/chongo/src/calc/calc-${finalAttrs.version}.tar.bz2"
+    ];
+    hash = "sha256-dPEj32SiR7RhI9fBa9ny9+EEuuiXS2WswRcDVuOMJXc=";
   };
 
-  buildInputs = [ makeWrapper readline ncurses utillinux ];
-
-  configurePhase = ''
-    sed -i 's/all: check_include/all:/' Makefile
+  postPatch = ''
+    substituteInPlace Makefile.target \
+      --replace '-install_name ''${LIBDIR}/libcalc''${LIB_EXT_VERSION}' '-install_name ''${T}''${LIBDIR}/libcalc''${LIB_EXT_VERSION}' \
+      --replace '-install_name ''${LIBDIR}/libcustcalc''${LIB_EXT_VERSION}' '-install_name ''${T}''${LIBDIR}/libcustcalc''${LIB_EXT_VERSION}'
   '';
 
-  buildPhase = ''
-    make ${makeFlags}
-  '';
+  nativeBuildInputs = [
+    makeWrapper
+    unixtools.col
+  ];
 
-  installPhase = ''
-    make install ${makeFlags}
-    wrapProgram $out/bin/calc --prefix LD_LIBRARY_PATH : $out/lib
-  '';
+  buildInputs = lib.optionals enableReadline [
+    ncurses
+    readline
+  ];
+
+  makeFlags = [
+    "T=$(out)"
+    "INCDIR="
+    "BINDIR=/bin"
+    "LIBDIR=/lib"
+    "CALC_SHAREDIR=/share/calc"
+    "CALC_INCDIR=/include"
+    "MANDIR=/share/man/man1"
+
+    # Handle LDFLAGS defaults in calc
+    "DEFAULT_LIB_INSTALL_PATH=$(out)/lib"
+  ]
+  ++ lib.optionals enableReadline [
+    "READLINE_LIB=-lreadline"
+    "USE_READLINE=-DUSE_READLINE"
+  ];
 
   meta = {
+    homepage = "http://www.isthe.com/chongo/tech/comp/calc/";
     description = "C-style arbitrary precision calculator";
-    homepage = http://www.isthe.com/chongo/tech/comp/calc/;
-    license = licenses.lgpl21;
-    maintainers = [ ];
-    platforms = platforms.all;
+    mainProgram = "calc";
+    changelog = "https://github.com/lcn2/calc/blob/v${finalAttrs.version}/CHANGES";
+    # The licensing situation depends on readline (see section 3 of the LGPL)
+    # If linked against readline then GPLv2 otherwise LGPLv2.1
+    license = if enableReadline
+              then lib.licenses.gpl2Only
+              else lib.licenses.lgpl21Only;
+    maintainers = with lib.maintainers; [ matthewbauer ];
+    platforms = lib.platforms.all;
   };
-}
+})

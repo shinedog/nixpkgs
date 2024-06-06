@@ -1,21 +1,27 @@
-{ stdenv, fetchFromGitHub, autoreconfHook }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, libcap }:
 
 stdenv.mkDerivation rec {
-  name = "smcroute-${version}";
-  version = "2.1.0";
+  pname = "smcroute";
+  version = "2.5.7";
 
   src = fetchFromGitHub {
     owner = "troglobit";
     repo = "smcroute";
     rev = version;
-    sha256 = "0mmwvjqbzhzwii4g6rz3ms9fhzppnhbsrhr4jqpih2y95cz039gg";
+    sha256 = "sha256-b1FsaDw5wAZkOwc6Y7TsMwyfxIRQ2rNUTK+knEzOn7w=";
   };
 
-  nativeBuildInputs = [ autoreconfHook ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ libcap ];
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--localstatedir=/var"
+    "--with-systemd=\$(out)/lib/systemd/system"
+  ];
+
+  meta = with lib; {
     description = "Static multicast routing daemon";
-    homepage = "http://troglobit.com/smcroute.html";
+    homepage = "https://troglobit.com/smcroute.html";
     license = licenses.gpl2Plus;
     maintainers = with maintainers; [ fpletz ];
     platforms = with platforms; (linux ++ freebsd ++ netbsd ++ openbsd);

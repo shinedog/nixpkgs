@@ -1,31 +1,67 @@
-{ stdenv, fetchurl, fetchpatch, python, pkgconfig, usbmuxd, glib, libgcrypt,
-  libtasn1, libplist, readline, libusbmuxd, openssl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, autoreconfHook
+, pkg-config
+, openssl
+, libgcrypt
+, libplist
+, libtasn1
+, libusbmuxd
+, libimobiledevice-glue
+, SystemConfiguration
+, CoreFoundation
+}:
 
 stdenv.mkDerivation rec {
-  name = "libimobiledevice-1.2.0";
+  pname = "libimobiledevice";
+  version = "1.3.0+date=2023-04-30";
 
-  nativeBuildInputs = [ python libplist.swig pkgconfig ];
-  buildInputs = [ readline ];
-  propagatedBuildInputs = [ libusbmuxd glib libgcrypt libtasn1 libplist openssl ];
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitHub {
+    owner = "libimobiledevice";
+    repo = pname;
+    rev = "860ffb707af3af94467d2ece4ad258dda957c6cd";
+    hash = "sha256-mIsB+EaGJlGMOpz3OLrs0nAmhOY1BwMs83saFBaejwc=";
+  };
 
   patches = [
-    ./disable_sslv3.patch
-    (fetchpatch { # CVE-2016-5104
-      url = "https://github.com/libimobiledevice/libimobiledevice/commit/df1f5c4d70d0c19ad40072f5246ca457e7f9849e.patch";
-      sha256 = "06ygb9aqcvm4v08wrldsddjgyqv5bkpq6lxzq2a1nwqp9mq4a4k1";
+    # Pull upstream fix for clang-16 and upcoming gcc-14 support:
+    #   https://github.com/libimobiledevice/libimobiledevice/pull/1444
+    (fetchpatch {
+      name = "usleep-decl.patch";
+      url = "https://github.com/libimobiledevice/libimobiledevice/commit/db623184c0aa09c27697f5a2e81025db223075d5.patch";
+      hash = "sha256-TgdgBkEDXzQDSgJxcZc+pZncfmBVXarhHOByGFs6p0Q=";
     })
   ];
 
-  postPatch = ''sed -e 's@1\.3\.21@@' -i configure'';
-  passthru.swig = libplist.swig;
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
 
-  src = fetchurl {
-    url = "${meta.homepage}/downloads/${name}.tar.bz2";
-    sha256 = "0dqhy4qwj30mw8pwckvjmgnj1qqrh6p8c6jknmhvylshhzh0ssvq";
-  };
+  propagatedBuildInputs = [
+    openssl
+    libgcrypt
+    libplist
+    libtasn1
+    libusbmuxd
+    libimobiledevice-glue
+  ] ++ lib.optionals stdenv.isDarwin [
+    SystemConfiguration
+    CoreFoundation
+  ];
 
-  meta = {
-    homepage = http://www.libimobiledevice.org;
+  preAutoreconf = ''
+    export RELEASE_VERSION=${version}
+  '';
+
+  configureFlags = [ "--without-cython" ];
+
+  meta = with lib; {
+    homepage = "https://github.com/libimobiledevice/libimobiledevice";
     description = "A software library that talks the protocols to support iPhone®, iPod Touch® and iPad® devices on Linux";
     longDescription = ''
       libimobiledevice is a software library that talks the protocols to support
@@ -37,7 +73,10 @@ stdenv.mkDerivation rec {
       installed applications, retrieve addressbook/calendars/notes and bookmarks
       and synchronize music and video to the device. The library is in
       development since August 2007 with the goal to bring support for these
-      devices to the Linux Desktop.'';
-    inherit (usbmuxd.meta) platforms maintainers;
+      devices to the Linux Desktop.
+    '';
+    license = licenses.lgpl21Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ RossComputerGuy ];
   };
 }

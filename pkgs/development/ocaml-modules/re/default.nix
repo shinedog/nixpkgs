@@ -1,28 +1,37 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, ounit }:
+{ lib, fetchurl, buildDunePackage, ocaml, ounit, seq }:
 
-stdenv.mkDerivation rec {
-  name = "ocaml-re-1.5.0";
+let version_sha = if lib.versionAtLeast ocaml.version "4.08"
+  then
+    {
+      version = "1.11.0";
+      sha256 = "sha256-AfwkR4DA9r5yrnlrH7dQ82feGGJP110H7nl4LtbfjU8=";
+    }
+  else
+    {
+      version = "1.9.0";
+      sha256 = "1gas4ky49zgxph3870nffzkr6y41kkpqp4nj38pz1gh49zcf12aj";
+    };
+in
 
-  src = fetchzip {
-    url = "https://github.com/ocaml/ocaml-re/archive/${name}.tar.gz";
-    sha256 = "17avk7kwmgdjkri1sj5q4a59ykc9rj0bxj6ixxpl6i0n49br3f92";
+buildDunePackage rec {
+  pname = "re";
+  version = version_sha.version;
+
+  minimalOCamlVersion = "4.02";
+
+  src = fetchurl {
+    url = "https://github.com/ocaml/ocaml-re/releases/download/${version}/re-${version}.tbz";
+    sha256 = version_sha.sha256;
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ounit ];
-
-  configurePhase = "ocaml setup.ml -configure --prefix $out --enable-tests";
-  buildPhase = "ocaml setup.ml -build";
-  doCheck = true;
-  checkPhase = "ocaml setup.ml -test";
-  installPhase = "ocaml setup.ml -install";
-
-  createFindlibDestdir = true;
+  buildInputs = lib.optional doCheck ounit;
+  propagatedBuildInputs = [ seq ];
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
 
   meta = {
-    homepage = https://github.com/ocaml/ocaml-re;
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/ocaml/ocaml-re";
     description = "Pure OCaml regular expressions, with support for Perl and POSIX-style strings";
-    license = stdenv.lib.licenses.lgpl2;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    license = lib.licenses.lgpl2;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
 }

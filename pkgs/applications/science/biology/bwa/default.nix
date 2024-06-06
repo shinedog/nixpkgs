@@ -1,28 +1,47 @@
-{ stdenv, fetchFromGitHub, zlib }:
+{ lib, stdenv, fetchFromGitHub, zlib }:
 
-stdenv.mkDerivation rec {
-  name    = "bwa-${version}";
-  version = "0.7.15";
+stdenv.mkDerivation {
+  pname = "bwa";
+  version = "unstable-2022-09-23";
 
   src = fetchFromGitHub {
-    owner  = "lh3";
-    repo   = "bwa";
-    rev    = "v${version}";
-    sha256 = "1aasdr3lik42gafi9lds7xw0wgv8ijjll1g32d7jm04pp235c7nl";
+    owner = "lh3";
+    repo = "bwa";
+    rev = "139f68fc4c3747813783a488aef2adc86626b01b";
+    hash = "sha256-8u35lTK6gBKeapYoIkG9MuJ/pyy/HFA2OiPn+Ml2C6c=";
   };
 
   buildInputs = [ zlib ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp bwa $out/bin
+  # Avoid hardcoding gcc to allow environments with a different
+  # C compiler to build
+  preConfigure = ''
+    sed -i '/^CC/d' Makefile
   '';
 
-  meta = with stdenv.lib; {
+  makeFlags = lib.optional stdenv.hostPlatform.isStatic "AR=${stdenv.cc.targetPrefix}ar";
+
+  # it's unclear which headers are intended to be part of the public interface
+  # so we may find ourselves having to add more here over time
+  installPhase = ''
+    runHook preInstall
+
+    install -vD -t $out/bin bwa
+    install -vD -t $out/lib libbwa.a
+    install -vD -t $out/include bntseq.h
+    install -vD -t $out/include bwa.h
+    install -vD -t $out/include bwamem.h
+    install -vD -t $out/include bwt.h
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
     description = "A software package for mapping low-divergent sequences against a large reference genome, such as the human genome";
-    license     = licenses.gpl3;
-    homepage    = http://bio-bwa.sourceforge.net/;
+    mainProgram = "bwa";
+    license     = licenses.gpl3Plus;
+    homepage    = "https://bio-bwa.sourceforge.net/";
     maintainers = with maintainers; [ luispedro ];
-    platforms = [ "x86_64-linux" ];
+    platforms = platforms.unix;
   };
 }

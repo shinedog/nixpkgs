@@ -1,40 +1,44 @@
-{ stdenv, fetchurl, alsaLib, ffmpeg, libjack2, libX11, libXext
-, libXfixes, mesa, pkgconfig, libpulseaudio, qt4
+{ lib, stdenv, mkDerivation, fetchFromGitHub, alsa-lib, ffmpeg_4, libjack2, libX11, libXext, libXinerama, qtx11extras
+, libXfixes, libGLU, libGL, pkg-config, libpulseaudio, libv4l, qtbase, qttools, cmake, ninja, nix-update-script
 }:
 
-stdenv.mkDerivation rec {
-  name = "simplescreenrecorder-${version}";
-  version = "0.3.6";
+mkDerivation rec {
+  pname = "simplescreenrecorder";
+  version = "0.4.4";
 
-  src = fetchurl {
-    url = "https://github.com/MaartenBaert/ssr/archive/${version}.tar.gz";
-    sha256 = "1d89ncspjd8c4mckf0nb6y3hrxpv4rjpbj868pznhvfmdgr5nvql";
+  src = fetchFromGitHub {
+    owner = "MaartenBaert";
+    repo = "ssr";
+    rev = version;
+    sha256 = "sha256-cVjQmyk+rCqmDJzdnDk7bQ8kpyD3HtTw3wLVx2thHok=";
   };
 
-  patches = [ ./fix-paths.patch ];
-
-  postPatch = ''
-    # #455
-    sed '1i#include <random>' -i src/Benchmark.cpp
-
-    for i in scripts/ssr-glinject src/AV/Input/GLInjectInput.cpp; do
-      substituteInPlace $i \
-        --subst-var out \
-        --subst-var-by sh ${stdenv.shell}
-    done
-  '';
-
-  buildInputs = [
-    alsaLib ffmpeg libjack2 libX11 libXext libXfixes mesa pkgconfig
-    libpulseaudio qt4
+  cmakeFlags = [
+    "-DWITH_QT5=TRUE"
+    "-DWITH_GLINJECT=${if stdenv.hostPlatform.isx86 then "TRUE" else "FALSE"}"
   ];
 
-  enableParallelBuilding = true;
+  postPatch = ''
+    substituteInPlace scripts/ssr-glinject \
+      --replace-fail "libssr-glinject.so" "$out/lib/libssr-glinject.so"
 
-  meta = with stdenv.lib; {
+    substituteInPlace src/AV/Input/GLInjectInput.cpp \
+      --replace-fail "/bin/sh" "${stdenv.shell}" \
+      --replace-fail "libssr-glinject.so" "$out/lib/libssr-glinject.so"
+  '';
+
+  nativeBuildInputs = [ pkg-config cmake ninja ];
+  buildInputs = [
+    alsa-lib ffmpeg_4 libjack2 libX11 libXext libXfixes libXinerama libGLU libGL
+    libpulseaudio libv4l qtbase qttools qtx11extras
+  ];
+
+  passthru.updateScript = nix-update-script { };
+
+  meta = with lib; {
     description = "A screen recorder for Linux";
-    homepage = http://www.maartenbaert.be/simplescreenrecorder;
-    license = licenses.gpl3;
+    homepage = "https://www.maartenbaert.be/simplescreenrecorder";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
     maintainers = [ maintainers.goibhniu ];
   };

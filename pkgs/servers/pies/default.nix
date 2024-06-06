@@ -1,12 +1,19 @@
-{ fetchurl, stdenv }:
+{ fetchurl, lib, stdenv, libxcrypt }:
 
 stdenv.mkDerivation rec {
-  name = "pies-1.2";
+  pname = "pies";
+  version = "1.3";
 
   src = fetchurl {
-    url = "mirror://gnu/pies/${name}.tar.bz2";
-    sha256 = "18w0dbg77i56cx1bwa789w0qi3l4xkkbascxcv2b6gbm0zmjg1g6";
+    url = "mirror://gnu/pies/${pname}-${version}.tar.bz2";
+    sha256 = "12r7rjjyibjdj08dvwbp0iflfpzl4s0zhn6cr6zj3hwf9gbzgl1g";
   };
+
+  buildInputs = [ libxcrypt ];
+
+  configureFlags = ["--sysconfdir=/etc"];
+
+  hardeningDisable = [ "format" ];
 
   doCheck = true;
 
@@ -34,11 +41,11 @@ stdenv.mkDerivation rec {
          native utilities).  Finally, it can replace the inetd utility!
       '';
 
-    license = stdenv.lib.licenses.gpl3Plus;
+    license = lib.licenses.gpl3Plus;
 
-    homepage = http://www.gnu.org/software/pies/;
+    homepage = "https://www.gnu.org/software/pies/";
 
-    platforms = stdenv.lib.platforms.gnu;
+    platforms = lib.platforms.gnu ++ lib.platforms.linux;
     maintainers = [ ];
   };
 }

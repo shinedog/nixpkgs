@@ -1,33 +1,69 @@
-{ stdenv, autoconf, automake, libtool, makeWrapper, fetchgit, pkgconfig
-, intltool, gtk3, json_glib, curl }:
-
+{ lib
+, stdenv
+, appstream-glib
+, curl
+, desktop-file-utils
+, fetchFromGitHub
+, geoip
+, gettext
+, glib
+, glib-networking
+, gtk3
+, json-glib
+, libappindicator
+, libmrss
+, libproxy
+, libsoup_3
+, meson
+, ninja
+, pkg-config
+, wrapGAppsHook3
+}:
 
 stdenv.mkDerivation rec {
-  name = "transmission-remote-gtk-${version}";
-  version = "1.2";
+  pname = "transmission-remote-gtk";
+  version = "1.6.0";
 
-  src = fetchgit {
-    url = "https://github.com/ajf8/transmission-remote-gtk.git";
-    rev = "aa4e0c7d836cfcc10d8effd10225abb050343fc8";
-    sha256 = "0qz0jzr5w5fik2awfps0q49blwm4z7diqca2405rr3fyhyjhx42b";
+  src = fetchFromGitHub {
+    owner = "transmission-remote-gtk";
+    repo = "transmission-remote-gtk";
+    rev = "refs/tags/${version}";
+    hash = "sha256-/syZI/5LhuYLvXrNknnpbGHEH0z5iHeye2YRNJFWZJ0=";
   };
 
-  buildInputs = [ libtool autoconf automake makeWrapper pkgconfig intltool
-                  gtk3 json_glib curl ];
+  nativeBuildInputs = [
+    appstream-glib
+    desktop-file-utils
+    meson
+    ninja
+    pkg-config
+    wrapGAppsHook3
+  ];
 
-  preConfigure = "sh autogen.sh";
+  buildInputs = [
+    curl
+    geoip
+    gettext
+    glib
+    gtk3
+    json-glib
+    libappindicator
+    libmrss
+    libproxy
+    libsoup_3
+    # For TLS support.
+    glib-networking
+  ];
 
-  preFixup = ''
-    wrapProgram "$out/bin/transmission-remote-gtk" \
-      --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH"
-    rm $out/share/icons/hicolor/icon-theme.cache
-  '';
+  doCheck = false; # Requires network access
 
-  meta = with stdenv.lib;
-    { description = "GTK remote control for the Transmission BitTorrent client";
-      homepage = https://github.com/ajf8/transmission-remote-gtk;
-      license = licenses.gpl2;
-      maintainers = [ maintainers.ehmry ];
-      platforms = platforms.linux;
-    };
+  meta = with lib; {
+    description = "GTK remote control for the Transmission BitTorrent client";
+    mainProgram = "transmission-remote-gtk";
+    homepage = "https://github.com/transmission-remote-gtk/transmission-remote-gtk";
+    changelog = "https://github.com/transmission-remote-gtk/transmission-remote-gtk/releases/tag/${version}";
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ ehmry ];
+    platforms = platforms.linux;
+  };
 }

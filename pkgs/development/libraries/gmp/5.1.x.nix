@@ -1,12 +1,16 @@
-{ stdenv, fetchurl, m4, cxx ? true, withStatic ? true }:
+{ lib, stdenv, fetchurl, m4
+, cxx ? true
+, withStatic ? stdenv.hostPlatform.isStatic
+}:
 
-with { inherit (stdenv.lib) optional optionalString; };
+let inherit (lib) optional; in
 
 let self = stdenv.mkDerivation rec {
-  name = "gmp-5.1.3";
+  pname = "gmp";
+  version = "5.1.3";
 
   src = fetchurl { # we need to use bz2, others aren't in bootstrapping stdenv
-    urls = [ "mirror://gnu/gmp/${name}.tar.bz2" "ftp://ftp.gmplib.org/pub/${name}/${name}.tar.bz2" ];
+    urls = [ "mirror://gnu/gmp/gmp-${version}.tar.bz2" "ftp://ftp.gmplib.org/pub/gmp-${version}/gmp-${version}.tar.bz2" ];
     sha256 = "0q5i39pxrasgn9qdxzpfbwhh11ph80p57x6hf48m74261d97j83m";
   };
 
@@ -18,31 +22,28 @@ let self = stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ m4 ];
 
-  # FIXME needs gcc 4.9 in bootstrap tools
-  hardeningDisable = [ "format" "stackprotector" ];
+  patches = [
+    ./5.1.3-CVE-2021-43618.patch
+  ] ++ lib.optionals stdenv.isDarwin [
+    ./need-size-t.patch
+  ];
 
-  patches = if stdenv.isDarwin then [ ./need-size-t.patch ] else null;
-
-  configureFlags =
+  configureFlags = [
+    "--with-pic"
+    (lib.enableFeature cxx "cxx")
     # Build a "fat binary", with routines for several sub-architectures
     # (x86), except on Solaris where some tests crash with "Memory fault".
-    # See <http://hydra.nixos.org/build/2760931>, for instance.
+    # See <https://hydra.nixos.org/build/2760931>, for instance.
     #
     # no darwin because gmp uses ASM that clang doesn't like
-    optional (!stdenv.isSunOS) "--enable-fat"
-    ++ (if cxx then [ "--enable-cxx"  ]
-               else [ "--disable-cxx" ])
-    ++ optional (cxx && stdenv.isDarwin) "CPPFLAGS=-fexceptions"
-    ++ optional stdenv.isDarwin "ABI=64"
-    ++ optional stdenv.is64bit "--with-pic"
+    (lib.enableFeature (!stdenv.isSunOS && stdenv.hostPlatform.isx86) "fat")
+    # The config.guess in GMP tries to runtime-detect various
+    # ARM optimization flags via /proc/cpuinfo (and is also
+    # broken on multicore CPUs). Avoid this impurity.
+    "--build=${stdenv.buildPlatform.config}"
+  ] ++ optional (cxx && stdenv.isDarwin) "CPPFLAGS=-fexceptions"
+    ++ optional (stdenv.isDarwin && stdenv.is64bit) "ABI=64"
     ;
-
-  # The config.guess in GMP tries to runtime-detect various
-  # ARM optimization flags via /proc/cpuinfo (and is also
-  # broken on multicore CPUs). Avoid this impurity.
-  preConfigure = optionalString stdenv.isArm ''
-      configureFlagsArray+=("--build=$(./configfsf.guess)")
-    '';
 
   doCheck = true;
 
@@ -50,8 +51,8 @@ let self = stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = "http://gmplib.org/";
+  meta = with lib; {
+    homepage = "https://gmplib.org/";
     description = "GNU multiple precision arithmetic library";
     license = licenses.gpl3Plus;
 
@@ -78,7 +79,9 @@ let self = stdenv.mkDerivation rec {
       '';
 
     platforms = platforms.all;
-    maintainers = [ maintainers.peti ];
+    badPlatforms = [ "x86_64-darwin" ];
+    # never built on aarch64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin && stdenv.isAarch64;
   };
 };
   in self

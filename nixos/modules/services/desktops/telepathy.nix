@@ -6,6 +6,10 @@ with lib;
 
 {
 
+  meta = {
+    maintainers = teams.gnome.members;
+  };
+
   ###### interface
 
   options = {
@@ -30,10 +34,15 @@ with lib;
 
   config = mkIf config.services.telepathy.enable {
 
-    environment.systemPackages = [ pkgs.telepathy_mission_control ];
+    environment.systemPackages = [ pkgs.telepathy-mission-control ];
 
-    services.dbus.packages = [ pkgs.telepathy_mission_control ];
+    services.dbus.packages = [ pkgs.telepathy-mission-control ];
 
+    # Enable runtime optional telepathy in gnome-shell
+    services.xserver.desktopManager.gnome.sessionPath = with pkgs; [
+      telepathy-glib
+      telepathy-logger
+    ];
   };
 
 }

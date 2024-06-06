@@ -1,48 +1,36 @@
-{ stdenv, fetchurl, cmake, openssl, sqlite, pkgconfig, systemd
-, tlsSupport ? false }:
+{ lib, stdenv, fetchFromGitHub, cmake, openssl, sqlite, pkg-config
+, systemd, tlsSupport ? false }:
 
 assert tlsSupport -> openssl != null;
 
 stdenv.mkDerivation rec {
-  name = "uhub-${version}";
-  version = "0.5.0";
+  pname = "uhub";
+  version = "unstable-2019-12-13";
 
-  src = fetchurl {
-    url = "http://www.extatic.org/downloads/uhub/uhub-${version}-src.tar.bz2";
-    sha256 = "1xcqjz20lxikzn96f4f69mqyl9y985h9g0gyc9f7ckj18q22b5j5";
+  src = fetchFromGitHub {
+    owner = "janvidar";
+    repo = "uhub";
+    rev = "35d8088b447527f56609b85b444bd0b10cd67b5c";
+    hash = "sha256-CdTTf82opnpjd7I9TTY+JDEZSfdGFPE0bq/xsafwm/w=";
   };
 
-  buildInputs = [ cmake sqlite pkgconfig systemd ] ++ stdenv.lib.optional tlsSupport openssl;
+  nativeBuildInputs = [ cmake pkg-config ];
+  buildInputs = [ sqlite systemd ] ++ lib.optional tlsSupport openssl;
 
-  outputs = [ "out"
-    "mod_example"
-    "mod_welcome"
-    "mod_logging"
-    "mod_auth_simple"
-    "mod_chat_history"
-    "mod_chat_only"
-    "mod_topic"
-    "mod_no_guest_downloads"
-  ];
-
-  patches = [
-    ./plugin-dir.patch
-
-    # Fixed compilation on systemd > 210
-    (fetchurl {
-      url = "https://github.com/janvidar/uhub/commit/70f2a43f676cdda5961950a8d9a21e12d34993f8.diff";
-      sha256 = "1jp8fvw6f9jh0sdjml9mahkk6p6b96p6rzg2y601mnnbcdj8y8xp";
-    })
-  ];
-
-  cmakeFlags = ''
-    -DSYSTEMD_SUPPORT=ON
-    ${if tlsSupport then "-DSSL_SUPPORT=ON" else "-DSSL_SUPPORT=OFF"}
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace "/usr/lib/uhub/" "$out/plugins" \
+      --replace "/etc/uhub" "$TMPDIR"
   '';
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    "-DSYSTEMD_SUPPORT=ON"
+    "-DSSL_SUPPORT=${if tlsSupport then "ON" else "OFF"}"
+  ];
+
+  meta = with lib; {
     description = "High performance peer-to-peer hub for the ADC network";
-    homepage = https://www.uhub.org/;
+    homepage = "https://www.uhub.org/";
     license = licenses.gpl3;
     maintainers = [ maintainers.ehmry ];
     platforms = platforms.unix;

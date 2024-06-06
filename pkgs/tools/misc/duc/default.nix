@@ -1,24 +1,36 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, tokyocabinet, cairo, pango, ncurses }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
+, tokyocabinet, ncurses
+, cairo ? null, pango ? null
+, enableCairo ? stdenv.isLinux
+}:
+
+assert enableCairo -> cairo != null && pango != null;
 
 stdenv.mkDerivation rec {
-  name = "duc-${version}";
-  version = "1.4.1";
+  pname = "duc";
+  version = "1.4.5";
 
   src = fetchFromGitHub {
     owner = "zevv";
     repo = "duc";
-    rev = "${version}";
-    sha256 = "0rnar2zacsb9rvdmp1a62xixhy69s5vh0nwgrklqxhb19qkzhdp7";
+    rev = version;
+    sha256 = "sha256-ZLNsyp82UnsveEfDKzH8WfRh/Y/PQlXq8Ma+jIZl9Gk=";
   };
 
-  buildInputs = [ autoreconfHook pkgconfig tokyocabinet cairo pango ncurses ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+  buildInputs = [ tokyocabinet ncurses ] ++
+    lib.optionals enableCairo [ cairo pango ];
 
-  meta = with stdenv.lib; {
-    homepage = http://duc.zevv.nl/;
+  configureFlags =
+    lib.optionals (!enableCairo) [ "--disable-x11" "--disable-cairo" ];
+
+  meta = with lib; {
+    homepage = "http://duc.zevv.nl/";
     description = "Collection of tools for inspecting and visualizing disk usage";
-    license = licenses.gpl2;
+    license = licenses.gpl2Only;
 
-    platforms = platforms.linux;
-    maintainers = [ maintainers.lethalman ];
+    platforms = platforms.all;
+    maintainers = [ ];
+    mainProgram = "duc";
   };
 }

@@ -1,87 +1,133 @@
-{ stdenv, fetchurl, unzip, buildPythonApplication, makeQtWrapper, wrapGAppsHook
-, qtbase, pyqt5, jinja2, pygments, pyyaml, pypeg2, cssutils, glib_networking
-, asciidoc, docbook_xml_dtd_45, docbook_xsl, libxml2, libxslt
-, gst-plugins-base, gst-plugins-good, gst-plugins-bad, gst-plugins-ugly, gst-libav
-, qtwebkit-plugins }:
+{ stdenv, lib, fetchurl, fetchzip, python3
+, wrapQtAppsHook, glib-networking
+, asciidoc, docbook_xml_dtd_45, docbook_xsl, libxml2
+, libxslt
+, withPdfReader      ? true
+, pipewireSupport    ? stdenv.isLinux
+, pipewire
+, qtwayland
+, qtbase
+, qtwebengine
+, enableWideVine ? false
+, widevine-cdm
+# can cause issues on some graphics chips
+, enableVulkan ? false
+, vulkan-loader
+}:
 
 let
-  pdfjs = stdenv.mkDerivation rec {
-    name = "pdfjs-${version}";
-    version = "1.5.188";
-
-    src = fetchurl {
-      url = "https://github.com/mozilla/pdf.js/releases/download/v${version}/${name}-dist.zip";
-      sha256 = "1y3yaqfgjj96qzvbm5200x68j5hy1qs7l2mqm3kbbj2b58z9f1qv";
-    };
-
-    nativeBuildInputs = [ unzip ];
-
-    buildCommand = ''
-      mkdir $out
-      unzip -d $out $src
-    '';
+  isQt6 = lib.versions.major qtbase.version == "6";
+  pdfjs = let
+    version = "4.2.67";
+  in
+  fetchzip {
+    url = "https://github.com/mozilla/pdf.js/releases/download/v${version}/pdfjs-${version}-dist.zip";
+    hash = "sha256-7kfT3+ZwoGqZ5OwkO9h3DIuBFd0v8fRlcufxoBdcy8c=";
+    stripRoot = false;
   };
 
-in buildPythonApplication rec {
-  name = "qutebrowser-${version}";
-  version = "0.8.4";
-  namePrefix = "";
+  version = "3.2.0";
+in
 
+python3.pkgs.buildPythonApplication {
+  pname = "qutebrowser" + lib.optionalString (!isQt6) "-qt5";
+  inherit version;
   src = fetchurl {
-    url = "https://github.com/The-Compiler/qutebrowser/releases/download/v${version}/${name}.tar.gz";
-    sha256 = "0wc6iq7rw89625v595bs4y8spzhid6nnz2gq67f2kbjppk2rikpm";
+    url = "https://github.com/qutebrowser/qutebrowser/releases/download/v${version}/qutebrowser-${version}.tar.gz";
+    hash = "sha256-4eGRG5VWI2rKpZ0NGYbWFHlvs2Zz0TljwhZYzWSh8DM=";
   };
 
   # Needs tox
   doCheck = false;
 
   buildInputs = [
-    qtbase qtwebkit-plugins
-    gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-    glib_networking
+    qtbase
+    glib-networking
   ];
 
   nativeBuildInputs = [
-    makeQtWrapper wrapGAppsHook asciidoc docbook_xml_dtd_45 docbook_xsl libxml2 libxslt
+    wrapQtAppsHook asciidoc
+    docbook_xml_dtd_45 docbook_xsl libxml2 libxslt
+    python3.pkgs.pygments
   ];
 
-  propagatedBuildInputs = [
-    pyyaml pyqt5 jinja2 pygments pypeg2 cssutils
+  propagatedBuildInputs = with python3.pkgs; ([
+    pyyaml (if isQt6 then pyqt6-webengine else pyqtwebengine) jinja2 pygments
+    # scripts and userscripts libs
+    tldextract beautifulsoup4
+    readability-lxml pykeepass
+    stem
+    pynacl
+    # extensive ad blocking
+    adblock
+    # for the qute-bitwarden user script to be able to copy the TOTP token to clipboard
+    pyperclip
+  ] ++ lib.optional stdenv.isLinux qtwayland
+  );
+
+  patches = [
+    ./fix-restart.patch
   ];
+
+  dontWrapQtApps = true;
 
   postPatch = ''
-    sed -i "s,/usr/share/qutebrowser,$out/share/qutebrowser,g" qutebrowser/utils/standarddir.py
+    substituteInPlace qutebrowser/misc/quitter.py --subst-var-by qutebrowser "$out/bin/qutebrowser"
+
+    sed -i "s,/usr,$out,g" qutebrowser/utils/standarddir.py
+  '' + lib.optionalString withPdfReader ''
     sed -i "s,/usr/share/pdf.js,${pdfjs},g" qutebrowser/browser/pdfjs.py
   '';
 
-  postBuild = ''
-    a2x -f manpage doc/qutebrowser.1.asciidoc
+  installPhase = ''
+    runHook preInstall
+
+    make -f misc/Makefile \
+      PYTHON=${python3.pythonOnBuildForHost.interpreter} \
+      PREFIX=. \
+      DESTDIR="$out" \
+      DATAROOTDIR=/share \
+      install
+
+    runHook postInstall
   '';
 
   postInstall = ''
-    install -Dm644 doc/qutebrowser.1 "$out/share/man/man1/qutebrowser.1"
-    install -Dm644 qutebrowser.desktop \
-        "$out/share/applications/qutebrowser.desktop"
-    for i in 16 24 32 48 64 128 256 512; do
-        install -Dm644 "icons/qutebrowser-''${i}x''${i}.png" \
-            "$out/share/icons/hicolor/''${i}x''${i}/apps/qutebrowser.png"
+    # Patch python scripts
+    buildPythonPath "$out $propagatedBuildInputs"
+    scripts=$(grep -rl python "$out"/share/qutebrowser/{user,}scripts/)
+    for i in $scripts; do
+      patchPythonScript "$i"
     done
-    install -Dm644 icons/qutebrowser.svg \
-        "$out/share/icons/hicolor/scalable/apps/qutebrowser.svg"
-    install -Dm755 -t "$out/share/qutebrowser/userscripts/" misc/userscripts/*
   '';
 
-  postFixup = ''
-    mv $out/bin/qutebrowser $out/bin/.qutebrowser-noqtpath
-    makeQtWrapper $out/bin/.qutebrowser-noqtpath $out/bin/qutebrowser
-
-    sed -i 's/\.qutebrowser-wrapped/qutebrowser/g' $out/bin/..qutebrowser-wrapped-wrapped
+  preFixup = let
+    libPath = lib.makeLibraryPath [ pipewire ];
+  in
+    ''
+    makeWrapperArgs+=(
+      # Force the app to use QT_PLUGIN_PATH values from wrapper
+      --unset QT_PLUGIN_PATH
+      "''${qtWrapperArgs[@]}"
+      # avoid persistant warning on starup
+      --set QT_STYLE_OVERRIDE Fusion
+      ${lib.optionalString pipewireSupport ''--prefix LD_LIBRARY_PATH : ${libPath}''}
+      ${lib.optionalString (enableVulkan) ''
+        --prefix LD_LIBRARY_PATH : ${lib.makeLibraryPath [vulkan-loader]}
+        --set-default QSG_RHI_BACKEND vulkan
+      ''}
+      ${lib.optionalString enableWideVine ''--add-flags "--qt-flag widevine-path=${widevine-cdm}/share/google/chrome/WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so"''}
+      --set QTWEBENGINE_RESOURCES_PATH "${qtwebengine}/resources"
+    )
   '';
 
-  meta = {
-    homepage = https://github.com/The-Compiler/qutebrowser;
+  meta = with lib; {
+    homepage    = "https://github.com/qutebrowser/qutebrowser";
+    changelog   = "https://github.com/qutebrowser/qutebrowser/blob/v${version}/doc/changelog.asciidoc";
     description = "Keyboard-focused browser with a minimal GUI";
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = [ stdenv.lib.maintainers.jagajaga ];
+    license     = licenses.gpl3Plus;
+    mainProgram = "qutebrowser";
+    platforms   = if enableWideVine then [ "x86_64-linux" ] else qtwebengine.meta.platforms;
+    maintainers = with maintainers; [ jagajaga rnhmjoj ebzzry dotlambda nrdxp ];
   };
 }

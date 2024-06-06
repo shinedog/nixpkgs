@@ -1,20 +1,19 @@
-{ stdenv, lib, fetchurl, makeDesktopItem, unzip, ant, jdk
+{ stdenv, lib, fetchFromGitHub, makeDesktopItem, unzip, ant, jdk8
 # Optional, Jitsi still runs without, but you may pass null:
-, alsaLib, dbus_libs, gtk2, libpulseaudio, openssl, xorg
+, alsa-lib, dbus, gtk2, libpulseaudio, openssl, xorg
 }:
 
-assert stdenv.isLinux;
-
+let jdk = jdk8; in
 stdenv.mkDerivation rec {
+  pname = "jitsi";
+  version = "2.11.5633";
 
-  name = "jitsi-${version}";
-  version = "2.8.5426";
-
-  src = fetchurl {
-    url = "https://download.jitsi.org/jitsi/src/jitsi-src-${version}.zip";
-    sha256 = "0v7k16in2i57z5amr7k5c3fc8f0azrzrs5dvn729bwbc31z8cjg6";
+  src = fetchFromGitHub {
+    owner = "jitsi";
+    repo = "jitsi";
+    rev = "refs/tags/${lib.versions.patch version}";
+    hash = "sha256-CN4o0VfHdoUteI2wyJ2hFJ9UsQ2wWUzcvrLMbR/l36M=";
   };
-
 
   patches = [ ./jitsi.patch ];
 
@@ -24,27 +23,26 @@ stdenv.mkDerivation rec {
     comment = "VoIP and Instant Messaging client";
     desktopName = "Jitsi";
     genericName = "Instant Messaging";
-    categories = "Application;Internet;";
+    categories = [ "Chat" ];
   };
 
   libPath = lib.makeLibraryPath ([
     stdenv.cc.cc  # For libstdc++.
-  ] ++ lib.filter (x: x != null) [
-    alsaLib
-    dbus_libs
+    alsa-lib
+    dbus
     gtk2
     libpulseaudio
     openssl
-  ] ++ lib.optionals (xorg != null) [
     xorg.libX11
     xorg.libXext
     xorg.libXScrnSaver
     xorg.libXv
   ]);
 
-  buildInputs = [unzip ant jdk];
+  nativeBuildInputs = [ unzip ];
+  buildInputs = [ ant jdk ];
 
-  buildPhase = ''ant make'';
+  buildPhase = "ant make";
 
   installPhase = ''
     mkdir -p $out
@@ -55,23 +53,27 @@ stdenv.mkDerivation rec {
     cp resources/install/generic/run.sh $out/bin/jitsi
     chmod +x $out/bin/jitsi
     substituteInPlace $out/bin/jitsi \
-        --subst-var-by JAVA ${jdk}/bin/java \
-        --subst-var-by EXTRALIBS ${gtk2.out}/lib
+      --subst-var-by JAVA ${jdk}/bin/java \
+      --subst-var-by EXTRALIBS ${gtk2.out}/lib
+    sed -e 's,^java\ ,${jdk}/bin/java ,' -i $out/bin/jitsi
     patchShebangs $out
-
-    libPath="$libPath:${jdk.jre.home}/lib/${jdk.architecture}"
+    libPath="$libPath:${jdk.home}/lib/${jdk.architecture}"
     find $out/ -type f -name '*.so' | while read file; do
       patchelf --set-rpath "$libPath" "$file" && \
           patchelf --shrink-rpath "$file"
     done
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://jitsi.org/;
+  meta = with lib; {
+    homepage = "https://desktop.jitsi.org/";
     description = "Open Source Video Calls and Chat";
+    mainProgram = "jitsi";
+    sourceProvenance = with sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
     license = licenses.lgpl21Plus;
     platforms = platforms.linux;
-    maintainers = [ maintainers.khumba ];
+    maintainers = teams.jitsi.members;
   };
-
 }

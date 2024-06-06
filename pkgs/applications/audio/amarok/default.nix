@@ -1,48 +1,38 @@
-{ stdenv, fetchurl, lib, automoc4, cmake, perl, pkgconfig
-, qtscriptgenerator, gettext, curl , libxml2, mysql, taglib
-, taglib_extras, loudmouth , kdelibs , qca2, libmtp, liblastfm, libgpod
-, phonon , strigi, soprano, qjson, ffmpeg, libofa, nepomuk_core ? null
-, lz4, lzo, snappy, libaio, pcre
+{ stdenv, fetchurl, lib
+, extra-cmake-modules, kdoctools
+, qca-qt5, qjson, qtquickcontrols2, qtscript, qtwebengine
+, karchive, kcmutils, kconfig, kdnssd, kguiaddons, kinit, kirigami2, knewstuff, knotifyconfig, ktexteditor, kwindowsystem
+, fftw, phonon, plasma-framework, threadweaver, breeze-icons, wrapQtAppsHook
+, curl, ffmpeg, gdk-pixbuf, libaio, liblastfm, libmtp, loudmouth, lzo, lz4, mariadb-embedded, pcre, snappy, taglib, taglib_extras
 }:
 
-stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
-
+stdenv.mkDerivation (finalAttrs: {
   pname = "amarok";
-  version = "2.8.0";
+  version = "3.0.0";
 
   src = fetchurl {
-    url = "mirror://kde/stable/${pname}/${version}/src/${name}.tar.bz2";
-    sha256 = "1ilf9wdp3wna5pmvxill8x08rb9gw86qkc2zwm3xk9hpy8l9pf7l";
+    url = "mirror://kde/stable/amarok/${finalAttrs.version}/amarok-${finalAttrs.version}.tar.xz";
+    sha256 = "sha256-FKh2eDBfrXagodrKVVpndf+mQuXrvMzs2R9JcJOZLBw=";
   };
 
-  QT_PLUGIN_PATH="${qtscriptgenerator}/lib/qt4/plugins";
+  outputs = [ "out" "doc" ];
 
-  nativeBuildInputs = [ automoc4 cmake perl pkgconfig ];
+  nativeBuildInputs = [ extra-cmake-modules kdoctools wrapQtAppsHook ];
 
-  buildInputs = [
-    qtscriptgenerator stdenv.cc.libc gettext curl libxml2 mysql.server/*libmysqld*/
-    taglib taglib_extras loudmouth kdelibs phonon strigi soprano qca2
-    libmtp liblastfm libgpod qjson ffmpeg libofa nepomuk_core
-    lz4 lzo snappy libaio pcre
+  propagatedBuildInputs = [
+    qca-qt5 qjson qtquickcontrols2 qtscript qtwebengine
+    karchive kcmutils kconfig kdnssd kguiaddons kinit kirigami2 knewstuff knotifyconfig ktexteditor kwindowsystem
+    phonon plasma-framework threadweaver
+    curl fftw ffmpeg gdk-pixbuf libaio liblastfm libmtp loudmouth lz4 lzo mariadb-embedded
+    pcre snappy taglib taglib_extras breeze-icons
   ];
-
-  # This is already fixed upstream, will be release in 2.9
-  preConfigure = ''
-    sed -i -e 's/STRLESS/VERSION_LESS/g' cmake/modules/FindTaglib.cmake
-  '';
-
-  cmakeFlags = "-DKDE4_BUILD_TESTS=OFF";
 
   enableParallelBuilding = true;
 
-  propagatedUserEnvPkgs = [ qtscriptgenerator ];
-
-  meta = {
-    repositories.git = git://anongit.kde.org/amarok.git;
-    description = "Popular music player for KDE";
-    license = "GPL";
-    homepage = http://amarok.kde.org;
-    inherit (kdelibs.meta) platforms maintainers;
+  meta = with lib; {
+    homepage = "https://amarok.kde.org";
+    description = "A powerful music player with an intuitive interface";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ peterhoeg ];
   };
-}
+})

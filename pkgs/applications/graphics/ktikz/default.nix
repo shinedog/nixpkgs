@@ -1,78 +1,61 @@
-{ withKDE ? true
-, stdenv, fetchurl, gettext, poppler_qt4, qt4
-# Qt only (no KDE):
-, pkgconfig
-# With KDE
-, cmake, automoc4, kdelibs
+{ lib, stdenv, fetchFromGitHub, fetchpatch
+, pkg-config, wrapQtAppsHook
+, poppler, gnuplot
+, qmake, qtbase, qttools
 }:
 
-# Warning: You will also need a working pdflatex installation containing (at
-# least) auctex and pgf.
+# This package only builds ktikz without KDE integration because KDE4 is
+# deprecated and upstream does not (yet ?) support KDE5.
+# See historical versions of this file for building ktikz with KDE4.
 
-assert withKDE -> kdelibs != null;
+stdenv.mkDerivation rec {
+  version = "0.12";
+  pname = "qtikz";
 
-let
-  version = "0.10";
-
-  qtikz = {
-    name = "qtikz-${version}";
-
-    conf = ''
-      # installation prefix:
-      #PREFIX = ""
-
-      # install desktop file here (*nix only):
-      DESKTOPDIR = ''$''${PREFIX}/share/applications
-
-      # install mimetype here:
-      MIMEDIR = ''$''${PREFIX}/share/mime/packages
-
-      CONFIG -= debug
-      CONFIG += release
-
-      # qmake command:
-      QMAKECOMMAND = qmake
-      # lrelease command:
-      LRELEASECOMMAND = lrelease
-      # qcollectiongenerator command:
-      #QCOLLECTIONGENERATORCOMMAND = qcollectiongenerator
-
-      # TikZ documentation default file path:
-      TIKZ_DOCUMENTATION_DEFAULT = ''$''${PREFIX}/share/doc/texmf/pgf/pgfmanual.pdf.gz
+  meta = with lib; {
+    description = "Editor for the TikZ language";
+    mainProgram = "qtikz";
+    homepage = "https://github.com/fhackenberger/ktikz";
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.layus ];
+    longDescription = ''
+      You will also need a working *tex installation in your PATH, containing at least `preview` and `pgf`.
     '';
-
-    patchPhase = ''
-      echo "$conf" > conf.pri
-    '';
-
-    configurePhase = ''
-      qmake PREFIX="$out" ./qtikz.pro
-    '';
-
-    buildInputs = [ gettext qt4 poppler_qt4 pkgconfig ];
   };
 
-  ktikz = {
-    name = "ktikz-${version}";
-    buildInputs = [ kdelibs cmake qt4 automoc4 gettext poppler_qt4 ];
+  src = fetchFromGitHub {
+    owner = "fhackenberger";
+    repo = "ktikz";
+    rev = version;
+    sha256 = "1s83x8r2yi64wc6ah2iz09dj3qahy0fkxx6cfgpkavjw9x0j0582";
   };
 
-  common = {
-    inherit version;
-    src = fetchurl {
-      url = "http://www.hackenberger.at/ktikz/ktikz_${version}.tar.gz";
-      sha256 = "19jl49r7dw3vb3hg52man8p2lszh71pvnx7d0xawyyi0x6r8ml9i";
-    };
+  patches = [
+    # Fix version in qtikz.pro
+    (fetchpatch {
+      url = "https://github.com/fhackenberger/ktikz/commit/972685a406517bb85eb561f2c8e26f029eacd7db.patch";
+      sha256 = "13z40rcd4m4n088v7z2ns17lnpn0z3rzp31lsamic3qdcwjwa5k8";
+    })
+    # Fix missing qt5.15 QPainterPath include
+    (fetchpatch {
+      url = "https://github.com/fhackenberger/ktikz/commit/ebe4dfb72ac8a137b475ef688b9f7ac3e5c7f242.patch";
+      sha256 = "GIgPh+iUBPftHKIpZR3a0FxmLhMLuPUapF/t+bCuqMs=";
+    })
+  ];
 
-    enableParallelBuilding = true;
+  nativeBuildInputs = [ pkg-config qttools qmake wrapQtAppsHook ];
+  QT_PLUGIN_PATH = "${qtbase}/${qtbase.qtPluginPrefix}";
 
-    meta = with stdenv.lib; {
-      description = "Editor for the TikZ language";
-      license = licenses.gpl2;
-      platforms = platforms.linux;
-      maintainers = [ maintainers.layus ];
-    };
-  };
+  buildInputs = [ qtbase poppler ];
 
-in stdenv.mkDerivation (common // (if withKDE then ktikz else qtikz))
+  qmakeFlags = [
+    "DESKTOP_INSTALL_DIR=${placeholder "out"}/share/applications"
+    "MIME_INSTALL_DIR=${placeholder "out"}/share/mime/packages"
+    # qcollectiongenerator does no more exist in `qt5.qttools`.
+    # It was merged with qhelpgenerator at some point.
+    "QCOLLECTIONGENERATORCOMMAND=qhelpgenerator"
+  ];
 
+  qtWrapperArgs = [ ''--prefix PATH : "${gnuplot}/bin"'' ];
+}

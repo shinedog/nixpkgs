@@ -1,11 +1,24 @@
-{ stdenv, fetchFromGitHub
-, xlibsWrapper, mesa
-, nvidia_x11 ? null
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
 , libX11
+, libGL
+, mesa
+, nvidia_x11 ? null
+, libglvnd
 }:
 
+let
+  aPackage =
+    if nvidia_x11 == null then libGL
+    else if nvidia_x11.useGLVND then libglvnd
+    else nvidia_x11;
+
+in
 stdenv.mkDerivation {
-  name = "primus-lib-2015-04-28";
+  pname = "primus-lib";
+  version = "unstable-2015-04-28";
 
   src = fetchFromGitHub {
     owner = "amonakov";
@@ -14,22 +27,33 @@ stdenv.mkDerivation {
     sha256 = "118jm57ccawskb8vjq3a9dpa2gh72nxzvx2zk7zknpy0arrdznj1";
   };
 
-  buildInputs = [ libX11 mesa ];
+  patches = [
+    # Bump buffer size for long library paths.
+    (fetchpatch {
+      url = "https://github.com/abbradar/primus/commit/2f429e232581c556df4f4bf210aee8a0c99c60b7.patch";
+      sha256 = "1da6ynz7r7x98495i329sf821308j1rpy8prcdraqahz7p4c89nc";
+    })
+  ];
 
-  makeFlags = [ "LIBDIR=$(out)/lib"
-                "PRIMUS_libGLa=${if nvidia_x11 == null then mesa else nvidia_x11}/lib/libGL.so"
-                "PRIMUS_libGLd=${mesa}/lib/libGL.so"
-                "PRIMUS_LOAD_GLOBAL=${mesa}/lib/libglapi.so"
-              ];
+  buildInputs = [ libX11 libGL ];
+
+  makeFlags = [
+    "LIBDIR=$(out)/lib"
+    "PRIMUS_libGLa=${aPackage}/lib/libGL.so"
+    "PRIMUS_libGLd=${libGL}/lib/libGL.so"
+    "PRIMUS_LOAD_GLOBAL=${mesa}/lib/libglapi.so"
+  ];
 
   installPhase = ''
     ln -s $out/lib/libGL.so.1 $out/lib/libGL.so
   '';
 
-  meta = with stdenv.lib; {
+  passthru.glvnd = if nvidia_x11 != null && nvidia_x11.useGLVND then nvidia_x11 else null;
+
+  meta = with lib; {
     description = "Low-overhead client-side GPU offloading";
     homepage = "https://github.com/amonakov/primus";
-    platforms = platforms.linux;
+    platforms = [ "i686-linux" "x86_64-linux" ];
     license = licenses.bsd2;
     maintainers = with maintainers; [ abbradar ];
   };

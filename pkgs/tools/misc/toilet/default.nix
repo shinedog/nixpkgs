@@ -1,20 +1,27 @@
-{ stdenv, fetchurl, pkgconfig, libcaca, figlet }:
+{ lib, stdenv, fetchurl, pkg-config, libcaca, toilet, testers }:
 
 stdenv.mkDerivation rec {
-  name = "toilet-${version}";
+  pname = "toilet";
   version = "0.3";
 
   src = fetchurl {
-    url = "http://caca.zoy.org/raw-attachment/wiki/toilet/${name}.tar.gz";
+    url = "http://caca.zoy.org/raw-attachment/wiki/toilet/${pname}-${version}.tar.gz";
     sha256 = "1pl118qb7g0frpgl9ps43w4sd0psjirpmq54yg1kqcclqcqbbm49";
   };
 
-  buildInputs = [ pkgconfig libcaca ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libcaca ];
 
-  meta = {
+  passthru.tests.version = testers.testVersion {
+    package = toilet;
+  };
+
+  meta = with lib; {
     description = "Display large colourful characters in text mode";
     homepage = "http://caca.zoy.org/wiki/toilet";
-    license = stdenv.lib.licenses.wtfpl;
-    platforms = stdenv.lib.platforms.all;
+    license = licenses.wtfpl;
+    maintainers = with maintainers; [ pSub ];
+    platforms = platforms.all;
+    mainProgram = "toilet";
   };
 }

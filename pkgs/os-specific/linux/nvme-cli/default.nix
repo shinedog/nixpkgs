@@ -1,23 +1,53 @@
-{ lib, stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub, pkg-config
+, meson
+, ninja
+, libnvme
+, json_c
+, zlib
+, python3Packages
+}:
 
 stdenv.mkDerivation rec {
-  name = "nvme-cli-${version}";
-  version = "0.9";
+  pname = "nvme-cli";
+  version = "2.7.1";
 
   src = fetchFromGitHub {
     owner = "linux-nvme";
     repo = "nvme-cli";
     rev = "v${version}";
-    sha256 = "16n0gg1zx4fgadcq94kx6bgysqw60jvybjwynk7mj3fzdbvzrqyh";
+    hash = "sha256-Gm+1tb/Nh+Yg2PgSUn/1hR4CZYnfTWRwcQU0A8UeQwI=";
   };
 
-  makeFlags = [ "DESTDIR=$(out)" "PREFIX=" ];
+  mesonFlags = [
+    "-Dversion-tag=${version}"
+  ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    python3Packages.nose2
+  ];
+  buildInputs = [
+    libnvme
+    json_c
+    zlib
+  ];
 
   meta = with lib; {
-    inherit (src.meta) homepage;
+    inherit (src.meta) homepage; # https://nvmexpress.org/
     description = "NVM-Express user space tooling for Linux";
-    license = licenses.gpl2;
+    longDescription = ''
+      NVM-Express is a fast, scalable host controller interface designed to
+      address the needs for not only PCI Express based solid state drives, but
+      also NVMe-oF(over fabrics).
+      This nvme program is a user space utility to provide standards compliant
+      tooling for NVM-Express drives. It was made specifically for Linux as it
+      relies on the IOCTLs defined by the mainline kernel driver.
+    '';
+    license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ tavyc ];
+    maintainers = with maintainers; [ mic92 vifino ];
+    mainProgram = "nvme";
   };
 }

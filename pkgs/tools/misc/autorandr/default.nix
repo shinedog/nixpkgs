@@ -1,49 +1,77 @@
-{ fetchgit
-, stdenv
-, enableXRandr ? true, xrandr ? null
-, enableDisper ? true, disper ? null
-, python
-, xdpyinfo }:
+{ lib
+, python3
+, fetchFromGitHub
+, systemd
+, xrandr
+, installShellFiles
+, desktop-file-utils
+}:
 
-assert enableXRandr -> xrandr != null;
-assert enableDisper -> disper != null;
+python3.pkgs.buildPythonApplication rec {
+  pname = "autorandr";
+  version = "1.14";
+  format = "other";
 
-let
-  # Revision and date taken from the legacy tree, which still
-  # supports disper:
-  # https://github.com/phillipberndt/autorandr/tree/legacy
-  rev = "59f6aec0bb72e26751ce285d079e085b7178e45d";
-  date = "20150127";
-in
-  stdenv.mkDerivation {
-    name = "autorandr-${date}";
+  src = fetchFromGitHub {
+    owner = "phillipberndt";
+    repo = "autorandr";
+    rev = "refs/tags/${version}";
+    hash = "sha256-Ru3nQF0DB98rKSew6QtxAZQEB/9nVlIelNX3M7bNYHk=";
+  };
 
-    src = fetchgit {
-      inherit rev;
-      url = "https://github.com/phillipberndt/autorandr.git";
-      sha256 = "0mnggsp42477kbzwwn65gi8y0rydk10my9iahikvs6n43lphfa1f";
-    };
+  nativeBuildInputs = [ installShellFiles desktop-file-utils ];
+  propagatedBuildInputs = with python3.pkgs; [ packaging ];
 
-    patchPhase = ''
-      substituteInPlace "autorandr" \
-        --replace "/usr/bin/xrandr" "${if enableXRandr then xrandr else "/nowhere"}/bin/xrandr" \
-        --replace "/usr/bin/disper" "${if enableDisper then disper else "/nowhere"}/bin/disper" \
-        --replace "/usr/bin/xdpyinfo" "${xdpyinfo}/bin/xdpyinfo" \
-        --replace "which xxd" "false" \
-        --replace "python" "${python}/bin/python"
-    '';
+  buildPhase = ''
+    substituteInPlace autorandr.py \
+      --replace 'os.popen("xrandr' 'os.popen("${xrandr}/bin/xrandr' \
+      --replace '["xrandr"]' '["${xrandr}/bin/xrandr"]'
+  '';
 
-    installPhase = ''
-      mkdir -p "$out/etc/bash_completion.d"
-      cp -v bash_completion/autorandr "$out/etc/bash_completion.d"
-      mkdir -p "$out/bin"
-      cp -v autorandr auto-disper $out/bin
-    '';
+  patches = [ ./0001-don-t-use-sys.executable.patch ];
 
-    meta = {
-      description = "Automatic display configuration selector based on connected devices";
-      homepage = https://github.com/wertarbyte/autorandr;
-      maintainers = [ stdenv.lib.maintainers.coroa ];
-      platforms = stdenv.lib.platforms.unix;
-    };
-  }
+  outputs = [ "out" "man" ];
+
+  installPhase = ''
+    runHook preInstall
+    make install TARGETS='autorandr' PREFIX=$out
+
+    # zsh completions exist but currently have no make target, use
+    # installShellCompletions for both
+    # see https://github.com/phillipberndt/autorandr/issues/197
+    installShellCompletion --cmd autorandr \
+        --bash contrib/bash_completion/autorandr \
+        --zsh contrib/zsh_completion/_autorandr \
+        --fish contrib/fish_copletion/autorandr.fish
+    # In the line above there's a typo that needs to be fixed in the next
+    # release
+
+    make install TARGETS='autostart_config' PREFIX=$out DESTDIR=$out
+
+    make install TARGETS='manpage' PREFIX=$man
+
+    ${if systemd != null then ''
+      make install TARGETS='systemd udev' PREFIX=$out DESTDIR=$out \
+        SYSTEMD_UNIT_DIR=/lib/systemd/system \
+        UDEV_RULES_DIR=/etc/udev/rules.d
+      substituteInPlace $out/etc/udev/rules.d/40-monitor-hotplug.rules \
+        --replace /bin/systemctl "/run/current-system/systemd/bin/systemctl"
+    '' else ''
+      make install TARGETS='pmutils' DESTDIR=$out \
+        PM_SLEEPHOOKS_DIR=/lib/pm-utils/sleep.d
+      make install TARGETS='udev' PREFIX=$out DESTDIR=$out \
+        UDEV_RULES_DIR=/etc/udev/rules.d
+    ''}
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    homepage = "https://github.com/phillipberndt/autorandr/";
+    description = "Automatically select a display configuration based on connected devices";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ coroa ];
+    platforms = platforms.unix;
+    mainProgram = "autorandr";
+  };
+}

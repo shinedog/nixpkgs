@@ -1,16 +1,29 @@
-{stdenv, fetchurl}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+}:
 
 stdenv.mkDerivation rec {
-  name = "libxdg-basedir-1.0.2";
-  src = fetchurl {
-    url = "http://n.ethz.ch/student/nevillm/download/libxdg-basedir/${name}.tar.gz";
-    sha256 = "0fibbzba228gdk05lfi8cgfrsp80a2gnjbwka0pzpkig0fz8pp9i";
+  pname = "libxdg-basedir";
+  version = "1.2.3";
+
+  src = fetchFromGitHub {
+    owner = "devnev";
+    repo = pname;
+    rev = "refs/tags/libxdg-basedir-${version}";
+    hash = "sha256-ewtUKDdE6k9Q9hglWwhbTU3DTxvIN41t+zf2Gch9Dkk=";
   };
 
-  meta = {
-    homepage = http://n.ethz.ch/student/nevillm/download/libxdg-basedir/;
+  nativeBuildInputs = [
+    autoreconfHook
+  ];
+
+  meta = with lib; {
     description = "Implementation of the XDG Base Directory specification";
-    license = "BSD";
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://github.com/devnev/libxdg-basedir";
+    license = licenses.mit;
+    maintainers = with maintainers; [ nickcao ];
+    platforms = platforms.unix;
   };
 }

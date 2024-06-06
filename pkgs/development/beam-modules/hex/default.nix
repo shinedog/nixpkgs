@@ -1,20 +1,20 @@
-{stdenv, fetchFromGitHub, writeText, elixir }:
+{ lib, stdenv, fetchFromGitHub, writeText, elixir }:
 
 let
   shell = drv: stdenv.mkDerivation {
-          name = "interactive-shell-${drv.name}";
-          buildInputs = [ drv ];
-    };
+    name = "interactive-shell-${drv.name}";
+    buildInputs = [ drv ];
+  };
 
   pkg = self: stdenv.mkDerivation rec {
-    name = "hex";
-    version = "v0.14.0";
+    pname = "hex";
+    version = "2.0.6";
 
     src = fetchFromGitHub {
-        owner = "hexpm";
-        repo = "hex";
-        rev = "${version}";
-        sha256 = "042rcwznb6cf9khn4l969axf7vhk53gy3rp23y6c8fhfp1472pai";
+      owner = "hexpm";
+      repo = "hex";
+      rev = "v${version}";
+      sha256 = "sha256-fSADQDrqh5U/TdhaHXsMiLMk1wtQ0gEiTqEclJ2w2nY=";
     };
 
     setupHook = writeText "setupHook.sh" ''
@@ -45,14 +45,13 @@ let
 
     meta = {
       description = "Package manager for the Erlang VM https://hex.pm";
-      license = stdenv.lib.licenses.mit;
+      license = lib.licenses.mit;
       homepage = "https://github.com/hexpm/hex";
-      maintainers = with stdenv.lib.maintainers; [ ericbmerritt ];
+      maintainers = with lib.maintainers; [ ericbmerritt ];
     };
 
     passthru = {
       env = shell self;
     };
-
 };
-in stdenv.lib.fix pkg
+in lib.fix pkg

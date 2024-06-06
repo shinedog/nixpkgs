@@ -1,26 +1,28 @@
-{ fetchurl, stdenv, pkgconfig, python, file, bc
+{ fetchurl, lib, mkDerivation, pkg-config, python3, file, bc
 , qtbase, qtsvg, hunspell, makeWrapper #, mythes, boost
 }:
 
-stdenv.mkDerivation rec {
-  version = "2.2.2";
-  name = "lyx-${version}";
+mkDerivation rec {
+  version = "2.3.7-1";
+  pname = "lyx";
 
   src = fetchurl {
-    url = "ftp://ftp.lyx.org/pub/lyx/stable/2.2.x/${name}.tar.xz";
-    sha256 = "0s2mma8fkj5mi8qzc0j67589mbj854bypx2s3y59y1n429s3sp58";
+    url = "ftp://ftp.lyx.org/pub/lyx/stable/2.3.x/${pname}-${version}.tar.xz";
+    sha256 = "sha256-Ob6IZPuGs06IMQ5w+4Dl6eKWYB8IVs8WGqCUFxcY2O0=";
   };
 
-  # LaTeX is used from $PATH, as people often want to have it with extra pkgs
-  buildInputs = [
-    pkgconfig qtbase qtsvg python file/*for libmagic*/ bc
-    hunspell makeWrapper # enchant
-  ];
-
-  # bogus configure script tests
-  preConfigure = ''
-    NIX_CFLAGS_COMPILE+=" $(pkg-config --cflags Qt5Core)"
+  # Needed with GCC 12
+  postPatch = ''
+    sed '1i#include <iterator>' -i src/lyxfind.cpp
+    sed '1i#include <cstring>'  -i src/insets/InsetListings.cpp
   '';
+
+  # LaTeX is used from $PATH, as people often want to have it with extra pkgs
+  nativeBuildInputs = [ pkg-config makeWrapper python3 qtbase ];
+  buildInputs = [
+    qtbase qtsvg file/*for libmagic*/ bc
+    hunspell # enchant
+  ];
 
   configureFlags = [
     "--enable-qt5"
@@ -34,12 +36,11 @@ stdenv.mkDerivation rec {
   doCheck = true;
 
   # python is run during runtime to do various tasks
-  postFixup = ''
-    wrapProgram "$out/bin/lyx" \
-      --prefix PATH : '${python}/bin'
-  '';
+  qtWrapperArgs = [
+    " --prefix PATH : ${python3}/bin"
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "WYSIWYM frontend for LaTeX, DocBook";
     homepage = "http://www.lyx.org";
     license = licenses.gpl2Plus;

@@ -1,21 +1,27 @@
-{ stdenv, fetchurl, pkgconfig, gtk2 }:
+{ lib, stdenv, fetchurl, pkg-config, gtk2 }:
 
-let
-  version = "3.3.7";
-
-  version_short = stdenv.lib.replaceChars [ "." ] [ "" ] "${version}";
-in stdenv.mkDerivation {
-  name = "scite-${version}";
+stdenv.mkDerivation {
+  pname = "scite";
+  version = "5.2.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/scintilla/SciTE/${version}/scite${version_short}.tgz";
-    sha256 = "0x7i6yxq50frsjkrp3lc5zy0d1ssq2n91igjn0dmqajpg7kls2dd";
+    url = "https://www.scintilla.org/scite522.tgz";
+    sha256 = "1q46clclx8r0b8zbq2zi89sygszgqf9ra5l83r2fs0ghvjgh2cxd";
   };
 
-  buildInputs = [ pkgconfig gtk2 ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ gtk2 ];
   sourceRoot = "scintilla/gtk";
 
+  CXXFLAGS = [
+    # GCC 13: error: 'intptr_t' does not name a type
+    "-include cstdint"
+    "-include system_error"
+  ];
+
   buildPhase = ''
+    make
+    cd ../../lexilla/src
     make
     cd ../../scite/gtk
     make prefix=$out/
@@ -25,11 +31,12 @@ in stdenv.mkDerivation {
     make install prefix=$out/
   '';
 
-  meta = {
-    homepage = "http://www.scintilla.org/SciTE.html";
+  meta = with lib; {
+    homepage = "https://www.scintilla.org/SciTE.html";
     description = "SCIntilla based Text Editor";
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.rszibele ];
+    license = licenses.mit;
+    platforms = platforms.linux;
+    maintainers = [ maintainers.rszibele ];
+    mainProgram = "SciTE";
   };
 }

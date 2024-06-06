@@ -1,47 +1,60 @@
-{ stdenv, fetchurl, fetchpatch, cmake, boost, gtest }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, cmake, boost, gtest, zlib }:
 
 stdenv.mkDerivation rec {
-  name = "lucene++-${version}";
-  version = "3.0.6";
+  pname = "lucene++";
+  version = "3.0.8";
 
-  src = fetchurl {
-    url = "https://github.com/luceneplusplus/LucenePlusPlus/"
-        + "archive/rel_${version}.tar.gz";
-    sha256 = "068msvh05gsbfj1wwdqj698kxxfjdqy8zb6pqvail3ayjfj94w1y";
+  src = fetchFromGitHub {
+    owner = "luceneplusplus";
+    repo = "LucenePlusPlus";
+    rev = "rel_${version}";
+    sha256 = "12v7r62f7pqh5h210pb74sfx6h70lj4pgfpva8ya2d55fn0qxrr2";
   };
 
-  patches = let
-    baseurl = "https://github.com/luceneplusplus/LucenePlusPlus";
-  in [
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ boost gtest zlib ];
+
+  cmakeFlags = [ "-DCMAKE_INSTALL_LIBDIR=lib" ];
+
+  patches = [
     (fetchpatch {
-      url = "${baseurl}/pull/62.diff";
-      sha256 = "0v314877mjb0hljg4mcqi317m1p1v27rgsgf5wdr9swix43vmhgw";
+      name = "pkgconfig_use_correct_LIBDIR_for_destination_library";
+      url = "https://github.com/luceneplusplus/LucenePlusPlus/commit/39cd44bd54e918d25ee464477992ad0dc234dcba.patch";
+      sha256 = "sha256-PP6ENNhPJMWrYDlTnr156XV8d5aX/VNX8v4vvi9ZiWo";
     })
     (fetchpatch {
-      url = "${baseurl}/commit/994f03cf736229044a168835ae7387696041658f.diff";
-      sha256 = "0fcm5b87nxw062wjd7b4qrfcwsyblmcw19s64004pklj9grk30zz";
+      name = "fix-visibility-on-mac.patch";
+      url = "https://github.com/luceneplusplus/LucenePlusPlus/commit/bc436842227aea561b68c6ae89fbd1fdefcac7b3.patch";
+      sha256 = "sha256-/S7tFZ4ht5p0cv036xF2NKZQwExbPaGINyWZiUg/lS4=";
     })
   ];
 
+  # Don't use the built in gtest - but the nixpkgs one requires C++14.
   postPatch = ''
-    sed -i -e '/Subversion *REQUIRED/d' \
-           -e '/include.*CMakeExternal/d' \
-           CMakeLists.txt
-    # not using -f because we want it to fail for the next release
-    rm CMakeExternal.txt
+    substituteInPlace src/test/CMakeLists.txt \
+      --replace "add_subdirectory(gtest)" ""
+    substituteInPlace CMakeLists.txt \
+      --replace "set(CMAKE_CXX_STANDARD 11)" "set(CMAKE_CXX_STANDARD 14)"
   '';
 
-  cmakeFlags = [ "-DGTEST_INCLUDE_DIR=${gtest}/include" ];
-  buildInputs = [ cmake boost gtest ];
-
-  enableParallelBuilding = true;
   doCheck = true;
-  checkTarget = "test";
+
+  checkPhase = ''
+    runHook preCheck
+    LD_LIBRARY_PATH=$PWD/src/contrib:$PWD/src/core \
+            src/test/lucene++-tester
+    runHook postCheck
+  '';
+
+  postInstall = ''
+    mv $out/include/pkgconfig $out/lib/
+    cp $src/src/contrib/include/*h $out/include/lucene++/
+  '';
 
   meta = {
     description = "C++ port of the popular Java Lucene search engine";
     homepage = "https://github.com/luceneplusplus/LucenePlusPlus";
-    license = with stdenv.lib.licenses; [ asl20 lgpl3Plus ];
-    platforms = stdenv.lib.platforms.linux;
+    license = with lib.licenses; [ asl20 lgpl3Plus ];
+    platforms = lib.platforms.unix;
   };
 }

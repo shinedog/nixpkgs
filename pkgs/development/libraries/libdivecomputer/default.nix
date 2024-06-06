@@ -1,19 +1,20 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "libdivecomputer-${version}";
-  version = "0.5.0";
+  pname = "libdivecomputer";
+  version = "0.8.0";
 
   src = fetchurl {
-    url = "http://www.libdivecomputer.org/releases/${name}.tar.gz";
-    sha256 = "11n2qpqg4b2h7mqifp9qm5gm1aqwy7wj1j4j5ha0wdjf55zzy30y";
+    url = "https://www.libdivecomputer.org/releases/${pname}-${version}.tar.gz";
+    sha256 = "sha256-J17M55I2RO1YH6q53LTxpprSUbzrByHE5fhftjFheg4=";
   };
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://www.libdivecomputer.org;
+  meta = with lib; {
+    homepage = "http://www.libdivecomputer.org";
     description = "A cross-platform and open source library for communication with dive computers from various manufacturers";
+    mainProgram = "dctool";
     maintainers = [ maintainers.mguentner ];
     license = licenses.lgpl21;
     platforms = platforms.all;

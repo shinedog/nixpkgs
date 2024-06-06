@@ -1,31 +1,55 @@
-{ stdenv, fetchurl, makeWrapper, qt4, utillinux, coreutils, which, qmake4Hook
-, p7zip, mtools, syslinux }:
+{ lib
+, stdenv
+, coreutils
+, fetchFromGitHub
+, mtools
+, p7zip
+, wrapQtAppsHook
+, qtbase
+, qttools
+, qmake
+, syslinux
+, util-linux
+, which
+}:
 
 stdenv.mkDerivation rec {
-  name = "unetbootin-${version}";
-  version = "613";
+  pname = "unetbootin";
+  version = "702";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/unetbootin/UNetbootin/${version}/unetbootin-source-${version}.tar.gz";
-    sha256 = "1f389z5lqimp4hlxm6zlrh1ja474r6ivzb9r43i9bvf0z1n21f0q";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-psX15XicPXAsd36BhuvK0G3GQS8hV/hazzO0HByCqV4=";
   };
 
-  sourceRoot = ".";
+  setSourceRoot = ''
+    sourceRoot=$(echo */src/unetbootin)
+  '';
 
-  buildInputs = [ makeWrapper qt4 qmake4Hook ];
+  buildInputs = [
+    qtbase
+    qttools
+    qmake
+  ];
+
+  nativeBuildInputs = [ wrapQtAppsHook ];
 
   # Lots of nice hard-coded paths...
-  postUnpack = ''
+  postPatch = ''
     substituteInPlace unetbootin.cpp \
-      --replace /sbin/fdisk ${utillinux}/sbin/fdisk \
-      --replace /sbin/sfdisk ${utillinux}/sbin/sfdisk \
-      --replace /sbin/blkid ${utillinux}/sbin/blkid \
-      --replace /bin/df ${coreutils}/bin/df \
-      --replace /usr/bin/syslinux ${syslinux}/bin/syslinux \
-      --replace /usr/bin/extlinux ${syslinux}/sbin/extlinux \
+      --replace /bin/df             ${coreutils}/bin/df \
+      --replace /sbin/blkid         ${util-linux}/sbin/blkid \
+      --replace /sbin/fdisk         ${util-linux}/sbin/fdisk \
+      --replace /sbin/sfdisk        ${util-linux}/sbin/sfdisk \
+      --replace /usr/bin/syslinux   ${syslinux}/bin/syslinux \
+      --replace /usr/bin/extlinux   ${syslinux}/sbin/extlinux \
       --replace /usr/share/syslinux ${syslinux}/share/syslinux
+
     substituteInPlace main.cpp \
       --replace /usr/share/unetbootin $out/share/unetbootin
+
     substituteInPlace unetbootin.desktop \
       --replace /usr/bin $out/bin
   '';
@@ -36,24 +60,26 @@ stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp unetbootin $out/bin
+    runHook preInstall
 
-    mkdir -p $out/share/unetbootin
-    cp unetbootin_*.qm  $out/share/unetbootin
+    install -Dm755 -t $out/bin                unetbootin
+    install -Dm644 -t $out/share/unetbootin   unetbootin_*.qm
+    install -Dm644 -t $out/share/applications unetbootin.desktop
 
-    mkdir -p $out/share/applications
-    cp unetbootin.desktop $out/share/applications
-
-    wrapProgram $out/bin/unetbootin \
-      --prefix PATH : ${stdenv.lib.makeBinPath [ which p7zip mtools ]}
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://unetbootin.sourceforge.net/;
+  qtWrapperArgs = [
+    "--prefix PATH : ${lib.makeBinPath [ mtools p7zip which ]}"
+    "--set QT_X11_NO_MITSHM 1"
+  ];
+
+  meta = with lib; {
     description = "A tool to create bootable live USB drives from ISO images";
+    homepage = "https://unetbootin.github.io/";
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ ebzzry ];
     platforms = platforms.linux;
-    maintainers = [ maintainers.ebzzry ];
+    mainProgram = "unetbootin";
   };
 }

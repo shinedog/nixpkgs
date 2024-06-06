@@ -22,13 +22,11 @@ stdenv.mkDerivation {
     find $fontDirs -type f -o -type l | while read i; do
       j="''${i##*/}"
       if ! test -e "$out/share/X11-fonts/''${j}"; then
-        ln -s "$i" "$out/share/X11-fonts/''${j}";
+        cp "$i" "$out/share/X11-fonts/''${j}";
       fi;
     done;
     cd $out/share/X11-fonts/
-    rm fonts.dir
-    rm fonts.scale
-    rm fonts.alias
+    rm -f fonts.dir fonts.scale fonts.alias
     mkfontdir
     mkfontscale
     cat $( find ${xorg.fontalias}/ -name fonts.alias) >fonts.alias

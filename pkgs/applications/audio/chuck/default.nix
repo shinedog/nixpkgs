@@ -1,38 +1,34 @@
-{ stdenv, fetchurl, alsaLib, bison, flex, libsndfile, which }:
+{ stdenv, lib, fetchurl, alsa-lib, bison, flex, libsndfile, which, DarwinTools, xcbuild
+, AppKit, Carbon, CoreAudio, CoreMIDI, CoreServices, Kernel, MultitouchSupport
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.3.5.1";
-  name = "chuck-${version}";
+  version = "1.4.2.0";
+  pname = "chuck";
 
   src = fetchurl {
     url = "http://chuck.cs.princeton.edu/release/files/chuck-${version}.tgz";
-    sha256 = "0lqzkphfd91kz95nf1wqy0z17r1m70c8inwvnb9fscbiaihwlhfi";
+    sha256 = "sha256-hIwsC9rYgXWSTFqUufKGqoT0Gnsf4nR4KQ0iSVbj8xg=";
   };
 
-  buildInputs = [ bison flex libsndfile which ]
-    ++ stdenv.lib.optional (!stdenv.isDarwin) alsaLib;
+  nativeBuildInputs = [ flex bison which ]
+    ++ lib.optionals stdenv.isDarwin [ DarwinTools xcbuild ];
+
+  buildInputs = [ libsndfile ]
+    ++ lib.optional (!stdenv.isDarwin) alsa-lib
+    ++ lib.optionals stdenv.isDarwin [ AppKit Carbon CoreAudio CoreMIDI CoreServices Kernel MultitouchSupport ];
 
   patches = [ ./darwin-limits.patch ];
 
-  postPatch = ''
-    substituteInPlace src/makefile --replace "/usr/bin" "$out/bin"
-    substituteInPlace src/makefile.osx --replace "xcodebuild" "/usr/bin/xcodebuild"
-    substituteInPlace src/makefile.osx --replace "weak_framework" "framework"
-  '';
+  makeFlags = [ "-C src" "DESTDIR=$(out)/bin" ];
+  buildFlags = [ (if stdenv.isDarwin then "mac" else "linux-alsa") ];
 
-  buildPhase =
-    stdenv.lib.optionals stdenv.isLinux  ["make -C src linux-alsa"] ++
-    stdenv.lib.optionals stdenv.isDarwin ["make -C src osx"];
-
-  installPhase = ''
-    install -Dm755 ./src/chuck $out/bin/chuck
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "Programming language for real-time sound synthesis and music creation";
-    homepage = http://chuck.cs.princeton.edu;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
-    maintainers = with stdenv.lib.maintainers; [ ftrvxmtrx ];
+    homepage = "http://chuck.cs.princeton.edu";
+    license = licenses.gpl2;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ ftrvxmtrx ];
+    mainProgram = "chuck";
   };
 }

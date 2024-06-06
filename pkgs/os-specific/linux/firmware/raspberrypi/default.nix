@@ -1,37 +1,36 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "raspberrypi-firmware-${version}";
-  version = "1.20161020";
+stdenvNoCC.mkDerivation rec {
+  # NOTE: this should be updated with linux_rpi
+  pname = "raspberrypi-firmware";
+  # raspberrypi/firmware no longers tag the releases. However, since each commit
+  # on the stable branch corresponds to a tag in raspberrypi/linux repo, we
+  # assume they are cut together.
+  version = "stable_20231123";
 
   src = fetchFromGitHub {
     owner = "raspberrypi";
     repo = "firmware";
-    rev = version;
-    sha256 = "073cry7xqrbkn8p1qzl4f3z6jvcbks4i61fz7i2pbwa60vddcp34";
+    rev = "524247ac6d8b1f4ddd53730e978a70c76a320bd6";
+    hash = "sha256-rESwkR7pc5MTwIZ8PaMUPXuzxfv+jVpdRp8ijvxHGcg=";
   };
 
-  dontStrip = true;    # Stripping breaks some of the binaries
-
   installPhase = ''
-    mkdir -p $out/share/raspberrypi/boot
-    cp -R boot/* $out/share/raspberrypi/boot
-    cp -R hardfp/opt/vc/* $out
-    cp opt/vc/LICENCE $out/share/raspberrypi
-
-    for f in $out/bin/*; do
-      if isELF "$f"; then
-        patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" "$f"
-        patchelf --set-rpath "$out/lib" "$f"
-      fi
-    done
+    mkdir -p $out/share/raspberrypi/
+    mv boot "$out/share/raspberrypi/"
   '';
 
-  meta = with stdenv.lib; {
+  dontConfigure = true;
+  dontBuild = true;
+  dontFixup = true;
+
+  meta = with lib; {
     description = "Firmware for the Raspberry Pi board";
-    homepage = https://github.com/raspberrypi;
-    license = licenses.unfree;
-    platforms = [ "armv6l-linux" "armv7l-linux" ];
-    maintainers = with maintainers; [ viric tavyc ];
+    homepage = "https://github.com/raspberrypi/firmware";
+    license = licenses.unfreeRedistributableFirmware; # See https://github.com/raspberrypi/firmware/blob/master/boot/LICENCE.broadcom
+    maintainers = with maintainers; [ dezgeg ];
+    # Hash mismatch on source, mystery.
+    # Maybe due to https://github.com/NixOS/nix/issues/847
+    broken = stdenvNoCC.isDarwin;
   };
 }

@@ -1,28 +1,65 @@
-{ fetchFromGitHub, stdenv, autoconf, automake, pkgconfig, m4, curl,
-mesa, libXmu, libXi, freeglut, libjpeg, libtool, wxGTK, xcbutil,
-sqlite, gtk2, patchelf, libXScrnSaver, libnotify, libX11, libxcb }:
+{ fetchFromGitHub
+, lib
+, stdenv
+, autoconf
+, automake
+, pkg-config
+, m4
+, curl
+, libGLU
+, libGL
+, libXmu
+, libXi
+, freeglut
+, libjpeg
+, libtool
+, wxGTK32
+, xcbutil
+, sqlite
+, gtk3
+, patchelf
+, libXScrnSaver
+, libnotify
+, libX11
+, libxcb
+, headless ? false
+}:
 
 stdenv.mkDerivation rec {
-  version = "7.4.42";
-  name = "boinc-${version}";
+  pname = "boinc";
+  version = "8.0.2";
 
   src = fetchFromGitHub {
+    name = "${pname}-${version}-src";
     owner = "BOINC";
     repo = "boinc";
-    rev = "561fbdae0cac3be996136319828f43cbc62c9";
-    sha256 = "1rlh463yyz88p2g5pc6avndn3x1162vcksgbqich0i3qb90jms29";
+    rev = "client_release/${lib.versions.majorMinor version}/${version}";
+    hash = "sha256-e0zEdiN3QQHj6MNGd1pfaZf3o9rOpCTmuNSJQb3sss4=";
   };
 
-  buildInputs = [ libtool automake autoconf m4 pkgconfig curl mesa libXmu libXi
-    freeglut libjpeg wxGTK sqlite gtk2 libXScrnSaver libnotify patchelf libX11
-    libxcb xcbutil
+  nativeBuildInputs = [ libtool automake autoconf m4 pkg-config ];
+
+  buildInputs = [
+    curl
+    sqlite
+    patchelf
+  ] ++ lib.optionals (!headless) [
+    libGLU
+    libGL
+    libXmu
+    libXi
+    freeglut
+    libjpeg
+    wxGTK32
+    gtk3
+    libXScrnSaver
+    libnotify
+    libX11
+    libxcb
+    xcbutil
   ];
 
-  postConfigure = ''
-    sed -i -e s,/etc,$out/etc, client/scripts/Makefile
-  '';
-
-  NIX_LDFLAGS = "-lX11";
+  NIX_LDFLAGS = lib.optionalString (!headless) "-lX11";
 
   preConfigure = ''
     ./_autosetup
@@ -31,15 +68,17 @@ stdenv.mkDerivation rec {
 
   enableParallelBuilding = true;
 
-  configureFlags = "--disable-server";
+  configureFlags = [ "--disable-server" ] ++ lib.optionals headless [ "--disable-manager" ];
 
-  meta = {
+  postInstall = ''
+    install --mode=444 -D 'client/scripts/boinc-client.service' "$out/etc/systemd/system/boinc.service"
+  '';
+
+  meta = with lib; {
     description = "Free software for distributed and grid computing";
-
-    homepage = http://boinc.berkeley.edu/;
-
-    license = stdenv.lib.licenses.lgpl2Plus;
-
-    platforms = stdenv.lib.platforms.linux;  # arbitrary choice
+    homepage = "https://boinc.berkeley.edu/";
+    license = licenses.lgpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ Luflosi ];
   };
 }

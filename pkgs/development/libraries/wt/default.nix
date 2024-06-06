@@ -1,40 +1,52 @@
-{stdenv, fetchFromGitHub, cmake, boost, pkgconfig, doxygen, qt48Full, libharu, 
-  pango, fcgi, firebird, libmysql, postgresql, graphicsmagick, glew, openssl,
-  pcre }:
+{ lib, stdenv, fetchFromGitHub, cmake, boost, pkg-config, doxygen, qtbase, libharu
+, pango, fcgi, firebird, libmysqlclient, postgresql, graphicsmagick, glew, openssl
+, pcre, harfbuzz, icu
+}:
 
-stdenv.mkDerivation rec {
-  name = "wt";
-  version = "3.3.6";
+let
+  generic =
+    { version, sha256 }:
+    stdenv.mkDerivation {
+      pname = "wt";
+      inherit version;
 
-  src = fetchFromGitHub {
-    owner = "kdeforche";
-    repo = name;
-    rev = version;
-    sha256 = "1pvykc969l9cpd0da8bgpi4gr8f6qczrbpprrxamyj1pn0ydzvq3";
-  };
+      src = fetchFromGitHub {
+        owner = "emweb";
+        repo = "wt";
+        rev = version;
+        inherit sha256;
+      };
 
-  enableParallelBuilding = true;
+      nativeBuildInputs = [ cmake pkg-config ];
+      buildInputs = [
+        boost doxygen qtbase libharu
+        pango fcgi firebird libmysqlclient postgresql graphicsmagick glew
+        openssl pcre harfbuzz icu
+      ];
 
-  buildInputs = [ cmake boost pkgconfig doxygen qt48Full libharu 
-    pango fcgi firebird libmysql postgresql graphicsmagick glew 
-    openssl pcre ];
+      dontWrapQtApps = true;
+      cmakeFlags = [
+        "-DWT_CPP_11_MODE=-std=c++11"
+        "--no-warn-unused-cli"
+      ]
+      ++ lib.optionals (graphicsmagick != null) [
+        "-DWT_WRASTERIMAGE_IMPLEMENTATION=GraphicsMagick"
+        "-DGM_PREFIX=${graphicsmagick}"
+      ]
+      ++ lib.optional (libmysqlclient != null)
+        "-DMYSQL_PREFIX=${libmysqlclient}";
 
-  cmakeFlags = [
-    "-DWT_WRASTERIMAGE_IMPLEMENTATION=GraphicsMagick"
-    "-DWT_CPP_11_MODE=-std=c++11"
-    "-DGM_PREFIX=${graphicsmagick}"
-    "-DMYSQL_PREFIX=${libmysql.dev}"
-    "--no-warn-unused-cli"
-  ];
-
-  patches = [ ./cmake.patch ];  # fix a cmake warning; PR sent to upstream 
-
-  meta = with stdenv.lib; {
-    homepage = "https://www.webtoolkit.eu/wt";
-    description = "C++ library for developing web applications";
-    platforms = platforms.linux ;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.juliendehos ];
+      meta = with lib; {
+        homepage = "https://www.webtoolkit.eu/wt";
+        description = "C++ library for developing web applications";
+        platforms = platforms.linux;
+        license = licenses.gpl2;
+        maintainers = with maintainers; [ juliendehos ];
+      };
+    };
+in {
+  wt4 = generic {
+    version = "4.10.4";
+    sha256 = "sha256-O2waUKGTw8kZw+6qBMqG9tNN92aGL+WCrcPOGAG7HO0=";
   };
 }
-

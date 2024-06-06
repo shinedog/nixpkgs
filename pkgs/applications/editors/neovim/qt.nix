@@ -1,46 +1,37 @@
-{ stdenv, fetchFromGitHub, cmake, qt5, pythonPackages, libmsgpack
-, makeWrapper, neovim
-}:
+{ stdenv, makeWrapper, neovim, neovim-qt-unwrapped }:
 
-let # not very usable ATM
-  version = "0.2.4";
+let
+  unwrapped = neovim-qt-unwrapped;
 in
 stdenv.mkDerivation {
-  name = "neovim-qt-${version}";
+  pname = "neovim-qt";
+  version = unwrapped.version;
+  buildCommand = if stdenv.isDarwin then ''
+    mkdir -p $out/Applications
+    cp -r ${unwrapped}/bin/nvim-qt.app $out/Applications
 
-  src = fetchFromGitHub {
-    owner = "equalsraf";
-    repo = "neovim-qt";
-    rev = "v${version}";
-    sha256 = "0yf9wwkl0lbbj3vyf8hxnlsk7jhk5ggivszyqxply69dbar9ww59";
-  };
+    chmod -R a+w $out/Applications/nvim-qt.app/Contents/MacOS
+    wrapProgram $out/Applications/nvim-qt.app/Contents/MacOS/nvim-qt \
+      --prefix PATH : ${neovim}/bin
+  '' else ''
+    makeWrapper ${unwrapped}/bin/nvim-qt $out/bin/nvim-qt \
+      --prefix PATH : ${neovim}/bin
 
-  # It tries to download libmsgpack; let's use ours.
-  postPatch = let use-msgpack = ''
-    cmake_minimum_required(VERSION 2.8.11)
-    project(neovim-qt-deps)
-
-    # Similar enough to FindMsgpack
-    set(MSGPACK_INCLUDE_DIRS ${libmsgpack}/include PARENT_SCOPE)
-    set(MSGPACK_LIBRARIES msgpackc PARENT_SCOPE)
+    # link .desktop file
+    mkdir -p $out/share/pixmaps
+    ln -s ${unwrapped}/share/applications $out/share/applications
+    ln -s ${unwrapped}/share/icons $out/share/icons
   '';
-    in "echo '${use-msgpack}' > third-party/CMakeLists.txt";
 
-  buildInputs = with pythonPackages; [
-    cmake qt5.qtbase
-    python msgpack jinja2 libmsgpack
+  preferLocalBuild = true;
+
+  nativeBuildInputs = [
     makeWrapper
   ];
 
-  enableParallelBuilding = true;
-
-  postInstall = ''
-    wrapProgram "$out/bin/nvim-qt" --prefix PATH : "${neovim}/bin"
-  '';
-
-  meta = with stdenv.lib; {
-    description = "A prototype Qt5 GUI for neovim";
-    license = licenses.isc;
-    inherit (neovim.meta) platforms;
+  passthru = {
+    inherit unwrapped;
   };
+
+  inherit (unwrapped) meta;
 }

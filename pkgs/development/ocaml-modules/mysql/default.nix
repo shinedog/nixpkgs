@@ -1,4 +1,4 @@
-{ stdenv, fetchurl, ocaml, findlib, mysql, camlp4 }:
+{ stdenv, lib, fetchurl, fetchpatch, ocaml, findlib, libmysqlclient }:
 
 # TODO: la versione stabile da' un errore di compilazione dovuto a
 # qualche cambiamento negli header .h
@@ -10,33 +10,37 @@ in
 
 stdenv.mkDerivation rec {
   name = "${pname}-${version}";
-  version = "1.1.1";
+  version = "1.2.1";
 
   src = fetchurl {
-    url = "https://forge.ocamlcore.org/frs/download.php/870/${pname}-${version}.tar.gz";
-    sha256 = "f896fa101a05d81b85af8122fe1c2809008a5e5fdca00f9ceeb7eec356369e3a";
+    url = "http://ygrek.org.ua/p/release/ocaml-mysql/${name}.tar.gz";
+    sha256 = "06mb2bq7v37wn0lza61917zqgb4bsg1xxb73myjyn88p6khl6yl2";
   };
 
-  configureFlags = [ 
-     "--prefix=$out" 
+  configureFlags = [
+     "--prefix=$out"
      "--libdir=$out/lib/ocaml/${ocaml.version}/site-lib/mysql"
   ];
 
-  buildInputs = [ocaml findlib camlp4 ];
+  nativeBuildInputs = [ ocaml findlib ];
 
   createFindlibDestdir = true;
 
-  propagatedBuildInputs = [ mysql.client ];
+  propagatedBuildInputs = [ libmysqlclient ];
 
-  buildPhase = ''
-    make
-    make opt
-  '';
+  strictDeps = true;
+
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/ygrek/ocaml-mysql/compare/v1.2.1...d6d1b3b262ae2cf493ef56f1dd7afcf663a70a26.patch";
+      sha256 = "0018s2wcrvbsw9yaqmwq500qmikwffrgdp5xg9b8v7ixhd4gi6hn";
+    })
+  ];
 
   meta = {
-    homepage = http://ocaml-mysql.forge.ocamlcore.org;
+    homepage = "http://ocaml-mysql.forge.ocamlcore.org";
     description = "Bindings for interacting with MySQL databases from ocaml";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    maintainers = [ stdenv.lib.maintainers.roconnor ];
+    license = lib.licenses.lgpl21Plus;
+    maintainers = [ lib.maintainers.roconnor ];
   };
 }

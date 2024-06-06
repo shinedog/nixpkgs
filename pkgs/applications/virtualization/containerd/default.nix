@@ -1,42 +1,56 @@
-{ stdenv, lib, fetchFromGitHub
-, go, libapparmor, apparmor-parser, libseccomp }:
+{ lib
+, fetchFromGitHub
+, buildGoModule
+, btrfs-progs
+, go-md2man
+, installShellFiles
+, util-linux
+, nixosTests
+, kubernetes
+}:
 
-with lib;
-
-stdenv.mkDerivation rec {
-  name = "containerd-${version}";
-  version = "0.2.3";
+buildGoModule rec {
+  pname = "containerd";
+  version = "1.7.16";
 
   src = fetchFromGitHub {
-    owner = "docker";
+    owner = "containerd";
     repo = "containerd";
     rev = "v${version}";
-    sha256 = "0hlvbd5n4v337ywkc8mnbhp9m8lg8612krv45262n87c2ijyx09s";
+    hash = "sha256-OApJaH11iTvjW4gZaANSCVcxw/VHG7a/6OnYcUcHFME=";
   };
 
-  buildInputs = [ go ];
+  vendorHash = null;
 
-  preBuild = ''
-    ln -s $(pwd) vendor/src/github.com/docker/containerd
+  nativeBuildInputs = [ go-md2man installShellFiles util-linux ];
+
+  buildInputs = [ btrfs-progs ];
+
+  BUILDTAGS = lib.optionals (btrfs-progs == null) [ "no_btrfs" ];
+
+  buildPhase = ''
+    runHook preBuild
+    patchShebangs .
+    make binaries "VERSION=v${version}" "REVISION=${src.rev}"
+    runHook postBuild
   '';
 
   installPhase = ''
-    mkdir -p $out/bin
-    cp bin/* $out/bin
+    runHook preInstall
+    install -Dm555 bin/* -t $out/bin
+    installShellCompletion --bash contrib/autocomplete/ctr
+    installShellCompletion --zsh --name _ctr contrib/autocomplete/zsh_autocomplete
+    runHook postInstall
   '';
 
-  preFixup = ''
-    # remove references to go compiler
-    while read file; do
-      sed -ri "s,${go},$(echo "${go}" | sed "s,$NIX_STORE/[^-]*,$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee,"),g" $file
-    done < <(find $out/bin -type f 2>/dev/null)
-  '';
+  passthru.tests = { inherit (nixosTests) docker; } // kubernetes.tests;
 
-  meta = {
-    homepage = https://containerd.tools/;
+  meta = with lib; {
+    changelog = "https://github.com/containerd/containerd/releases/tag/${src.rev}";
+    homepage = "https://containerd.io/";
     description = "A daemon to control runC";
     license = licenses.asl20;
-    maintainers = with maintainers; [ offline ];
+    maintainers = with maintainers; [ offline vdemeester ];
     platforms = platforms.linux;
   };
 }

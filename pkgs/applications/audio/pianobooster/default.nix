@@ -1,33 +1,72 @@
-{ stdenv, fetchurl, alsaLib, cmake, mesa, makeWrapper, qt4 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, qttools
+, alsa-lib
+, ftgl
+, libGLU
+, qtbase
+, rtmidi
+, libjack2
+, fluidsynth
+, soundfont-fluid
+, unzip
+, wrapQtAppsHook
+}:
 
-stdenv.mkDerivation  rec {
-  name = "pianobooster-${version}";
-  version = "0.6.4b";
+stdenv.mkDerivation rec {
+  pname = "pianobooster";
+  version = "1.0.0";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/pianobooster/pianobooster-src-0.6.4b.tar.gz";
-    sha256 = "1xwyap0288xcl0ihjv52vv4ijsjl0yq67scc509aia4plmlm6l35";
+  src = fetchFromGitHub {
+    owner = "pianobooster";
+    repo = "PianoBooster";
+    rev = "v${version}";
+    hash = "sha256-1WOlAm/HXSL6QK0Kd1mnFEZxxpMseTG+6WzgMNWt+RA=";
   };
 
-  patches = [
-    ./pianobooster-0.6.4b-cmake.patch
-    ./pianobooster-0.6.4b-cmake-gcc4.7.patch
-  ];
-
-  preConfigure = "cd src";
-
-  buildInputs = [ alsaLib cmake makeWrapper mesa qt4 ];
-
-  postInstall = ''
-    wrapProgram $out/bin/pianobooster \
-      --prefix LD_LIBRARY_PATH : ${mesa}/lib
+  postPatch = ''
+    substituteInPlace src/Settings.cpp src/GuiMidiSetupDialog.cpp \
+      --replace "/usr/share/soundfonts" "${soundfont-fluid}/share/soundfonts" \
+      --replace "FluidR3_GM.sf2" "FluidR3_GM2-2.sf2"
   '';
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    qttools
+    wrapQtAppsHook
+  ];
+
+  buildInputs = [
+    alsa-lib
+    ftgl
+    libGLU
+    qtbase
+    rtmidi
+    libjack2
+    fluidsynth
+  ];
+
+  cmakeFlags = [
+    "-DOpenGL_GL_PREFERENCE=GLVND"
+    "-DUSE_JACK=ON"
+  ];
+
+  postInstall = ''
+    qtWrapperArgs+=(
+      --prefix PATH : "${lib.makeBinPath [ unzip ]}"
+    )
+  '';
+
+  meta = with lib; {
     description = "A MIDI file player that teaches you how to play the piano";
-    homepage = http://pianobooster.sourceforge.net;
-    license = licenses.gpl3;
+    mainProgram = "pianobooster";
+    homepage = "https://github.com/pianobooster/PianoBooster";
+    license = licenses.gpl3Plus;
     platforms = platforms.linux;
-    maintainers = [ maintainers.goibhniu ];
+    maintainers = with maintainers; [ goibhniu orivej ];
   };
 }

@@ -1,27 +1,30 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ stdenv, lib, fetchFromGitHub, cmake }:
 
 stdenv.mkDerivation rec {
-  name = "double-conversion-${version}";
-  version = "2.0.1";
+  pname = "double-conversion";
+  version = "3.3.0";
 
   src = fetchFromGitHub {
     owner = "google";
     repo = "double-conversion";
     rev = "v${version}";
-    sha256 = "05x5rdwndgp1vdq2z1bpvng0dd8pn93kw4vhl6nsvv9vsara2q4b";
+    sha256 = "sha256-DkMoHHoHwV4p40IINEqEPzKsCa0LHrJAFw2Yftw7zHo=";
   };
 
   nativeBuildInputs = [ cmake ];
 
   cmakeFlags = [ "-DBUILD_SHARED_LIBS=ON" ];
 
-  enableParallelBuilding = true;
+  # Case sensitivity issue
+  preConfigure = lib.optionalString stdenv.isDarwin ''
+    rm BUILD
+  '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Binary-decimal and decimal-binary routines for IEEE doubles";
     homepage = "https://github.com/google/double-conversion";
     license = licenses.bsd3;
-    platforms = platforms.unix;
+    platforms = platforms.unix ++ platforms.windows;
     maintainers = with maintainers; [ abbradar ];
   };
 }

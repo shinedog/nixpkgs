@@ -1,24 +1,34 @@
-{stdenv, fetchurl, gmp, mpir, cddlib}:
+{lib, stdenv, fetchurl, gmp, mpir, cddlib}:
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "gfan";
-  version = "0.5";
-  # or fetchFromGitHub(owner,repo,rev) or fetchgit(rev)
+  version = "0.6.2";
+
   src = fetchurl {
     url = "http://home.math.au.dk/jensen/software/gfan/gfan${version}.tar.gz";
-    sha256 = "0adk9pia683wf6kn6h1i02b3801jz8zn67yf39pl57md7bqbrsma";
+    sha256 = "02pihqb1lb76a0xbfwjzs1cd6ay3ldfxsm8dvsbl6qs3vkjxax56";
   };
-  preBuild = ''
-    sed -e 's@static int i;@//&@' -i app_minkowski.cpp
+
+  patches = [
+    ./gfan-0.6.2-cddlib-prefix.patch
+  ];
+
+  postPatch = lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace Makefile --replace "-fno-guess-branch-probability" ""
+
+    for f in $(find -name "*.h" -or -name "*.cpp"); do
+        substituteInPlace "$f" --replace-quiet "log2" "_log2"
+    done
   '';
-  makeFlags = ''PREFIX=$(out)'';
-  buildInputs = [gmp mpir cddlib];
+
+  buildFlags = [ "CC=${stdenv.cc.targetPrefix}cc" "CXX=${stdenv.cc.targetPrefix}c++" ];
+  installFlags = [ "PREFIX=$(out)" ];
+  buildInputs = [ gmp mpir cddlib ];
+
   meta = {
-    inherit version;
-    description = ''A software package for computing Gröbner fans and tropical varieties'';
-    license = stdenv.lib.licenses.gpl2 ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+    description = "A software package for computing Gröbner fans and tropical varieties";
+    license = lib.licenses.gpl2 ;
+    maintainers = [lib.maintainers.raskin];
+    platforms = lib.platforms.unix;
     homepage = "http://home.math.au.dk/jensen/software/gfan/gfan.html";
   };
 }

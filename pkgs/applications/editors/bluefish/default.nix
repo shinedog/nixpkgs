@@ -1,23 +1,41 @@
-{ stdenv, fetchurl, intltool, pkgconfig , gtk, libxml2
-, enchant, gucharmap, python
+{ lib
+, stdenv
+, fetchurl
+, wrapGAppsHook3
+, pkg-config
+, gtk
+, libxml2
+, enchant
+, gucharmap
+, python3
+, gnome
 }:
 
 stdenv.mkDerivation rec {
-  name = "bluefish-2.2.7";
+  pname = "bluefish";
+  version = "2.2.15";
 
   src = fetchurl {
-    url = "mirror://sourceforge/bluefish/${name}.tar.bz2";
-    sha256 = "1psqx3ljz13ylqs4zkaxv9lv1hgzld6904kdp0alwx99p5rlnlr3";
+    url = "mirror://sourceforge/bluefish/bluefish-${version}.tar.bz2";
+    sha256 = "sha256-YUPlHGtVedWW86moXg8NhYDJ9Y+ChXWxGYgODKHZQbw=";
   };
 
-  buildInputs = [ intltool pkgconfig gtk libxml2
-    enchant gucharmap python ];
+  nativeBuildInputs = [ pkg-config wrapGAppsHook3 ];
+  buildInputs = [
+    gnome.adwaita-icon-theme
+    gtk
+    libxml2
+    enchant
+    gucharmap
+    python3
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A powerful editor targeted towards programmers and webdevelopers";
-    homepage = http://bluefish.openoffice.nl/;
+    homepage = "https://bluefish.openoffice.nl/";
     license = licenses.gpl3Plus;
-    maintainers = [maintainers.vbgl];
+    maintainers = with maintainers; [ vbgl ];
     platforms = platforms.all;
+    mainProgram = "bluefish";
   };
 }

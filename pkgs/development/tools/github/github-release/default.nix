@@ -1,43 +1,43 @@
-{ stdenv, fetchurl }:
+{ buildGoModule, fetchFromGitHub, fetchpatch, lib, testers, github-release }:
 
-let
-  linuxPredicate = stdenv.system == "x86_64-linux";
-  bsdPredicate = stdenv.system == "x86_64-freebsd";
-  darwinPredicate = stdenv.system == "x86_64-darwin";
-  metadata = assert linuxPredicate || bsdPredicate || darwinPredicate;
-    if linuxPredicate then
-      { arch = "linux-amd64";
-        sha256 = "0b3h0d0qsrjx99kcd2cf71xijh44wm5rpm2sr54snh3f7macj2p1";
-        archiveBinaryPath = "linux/amd64"; }
-    else if bsdPredicate then
-      { arch = "freebsd-amd64";
-        sha256 = "1yydm4ndkh80phiwk41kcf6pizvwrfhsfk3jwrrgr42wsnkkgj0q";
-        archiveBinaryPath = "freebsd/amd64"; }
-    else
-      { arch = "darwin-amd64";
-        sha256 = "1dj74cf1ahihia2dr9ii9ky0cpmywn42z2iq1vkbrrcggjvyrnlf";
-        archiveBinaryPath = "darwin/amd64"; };
-in stdenv.mkDerivation rec {
-  shortname = "github-release";
-  name = "${shortname}-${version}";
-  version = "0.6.2";
+buildGoModule rec {
+  pname = "github-release";
+  version = "0.10.0";
 
-  src = fetchurl {
-    url = "https://github.com/aktau/github-release/releases/download/v${version}/${metadata.arch}-${shortname}.tar.bz2";
-    sha256 = metadata.sha256;
+  src = fetchFromGitHub {
+    owner = "github-release";
+    repo = "github-release";
+    rev = "v${version}";
+    hash = "sha256-J5Y0Kvon7DstTueCsoYvw6x4cOH/C1IaVArE0bXtZts=";
   };
 
-  buildInputs = [ ];
+  vendorHash = null;
 
-  phases = [ "unpackPhase" "installPhase" ];
+  patches = [
+    # Update version info
+    (fetchpatch {
+      url = "https://github.com/github-release/github-release/commit/ee13bb17b74135bfe646d9be1807a6bc577ba7c6.patch";
+      hash = "sha256-9ZcHwai0HOgapDcpvn3xssrVP9cuNAz9rTgrR4Jfdfg=";
+    })
 
-  installPhase = ''
-    mkdir -p "$out/bin"
-    cp "${metadata.archiveBinaryPath}/github-release" "$out/bin/"
-  '';
+    # Add Go Modules support.
+    # See https://github.com/Homebrew/homebrew-core/pull/162414.
+    (fetchpatch {
+      url = "https://github.com/github-release/github-release/pull/129/commits/074f4e8e1688642f50a7a3cc92b5777c7b484139.patch";
+      hash = "sha256-OBFbOvNhqcNiuSCP0AfClntj7y5habn+r2eBkmClsgI=";
+    })
+  ];
 
-  meta = with stdenv.lib; {
+  ldflags = [ "-s" "-w" ];
+
+  passthru.tests.version = testers.testVersion {
+    package = github-release;
+    version = "v${version}";
+  };
+
+  meta = with lib; {
     description = "Commandline app to create and edit releases on Github (and upload artifacts)";
+    mainProgram = "github-release";
     longDescription = ''
       A small commandline app written in Go that allows you to easily create and
       delete releases of your projects on Github.
@@ -45,8 +45,8 @@ in stdenv.mkDerivation rec {
     '';
 
     license = licenses.mit;
-    homepage = https://github.com/aktau/github-release;
-    maintainers = with maintainers; [ ardumont ];
+    homepage = "https://github.com/github-release/github-release";
+    maintainers = with maintainers; [ ardumont j03 ];
     platforms = with platforms; unix;
   };
 }

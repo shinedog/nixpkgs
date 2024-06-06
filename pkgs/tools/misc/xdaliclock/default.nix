@@ -1,27 +1,47 @@
-{ stdenv, fetchurl, libX11, xproto, libXt, libICE, libSM, libXext }:
+{ lib, stdenv, fetchurl
+, gtk3
+, wrapGAppsHook3
+, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "xdaliclock-${version}";
-  version = "2.43";
+  pname = "xdaliclock";
+  version = "2.48";
 
   src = fetchurl {
-    url="http://www.jwz.org/xdaliclock/${name}.tar.gz";
-    sha256 = "194zzp1a989k2v8qzfr81gdknr8xiz16d6fdl63jx9r3mj5klmvb";
+    url = "https://www.jwz.org/xdaliclock/${pname}-${version}.tar.gz";
+    hash = "sha256-BZiqjTSSAgvT/56OJDcKh4pDP9uqVhR5cCx89H+5FLQ=";
   };
 
-  sourceRoot = "${name}/X11";
+  # Note: don't change this to set sourceRoot, or updateAutotoolsGnuConfigScriptsHook
+  # on aarch64 doesn't find the files to patch and the aarch64 build fails!
+  preConfigure = "cd X11";
 
-  buildInputs = [ libX11 xproto libXt libICE libSM libXext ];
+  nativeBuildInputs = [
+    pkg-config
+    wrapGAppsHook3
+  ];
+  buildInputs = [
+    gtk3
+  ];
 
   preInstall = ''
-    mkdir -vp $out/bin $out/share/man/man1
+    mkdir -vp $out/bin $out/share/man/man1 $out/share/gsettings-schemas/$name/glib-2.0/schemas $out/share/pixmaps $out/share/applications
+
+    # https://www.jwz.org/blog/2022/08/dali-clock-2-45-released/#comment-236762
+    gappsWrapperArgs+=(--set MESA_GL_VERSION_OVERRIDE 3.1)
   '';
 
-  meta = with stdenv.lib; {
+  installFlags = [
+    "GTK_ICONDIR=${placeholder "out"}/share/pixmaps/"
+    "GTK_APPDIR=${placeholder "out"}/share/applications/"
+  ];
+
+  meta = with lib; {
     description = "A clock application that morphs digits when they are changed";
-    maintainers = with maintainers; [ raskin rycee ];
+    maintainers = with maintainers; [ raskin ];
     platforms = with platforms; linux ++ freebsd;
     license = licenses.free; #TODO BSD on Gentoo, looks like MIT
-    downloadPage = http://www.jwz.org/xdaliclock/;
+    downloadPage = "http://www.jwz.org/xdaliclock/";
+    mainProgram = "xdaliclock";
   };
 }

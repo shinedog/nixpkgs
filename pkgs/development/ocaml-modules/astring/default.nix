@@ -1,29 +1,36 @@
-{stdenv, fetchurl, buildOcaml, ocaml, findlib, ocamlbuild, topkg, opam}:
+{ stdenv, lib, fetchurl, ocaml, findlib, ocamlbuild, topkg }:
 
-buildOcaml rec {
-  version = "0.8.3";
-  name = "astring";
+let
+  # Use astring 0.8.3 for OCaml < 4.05
+  param =
+    if lib.versionAtLeast ocaml.version "4.05"
+    then {
+      version = "0.8.5";
+      sha256 = "1ykhg9gd3iy7zsgyiy2p9b1wkpqg9irw5pvcqs3sphq71iir4ml6";
+    } else {
+      version = "0.8.3";
+      sha256 = "0ixjwc3plrljvj24za3l9gy0w30lsbggp8yh02lwrzw61ls4cri0";
+    };
+in
+
+stdenv.mkDerivation {
+  pname = "ocaml${ocaml.version}-astring";
+  inherit (param) version;
 
   src = fetchurl {
-    url = "http://erratique.ch/software/astring/releases/astring-${version}.tbz";
-    sha256 = "0ixjwc3plrljvj24za3l9gy0w30lsbggp8yh02lwrzw61ls4cri0";
+    url = "https://erratique.ch/software/astring/releases/astring-${param.version}.tbz";
+    inherit (param) sha256;
   };
 
-  unpackCmd = "tar -xf $curSrc";
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [ topkg ];
 
-  buildInputs = [ ocaml findlib ocamlbuild topkg opam ];
+  strictDeps = true;
 
-  buildPhase = ''
-    ocaml -I ${findlib}/lib/ocaml/${ocaml.version}/site-lib/ pkg/pkg.ml build
-  '';
-
-  installPhase = ''
-    opam-installer --script --prefix=$out astring.install | sh
-    ln -s $out/lib/astring $out/lib/ocaml/${ocaml.version}/site-lib/
-  '';
+  inherit (topkg) buildPhase installPhase;
 
   meta = {
-    homepage = http://erratique.ch/software/astring;
+    homepage = "https://erratique.ch/software/astring";
     description = "Alternative String module for OCaml";
     longDescription = ''
       Astring exposes an alternative String module for OCaml. This module tries
@@ -37,7 +44,7 @@ buildOcaml rec {
       adds a few missing functions and fully exploits OCaml's newfound string
       immutability.
     '';
-    license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ sternenseemann ];
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ sternenseemann ];
   };
 }

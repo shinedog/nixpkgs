@@ -1,26 +1,53 @@
-{ stdenv, fetchurl, pythonPackages, python} :
+{ lib
+, fetchFromGitea
+, buildPythonApplication
+, pbr
+, requests
+, setuptools
+, gitUpdater
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "git-review-${version}";
-  version = "1.25.0";
+buildPythonApplication rec {
+  pname = "git-review";
+  version = "2.4.0";
 
   # Manually set version because prb wants to get it from the git
   # upstream repository (and we are installing from tarball instead)
-  PBR_VERSION = "${version}";
+  PBR_VERSION = version;
 
-  src = fetchurl rec {
-    url = "https://github.com/openstack-infra/git-review/archive/${version}.tar.gz";
-    sha256 = "aa594690ed586041a524d6e5ae76152cbd53d4f03a98b20b213d15cecbe128ce";
+  src = fetchFromGitea {
+    domain = "opendev.org";
+    owner = "opendev";
+    repo = "git-review";
+    rev = version;
+    hash = "sha256-UfYc662NqnQt0+CKc+18jXnNTOcZv8urCNBsWd6x0VQ=";
   };
 
-  propagatedBuildInputs = [ pythonPackages.pbr pythonPackages.requests2 pythonPackages.argparse pythonPackages.setuptools ];
+  outputs = [ "out" "man" ];
 
-  # Don't do tests because they require gerrit which is not packaged
+  nativeBuildInputs = [
+    pbr
+  ];
+
+  propagatedBuildInputs = [
+    requests
+    setuptools # implicit dependency, used to get package version through pkg_resources
+  ];
+
+  # Don't run tests because they pull in external dependencies
+  # (a specific build of gerrit + maven plugins), and I haven't figured
+  # out how to work around this yet.
   doCheck = false;
 
-  meta = {
-    homepage = "https://github.com/openstack-infra/git-review";
+  pythonImportsCheck = [ "git_review" ];
+
+  passthru.updateScript = gitUpdater { };
+
+  meta = with lib; {
     description = "Tool to submit code to Gerrit";
-    license = stdenv.lib.licenses.asl20;
+    homepage = "https://opendev.org/opendev/git-review";
+    license = licenses.asl20;
+    maintainers = with maintainers; [ kira-bruneau ];
+    mainProgram = "git-review";
   };
 }

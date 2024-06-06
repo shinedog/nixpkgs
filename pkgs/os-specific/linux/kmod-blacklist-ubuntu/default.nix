@@ -1,13 +1,15 @@
-{ stdenv, fetchurl, gnugrep, findutils }:
+{ lib, stdenv, fetchurl }:
+
 let
-  version = "3ubuntu1"; # Saucy
-in
-stdenv.mkDerivation {
-  name = "kmod-blacklist-${version}";
+  version = "30+20230519-1ubuntu3"; # mantic 2023-08-26
+
+in stdenv.mkDerivation {
+  pname = "kmod-blacklist";
+  inherit version;
 
   src = fetchurl {
-    url = "https://launchpad.net/ubuntu/+archive/primary/+files/kmod_9-${version}.debian.tar.gz";
-    sha256 = "0h6h0zw2490iqj9xa2sz4309jyfmcc50jdvkhxa1nw90npxglp67";
+    url = "https://launchpad.net/ubuntu/+archive/primary/+files/kmod_${version}.debian.tar.xz";
+    hash = "sha256-VGw1/rUjl9/j6026ut0dvC0/8maAAz8umb0D3YGf8p4=";
   };
 
   installPhase = ''
@@ -15,19 +17,22 @@ stdenv.mkDerivation {
     for f in modprobe.d/*.conf; do
       echo "''\n''\n## file: "`basename "$f"`"''\n''\n" >> "$out"/modprobe.conf
       cat "$f" >> "$out"/modprobe.conf
+      # https://bugs.launchpad.net/ubuntu/+source/kmod/+bug/1475945
+      sed -i '/^blacklist i2c_i801/d' $out/modprobe.conf
     done
 
     substituteInPlace "$out"/modprobe.conf \
       --replace /sbin/lsmod /run/booted-system/sw/bin/lsmod \
       --replace /sbin/rmmod /run/booted-system/sw/bin/rmmod \
       --replace /sbin/modprobe /run/booted-system/sw/bin/modprobe \
-      --replace " grep " " ${gnugrep}/bin/grep " \
-      --replace " xargs " " ${findutils}/bin/xargs "
+      --replace " grep " " /run/booted-system/sw/bin/grep " \
+      --replace " xargs " " /run/booted-system/sw/bin/xargs "
   '';
 
-  meta = {
-    homepage = http://packages.ubuntu.com/source/saucy/kmod;
+  meta = with lib; {
+    homepage = "https://launchpad.net/ubuntu/+source/kmod";
     description = "Linux kernel module blacklists from Ubuntu";
-    platforms = stdenv.lib.platforms.linux;
+    platforms = platforms.linux;
+    license = with licenses; [ gpl2Plus lgpl21Plus ];
   };
 }

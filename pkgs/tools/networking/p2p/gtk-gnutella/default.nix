@@ -1,29 +1,68 @@
-{ stdenv, fetchurl, bison, pkgconfig
-, glib, gtk2, libxml2, gettext, zlib, binutils, gnutls }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, bison
+, desktop-file-utils
+, gettext
+, pkg-config
+, glib
+, gtk2
+, libxml2
+, libbfd
+, zlib
+, gnutls
+, enableGui ? true
+}:
 
-let
-  name = "gtk-gnutella";
-  version = "1.1.9";
-in
-stdenv.mkDerivation {
-  name = "${name}-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "gtk-gnutella";
+  version = "1.2.2";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/${name}/${name}-${version}.tar.bz2";
-    sha256 = "1zvadgsskmpm82id9mbj24a2lyq38qv768ixv7nmfjl3d4wr2biv";
+  src = fetchFromGitHub {
+    owner = "gtk-gnutella";
+    repo = "gtk-gnutella";
+    rev = "v${finalAttrs.version}";
+    sha256 = "sha256-LbSUdU+a9G8qL7gCZVJQ6UQMATpOMtktY6FeOkUuaYI=";
   };
 
-  nativeBuildInputs = [ bison binutils gettext pkgconfig ];
-  buildInputs = [ glib gnutls gtk2 libxml2 zlib ];
+  nativeBuildInputs = [
+    bison
+    desktop-file-utils
+    gettext
+    pkg-config
+  ];
+  buildInputs = [
+    glib
+    gnutls
+    libbfd
+    libxml2
+    zlib
+  ] ++ lib.optionals enableGui [
+    gtk2
+  ];
 
-  hardeningDisable = [ "bindnow" "fortify" "pic" "relro" ];
+  configureScript = "./build.sh";
+  configureFlags = [
+    "--configure-only"
+    # See https://sourceforge.net/p/gtk-gnutella/bugs/555/
+    "--disable-malloc"
+  ] ++ lib.optionals (!enableGui) [
+    "--topless"
+  ];
 
-  configureScript = "./build.sh --configure-only";
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://gtk-gnutella.sourceforge.net/;
-    description = "Server/client for Gnutella";
-    license = licenses.gpl2;
+  postInstall = ''
+    install -Dm0444 src/gtk-gnutella.man $out/share/man/man1/gtk-gnutella.1
+  '';
+
+  meta = with lib; {
+    description = "A GTK Gnutella client, optimized for speed and scalability";
+    mainProgram = "gtk-gnutella";
+    homepage = "https://gtk-gnutella.sourceforge.net/"; # Code: https://github.com/gtk-gnutella/gtk-gnutella
+    changelog = "https://raw.githubusercontent.com/gtk-gnutella/gtk-gnutella/v${finalAttrs.version}/ChangeLog";
+    maintainers = [ maintainers.doronbehar ];
+    license = licenses.gpl2Plus;
     platforms = platforms.unix;
   };
-}
+})

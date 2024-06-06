@@ -1,26 +1,34 @@
-{ fetchurl, stdenv, expect, makeWrapper }:
+{ fetchurl, lib, stdenv, expect, makeWrapper }:
 
 stdenv.mkDerivation rec {
-  name = "dejagnu-1.6";
+  pname = "dejagnu";
+  version = "1.6.3";
 
   src = fetchurl {
-    url = "mirror://gnu/dejagnu/${name}.tar.gz";
-    sha256 = "0qypaakd2065jgpcv84zcsibl8gph3p334gb2qdmhsrbirhlmdh0";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "1qx2cv6qkxbiqg87jh217jb62hk3s7dmcs4cz1llm2wmsynfznl7";
   };
 
-  patches = [ ./wrapped-runtest-program-name.patch ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ expect ];
 
-  buildInputs = [ expect makeWrapper ];
+  # dejagnu-1.6.3 can't successfully run tests in source tree:
+  #   https://wiki.linuxfromscratch.org/lfs/ticket/4871
+  preConfigure = ''
+    mkdir build
+    cd build
+  '';
+  configureScript = "../configure";
 
-  doCheck = true;
+  doCheck = !(with stdenv; isDarwin && isAarch64);
 
   # Note: The test-suite *requires* /dev/pts among the `build-chroot-dirs' of
   # the build daemon when building in a chroot.  See
-  # <http://thread.gmane.org/gmane.linux.distributions.nixos/1036> for
+  # <https://www.mail-archive.com/nix-dev@cs.uu.nl/msg01056.html> for
   # details.
 
   # The test-suite needs to have a non-empty stdin:
-  #   http://lists.gnu.org/archive/html/bug-dejagnu/2003-06/msg00002.html
+  #   https://lists.gnu.org/archive/html/bug-dejagnu/2003-06/msg00002.html
   checkPhase = ''
     # Provide `runtest' with a log name, otherwise it tries to run
     # `whoami', which fails when in a chroot.
@@ -28,11 +36,14 @@ stdenv.mkDerivation rec {
   '';
 
   postInstall = ''
-    wrapProgram "$out/bin/runtest" \
-      --prefix PATH ":" "${expect}/bin"
+    # 'runtest' and 'dejagnu' look up 'expect' in their 'bin' path
+    # first. We avoid use of 'wrapProgram' here because  wrapping
+    # of shell scripts does not preserve argv[0] for schell scripts:
+    #   https://sourceware.org/PR30052#c5
+    ln -s ${expect}/bin/expect $out/bin/expect
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Framework for testing other programs";
 
     longDescription = ''
@@ -46,10 +57,10 @@ stdenv.mkDerivation rec {
       Tool command language.
     '';
 
-    homepage = http://www.gnu.org/software/dejagnu/;
+    homepage = "https://www.gnu.org/software/dejagnu/";
     license = licenses.gpl2Plus;
 
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ wkennington vrthra ];
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ vrthra ];
   };
 }

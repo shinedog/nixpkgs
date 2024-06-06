@@ -1,28 +1,30 @@
-{stdenv, fetchurl}:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "crimson-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "crimson";
   version = "2014.10";
 
-  src = fetchurl {
-    url = "https://github.com/skosch/Crimson/archive/fonts-october2014.tar.gz";
-    sha256 = "0qyihrhqb89vwg9cfpaf5xqmcjvs4r4614bxy634vmqv9v1bzn5b";
+  src = fetchFromGitHub {
+    owner = "skosch";
+    repo = "Crimson";
+    rev = "fonts-october2014";
+    hash = "sha256-Wp9L77q93TRmrAr0P4iH9gm0tqFY0X/xSsuFcd19aAE=";
   };
 
-  phases = ["unpackPhase" "installPhase"];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    mkdir -p $out/share/doc/${name}
-    cp -v "Desktop Fonts/OTF/"*.otf $out/share/fonts/opentype
-    cp -v README.md $out/share/doc/${name}
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/opentype "Desktop Fonts/OTF/"*.otf
+    install -m444 -Dt $out/share/doc/${pname}-${version}    README.md
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://aldusleaf.org/crimson.html;
+  meta = with lib; {
+    homepage = "https://github.com/skosch/Crimson";
     description = "A font family inspired by beautiful oldstyle typefaces";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

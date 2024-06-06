@@ -1,14 +1,25 @@
-{stdenv, makeWrapper, fetchurl, perl, openssl, perlPackages }:
+{ lib
+, fetchFromGitHub
+, makeWrapper
+, perl
+, perlPackages
+, stdenv
+}:
 
 stdenv.mkDerivation rec {
-  name = "imapsync-1.684";
-  src = fetchurl {
-    url = "https://fedorahosted.org/released/imapsync/${name}.tgz";
-    sha256 = "1ilqdaabh6xiwpjfdg2mrhygvjlxj6jdkmqjqadq5z29172hji5b";
+  pname = "imapsync";
+  version = "2.229";
+
+  src = fetchFromGitHub {
+    owner = "imapsync";
+    repo = "imapsync";
+    rev = "imapsync-${version}";
+    sha256 = "sha256-nlNePOV3Y0atEPSRByRo3dHj/WjIaefEDeWdMKTo4gc=";
   };
 
-  patchPhase = ''
+  postPatch = ''
     sed -i -e s@/usr@$out@ Makefile
+    substituteInPlace INSTALL.d/prerequisites_imapsync --replace "PAR::Packer" ""
   '';
 
   postInstall = ''
@@ -17,17 +28,46 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ makeWrapper ];
 
-  buildInputs = with perlPackages; [ perl openssl MailIMAPClient TermReadKey
-    IOSocketSSL DigestHMAC URI FileCopyRecursive IOTee UnicodeString
-    DataUniqid JSONWebToken TestMockGuard LWP CryptOpenSSLRSA
-    LWPProtocolHttps
+  buildInputs = with perlPackages; [
+    Appcpanminus
+    CGI
+    CryptOpenSSLRSA
+    DataUniqid
+    DistCheckConflicts
+    EncodeIMAPUTF7
+    FileCopyRecursive
+    FileTail
+    IOSocketINET6
+    IOTee
+    JSONWebToken
+    LWP
+    MailIMAPClient
+    ModuleImplementation
+    ModuleScanDeps
+    NTLM
+    PackageStash
+    PackageStashXS
+    ProcProcessTable
+    Readonly
+    RegexpCommon
+    SysMemInfo
+    TermReadKey
+    TestDeep
+    TestFatal
+    TestMockGuard
+    TestMockObject
+    TestPod
+    TestRequires
+    UnicodeString
+    perl
   ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.linux-france.org/prj/imapsync/;
+  meta = with lib; {
     description = "Mail folder synchronizer between IMAP servers";
-    license = licenses.gpl2Plus;
-    platforms = platforms.linux;
+    mainProgram = "imapsync";
+    homepage = "https://imapsync.lamiral.info/";
+    license = licenses.nlpl;
     maintainers = with maintainers; [ pSub ];
+    platforms = platforms.unix;
   };
 }

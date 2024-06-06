@@ -1,19 +1,35 @@
-{stdenv, fetchurl, m17n_db}:
+{ lib
+, stdenv
+, fetchurl
+, m17n_db
+, autoreconfHook
+, pkg-config
+}:
 stdenv.mkDerivation rec {
-  name = "m17n-lib-1.7.0";
+  pname = "m17n-lib";
+  version = "1.8.4";
 
   src = fetchurl {
-    url = "http://download.savannah.gnu.org/releases/m17n/${name}.tar.gz";
-    sha256 = "10yv730i25g1rpzv6q49m6xn4p8fjm7jdwvik2h70sn8w3hm7f4f";
+    url = "https://download.savannah.gnu.org/releases/m17n/m17n-lib-${version}.tar.gz";
+    hash = "sha256-xqJYLG5PKowueihE+lx+s2Oq0lOLBS8gPHEGSd1CHMg=";
   };
 
-  buildInputs = [ m17n_db ];
+  strictDeps = true;
+
+  # reconf needed to sucesfully cross-compile
+  nativeBuildInputs = [
+    autoreconfHook pkg-config
+    # requires m17n-db tool at build time
+    m17n_db
+  ];
+
+  enableParallelBuilding = true;
 
   meta = {
-    homepage = http://www.nongnu.org/m17n/;
+    homepage = "https://www.nongnu.org/m17n/";
     description = "Multilingual text processing library (runtime)";
-    license = stdenv.lib.licenses.lgpl21Plus;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ astsmtl ];
+    license = lib.licenses.lgpl21Plus;
+    platforms = lib.platforms.linux;
+    maintainers = with lib.maintainers; [ astsmtl ];
   };
 }

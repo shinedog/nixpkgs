@@ -1,7 +1,7 @@
-{ stdenv, appleDerivation }:
+{ lib, appleDerivation', stdenvNoCC }:
 
-appleDerivation {
-  phases = [ "unpackPhase" "installPhase" ];
+appleDerivation' stdenvNoCC {
+  dontBuild = true;
 
   installPhase = ''
     mkdir -p $out/include
@@ -12,9 +12,9 @@ appleDerivation {
       --replace "CarbonCore/" ""
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     maintainers = with maintainers; [ copumpkin ];
     platforms   = platforms.darwin;
-    license     = licenses.apsl20;
+    license     = licenses.apple-psl20;
   };
 }

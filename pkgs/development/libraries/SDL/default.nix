@@ -1,62 +1,65 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, audiofile, libcap
-, openglSupport ? false, mesa_noglu, mesa_glu
-, alsaSupport ? true, alsaLib
-, x11Support ? true, libXext, libICE, libXrandr
-, pulseaudioSupport ? true, libpulseaudio
-, OpenGL, CoreAudio, CoreServices, AudioUnit, Kernel, Cocoa
+{ lib, stdenv, config, fetchurl, fetchpatch, pkg-config, audiofile, libcap, libiconv
+, libGLSupported ? lib.meta.availableOn stdenv.hostPlatform libGL
+, openglSupport ? libGLSupported, libGL, libGLU
+, alsaSupport ? stdenv.isLinux && !stdenv.hostPlatform.isAndroid, alsa-lib
+, x11Support ? !stdenv.isCygwin && !stdenv.hostPlatform.isAndroid
+, libXext, libICE, libXrandr
+, pulseaudioSupport ? config.pulseaudio or stdenv.isLinux && !stdenv.hostPlatform.isAndroid && lib.meta.availableOn stdenv.hostPlatform libpulseaudio, libpulseaudio
+, OpenGL, GLUT, CoreAudio, CoreServices, AudioUnit, Kernel, Cocoa
 }:
 
-# OSS is no longer supported, for it's much crappier than ALSA and
-# PulseAudio.
-assert (stdenv.isLinux && !(stdenv ? cross)) -> alsaSupport || pulseaudioSupport;
+# NOTE: When editing this expression see if the same change applies to
+# SDL2 expression too
 
 let
-  inherit (stdenv.lib) optional optionals;
+  extraPropagatedBuildInputs = [ ]
+    ++ lib.optionals x11Support [ libXext libICE libXrandr ]
+    ++ lib.optionals (openglSupport && stdenv.isLinux) [ libGL libGLU ]
+    ++ lib.optionals (openglSupport && stdenv.isDarwin) [ OpenGL GLUT ]
+    ++ lib.optional alsaSupport alsa-lib
+    ++ lib.optional pulseaudioSupport libpulseaudio
+    ++ lib.optional stdenv.isDarwin Cocoa;
+  rpath = lib.makeLibraryPath extraPropagatedBuildInputs;
 in
+
 stdenv.mkDerivation rec {
-  name    = "SDL-${version}";
+  pname = "SDL";
   version = "1.2.15";
 
   src = fetchurl {
-    url    = "http://www.libsdl.org/release/${name}.tar.gz";
+    url    = "https://www.libsdl.org/release/${pname}-${version}.tar.gz";
     sha256 = "005d993xcac8236fpvd1iawkz4wqjybkpn8dbwaliqz5jfkidlyn";
   };
 
   outputs = [ "out" "dev" ];
   outputBin = "dev"; # sdl-config
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ pkg-config ]
+    ++ lib.optional stdenv.isLinux libcap;
 
-  # Since `libpulse*.la' contain `-lgdbm', PulseAudio must be propagated.
-  propagatedBuildInputs =
-    optionals x11Support [ libXext libICE libXrandr ] ++
-    optional alsaSupport alsaLib ++
-    optional stdenv.isLinux libcap ++
-    optionals openglSupport [ mesa_noglu mesa_glu ] ++
-    optional pulseaudioSupport libpulseaudio ++
-    optional stdenv.isDarwin Cocoa;
+  propagatedBuildInputs = [ libiconv ] ++ extraPropagatedBuildInputs;
 
-  buildInputs = let
-    notMingw = !(stdenv ? cross) || stdenv.cross.libc != "msvcrt";
-  in optional notMingw audiofile
-  ++ optionals stdenv.isDarwin [ OpenGL CoreAudio CoreServices AudioUnit Kernel ];
+  buildInputs = [ ]
+    ++ lib.optional (!stdenv.hostPlatform.isMinGW && alsaSupport) audiofile
+    ++ lib.optionals stdenv.isDarwin [ AudioUnit CoreAudio CoreServices Kernel OpenGL ];
 
-  # XXX: By default, SDL wants to dlopen() PulseAudio, in which case
-  # we must arrange to add it to its RPATH; however, `patchelf' seems
-  # to fail at doing this, hence `--disable-pulseaudio-shared'.
   configureFlags = [
     "--disable-oss"
     "--disable-video-x11-xme"
-    "--disable-x11-shared"
-    "--disable-alsa-shared"
     "--enable-rpath"
-    "--disable-pulseaudio-shared"
-    "--disable-osmesa-shared"
-  ] ++ optionals (stdenv ? cross) ([
-    "--without-x"
-  ] ++ optional alsaSupport "--with-alsa-prefix=${alsaLib.out}/lib");
+  # Building without this fails on Darwin with
+  #
+  #   ./src/video/x11/SDL_x11sym.h:168:17: error: conflicting types for '_XData32'
+  #   SDL_X11_SYM(int,_XData32,(Display *dpy,register long *data,unsigned len),(dpy,data,len),return)
+  #
+  # Please try revert the change that introduced this comment when updating SDL.
+  ] ++ lib.optional stdenv.isDarwin "--disable-x11-shared"
+    ++ lib.optional (!x11Support) "--without-x"
+    ++ lib.optional alsaSupport "--with-alsa-prefix=${alsa-lib.out}/lib";
 
   patches = [
+    ./find-headers.patch
+
     # Fix window resizing issues, e.g. for xmonad
     # Ticket: http://bugzilla.libsdl.org/show_bug.cgi?id=1430
     (fetchpatch {
@@ -66,41 +69,65 @@ stdenv.mkDerivation rec {
     })
     # Fix drops of keyboard events for SDL_EnableUNICODE
     (fetchpatch {
-      url = "http://hg.libsdl.org/SDL/raw-rev/0aade9c0203f";
-      sha256 = "1y9izncjlqvk1mkz1pkl9lrk9s452cmg2izjjlqqrhbn8279xy50";
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/0332e2bb18dc68d6892c3b653b2547afe323854b.patch";
+      sha256 = "0g458iv6pp9sikdch6ms8svz60lf5ks2q5wgid8s9rydhk98lpp5";
     })
     # Ignore insane joystick axis events
     (fetchpatch {
-      url = "http://hg.libsdl.org/SDL/raw-rev/95abff7adcc2";
-      sha256 = "0i8x0kx0pw12ld5bfxhyzs466y3c0n9dscw1ijhq1b96r72xyhqq";
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/ab99cc82b0a898ad528d46fa128b649a220a94f4.patch";
+      sha256 = "1b3473sawfdbkkxaqf1hg0vn37yk8hf655jhnjwdk296z4gclazh";
+    })
+    # https://bugzilla.libsdl.org/show_bug.cgi?id=1769
+    (fetchpatch {
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/5d79977ec7a6b58afa6e4817035aaaba186f7e9f.patch";
+      sha256 = "1k7y57b1zy5afib1g7w3in36n8cswbcrzdbrjpn5cb105rnb9vmp";
     })
     # Workaround X11 bug to allow changing gamma
     # Ticket: https://bugs.freedesktop.org/show_bug.cgi?id=27222
     (fetchpatch {
-      url = "http://pkgs.fedoraproject.org/cgit/rpms/SDL.git/plain/SDL-1.2.15-x11-Bypass-SetGammaRamp-when-changing-gamma.patch?id=04a3a7b1bd88c2d5502292fad27e0e02d084698d";
+      name = "SDL_SetGamma.patch";
+      url = "https://src.fedoraproject.org/rpms/SDL/raw/7a07323e5cec08bea6f390526f86a1ce5341596d/f/SDL-1.2.15-x11-Bypass-SetGammaRamp-when-changing-gamma.patch";
       sha256 = "0x52s4328kilyq43i7psqkqg7chsfwh0aawr50j566nzd7j51dlv";
     })
     # Fix a build failure on OS X Mavericks
     # Ticket: https://bugzilla.libsdl.org/show_bug.cgi?id=2085
     (fetchpatch {
-      url = "http://hg.libsdl.org/SDL/raw-rev/e9466ead70e5";
-      sha256 = "0mpwdi09h89df2wxqw87m1rdz7pr46k0w6alk691k8kwv970z6pl";
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/19039324be71738d8990e91b9ba341b2ea068445.patch";
+      sha256 = "0ckwling2ad27c9vxgp97ndjd098d6zbrydza8b9l77k8airj98c";
     })
     (fetchpatch {
-      url = "http://hg.libsdl.org/SDL/raw-rev/bbfb41c13a87";
-      sha256 = "1336g7waaf1c8yhkz11xbs500h8bmvabh4h437ax8l1xdwcppfxv";
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/7933032ad4d57c24f2230db29f67eb7d21bb5654.patch";
+      sha256 = "1by16firaxyr0hjvn35whsgcmq6bl0nwhnpjf75grjzsw9qvwyia";
     })
-    ./find-headers.patch
+    (fetchpatch {
+      name = "CVE-2022-34568.patch";
+      url = "https://github.com/libsdl-org/SDL-1.2/commit/d7e00208738a0bc6af302723fe64908ac35b777b.patch";
+      sha256 = "sha256-fuxXsqZW94/C8CKu9LakppCU4zHupj66O2MngQ4BO9o=";
+    })
   ];
 
-  postFixup = ''moveToOutput share/aclocal "$dev" '';
+  postInstall = ''
+    moveToOutput share/aclocal "$dev"
+  '';
+
+  # See the same place in the expression for SDL2
+  postFixup = ''
+    for lib in $out/lib/*.so* ; do
+      if [[ -L "$lib" ]]; then
+        patchelf --set-rpath "$(patchelf --print-rpath $lib):${rpath}" "$lib"
+      fi
+    done
+  '';
 
   setupHook = ./setup-hook.sh;
 
   passthru = { inherit openglSupport; };
 
-  meta = with stdenv.lib; {
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "A cross-platform multimedia library";
+    mainProgram = "sdl-config";
     homepage    = "http://www.libsdl.org/";
     maintainers = with maintainers; [ lovek323 ];
     platforms   = platforms.unix;

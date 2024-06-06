@@ -1,29 +1,28 @@
-{ stdenv, fetchFromGitHub, pkgconfig, libusb }:
+{ lib, stdenv, fetchFromGitHub, pkg-config, dtc, libusb1, zlib }:
 
-stdenv.mkDerivation {
-  name = "sunxi-tools-1.3";
+stdenv.mkDerivation rec {
+  pname = "sunxi-tools";
+  version = "unstable-2021-08-29";
 
   src = fetchFromGitHub {
     owner = "linux-sunxi";
     repo = "sunxi-tools";
-    rev = "be1b4c7400161b90437432076360c1f99970f54f";
-    sha256 = "02pqaaahra4wbv325264qh5i17mxwicmjx9nm33nw2dpmfmg9xhr";
+    rev = "74273b671a3fc34048383c40c85c684423009fb9";
+    sha256 = "1gwamb64vr45iy2ry7jp1k3zc03q5sydmdflrbwr892f0ijh2wjl";
   };
 
-  buildInputs = [ pkgconfig libusb ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ dtc libusb1 zlib ];
 
-  buildPhase = ''
-    make all misc
-  '';
+  makeFlags = [ "PREFIX=$(out)" ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp bin2fex fex2bin phoenix_info sunxi-bootinfo sunxi-fel sunxi-fexc sunxi-nand-part sunxi-pio $out/bin
-  '';
+  buildFlags = [ "tools" "misc" ];
 
-  meta = with stdenv.lib; {
-    description = "Tools for Allwinner A10 devices";
-    homepage = http://linux-sunxi.org/;
+  installTargets = [ "install-tools" "install-misc" ];
+
+  meta = with lib; {
+    description = "Tools for Allwinner SoC devices";
+    homepage = "http://linux-sunxi.org/";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
     maintainers = with maintainers; [ elitak ];

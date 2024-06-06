@@ -1,25 +1,39 @@
-{ stdenv, fetchFromGitHub, unzip, cmake, boost, zlib }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, boost
+, zlib
+}:
 
-let
-  version = "3.2";
-in
-stdenv.mkDerivation {
-  name = "assimp-${version}";
+stdenv.mkDerivation rec {
+  pname = "assimp";
+  version = "5.4.1";
+  outputs = [ "out" "lib" "dev" ];
 
-  src = fetchFromGitHub{
+  src = fetchFromGitHub {
     owner = "assimp";
     repo = "assimp";
     rev = "v${version}";
-    sha256 = "09fsksbq9a8gykwmw6gaicwh2ladrln1jc1xc5yk7w6x180cbb1x";
+    hash = "sha256-F3aaEaHZyOLES6zOYqHRG0BtaKk9d/bAHCtal6FsIWc=";
   };
 
-  buildInputs = [ unzip cmake boost zlib ];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ boost zlib ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [ "-DASSIMP_BUILD_ASSIMP_TOOLS=ON" ];
+
+  env.NIX_CFLAGS_COMPILE = toString ([
+    # Needed with GCC 12
+    "-Wno-error=array-bounds"
+  ]);
+
+  meta = with lib; {
     description = "A library to import various 3D model formats";
-    homepage = http://assimp.sourceforge.net/;
+    mainProgram = "assimp";
+    homepage = "https://www.assimp.org/";
     license = licenses.bsd3;
     maintainers = with maintainers; [ ehmry ];
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

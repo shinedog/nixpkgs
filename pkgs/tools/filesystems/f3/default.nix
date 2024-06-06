@@ -1,40 +1,57 @@
-{ stdenv, fetchFromGitHub
-, parted, udev
+{ stdenv
+, lib
+, fetchFromGitHub
+, parted
+, systemd
+, argp-standalone
 }:
-let
-  version = "6.0-2016.11.16-unstable";
-in
-stdenv.mkDerivation rec {
-  name = "f3-${version}";
 
-  enableParallelBuilding = true;
+stdenv.mkDerivation rec {
+  pname = "f3";
+  version = "8.0";
 
   src = fetchFromGitHub {
     owner = "AltraMayor";
-    repo = "f3";
-    rev = "eabf001f69a788e64912bc9e812c118a324077d5";
-    sha256 = "0ypqyqwqiy3ynssdd9gamk1jxywg6avb45ndlzhv3wxh2qcframm";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "17l5vspfcgfbkqg7bakp3gql29yb05gzawm8n3im30ilzdr53678";
   };
 
-  buildInputs = [ parted udev ];
+  postPatch = ''
+    sed -i 's/-oroot -groot//' Makefile
 
-  patchPhase = "sed -i 's/-oroot -groot//' Makefile";
+    for f in f3write.h2w log-f3wr; do
+     substituteInPlace $f \
+       --replace '$(dirname $0)' $out/bin
+    done
+  '';
 
-  buildFlags   = [ "CFLAGS=-fgnu89-inline"  # HACK for weird gcc incompatibility with -O2
-                   "all"                    # f3read, f3write
-                   "extra"                  # f3brew, f3fix, f3probe
-                 ];
+  buildInputs = lib.optionals stdenv.isLinux [ systemd parted ]
+    ++ lib.optionals stdenv.isDarwin [ argp-standalone ];
 
-  installFlags = [ "PREFIX=$(out)"
-                   "install"
-                   "install-extra"
-                 ];
+  buildFlags = [
+    "all" # f3read, f3write
+  ]
+  ++ lib.optional stdenv.isLinux "extra"; # f3brew, f3fix, f3probe
 
-  meta = {
+  installFlags = [
+    "PREFIX=${placeholder "out"}"
+  ];
+
+  installTargets = [
+    "install"
+  ]
+  ++ lib.optional stdenv.isLinux "install-extra";
+
+  postInstall = ''
+    install -Dm555 -t $out/bin f3write.h2w log-f3wr
+    install -Dm444 -t $out/share/doc/${pname} LICENSE README.rst
+  '';
+
+  meta = with lib; {
     description = "Fight Flash Fraud";
-    homepage = http://oss.digirati.com.br/f3/;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ makefu ];
+    homepage = "https://fight-flash-fraud.readthedocs.io/en/stable/";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ makefu evils ];
   };
 }

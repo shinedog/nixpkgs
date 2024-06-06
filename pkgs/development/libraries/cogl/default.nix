@@ -1,48 +1,109 @@
-{ stdenv, fetchurl, pkgconfig, mesa_noglu, glib, gdk_pixbuf, xorg, libintlOrEmpty
-, pangoSupport ? true, pango, cairo, gobjectIntrospection, wayland
-, gstreamerSupport ? true, gst_all_1 }:
+{ lib
+, stdenv
+, fetchurl
+, pkg-config
+, libGL
+, glib
+, gdk-pixbuf
+, xorg
+, libintl
+, pangoSupport ? true
+, pango
+, cairo
+, gobject-introspection
+, wayland
+, gnome
+, mesa
+, automake
+, autoconf
+, gstreamerSupport ? true
+, gst_all_1
+, harfbuzz
+, OpenGL
+}:
 
-let
-  ver_maj = "1.22";
-  ver_min = "2";
-in
 stdenv.mkDerivation rec {
-  name = "cogl-${ver_maj}.${ver_min}";
+  pname = "cogl";
+  version = "1.22.8";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/cogl/${ver_maj}/${name}.tar.xz";
-    sha256 = "03f0ha3qk7ca0nnkkcr1garrm1n1vvfqhkz9lwjm592fnv6ii9rr";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/cogl-${version}.tar.xz";
+    sha256 = "0nfph4ai60ncdx7hy6hl1i1cmp761jgnyjfhagzi0iqq36qb41d8";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  patches = [
+    # Some deepin packages need the following patches. They have been
+    # submitted by Fedora on the GNOME Bugzilla
+    # (https://bugzilla.gnome.org/787443). Upstream thinks the patch
+    # could be merged, but dev can not make a new release.
+    ./patches/gnome_bugzilla_787443_359589_deepin.patch
+    ./patches/gnome_bugzilla_787443_361056_deepin.patch
+  ];
+
+  outputs = [ "out" "dev" ];
+
+  nativeBuildInputs = [ pkg-config libintl automake autoconf gobject-introspection ];
 
   configureFlags = [
     "--enable-introspection"
+  ] ++ lib.optionals (!stdenv.isDarwin) [
     "--enable-kms-egl-platform"
     "--enable-wayland-egl-platform"
     "--enable-wayland-egl-server"
-  ] ++ stdenv.lib.optional gstreamerSupport "--enable-cogl-gst"
-    ++ stdenv.lib.optionals (!stdenv.isDarwin) [ "--enable-gles1" "--enable-gles2" ];
+    "--enable-gles1"
+    "--enable-gles2"
+    # Force linking against libGL.
+    # Otherwise, it tries to load it from the runtime library path.
+    "LIBS=-lGL"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "--disable-glx"
+    "--without-x"
+  ] ++ lib.optionals gstreamerSupport [
+    "--enable-cogl-gst"
+  ];
 
-  propagatedBuildInputs = with xorg; [
-      glib gdk_pixbuf gobjectIntrospection wayland
-      mesa_noglu libXrandr libXfixes libXcomposite libXdamage
-    ]
-    ++ libintlOrEmpty
-    ++ stdenv.lib.optionals gstreamerSupport [ gst_all_1.gstreamer
-                                               gst_all_1.gst-plugins-base ];
+  # TODO: this shouldn't propagate so many things
+  # especially not gobject-introspection
+  propagatedBuildInputs = [
+    glib
+    gdk-pixbuf
+    gobject-introspection
+  ] ++ lib.optionals stdenv.isLinux [
+    wayland
+    mesa
+    libGL
+    xorg.libXrandr
+    xorg.libXfixes
+    xorg.libXcomposite
+    xorg.libXdamage
+  ] ++ lib.optionals gstreamerSupport [
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+  ];
 
-  buildInputs = stdenv.lib.optionals pangoSupport [ pango cairo ];
+  buildInputs = lib.optionals pangoSupport [ pango cairo harfbuzz ]
+    ++ lib.optionals stdenv.isDarwin [ OpenGL ];
 
-  COGL_PANGO_DEP_CFLAGS
-    = stdenv.lib.optionalString (stdenv.isDarwin && pangoSupport)
-      "-I${pango.dev}/include/pango-1.0 -I${cairo.dev}/include/cairo";
-
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  env = {
+    COGL_PANGO_DEP_CFLAGS = toString (lib.optionals (stdenv.isDarwin && pangoSupport) [
+      "-I${pango.dev}/include/pango-1.0"
+      "-I${cairo.dev}/include/cairo"
+      "-I${harfbuzz.dev}/include/harfbuzz"
+    ]);
+  } // lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = "-Wno-error=implicit-function-declaration";
+  };
 
   #doCheck = true; # all tests fail (no idea why)
 
-  meta = with stdenv.lib; {
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
     description = "A small open source library for using 3D graphics hardware for rendering";
     maintainers = with maintainers; [ lovek323 ];
 
@@ -53,6 +114,7 @@ stdenv.mkDerivation rec {
       render without stepping on each other's toes.
     '';
 
-    platforms = stdenv.lib.platforms.mesaPlatforms;
+    platforms = platforms.unix;
+    license = with licenses; [ mit bsd3 publicDomain sgi-b-20 ];
   };
 }

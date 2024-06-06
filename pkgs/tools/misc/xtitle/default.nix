@@ -1,23 +1,28 @@
-{ stdenv, fetchurl, libxcb, xcbutil, xcbutilwm, git }:
+{ lib, stdenv, fetchFromGitHub, libxcb, xcbutil, xcbutilwm, git }:
 
 stdenv.mkDerivation rec {
-   name = "xtitle-0.3";
+  pname = "xtitle";
+  version = "0.4.4";
 
-   src = fetchurl {
-     url = "https://github.com/baskerville/xtitle/archive/0.3.tar.gz";
-     sha256 = "07r36f4ad1q0dpkx3ykd49xlmi24d8mjqwh40j228k81wsvzayl1";
-   };
+  src = fetchFromGitHub {
+    owner = "baskerville";
+    repo = "xtitle";
+    rev = version;
+    hash = "sha256-SVfM2vCCacgchXj0c0sPk3VR6DUI4R0ofFnxJSY4oDg=";
+  };
 
+  postPatch = ''
+    sed -i "s|/usr/local|$out|" Makefile
+  '';
 
-   buildInputs = [ libxcb git xcbutil xcbutilwm ];
+  buildInputs = [ libxcb git xcbutil xcbutilwm ];
 
-   prePatch = ''sed -i "s@/usr/local@$out@" Makefile'';
-
-   meta = {
-     description = "Outputs X window titles";
-     homepage = https://github.com/baskerville/xtitle;
-     maintainers = [ stdenv.lib.maintainers.meisternu ];
-     license = "Custom";
-     platforms = stdenv.lib.platforms.linux;
-   };
+  meta = with lib; {
+    description = "Outputs X window titles";
+    homepage = "https://github.com/baskerville/xtitle";
+    maintainers = with maintainers; [ meisternu ];
+    license = "Custom";
+    platforms = platforms.linux;
+    mainProgram = "xtitle";
+  };
 }

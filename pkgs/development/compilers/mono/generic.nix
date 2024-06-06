@@ -1,69 +1,80 @@
-{ stdenv, fetchurl, bison, pkgconfig, glib, gettext, perl, libgdiplus, libX11, callPackage, ncurses, zlib, withLLVM ? false, cacert, Foundation, libobjc, python, version, sha256 }:
+{ lib, stdenv, fetchurl, bison, pkg-config, glib, gettext, perl, libgdiplus, libX11, callPackage, ncurses, zlib, bash
+, withLLVM ? false, cacert, Foundation, libobjc, python3, version, sha256, autoconf, libtool, automake, cmake, which
+, gnumake42
+, enableParallelBuilding ? true
+, srcArchiveSuffix ? "tar.bz2"
+, extraPatches ? []
+}:
 
 let
-  llvm     = callPackage ./llvm.nix { };
+  llvm = callPackage ./llvm.nix { };
 in
 stdenv.mkDerivation rec {
-  name = "mono-${version}";
+  pname = "mono";
+  inherit version;
 
   src = fetchurl {
     inherit sha256;
-    url = "http://download.mono-project.com/sources/mono/${name}.tar.bz2";
+    url = "https://download.mono-project.com/sources/mono/${pname}-${version}.${srcArchiveSuffix}";
   };
 
-  buildInputs =
-    [ bison pkgconfig glib gettext perl libgdiplus libX11 ncurses zlib python
-    ]
-    ++ (stdenv.lib.optionals stdenv.isDarwin [ Foundation libobjc ]);
+  strictDeps = true;
+  nativeBuildInputs = [
+    autoconf
+    automake
+    bison
+    cmake
+    libtool
+    perl
+    pkg-config
+    python3
+    which
+    gnumake42
+  ];
+  buildInputs = [
+    glib
+    gettext
+    libgdiplus
+    libX11
+    ncurses
+    zlib
+    bash
+  ] ++ lib.optionals stdenv.isDarwin [ Foundation libobjc ];
 
-  propagatedBuildInputs = [glib];
-
-  NIX_LDFLAGS = if stdenv.isDarwin then "" else "-lgcc_s" ;
-
-  # To overcome the bug https://bugzilla.novell.com/show_bug.cgi?id=644723
-  dontDisableStatic = true;
-
-  # In fact I think this line does not help at all to what I
-  # wanted to achieve: have mono to find libgdiplus automatically
   configureFlags = [
     "--x-includes=${libX11.dev}/include"
     "--x-libraries=${libX11.out}/lib"
     "--with-libgdiplus=${libgdiplus}/lib/libgdiplus.so"
-  ]
-  ++ stdenv.lib.optionals withLLVM [
+  ] ++ lib.optionals withLLVM [
     "--enable-llvm"
-    "--enable-llvmloaded"
     "--with-llvm=${llvm}"
   ];
 
-  # Attempt to fix this error when running "mcs --version":
-  # The file /nix/store/xxx-mono-2.4.2.1/lib/mscorlib.dll is an invalid CIL image
-  dontStrip = true;
-
-  # Parallel building doesn't work, as shows http://hydra.nixos.org/build/2983601
-  enableParallelBuilding = false;
+  configurePhase = ''
+    patchShebangs autogen.sh mcs/build/start-compiler-server.sh
+    ./autogen.sh --prefix $out $configureFlags
+  '';
 
   # We want pkg-config to take priority over the dlls in the Mono framework and the GAC
   # because we control pkg-config
-  patches = [ ./pkgconfig-before-gac.patch ];
+  patches = [ ./pkgconfig-before-gac.patch ] ++ extraPatches;
 
   # Patch all the necessary scripts. Also, if we're using LLVM, we fix the default
   # LLVM path to point into the Mono LLVM build, since it's private anyway.
   preBuild = ''
     makeFlagsArray=(INSTALL=`type -tp install`)
-    patchShebangs ./
     substituteInPlace mcs/class/corlib/System/Environment.cs --replace /usr/share "$out/share"
-  '' + stdenv.lib.optionalString withLLVM ''
+  '' + lib.optionalString withLLVM ''
     substituteInPlace mono/mini/aot-compiler.c --replace "llvm_path = g_strdup (\"\")" "llvm_path = g_strdup (\"${llvm}/bin/\")"
   '';
 
-  # Fix mono DLLMap so it can find libX11 and gdiplus to run winforms apps
+  # Fix mono DLLMap so it can find libX11 to run winforms apps
+  # libgdiplus is correctly handled by the --with-libgdiplus configure flag
   # Other items in the DLLMap may need to be pointed to their store locations, I don't think this is exhaustive
-  # http://www.mono-project.com/Config_DllMap
+  # https://www.mono-project.com/Config_DllMap
   postBuild = ''
     find . -name 'config' -type f | xargs \
-    sed -i -e "s@libX11.so.6@${libX11.out}/lib/libX11.so.6@g" \
-           -e "s@/.*libgdiplus.so@${libgdiplus}/lib/libgdiplus.so@g" \
+    sed -i -e "s@libX11.so.6@${libX11.out}/lib/libX11.so.6@g"
   '';
 
   # Without this, any Mono application attempting to open an SSL connection will throw with
@@ -79,11 +90,24 @@ stdenv.mkDerivation rec {
     ln -s $out/bin/mcs $out/bin/gmcs
   '';
 
-  meta = {
-    homepage = http://mono-project.com/;
+  inherit enableParallelBuilding;
+
+  meta = with lib; {
+    # Per nixpkgs#151720 the build failures for aarch64-darwin are fixed since 6.12.0.129
+    broken = stdenv.isDarwin && stdenv.isAarch64 && lib.versionOlder version "6.12.0.129";
+    homepage = "https://mono-project.com/";
     description = "Cross platform, open source .NET development framework";
-    platforms = with stdenv.lib.platforms; darwin ++ linux;
-    maintainers = with stdenv.lib.maintainers; [ viric thoughtpolice obadz vrthra ];
-    license = stdenv.lib.licenses.free; # Combination of LGPL/X11/GPL ?
+    platforms = with platforms; darwin ++ linux;
+    maintainers = with maintainers; [ thoughtpolice obadz vrthra ];
+    license = with licenses; [
+      /* runtime, compilers, tools and most class libraries licensed */ mit
+      /* runtime includes some code licensed */ bsd3
+      /* mcs/class/I18N/mklist.sh marked GPLv2 and others just GPL */ gpl2Only
+      /* RabbitMQ.Client class libraries dual licensed */ mpl20 asl20
+      /* mcs/class/System.Core/System/TimeZoneInfo.Android.cs */ asl20
+      /* some documentation */ mspl
+      # https://www.mono-project.com/docs/faq/licensing/
+      # https://github.com/mono/mono/blob/main/LICENSE
+    ];
   };
 }

@@ -1,74 +1,150 @@
-{ stdenv, fetchurl, flex, bison, pkgconfig, zlib, libtiff, libpng, fftw
-, cairo, readline, ffmpeg, makeWrapper, wxGTK30, netcdf, blas
-, proj, gdal, geos, sqlite, postgresql, mysql, python2Packages
+{ lib
+, stdenv
+, callPackage
+, fetchFromGitHub
+, makeWrapper
+, wrapGAppsHook3
+
+, bison
+, blas
+, cairo
+, ffmpeg
+, fftw
+, flex
+, gdal
+, geos
+, libiconv
+, libmysqlclient
+, libpng
+, libtiff
+, libxml2
+, netcdf
+, pdal
+, pkg-config
+, postgresql
+, proj
+, python3Packages
+, readline
+, sqlite
+, wxGTK32
+, zlib
+, zstd
 }:
 
-stdenv.mkDerivation {
-  name = "grass-7.0.2";
-  src = fetchurl {
-    url = http://grass.osgeo.org/grass70/source/grass-7.0.2.tar.gz;
-    sha256 = "02qrdgn46gxr60amxwax4b8fkkmhmjxi6qh4yfvpbii6ai6diarf";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "grass";
+  version = "8.3.2";
+
+  src = fetchFromGitHub {
+    owner = "OSGeo";
+    repo = "grass";
+    rev = finalAttrs.version;
+    hash = "sha256-loeg+7h676d2WdYOMcJFyzeEZcxjBynir6Hz0J/GBns=";
   };
 
-  buildInputs = [ flex bison zlib proj gdal libtiff libpng fftw sqlite pkgconfig cairo
-  readline ffmpeg makeWrapper wxGTK30 netcdf geos postgresql mysql.client blas ]
-    ++ (with python2Packages; [ python dateutil wxPython30 numpy ]);
+  nativeBuildInputs = [
+    makeWrapper
+    wrapGAppsHook3
+
+    bison
+    flex
+    gdal # for `gdal-config`
+    geos # for `geos-config`
+    libmysqlclient # for `mysql_config`
+    netcdf # for `nc-config`
+    pkg-config
+  ] ++ (with python3Packages; [ python-dateutil numpy wxpython ]);
+
+  buildInputs = [
+    blas
+    cairo
+    ffmpeg
+    fftw
+    gdal
+    geos
+    libmysqlclient
+    libpng
+    libtiff
+    libxml2
+    netcdf
+    pdal
+    postgresql
+    proj
+    readline
+    sqlite
+    wxGTK32
+    zlib
+    zstd
+  ] ++ lib.optionals stdenv.isDarwin [ libiconv ];
+
+  strictDeps = true;
+
+  patches = lib.optionals stdenv.isDarwin [
+    # Fix conversion of const char* to unsigned int.
+    ./clang-integer-conversion.patch
+  ];
+
+  # Correct mysql_config query
+  postPatch = ''
+      substituteInPlace configure --replace "--libmysqld-libs" "--libs"
+  '';
 
   configureFlags = [
-    "--with-proj-share=${proj}/share/proj"
-    "--without-opengl"
-    "--with-readline"
-    "--with-wxwidgets"
-    "--with-netcdf"
-    "--with-geos"
-    "--with-postgres" "--with-postgres-libs=${postgresql.lib}/lib/"
-    # it complains about missing libmysqld but doesn't really seem to need it
-    "--with-mysql" "--with-mysql-includes=${stdenv.lib.getDev mysql.client}/include/mysql"
     "--with-blas"
+    "--with-geos"
+    # It complains about missing libmysqld but doesn't really seem to need it
+    "--with-mysql"
+    "--with-mysql-includes=${lib.getDev libmysqlclient}/include/mysql"
+    "--with-mysql-libs=${libmysqlclient}/lib/mysql"
+    "--with-netcdf"
+    "--with-postgres"
+    "--with-postgres-libs=${postgresql.lib}/lib/"
+    "--with-proj-includes=${proj.dev}/include"
+    "--with-proj-libs=${proj}/lib"
+    "--with-proj-share=${proj}/share/proj"
+    "--with-pthread"
+    "--with-readline"
+    "--without-opengl"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "--without-cairo"
+    "--without-freetype"
+    "--without-x"
   ];
+
+  # Otherwise a very confusing "Can't load GDAL library" error
+  makeFlags = lib.optional stdenv.isDarwin "GDAL_DYNAMIC=";
 
   /* Ensures that the python script run at build time are actually executable;
    * otherwise, patchShebangs ignores them.  */
   postConfigure = ''
-    chmod +x scripts/d.out.file/d.out.file.py \
-      scripts/d.to.rast/d.to.rast.py \
-      scripts/d.what.rast/d.what.rast.py \
-      scripts/d.what.vect/d.what.vect.py \
-      scripts/g.extension/g.extension.py \
-      scripts/g.extension.all/g.extension.all.py \
-      scripts/r.pack/r.pack.py \
-      scripts/r.tileset/r.tileset.py \
-      scripts/r.unpack/r.unpack.py \
-      scripts/v.krige/v.krige.py \
-      scripts/v.rast.stats/v.rast.stats.py \
-      scripts/v.to.lines/v.to.lines.py \
-      scripts/v.what.strds/v.what.strds.py \
-      scripts/v.unpack/v.unpack.py \
-      scripts/wxpyimgview/*.py \
-      gui/wxpython/animation/g.gui.animation.py \
-      gui/wxpython/rlisetup/g.gui.rlisetup.py \
-      gui/wxpython/vdigit/g.gui.vdigit.py \
-      temporal/t.rast.accumulate/t.rast.accumulate.py \
-      temporal/t.rast.accdetect/t.rast.accdetect.py \
-      temporal/t.select/t.select.py
-    for d in gui lib scripts temporal tools; do
-      patchShebangs $d
+    for f in $(find . -name '*.py'); do
+      chmod +x $f
     done
+
+    patchShebangs */
   '';
 
   postInstall = ''
-    wrapProgram $out/bin/grass70 \
+    wrapProgram $out/bin/grass \
     --set PYTHONPATH $PYTHONPATH \
-    --set GRASS_PYTHON ${python2Packages.python}/bin/${python2Packages.python.executable}
-    ln -s $out/grass-*/lib $out/lib
+    --set GRASS_PYTHON ${python3Packages.python.interpreter} \
+    --suffix LD_LIBRARY_PATH ':' '${gdal}/lib'
+    ln -s $out/grass*/lib $out/lib
+    ln -s $out/grass*/include $out/include
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
-    homepage = http://grass.osgeo.org/;
-    description = "GIS software suite used for geospatial data management and analysis, image processing, graphics and maps production, spatial modeling, and visualization";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.all;
+  passthru.tests = {
+    grass = callPackage ./tests.nix { grass = finalAttrs.finalPackage; };
   };
-}
+
+  meta = with lib; {
+    description = "GIS software suite used for geospatial data management and analysis, image processing, graphics and maps production, spatial modeling, and visualization";
+    homepage = "https://grass.osgeo.org/";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; teams.geospatial.members ++ [ mpickering ];
+    platforms = platforms.all;
+    mainProgram = "grass";
+  };
+})

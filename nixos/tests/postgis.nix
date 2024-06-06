@@ -1,30 +1,30 @@
-import ./make-test.nix ({ pkgs, ...} : {
+import ./make-test-python.nix ({ pkgs, ...} : {
   name = "postgis";
-  meta = with pkgs.stdenv.lib.maintainers; {
+  meta = with pkgs.lib.maintainers; {
     maintainers = [ lsix ];
   };
 
   nodes = {
     master =
-      { pkgs, config, ... }:
+      { pkgs, ... }:
 
       {
-        services.postgresql = let mypg = pkgs.postgresql95; in {
+        services.postgresql = {
             enable = true;
-            package = mypg;
-            extraPlugins = [ (pkgs.postgis.override { postgresql = mypg; }).v_2_2_1 ];
-            initialScript =  pkgs.writeText "postgresql-init.sql"
-          ''
-          CREATE ROLE postgres WITH superuser login createdb;
-          '';
-          };
+            package = pkgs.postgresql;
+            extraPlugins = ps: with ps; [
+              postgis
+            ];
+        };
       };
   };
 
   testScript = ''
-    startAll;
-    $master->waitForUnit("postgresql");
-    $master->sleep(10); # Hopefully this is long enough!!
-    $master->succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis;'");
+    start_all()
+    master.wait_for_unit("postgresql")
+    master.sleep(10)  # Hopefully this is long enough!!
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis;'")
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis_raster;'")
+    master.succeed("sudo -u postgres psql -c 'CREATE EXTENSION postgis_topology;'")
   '';
 })

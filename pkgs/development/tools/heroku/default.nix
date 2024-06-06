@@ -1,74 +1,46 @@
-{ stdenv, fetchurl, bash, buildFHSUserEnv, makeWrapper, writeTextFile
-, nodejs-6_x, postgresql, ruby }:
+{ stdenv, lib, fetchzip, makeWrapper, nodejs, writeScript }:
 
-with stdenv.lib;
+stdenv.mkDerivation {
+  pname = "heroku";
+  version = "8.11.5";
 
-let
-  version = "3.43.12";
-  bin_ver = "5.4.7-8dc2c80";
-
-  arch = {
-    "x86_64-linux" = "linux-amd64";
-  }."${stdenv.system}" or (throw "system ${stdenv.system} not supported");
-
-  sha256 = {
-    "x86_64-linux" = "0iqjxkdw53dvy54ahmr9yijlxrp5nbikh9z7iss93z753cgxdl06";
-  }."${stdenv.system}" or (throw "system ${stdenv.system} not supported");
-
-  fhsEnv = buildFHSUserEnv {
-    name = "heroku-fhs-env";
+  src = fetchzip {
+    url = "https://cli-assets.heroku.com/versions/8.11.5/df5cd30/heroku-v8.11.5-df5cd30-linux-x64.tar.xz";
+    hash = "sha256-in6VuJmoItXGL85XqN1oItGPkUmDb4n+LzxE5q4ycYc=";
   };
 
-  heroku = stdenv.mkDerivation rec {
-    inherit version;
-    name = "heroku";
+  nativeBuildInputs = [ makeWrapper ];
 
-    meta = {
-      homepage = "https://toolbelt.heroku.com";
-      description = "Everything you need to get started using Heroku";
-      maintainers = with maintainers; [ aflatter mirdhyn ];
-      license = licenses.mit;
-      platforms = with platforms; unix;
-    };
+  dontBuild = true;
 
-    src = fetchurl {
-      url = "https://s3.amazonaws.com/assets.heroku.com/heroku-client/heroku-client-${version}.tgz";
-      sha256 = "1z7z8sl2hkrc8rdvx3h00fbcrxs827xlfp6fji0ap97a6jc0v9x4";
-    };
-
-    bin = fetchurl {
-      url = "https://cli-assets.heroku.com/branches/stable/${bin_ver}/heroku-v${bin_ver}-${arch}.tar.gz";
-      inherit sha256;
-    };
-
-    installPhase = ''
-      cli=$out/share/heroku/cli
-      mkdir -p $cli
-
-      tar xzf $src -C $out --strip-components=1
-      tar xzf $bin -C $cli --strip-components=1
-
-      wrapProgram $out/bin/heroku \
-        --set HEROKU_NODE_PATH ${nodejs-6_x}/bin/node \
-        --set XDG_DATA_HOME    $out/share \
-        --set XDG_DATA_DIRS    $out/share
-
-      # When https://github.com/NixOS/patchelf/issues/66 is fixed, reinstate this and dump the fhsuserenv
-      #patchelf --set-interpreter $(cat $NIX_CC/nix-support/dynamic-linker) \
-      #  $cli/bin/heroku
-    '';
-
-    buildInputs = [ fhsEnv ruby postgresql makeWrapper ];
-
-    doUnpack = false;
-  };
-
-in writeTextFile {
-  name = "heroku-${version}";
-  destination = "/bin/heroku";
-  executable = true;
-  text = ''
-    #!${bash}/bin/bash -e
-    ${fhsEnv}/bin/heroku-fhs-env ${heroku}/bin/heroku
+  installPhase = ''
+    mkdir -p $out/share/heroku $out/bin
+    cp -pr * $out/share/heroku
+    substituteInPlace $out/share/heroku/bin/run \
+      --replace "/usr/bin/env node" "${nodejs}/bin/node"
+    makeWrapper $out/share/heroku/bin/run $out/bin/heroku \
+      --set HEROKU_DISABLE_AUTOUPDATE 1
   '';
+
+  passthru.updateScript = writeScript "update-heroku" ''
+    #!/usr/bin/env nix-shell
+    #!nix-shell -I nixpkgs=./. -i bash -p nix-prefetch curl jq common-updater-scripts
+    resp="$(
+        curl -L "https://cli-assets.heroku.com/versions/heroku-linux-x64-tar-xz.json" \
+            | jq '[to_entries[] | { version: .key, url: .value } | select(.version|contains("-")|not)] | sort_by(.version|split(".")|map(tonumber)) | .[-1]'
+    )"
+    url="$(jq <<<"$resp" .url --raw-output)"
+    version="$(jq <<<"$resp" .version --raw-output)"
+    hash="$(nix-prefetch fetchzip --url "$(jq <<<"$resp" .url --raw-output)")"
+    update-source-version heroku "$version" "$hash" "$url"
+  '';
+
+  meta = {
+    homepage = "https://devcenter.heroku.com/articles/heroku-cli";
+    description = "Everything you need to get started using Heroku";
+    mainProgram = "heroku";
+    maintainers = with lib.maintainers; [ aflatter mirdhyn ];
+    license = lib.licenses.mit;
+    platforms = with lib.platforms; unix;
+  };
 }

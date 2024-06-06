@@ -1,28 +1,32 @@
-{ stdenv, fetchgit }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "go-font-${version}";
-  version = "2016-11-17";
+stdenvNoCC.mkDerivation rec {
+  pname = "go-font";
+  version = "2.010";
 
-  src = fetchgit {
-    url = "https://go.googlesource.com/image";
-    rev = "d2f07f8aaaa906f1a64eee0e327fc681cdb2944f";
-    sha256 = "1kmsipa4cyrwx86acc695c281hchrz9k9ni8r7giyggvdi577iga";
+  src = fetchzip {
+    url = "https://go.googlesource.com/image/+archive/41969df76e82aeec85fa3821b1e24955ea993001/font/gofont/ttfs.tar.gz";
+    stripRoot = false;
+    hash = "sha256-rdzt51wY4b7HEr7W/0Ar/FB0zMyf+nKLsOT+CRSEP3o=";
   };
 
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
     mkdir -p $out/share/doc/go-font
-    cp font/gofont/ttfs/* $out/share/fonts/truetype
-    mv $out/share/fonts/truetype/README $out/share/doc/go-font/LICENSE
+    mv *.ttf $out/share/fonts/truetype
+    mv README $out/share/doc/go-font/LICENSE
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://blog.golang.org/go-fonts;
+  meta = with lib; {
+    homepage = "https://blog.golang.org/go-fonts";
     description = "The Go font family";
+    changelog = "https://go.googlesource.com/image/+log/refs/heads/master/font/gofont";
     license = licenses.bsd3;
     maintainers = with maintainers; [ sternenseemann ];
-    platforms = stdenv.lib.platforms.all;
-    hydraPlatforms = [];
+    platforms = lib.platforms.all;
   };
 }

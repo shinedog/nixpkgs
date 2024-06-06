@@ -1,36 +1,73 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ lib
+, fetchFromGitHub
+, python3
+}:
 
-pythonPackages.buildPythonApplication rec {
-  name = "errbot-${version}";
-  version = "4.2.2";
+python3.pkgs.buildPythonApplication rec {
+  pname = "errbot";
+  version = "6.1.9";
 
-  src = fetchurl {
-    url = "mirror://pypi/e/errbot/${name}.tar.gz";
-    sha256 = "1f1nw4m58dvmw0a37gbnihgdxxr3sz0l39653jigq9ysh3nznifv";
+  format = "setuptools";
+
+  src = fetchFromGitHub {
+    owner = "errbotio";
+    repo = "errbot";
+    rev = version;
+    hash = "sha256-BmHChLWWnrtg0p4WH8bANwpo+p4RTwjYbXfyPnz6mp8=";
   };
 
-  disabled = !pythonPackages.isPy3k;
-
-  patches = [
-    ./fix-dnspython.patch
+  nativeBuildInputs = with python3.pkgs; [
+    pythonRelaxDepsHook
   ];
 
-  buildInputs = with pythonPackages; [
-    pep8 mock pytest pytest_xdist
+  pythonRelaxDeps = true;
+
+  propagatedBuildInputs = with python3.pkgs; [
+    ansi
+    colorlog
+    daemonize
+    deepmerge
+    dulwich
+    flask
+    irc
+    jinja2
+    markdown
+    pyasn1
+    pyasn1-modules
+    pygments
+    pygments-markdown-lexer
+    pyopenssl
+    requests
+    slixmpp
+    python-telegram-bot
+    webtest
   ];
 
-  propagatedBuildInputs = with pythonPackages; [
-    webtest bottle threadpool rocket-errbot requests2 jinja2
-    pyopenssl colorlog Yapsy markdown ansi pygments dns pep8
-    daemonize pygments-markdown-lexer telegram irc slackclient
-    pyside sleekxmpp hypchat pytest
+  nativeCheckInputs = with python3.pkgs; [
+    mock
+    pytestCheckHook
   ];
 
-  meta = with stdenv.lib; {
+  # errbot-backend-slackv3 has not been packaged
+  pytestFlagsArray = [ "--ignore=tests/backend_tests/slack_test.py" ];
+
+  disabledTests = [
+    # require networking
+    "test_backup"
+    "test_broken_plugin"
+    "test_plugin_cycle"
+  ];
+
+  pythonImportsCheck = [ "errbot" ];
+
+  meta = with lib; {
+    changelog = "https://github.com/errbotio/errbot/blob/${version}/CHANGES.rst";
     description = "Chatbot designed to be simple to extend with plugins written in Python";
-    homepage = http://errbot.io/;
-    maintainers = with maintainers; [ fpletz ];
-    license = licenses.gpl3;
-    platforms = platforms.unix;
+    homepage = "http://errbot.io/";
+    maintainers = with maintainers; [ ];
+    license = licenses.gpl3Plus;
+    platforms = platforms.linux;
+    # flaky on darwin, "RuntimeError: can't start new thread"
+    mainProgram = "errbot";
   };
 }

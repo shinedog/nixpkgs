@@ -1,23 +1,40 @@
-{ stdenv, fetchurl }:
+{ lib,
+  stdenv,
+  fetchFromGitLab,
+  autoreconfHook,
+  boost,
+  llvmPackages,
+}:
 
-stdenv.mkDerivation rec {
-  version = "1.2.2";
-  name = "mdds-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "mdds";
+  version = "2.1.1";
 
-  src = fetchurl {
-    url = "http://kohei.us/files/mdds/src/mdds-${version}.tar.bz2";
-    sha256 = "17fcjhsq3bzqm7ba9sgp6my3y4226jnwai6q5jq3810i745p67hl";
+  src = fetchFromGitLab {
+    owner = "mdds";
+    repo = "mdds";
+    rev = finalAttrs.version;
+    hash = "sha256-a412LpgDiYM8TMToaUrTlHtblYS1HehzrDOwvIAAxiA=";
   };
+
+  nativeBuildInputs = [ autoreconfHook ];
+
+  buildInputs = lib.optionals stdenv.cc.isClang [ llvmPackages.openmp ];
+
+  nativeCheckInputs = [ boost ];
 
   postInstall = ''
-   mkdir -p "$out/lib/pkgconfig"
-   cp "$out/share/pkgconfig/"* "$out/lib/pkgconfig"
+    mkdir -p $out/lib/
+    mv $out/share/pkgconfig $out/lib/
   '';
 
-  meta = {
-    inherit version;
+  meta = with lib; {
     homepage = "https://gitlab.com/mdds/mdds";
-    description = "A collection of multi-dimensional data structure and indexing algorithm";
-    platforms = stdenv.lib.platforms.all;
+    description = "A collection of multi-dimensional data structure and indexing algorithms";
+    changelog = "https://gitlab.com/mdds/mdds/-/blob/${finalAttrs.version}/CHANGELOG";
+    license = licenses.mit;
+    maintainers = [ maintainers.AndersonTorres ];
+    platforms = platforms.unix;
   };
-}
+})
+# TODO: multi-output

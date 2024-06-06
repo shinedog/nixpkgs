@@ -1,34 +1,36 @@
-{ stdenv, fetchgit, kernel }:
+{ lib, stdenv, fetchFromGitHub, kernel }:
 
-stdenv.mkDerivation {
-  name = "acpi-call-${kernel.version}";
+stdenv.mkDerivation rec {
+  pname = "acpi-call";
+  version = "1.2.2";
+  name = "${pname}-${version}-${kernel.version}";
 
-  src = fetchgit {
-    url = "git://github.com/mkottman/acpi_call.git";
-    rev = "ac67445bc75ec4fcf46ceb195fb84d74ad350d51";
-    sha256 = "0jl19irz9x9pxab2qp4z8c3jijv2m30zhmnzi6ygbrisqqlg4c75";
+  src = fetchFromGitHub {
+    owner = "nix-community";
+    repo = "acpi_call";
+    rev = "v${version}";
+    sha256 = "1s7h9y3adyfhw7cjldlfmid79lrwz3vqlvziw9nwd6x5qdj4w9vp";
   };
 
   hardeningDisable = [ "pic" ];
 
-  preBuild = ''
-    sed -e 's/break/true/' -i examples/turn_off_gpu.sh
-    sed -e 's@/bin/bash@.bin/sh@' -i examples/turn_off_gpu.sh
-    sed -e "s@/lib/modules/\$(.*)@${kernel.dev}/lib/modules/${kernel.modDirVersion}@" -i Makefile
-    sed -e 's@acpi/acpi[.]h@linux/acpi.h@g' -i acpi_call.c
-  '';
- 
+  nativeBuildInputs = kernel.moduleBuildDependencies;
+
+  makeFlags = kernel.makeFlags ++ [
+    "KDIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
+  ];
+
   installPhase = ''
-    mkdir -p $out/lib/modules/${kernel.modDirVersion}/misc
-    cp acpi_call.ko $out/lib/modules/${kernel.modDirVersion}/misc
-    mkdir -p $out/bin
-    cp examples/turn_off_gpu.sh $out/bin/test_discrete_video_off.sh
-    chmod a+x $out/bin/test_discrete_video_off.sh
+    install -D acpi_call.ko $out/lib/modules/${kernel.modDirVersion}/misc/acpi_call.ko
+    install -D -m755 examples/turn_off_gpu.sh $out/bin/test_discrete_video_off.sh
   '';
 
-  meta = {
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    maintainers = with maintainers; [ raskin mic92 ];
+    homepage = "https://github.com/nix-community/acpi_call";
+    platforms = platforms.linux;
     description = "A module allowing arbitrary ACPI calls; use case: hybrid video";
+    mainProgram = "test_discrete_video_off.sh";
+    license = licenses.gpl3Plus;
   };
 }

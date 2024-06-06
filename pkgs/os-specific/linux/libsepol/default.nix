@@ -1,33 +1,46 @@
-{ stdenv, fetchurl, flex }:
+{ lib, stdenv, fetchurl, flex }:
 
 stdenv.mkDerivation rec {
-  name = "libsepol-${version}";
-  version = "2.4";
-  se_release = "20150202";
-  se_url = "https://raw.githubusercontent.com/wiki/SELinuxProject/selinux/files/releases";
+  pname = "libsepol";
+  version = "3.6";
+  se_url = "https://github.com/SELinuxProject/selinux/releases/download";
+
+  outputs = [ "bin" "out" "dev" "man" ];
 
   src = fetchurl {
-    url = "${se_url}/${se_release}/libsepol-${version}.tar.gz";
-    sha256 = "0ncnwhpc1gx4hrrb822fqkwy5h75zzngsrfkd5mlqh1jk7aib419";
+    url = "${se_url}/${version}/libsepol-${version}.tar.gz";
+    sha256 = "sha256-ydxYXqlJA9eE1ZfIYc1dzmRZFo+V4isxoOqxzdgAl1o=";
   };
+
+  postPatch = lib.optionalString stdenv.hostPlatform.isStatic ''
+    substituteInPlace src/Makefile --replace 'all: $(LIBA) $(LIBSO)' 'all: $(LIBA)'
+    sed -i $'/^\t.*LIBSO/d' src/Makefile
+  '';
 
   nativeBuildInputs = [ flex ];
 
-  # Temporary work-around for problems after flex security update:
-  # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=835542
-  NIX_CFLAGS_COMPILE = "-Wno-error=sign-compare";
+  makeFlags = [
+    "PREFIX=$(out)"
+    "BINDIR=$(bin)/bin"
+    "INCDIR=$(dev)/include/sepol"
+    "INCLUDEDIR=$(dev)/include"
+    "MAN3DIR=$(man)/share/man/man3"
+    "MAN8DIR=$(man)/share/man/man8"
+    "SHLIBDIR=$(out)/lib"
+  ];
 
-  preBuild = ''
-    makeFlagsArray+=("PREFIX=$out")
-    makeFlagsArray+=("DESTDIR=$out")
-  '';
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
 
-  passthru = { inherit se_release se_url; };
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://userspace.selinuxproject.org;
+  passthru = { inherit se_url; };
+
+  meta = with lib; {
+    description = "SELinux binary policy manipulation library";
+    homepage = "http://userspace.selinuxproject.org";
     platforms = platforms.linux;
-    maintainers = [ maintainers.phreedom ];
-    license = stdenv.lib.licenses.gpl2;
+    maintainers = with maintainers; [ RossComputerGuy ];
+    license = lib.licenses.gpl2Plus;
+    pkgConfigModules = [ "libselinux" ];
   };
 }

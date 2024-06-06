@@ -1,25 +1,74 @@
-{ fetchurl, stdenv, ocamlPackages, coq }:
+{ callPackage, fetchurl, lib, stdenv
+, ocamlPackages, coqPackages, rubber, hevea, emacs
+, version ? "1.7.2"
+, ideSupport ? true
+, wrapGAppsHook3
+}:
 
 stdenv.mkDerivation rec {
-  name    = "why3-${version}";
-  version = "0.87.1";
+  pname = "why3";
+  inherit version;
 
   src = fetchurl {
-    url    = https://gforge.inria.fr/frs/download.php/file/35893/why3-0.87.1.tar.gz;
-    sha256 = "1ssik2f6fkpvwpdmxz8hrm3p62qas3sjlqya0r57s60ilpkgiwwb";
+    url = "https://why3.gitlabpages.inria.fr/releases/${pname}-${version}.tar.gz";
+    hash = {
+      "1.7.2" = "sha256-VaSG/FiO2MDdSSFXGJJrIylQx0LPwtT8AF7TpPVZhCQ=";
+      "1.6.0" = "sha256-hFvM6kHScaCtcHCc6Vezl9CR7BFbiKPoTEh7kj0ZJxw=";
+    }."${version}";
   };
 
-  buildInputs = (with ocamlPackages; [
-      ocaml findlib lablgtk ocamlgraph zarith menhir ]) ++
-    stdenv.lib.optionals (ocamlPackages.ocaml == coq.ocaml ) [
-      coq coq.camlp5
-    ];
+  strictDeps = true;
+
+  nativeBuildInputs = lib.optional ideSupport
+    wrapGAppsHook3
+  ++ (with ocamlPackages;  [
+    ocaml findlib menhir
+  ]) ++ [
+    # Coq Support
+    coqPackages.coq
+  ];
+
+  buildInputs = with ocamlPackages; [
+    ocamlgraph zarith
+    # Emacs compilation of why3.el
+    emacs
+    # Documentation
+    rubber hevea
+  ] ++ lib.optional ideSupport
+    # GUI
+    lablgtk3-sourceview3
+  ++ [
+    # WebIDE
+    js_of_ocaml js_of_ocaml-ppx
+    # S-expression output for why3pp
+    ppx_deriving ppx_sexp_conv ]
+    ++
+    # Coq Support
+    (with coqPackages; [ coq flocq ])
+  ;
+
+  propagatedBuildInputs = with ocamlPackages; [ camlzip menhirLib num re sexplib ];
+
+  enableParallelBuilding = true;
+
+  configureFlags = [ "--enable-verbose-make"
+    (lib.enableFeature ideSupport "ide")
+  ];
+
+  outputs = [ "out" "dev" ];
 
   installTargets = [ "install" "install-lib" ];
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    mkdir -p $dev/lib
+    mv $out/lib/ocaml $dev/lib/
+  '';
+
+  passthru.withProvers = callPackage ./with-provers.nix {};
+
+  meta = with lib; {
     description = "A platform for deductive program verification";
-    homepage    = "http://why3.lri.fr/";
+    homepage    = "https://why3.lri.fr/";
     license     = licenses.lgpl21;
     platforms   = platforms.unix;
     maintainers = with maintainers; [ thoughtpolice vbgl ];

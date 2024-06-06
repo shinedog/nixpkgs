@@ -1,48 +1,54 @@
-{ stdenv, fetchurl, taskwarrior, perl, ncurses }:
+{ lib, stdenv, fetchFromGitHub, fetchpatch, makeWrapper, perl, ncurses5, taskwarrior }:
 
 stdenv.mkDerivation rec {
-  version = "0.8";
-  name = "tasknc-${version}";
+  version = "2020-12-17";
+  pname = "tasknc";
 
-  src = fetchurl {
-    url = "https://github.com/mjheagle8/tasknc/archive/v${version}.tar.gz";
-    sha256 = "0max5schga9hmf3vfqk2ic91dr6raxglyyjcqchzla280kxn5c28";
+  src = fetchFromGitHub {
+    owner = "lharding";
+    repo = "tasknc";
+    rev = "a182661fbcc097a933d5e8cce3922eb1734a563e";
+    sha256 = "0jrv2k1yizfdjndbl06lmy2bb62ky2rjdk308967j31c5kqqnw56";
   };
+
+  # Pull pending upstream inclusion for ncurses-6.3:
+  #  https://github.com/lharding/tasknc/pull/57
+  patches = [
+    (fetchpatch {
+      name = "ncurses-6.3.patch";
+      url = "https://github.com/lharding/tasknc/commit/f74ea0641e9bf287acf22fac9f6eeea571b01800.patch";
+      sha256 = "18a90zj85sw2zfnfcv055nvi0lx3h8lcgsyabdfk94ksn78pygrv";
+    })
+  ];
+
+  nativeBuildInputs = [
+    makeWrapper
+    perl # For generating the man pages with pod2man
+  ];
+
+  buildInputs = [ ncurses5 ];
 
   hardeningDisable = [ "format" ];
 
-  #
-  # I know this is ugly, but the Makefile does strange things in this package,
-  # so we have to:
-  #
-  #   1. Remove the "doc" task dependency from the "all" target
-  #   2. Remove the "tasknc.1" task dependency from the "install" target
-  #   3. Remove the installing of the tasknc.1 file from the install target as
-  #      we just removed the build target for it.
-  #
-  # TODO : One could also provide a patch for the doc/manual.pod file so it
-  # actually builds, but I'm not familiar with this, so this is the faster
-  # approach for me. We have no manpage, though.
-  #
-  preConfigure = ''
-    sed -i -r 's,(all)(.*)doc,\1\2,' Makefile
-    sed -i -r 's,(install)(.*)tasknc\.1,\1\2,' Makefile
-    sed -i -r 's,install\ -D\ -m644\ tasknc\.1\ (.*),,' Makefile
-  '';
+  buildFlags = [ "VERSION=${version}" ];
 
   installPhase = ''
-    mkdir $out/bin/ -p
-    mkdir $out/share/man1 -p
-    mkdir $out/share/tasknc -p
-    DESTDIR=$out PREFIX= MANPREFIX=share make install
+    mkdir -p $out/bin/
+    mkdir -p $out/share/man/man1
+    mkdir -p $out/share/tasknc
+
+    DESTDIR=$out PREFIX= MANPREFIX=/share/man make install
+
+    wrapProgram $out/bin/tasknc --prefix PATH : ${taskwarrior}/bin
   '';
 
-  buildInputs = [ taskwarrior perl ncurses ];
 
-  meta = {
-    homepage = "https://github.com/mjheagle8/tasknc";
+  meta = with lib; {
+    homepage = "https://github.com/lharding/tasknc";
     description = "A ncurses wrapper around taskwarrior";
-    maintainers = [ stdenv.lib.maintainers.matthiasbeyer ];
-    platforms = stdenv.lib.platforms.linux; # Cannot test others
+    mainProgram = "tasknc";
+    maintainers = with maintainers; [ matthiasbeyer ];
+    platforms = platforms.linux; # Cannot test others
+    license = licenses.mit;
   };
 }

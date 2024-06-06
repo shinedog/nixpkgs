@@ -1,29 +1,32 @@
-{ stdenv, fetchurl, libXi, libXrandr, libXxf86vm, mesa_noglu, mesa_glu, xlibsWrapper, cmake }:
+{ lib, stdenv, fetchurl, libICE, libXext, libXi, libXrandr, libXxf86vm, libGL, libGLU, cmake
+, testers
+}:
 
-let version = "3.0.0";
-in stdenv.mkDerivation {
-  name = "freeglut-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "freeglut";
+  version = "3.4.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/freeglut/freeglut-${version}.tar.gz";
-    sha256 = "18knkyczzwbmyg8hr4zh8a1i5ga01np2jzd1rwmsh7mh2n2vwhra";
+    url = "mirror://sourceforge/freeglut/freeglut-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-PAvLkV2bGAqX7a69ARt6HeVFg6g4ZE3NQrsOoMbz6uw=";
   };
 
   outputs = [ "out" "dev" ];
 
-  buildInputs = [ libXi libXrandr libXxf86vm mesa_noglu mesa_glu xlibsWrapper cmake ];
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ libICE libXext libXi libXrandr libXxf86vm libGL libGLU ];
 
-  cmakeFlags = stdenv.lib.optionals stdenv.isDarwin [
-                 "-DOPENGL_INCLUDE_DIR=${mesa_noglu}/include"
-                 "-DOPENGL_gl_LIBRARY:FILEPATH=${mesa_noglu}/lib/libGL.dylib"
-                 "-DOPENGL_glu_LIBRARY:FILEPATH=${mesa_glu}/lib/libGLU.dylib"
+  cmakeFlags = lib.optionals stdenv.isDarwin [
+                 "-DOPENGL_INCLUDE_DIR=${libGL}/include"
+                 "-DOPENGL_gl_LIBRARY:FILEPATH=${libGL}/lib/libGL.dylib"
+                 "-DOPENGL_glu_LIBRARY:FILEPATH=${libGLU}/lib/libGLU.dylib"
                  "-DFREEGLUT_BUILD_DEMOS:BOOL=OFF"
                  "-DFREEGLUT_BUILD_STATIC:BOOL=OFF"
                ];
 
-  enableParallelBuilding = true;
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Create and manage windows containing OpenGL contexts";
     longDescription = ''
       FreeGLUT is an open source alternative to the OpenGL Utility Toolkit
@@ -33,9 +36,10 @@ in stdenv.mkDerivation {
       intended to be a full replacement for GLUT, and has only a few
       differences.
     '';
-    homepage = http://freeglut.sourceforge.net/;
+    homepage = "https://freeglut.sourceforge.net/";
     license = licenses.mit;
+    pkgConfigModules = [ "glut" ];
     platforms = platforms.all;
     maintainers = [ maintainers.bjornfor ];
   };
-}
+})

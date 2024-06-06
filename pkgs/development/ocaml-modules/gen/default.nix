@@ -1,25 +1,29 @@
-{ stdenv, fetchFromGitHub, ocaml, findlib, ocamlbuild, qtest, ounit }:
+{ lib, buildDunePackage, fetchFromGitHub, ocaml
+, seq
+, qcheck, ounit2
+}:
 
-let version = "0.4"; in
-
-stdenv.mkDerivation {
-  name = "ocaml-gen-${version}";
+buildDunePackage rec {
+  version = "1.1";
+  pname = "gen";
+  minimalOCamlVersion = "4.03";
+  duneVersion = "3";
 
   src = fetchFromGitHub {
     owner = "c-cube";
     repo = "gen";
-    rev = "${version}";
-    sha256 = "041dga300fh1y6fi8y0fkri2qda406lf2dmbrgllazw3rp07zkzj";
+    rev = "v${version}";
+    hash = "sha256-ZytPPGhmt/uANaSgkgsUBOwyQ9ka5H4J+5CnJpEdrNk=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild qtest ounit ];
+  propagatedBuildInputs = [ seq ];
+  checkInputs = [ qcheck ounit2 ];
 
-  createFindlibDestdir = true;
+  doCheck = lib.versionAtLeast ocaml.version "4.08";
 
   meta = {
-    homepage = https://github.com/c-cube/gen;
+    homepage = "https://github.com/c-cube/gen";
     description = "Simple, efficient iterators for OCaml";
-    license = stdenv.lib.licenses.bsd3;
-    platforms = ocaml.meta.platforms or [];
+    license = lib.licenses.bsd3;
   };
 }

@@ -1,26 +1,36 @@
-{ fetchurl, stdenv, perl, makeWrapper, procps }:
+{ fetchurl, lib, stdenv, perl, makeWrapper, procps, coreutils, gawk, buildPackages }:
 
 stdenv.mkDerivation rec {
-  name = "parallel-20161022";
+  pname = "parallel";
+  version = "20240422";
 
   src = fetchurl {
-    url = "mirror://gnu/parallel/${name}.tar.bz2";
-    sha256 = "1mz82chm5qav6h64rcckxzabr7w4ma0sjx61xav85x0swgcbjdsr";
+    url = "mirror://gnu/parallel/${pname}-${version}.tar.bz2";
+    hash = "sha256-eDiIID7eK5LO0x6z6AnKOp2J9FCP3LEYML+zV1SIJGc=";
   };
 
+  outputs = [ "out" "man" "doc" ];
+
   nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ perl procps ];
 
-  preFixup = ''
-    sed -i 's,#![ ]*/usr/bin/env[ ]*perl,#!${perl}/bin/perl,' $out/bin/*
+  postPatch = lib.optionalString (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    substituteInPlace Makefile.in \
+      --replace '$(DESTDIR)$(bindir)/parallel --shell-completion' '${lib.getExe buildPackages.parallel} --shell-completion'
+  '';
 
+  preInstall = ''
+    patchShebangs ./src/parallel
+  '';
+
+  postInstall = ''
     wrapProgram $out/bin/parallel \
-      ${if stdenv.isLinux then ("--prefix PATH \":\" ${procps}/bin") else ""} \
-      --prefix PATH : "${perl}/bin" \
+      --prefix PATH : "${lib.makeBinPath [ procps perl coreutils gawk ]}"
   '';
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Shell tool for executing jobs in parallel";
     longDescription =
       '' GNU Parallel is a shell tool for executing jobs in parallel.  A job
@@ -39,9 +49,10 @@ stdenv.mkDerivation rec {
          it possible to use output from GNU Parallel as input for other
          programs.
       '';
-    homepage = http://www.gnu.org/software/parallel/;
+    homepage = "https://www.gnu.org/software/parallel/";
     license = licenses.gpl3Plus;
     platforms = platforms.all;
-    maintainers = with maintainers; [ pSub vrthra ];
+    maintainers = with maintainers; [ pSub vrthra tomberek ];
+    mainProgram = "parallel";
   };
 }

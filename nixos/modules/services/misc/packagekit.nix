@@ -1,61 +1,74 @@
 { config, lib, pkgs, ... }:
 
-with lib;
-
 let
-
   cfg = config.services.packagekit;
 
-  backend = "nix";
+  inherit (lib)
+    mkEnableOption mkOption mkIf mkRemovedOptionModule types
+    listToAttrs recursiveUpdate;
 
-  packagekitConf = ''
-[Daemon]
-DefaultBackend=${backend}
-KeepCache=false
-    '';
+  iniFmt = pkgs.formats.ini { };
 
-  vendorConf = ''
-[PackagesNotFound]
-DefaultUrl=https://github.com/NixOS/nixpkgs
-CodecUrl=https://github.com/NixOS/nixpkgs
-HardwareUrl=https://github.com/NixOS/nixpkgs
-FontUrl=https://github.com/NixOS/nixpkgs
-MimeUrl=https://github.com/NixOS/nixpkgs
-      '';
+  confFiles = [
+    (iniFmt.generate "PackageKit.conf" (recursiveUpdate
+      {
+        Daemon = {
+          DefaultBackend = "test_nop";
+          KeepCache = false;
+        };
+      }
+      cfg.settings))
+
+    (iniFmt.generate "Vendor.conf" (recursiveUpdate
+      {
+        PackagesNotFound = rec {
+          DefaultUrl = "https://github.com/NixOS/nixpkgs";
+          CodecUrl = DefaultUrl;
+          HardwareUrl = DefaultUrl;
+          FontUrl = DefaultUrl;
+          MimeUrl = DefaultUrl;
+        };
+      }
+      cfg.vendorSettings))
+  ];
 
 in
-
 {
+  imports = [
+    (mkRemovedOptionModule [ "services" "packagekit" "backend" ] "Always set to test_nop, Nix backend is broken see #177946.")
+  ];
 
-  options = {
+  options.services.packagekit = {
+    enable = mkEnableOption ''
+      PackageKit, a cross-platform D-Bus abstraction layer for
+      installing software. Software utilizing PackageKit can install
+      software regardless of the package manager
+    '';
 
-    services.packagekit = {
-      enable = mkEnableOption
-        ''
-          PackageKit provides a cross-platform D-Bus abstraction layer for
-          installing software. Software utilizing PackageKit can install
-          software regardless of the package manager.
-        '';
+    settings = mkOption {
+      type = iniFmt.type;
+      default = { };
+      description = "Additional settings passed straight through to PackageKit.conf";
     };
 
+    vendorSettings = mkOption {
+      type = iniFmt.type;
+      default = { };
+      description = "Additional settings passed straight through to Vendor.conf";
+    };
   };
 
   config = mkIf cfg.enable {
 
-    services.dbus.packages = [ pkgs.packagekit ];
+    services.dbus.packages = with pkgs; [ packagekit ];
 
-    systemd.services.packagekit = {
-      description = "PackageKit Daemon";
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig.ExecStart = "${pkgs.packagekit}/libexec/packagekitd";
-      serviceConfig.User = "root";
-      serviceConfig.BusName = "org.freedesktop.PackageKit";
-      serviceConfig.Type = "dbus";
-    };
+    environment.systemPackages = with pkgs; [ packagekit ];
 
-    environment.etc."PackageKit/PackageKit.conf".text = packagekitConf;
-    environment.etc."PackageKit/Vendor.conf".text = vendorConf;
+    systemd.packages = with pkgs; [ packagekit ];
 
+    environment.etc = listToAttrs (map
+      (e:
+        lib.nameValuePair "PackageKit/${e.name}" { source = e; })
+      confFiles);
   };
-
 }

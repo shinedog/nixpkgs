@@ -1,168 +1,139 @@
-{ lib, ... }:
+{ lib, pkgs, ... }:
 
-with lib;
-
+let
+  inherit (lib)
+    mkAliasOptionModuleMD
+    mkRemovedOptionModule;
+in
 {
   imports = [
-    (mkRenamedOptionModule [ "environment" "x11Packages" ] [ "environment" "systemPackages" ])
-    (mkRenamedOptionModule [ "environment" "enableBashCompletion" ] [ "programs" "bash" "enableCompletion" ])
-    (mkRenamedOptionModule [ "environment" "nix" ] [ "nix" "package" ])
-    (mkRenamedOptionModule [ "fonts" "enableFontConfig" ] [ "fonts" "fontconfig" "enable" ])
-    (mkRenamedOptionModule [ "fonts" "extraFonts" ] [ "fonts" "fonts" ])
+    /*
+    This file defines some renaming/removing options for backwards compatibility
 
-    (mkRenamedOptionModule [ "security" "extraSetuidPrograms" ] [ "security" "setuidPrograms" ])
-    (mkRenamedOptionModule [ "networking" "enableWLAN" ] [ "networking" "wireless" "enable" ])
-    (mkRenamedOptionModule [ "networking" "enableRT73Firmware" ] [ "networking" "enableRalinkFirmware" ])
+    It should ONLY be used when the relevant module can't define these imports
+    itself, such as when the module was removed completely.
+    See https://github.com/NixOS/nixpkgs/pull/61570 for explanation
+    */
 
-    (mkRenamedOptionModule [ "services" "cadvisor" "host" ] [ "services" "cadvisor" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "elasticsearch" "host" ] [ "services" "elasticsearch" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "graphite" "api" "host" ] [ "services" "graphite" "api" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "graphite" "web" "host" ] [ "services" "graphite" "web" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "kibana" "host" ] [ "services" "kibana" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "mpd" "network" "host" ] [ "services" "mpd" "network" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "neo4j" "host" ] [ "services" "neo4j" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "shout" "host" ] [ "services" "shout" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "sslh" "host" ] [ "services" "sslh" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "statsd" "host" ] [ "services" "statsd" "listenAddress" ])
-    (mkRenamedOptionModule [ "services" "subsonic" "host" ] [ "services" "subsonic" "listenAddress" ])
-    (mkRenamedOptionModule [ "jobs" ] [ "systemd" "services" ])
+    # This alias module can't be where _module.check is defined because it would
+    # be added to submodules as well there
+    (mkAliasOptionModuleMD [ "environment" "checkConfigurationOptions" ] [ "_module" "check" ])
 
-    (mkRenamedOptionModule [ "services" "gitlab" "stateDir" ] [ "services" "gitlab" "statePath" ])
-    (mkRemovedOptionModule [ "services" "gitlab" "satelliteDir" ] "")
+    # Completely removed modules
+    (mkRemovedOptionModule [ "environment" "blcr" "enable" ] "The BLCR module has been removed")
+    (mkRemovedOptionModule [ "fonts" "fontconfig" "penultimate" ] "The corresponding package has removed from nixpkgs.")
+    (mkRemovedOptionModule [ "hardware" "brightnessctl" ] ''
+      The brightnessctl module was removed because newer versions of
+      brightnessctl don't require the udev rules anymore (they can use the
+      systemd-logind API). Instead of using the module you can now
+      simply add the brightnessctl package to environment.systemPackages.
+    '')
+    (mkRemovedOptionModule [ "hardware" "u2f" ] ''
+      The U2F modules module was removed, as all it did was adding the
+      udev rules from libu2f-host to the system. Udev gained native support
+      to handle FIDO security tokens, so this isn't necessary anymore.
+    '')
+    (mkRemovedOptionModule [ "hardware" "xow" ] ''
+      The xow package was removed from nixpkgs. Upstream has deprecated
+      the project and users are urged to switch to xone.
+    '')
+    (mkRemovedOptionModule [ "networking" "vpnc" ] "Use environment.etc.\"vpnc/service.conf\" instead.")
+    (mkRemovedOptionModule [ "networking" "wicd" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "programs" "gnome-documents" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "programs" "pantheon-tweaks" ] ''
+      pantheon-tweaks is no longer a switchboard plugin but an independent app,
+      adding the package to environment.systemPackages is sufficient.
+    '')
+    (mkRemovedOptionModule [ "programs" "tilp2" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "programs" "way-cooler" ] ("way-cooler is abandoned by its author: " +
+      "https://way-cooler.org/blog/2020/01/09/way-cooler-post-mortem.html"))
+    (mkRemovedOptionModule [ "security" "hideProcessInformation" ] ''
+      The hidepid module was removed, since the underlying machinery
+      is broken when using cgroups-v2.
+    '')
+    (mkRemovedOptionModule [ "services" "baget" "enable" ] "The baget module was removed due to the upstream package being unmaintained.")
+    (mkRemovedOptionModule [ "services" "beegfs" ] "The BeeGFS module has been removed")
+    (mkRemovedOptionModule [ "services" "beegfsEnable" ] "The BeeGFS module has been removed")
+    (mkRemovedOptionModule [ "services" "cgmanager" "enable"] "cgmanager was deprecated by lxc and therefore removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "chronos" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "couchpotato" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "dd-agent" ] "dd-agent was removed from nixpkgs in favor of the newer datadog-agent.")
+    (mkRemovedOptionModule [ "services" "dnscrypt-proxy" ] "Use services.dnscrypt-proxy2 instead")
+    (mkRemovedOptionModule [ "services" "exhibitor" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "firefox" "syncserver" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "flashpolicyd" ] "The flashpolicyd module has been removed. Adobe Flash Player is deprecated.")
+    (mkRemovedOptionModule [ "services" "fourStore" ] "The fourStore module has been removed")
+    (mkRemovedOptionModule [ "services" "fourStoreEndpoint" ] "The fourStoreEndpoint module has been removed")
+    (mkRemovedOptionModule [ "services" "fprot" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "frab" ] "The frab module has been removed")
+    (mkRemovedOptionModule [ "services" "homeassistant-satellite"] "The `services.homeassistant-satellite` module has been replaced by `services.wyoming-satellite`.")
+    (mkRemovedOptionModule [ "services" "ihatemoney" ] "The ihatemoney module has been removed for lack of downstream maintainer")
+    (mkRemovedOptionModule [ "services" "kippo" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "mailpile" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "marathon" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "mathics" ] "The Mathics module has been removed")
+    (mkRemovedOptionModule [ "services" "meguca" ] "Use meguca has been removed from nixpkgs")
+    (mkRemovedOptionModule [ "services" "mesos" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "moinmoin" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "mwlib" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "pantheon" "files" ] ''
+      This module was removed, please add pkgs.pantheon.elementary-files to environment.systemPackages directly.
+    '')
+    (mkRemovedOptionModule [ "services" "prey" ] ''
+      prey-bash-client is deprecated upstream
+    '')
+    (mkRemovedOptionModule [ "services" "quagga" ] "the corresponding package has been removed from nixpkgs")
+    (mkRemovedOptionModule [ "services" "railcar" ] "the corresponding package has been removed from nixpkgs")
+    (mkRemovedOptionModule [ "services" "seeks" ] "")
+    (mkRemovedOptionModule [ "services" "ssmtp" ] ''
+      The ssmtp package and the corresponding module have been removed due to
+      the program being unmaintained. The options `programs.msmtp.*` can be
+      used instead.
+    '')
+    (mkRemovedOptionModule [ "services" "venus" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "wakeonlan"] "This module was removed in favor of enabling it with networking.interfaces.<name>.wakeOnLan")
+    (mkRemovedOptionModule [ "services" "winstone" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "xserver" "displayManager" "auto" ] ''
+      The services.xserver.displayManager.auto module has been removed
+      because it was only intended for use in internal NixOS tests, and gave the
+      false impression of it being a special display manager when it's actually
+      LightDM. Please use the services.displayManager.autoLogin options
+      instead, or any other display manager in NixOS as they all support auto-login.
+    '')
+    (mkRemovedOptionModule [ "services" "xserver" "multitouch" ] ''
+      services.xserver.multitouch (which uses xf86_input_mtrack) has been removed
+      as the underlying package isn't being maintained. Working alternatives are
+      libinput and synaptics.
+    '')
+    (mkRemovedOptionModule [ "virtualisation" "rkt" ] "The rkt module has been removed, it was archived by upstream")
+    (mkRemovedOptionModule [ "services" "racoon" ] ''
+      The racoon module has been removed, because the software project was abandoned upstream.
+    '')
+    (mkRemovedOptionModule [ "services" "shellinabox" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "gogoclient" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "virtuoso" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "openfire" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "riak" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "cryptpad" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "rtsp-simple-server" ] "Package has been completely rebranded by upstream as mediamtx, and thus the service and the package were renamed in NixOS as well.")
+    (mkRemovedOptionModule [ "services" "prayer" ] "The corresponding package was removed from nixpkgs.")
+    (mkRemovedOptionModule [ "services" "restya-board" ] "The corresponding package was removed from nixpkgs.")
 
-    (mkRenamedOptionModule [ "services" "clamav" "updater" "config" ] [ "services" "clamav" "updater" "extraConfig" ])
+    (mkRemovedOptionModule [ "i18n" "inputMethod" "fcitx" ] "The fcitx module has been removed. Please use fcitx5 instead")
+    (mkRemovedOptionModule [ "services" "dhcpd4" ] ''
+      The dhcpd4 module has been removed because ISC DHCP reached its end of life.
+      See https://www.isc.org/blogs/isc-dhcp-eol/ for details.
+      Please switch to a different implementation like kea or dnsmasq.
+    '')
+    (mkRemovedOptionModule [ "services" "dhcpd6" ] ''
+      The dhcpd6 module has been removed because ISC DHCP reached its end of life.
+      See https://www.isc.org/blogs/isc-dhcp-eol/ for details.
+      Please switch to a different implementation like kea or dnsmasq.
+    '')
+    (mkRemovedOptionModule [ "services" "tedicross" ] ''
+      The corresponding package was broken and removed from nixpkgs.
+    '')
 
-    # Old Grub-related options.
-    (mkRenamedOptionModule [ "boot" "initrd" "extraKernelModules" ] [ "boot" "initrd" "kernelModules" ])
-    (mkRenamedOptionModule [ "boot" "extraKernelParams" ] [ "boot" "kernelParams" ])
-    (mkRenamedOptionModule [ "boot" "loader" "grub" "timeout" ] [ "boot" "loader" "timeout" ])
-    (mkRenamedOptionModule [ "boot" "loader" "gummiboot" "timeout" ] [ "boot" "loader" "timeout" ])
-
-    # smartd
-    (mkRenamedOptionModule [ "services" "smartd" "deviceOpts" ] [ "services" "smartd" "defaults" "monitored" ])
-
-    # OpenSSH
-    (mkRenamedOptionModule [ "services" "sshd" "ports" ] [ "services" "openssh" "ports" ])
-    (mkAliasOptionModule [ "services" "sshd" "enable" ] [ "services" "openssh" "enable" ])
-    (mkRenamedOptionModule [ "services" "sshd" "allowSFTP" ] [ "services" "openssh" "allowSFTP" ])
-    (mkRenamedOptionModule [ "services" "sshd" "forwardX11" ] [ "services" "openssh" "forwardX11" ])
-    (mkRenamedOptionModule [ "services" "sshd" "gatewayPorts" ] [ "services" "openssh" "gatewayPorts" ])
-    (mkRenamedOptionModule [ "services" "sshd" "permitRootLogin" ] [ "services" "openssh" "permitRootLogin" ])
-    (mkRenamedOptionModule [ "services" "xserver" "startSSHAgent" ] [ "services" "xserver" "startOpenSSHAgent" ])
-    (mkRenamedOptionModule [ "services" "xserver" "startOpenSSHAgent" ] [ "programs" "ssh" "startAgent" ])
-    (mkAliasOptionModule [ "services" "openssh" "knownHosts" ] [ "programs" "ssh" "knownHosts" ])
-
-    # VirtualBox
-    (mkRenamedOptionModule [ "services" "virtualbox" "enable" ] [ "virtualisation" "virtualbox" "guest" "enable" ])
-    (mkRenamedOptionModule [ "services" "virtualboxGuest" "enable" ] [ "virtualisation" "virtualbox" "guest" "enable" ])
-    (mkRenamedOptionModule [ "programs" "virtualbox" "enable" ] [ "virtualisation" "virtualbox" "host" "enable" ])
-    (mkRenamedOptionModule [ "programs" "virtualbox" "addNetworkInterface" ] [ "virtualisation" "virtualbox" "host" "addNetworkInterface" ])
-    (mkRenamedOptionModule [ "programs" "virtualbox" "enableHardening" ] [ "virtualisation" "virtualbox" "host" "enableHardening" ])
-    (mkRenamedOptionModule [ "services" "virtualboxHost" "enable" ] [ "virtualisation" "virtualbox" "host" "enable" ])
-    (mkRenamedOptionModule [ "services" "virtualboxHost" "addNetworkInterface" ] [ "virtualisation" "virtualbox" "host" "addNetworkInterface" ])
-    (mkRenamedOptionModule [ "services" "virtualboxHost" "enableHardening" ] [ "virtualisation" "virtualbox" "host" "enableHardening" ])
-
-    # Tarsnap
-    (mkRenamedOptionModule [ "services" "tarsnap" "config" ] [ "services" "tarsnap" "archives" ])
-
-    # ibus
-    (mkRenamedOptionModule [ "programs" "ibus" "plugins" ] [ "i18n" "inputMethod" "ibus" "engines" ])
-
-    # proxy
-    (mkRenamedOptionModule [ "nix" "proxy" ] [ "networking" "proxy" "default" ])
-
-    # sandboxing
-    (mkRenamedOptionModule [ "nix" "useChroot" ] [ "nix" "useSandbox" ])
-    (mkRenamedOptionModule [ "nix" "chrootDirs" ] [ "nix" "sandboxPaths" ])
-
-    # KDE
-    (mkRenamedOptionModule [ "kde" "extraPackages" ] [ "environment" "systemPackages" ])
-    (mkRenamedOptionModule [ "environment" "kdePackages" ] [ "environment" "systemPackages" ])
-
-    # Multiple efi bootloaders now
-    (mkRenamedOptionModule [ "boot" "loader" "efi" "efibootmgr" "enable" ] [ "boot" "loader" "efi" "canTouchEfiVariables" ])
-
-    # NixOS environment changes
-    # !!! this hardcodes bash, could we detect from config which shell is actually used?
-    (mkRenamedOptionModule [ "environment" "promptInit" ] [ "programs" "bash" "promptInit" ])
-
-    (mkRenamedOptionModule [ "services" "xserver" "driSupport" ] [ "hardware" "opengl" "driSupport" ])
-    (mkRenamedOptionModule [ "services" "xserver" "driSupport32Bit" ] [ "hardware" "opengl" "driSupport32Bit" ])
-    (mkRenamedOptionModule [ "services" "xserver" "s3tcSupport" ] [ "hardware" "opengl" "s3tcSupport" ])
-    (mkRenamedOptionModule [ "hardware" "opengl" "videoDrivers" ] [ "services" "xserver" "videoDrivers" ])
-    (mkRenamedOptionModule [ "services" "xserver" "vaapiDrivers" ] [ "hardware" "opengl" "extraPackages" ])
-
-    (mkRenamedOptionModule [ "services" "mysql55" ] [ "services" "mysql" ])
-
-    (mkAliasOptionModule [ "environment" "checkConfigurationOptions" ] [ "_module" "check" ])
-
-    # XBMC
-    (mkRenamedOptionModule [ "services" "xserver" "windowManager" "xbmc" ] [ "services" "xserver" "desktopManager" "kodi" ])
-    (mkRenamedOptionModule [ "services" "xserver" "desktopManager" "xbmc" ] [ "services" "xserver" "desktopManager" "kodi" ])
-
-    # DNSCrypt-proxy
-    (mkRenamedOptionModule [ "services" "dnscrypt-proxy" "port" ] [ "services" "dnscrypt-proxy" "localPort" ])
-
-    (mkRenamedOptionModule [ "services" "hostapd" "extraCfg" ] [ "services" "hostapd" "extraConfig" ])
-
-    # Enlightenment
-    (mkRenamedOptionModule [ "services" "xserver" "desktopManager" "e19" "enable" ] [ "services" "xserver" "desktopManager" "enlightenment" "enable" ])
-
-    # Iodine
-    (mkRenamedOptionModule [ "services" "iodined" "enable" ] [ "services" "iodine" "server" "enable" ])
-    (mkRenamedOptionModule [ "services" "iodined" "domain" ] [ "services" "iodine" "server" "domain" ])
-    (mkRenamedOptionModule [ "services" "iodined" "ip" ] [ "services" "iodine" "server" "ip" ])
-    (mkRenamedOptionModule [ "services" "iodined" "extraConfig" ] [ "services" "iodine" "server" "extraConfig" ])
-    (mkRemovedOptionModule [ "services" "iodined" "client" ] "")
-
-    # Grsecurity
-    (mkRemovedOptionModule [ "security" "grsecurity" "kernelPatch" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "mode" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "priority" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "system" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "virtualisationConfig" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "hardwareVirtualisation" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "virtualisationSoftware" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "sysctl" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "denyChrootChmod" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "denyChrootCaps" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "denyUSB" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "restrictProc" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "restrictProcWithGroup" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "unrestrictProcGid" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "disableRBAC" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "disableSimultConnect" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "verboseVersion" ] "")
-    (mkRemovedOptionModule [ "security" "grsecurity" "config" "kernelExtraConfig" ] "")
-
-    # Unity3D
-    (mkRenamedOptionModule [ "programs" "unity3d" "enable" ] [ "security" "chromiumSuidSandbox" "enable" ])
-
-    # fontconfig-ultimate
-    (mkRenamedOptionModule [ "fonts" "fontconfig" "ultimate" "rendering" ] [ "fonts" "fontconfig" "ultimate" "preset" ])
-
-    # murmur
-    (mkRenamedOptionModule [ "services" "murmur" "welcome" ] [ "services" "murmur" "welcometext" ])
-
-    # parsoid
-    (mkRemovedOptionModule [ "services" "parsoid" "interwikis" ] [ "services" "parsoid" "wikis" ])
-
-    # tarsnap
-    (mkRemovedOptionModule [ "services" "tarsnap" "cachedir" ] "Use services.tarsnap.archives.<name>.cachedir")
-
-    # Options that are obsolete and have no replacement.
-    (mkRemovedOptionModule [ "boot" "initrd" "luks" "enable" ] "")
-    (mkRemovedOptionModule [ "programs" "bash" "enable" ] "")
-    (mkRemovedOptionModule [ "services" "samba" "defaultShare" ] "")
-    (mkRemovedOptionModule [ "services" "syslog-ng" "serviceName" ] "")
-    (mkRemovedOptionModule [ "services" "syslog-ng" "listenToJournal" ] "")
-    (mkRemovedOptionModule [ "ec2" "metadata" ] "")
-    (mkRemovedOptionModule [ "services" "openvpn" "enable" ] "")
-    (mkRemovedOptionModule [ "services" "printing" "cupsFilesConf" ] "")
-    (mkRemovedOptionModule [ "services" "printing" "cupsdConf" ] "")
-    (mkRemovedOptionModule [ "services" "xserver" "startGnuPGAgent" ]
-      "See the 16.09 release notes for more information.")
-    (mkRemovedOptionModule [ "services" "phpfpm" "phpIni" ] "")
-    (mkRemovedOptionModule [ "services" "dovecot2" "package" ] "")
+    # Do NOT add any option renames here, see top of the file
   ];
 }

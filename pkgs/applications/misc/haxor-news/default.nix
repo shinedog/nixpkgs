@@ -1,24 +1,64 @@
-{ stdenv, fetchurl, pythonPackages }:
+{ lib, fetchFromGitHub, fetchPypi, python3 }:
 
-pythonPackages.buildPythonApplication rec {
-  version = "0.3.1";
-  name = "haxor-news-${version}";
 
-  src = fetchurl {
-    url = "https://github.com/donnemartin/haxor-news/archive/0.3.1.tar.gz";
-    sha256 = "0jglx8fy38sjyszvvg7mvmyk66l53kyq4i09hmgdz7hb1hrm9m2m";
+let
+  py = python3.override {
+    packageOverrides = self: super: {
+      self = py;
+
+      # not compatible with prompt_toolkit >=2.0
+      prompt-toolkit = super.prompt-toolkit.overridePythonAttrs (oldAttrs: rec {
+        name = "${oldAttrs.pname}-${version}";
+        version = "1.0.18";
+        src = oldAttrs.src.override {
+          inherit version;
+          hash = "sha256-3U/KAsgGlJetkxotCZFMaw0bUBUc6Ha8Fb3kx0cJASY=";
+        };
+      });
+      # Use click 7
+      click = super.click.overridePythonAttrs (old: rec {
+        version = "7.1.2";
+        src = fetchPypi {
+          pname = "click";
+          inherit version;
+          hash = "sha256-0rUlXHxjSbwb0eWeCM0SrLvWPOZJ8liHVXg6qU37axo=";
+        };
+        disabledTests = [ "test_bytes_args" ];
+      });
+    };
+  };
+in
+with py.pkgs;
+
+buildPythonApplication rec {
+  pname = "haxor-news";
+  version = "unstable-2020-10-20";
+
+  # haven't done a stable release in 3+ years, but actively developed
+  src = fetchFromGitHub {
+    owner = "donnemartin";
+    repo = pname;
+    rev = "811a5804c09406465b2b02eab638c08bf5c4fa7f";
+    hash = "sha256-5v61b49ttwqPOvtoykJBBzwVSi7S8ARlakccMr12bbw=";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
+  propagatedBuildInputs = [
     click
     colorama
-    requests2
+    requests
     pygments
-    prompt_toolkit_52
+    prompt-toolkit
     six
   ];
 
-  meta = with stdenv.lib; {
+  # will fail without pre-seeded config files
+  doCheck = false;
+
+  nativeCheckInputs = [ unittestCheckHook mock ];
+
+  unittestFlagsArray = [ "-s" "tests" "-v" ];
+
+  meta = with lib; {
     homepage = "https://github.com/donnemartin/haxor-news";
     description = "Browse Hacker News like a haxor";
     license = licenses.asl20;

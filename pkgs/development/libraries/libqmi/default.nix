@@ -1,26 +1,97 @@
-{ stdenv, fetchurl, pkgconfig, glib, python }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, meson
+, ninja
+, pkg-config
+, gobject-introspection
+, gtk-doc
+, docbook-xsl-nons
+, docbook_xml_dtd_43
+, help2man
+, glib
+, python3
+, mesonEmulatorHook
+, libgudev
+, bash-completion
+, libmbim
+, libqrtr-glib
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, withMan ? stdenv.buildPlatform.canExecute stdenv.hostPlatform
+}:
 
 stdenv.mkDerivation rec {
-  name = "libqmi-1.16.0";
+  pname = "libqmi";
+  version = "1.34.0";
 
-  src = fetchurl {
-    url = "https://www.freedesktop.org/software/libqmi/${name}.tar.xz";
-    sha256 = "0amshs06qc8zy8jz3r2yksqhhbamll7f893ll4zlvgr3zm3vpdks";
+  outputs = [ "out" "dev" ]
+    ++ lib.optional withIntrospection "devdoc";
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "mobile-broadband";
+    repo = "libqmi";
+    rev = version;
+    hash = "sha256-l9ev9ZOWicVNZ/Wj//KNd3NHcefIrLVriqJhEpwWvtQ=";
   };
 
-  outputs = [ "out" "dev" "devdoc" ];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    python3
+  ] ++ lib.optionals withMan [
+    help2man
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+    gtk-doc
+    docbook-xsl-nons
+    docbook_xml_dtd_43
+  ] ++ lib.optionals (withIntrospection && !stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
 
-  preBuild = ''
-    patchShebangs .
+  buildInputs = [
+    bash-completion
+    libmbim
+  ] ++ lib.optionals withIntrospection [
+    libgudev
+  ];
+
+  propagatedBuildInputs = [
+    glib
+  ] ++ lib.optionals withIntrospection [
+    libqrtr-glib
+  ];
+
+  mesonFlags = [
+    "-Dudevdir=${placeholder "out"}/lib/udev"
+    (lib.mesonBool "gtk_doc" withIntrospection)
+    (lib.mesonBool "introspection" withIntrospection)
+    (lib.mesonBool "man" withMan)
+    (lib.mesonBool "qrtr" withIntrospection)
+    (lib.mesonBool "udev" withIntrospection)
+  ];
+
+  doCheck = true;
+
+  postPatch = ''
+    patchShebangs \
+      build-aux/qmi-codegen/qmi-codegen
   '';
 
-  buildInputs = [ pkgconfig glib python ];
-
-  meta = with stdenv.lib; {
-    homepage = http://www.freedesktop.org/wiki/Software/libqmi/;
+  meta = with lib; {
+    homepage = "https://www.freedesktop.org/wiki/Software/libqmi/";
     description = "Modem protocol helper library";
+    maintainers = teams.freedesktop.members;
     platforms = platforms.linux;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ wkennington ];
+    license = with licenses; [
+      # Library
+      lgpl2Plus
+      # Tools
+      gpl2Plus
+    ];
+    changelog = "https://gitlab.freedesktop.org/mobile-broadband/libqmi/-/blob/${version}/NEWS";
   };
 }

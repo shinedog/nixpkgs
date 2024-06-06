@@ -1,31 +1,37 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "comfortaa-${version}";
-  version = "2.004";
+stdenvNoCC.mkDerivation rec {
+  pname = "comfortaa";
+  version = "unstable-2021-07-29";
 
-  src = fetchurl {
-    url = "http://openfontlibrary.org/assets/downloads/comfortaa/38318a69b56162733bf82bc0170b7521/comfortaa.zip";
-    sha256 = "0js0kk5g6b7xrq92b68gz5ipbiv1havnbgnfqzvlw3k3nllwnl9z";
+  src = fetchFromGitHub {
+    owner = "googlefonts";
+    repo = pname;
+    rev = "2a87ac6f6ea3495150bfa00d0c0fb53dd0a2f11b";
+    postFetch = ''
+      # Remove the OTF fonts as they are not needed and cause a hash mismatch
+      rm -rf $out/fonts/{OTF,otf}
+    '';
+    hash = "sha256-4ZBRaQyYlnt9l4NgBHezuCnR3rKTJ37L41RTbGAhd0M=";
   };
 
-  phases = ["unpackPhase" "installPhase"];
-
-  buildInputs = [unzip];
+  dontBuild = true;
 
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    mkdir -p $out/share/doc/${name}
-    cp -v *.ttf $out/share/fonts/truetype/
-    cp -v FONTLOG.txt $out/share/doc/${name}/
-    cp -v donate.html $out/share/doc/${name}/
+    runHook preInstall
+
+    mkdir -p $out/share/fonts/truetype $out/share/doc/comfortaa
+    cp fonts/TTF/*.ttf $out/share/fonts/truetype
+    cp FONTLOG.txt README.md $out/share/doc/comfortaa
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://aajohan.deviantart.com/art/Comfortaa-font-105395949;
+  meta = with lib; {
+    homepage = "http://aajohan.deviantart.com/art/Comfortaa-font-105395949";
     description = "A clean and modern font suitable for headings and logos";
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
   };
 }

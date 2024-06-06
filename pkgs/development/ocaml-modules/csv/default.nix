@@ -1,32 +1,24 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild }:
+{ lib, fetchurl, buildDunePackage }:
 
-stdenv.mkDerivation {
+buildDunePackage rec {
+  pname = "csv";
+  version = "2.4";
 
-  name = "ocaml-csv-1.4.2";
-
-  src = fetchzip {
-    url = https://github.com/Chris00/ocaml-csv/releases/download/1.4.2/csv-1.4.2.tar.gz;
-    sha256 = "05s8py2qr3889c72g1q07r15pzch3j66xdphxi2sd93h5lvnpi4j";
+  src = fetchurl {
+    url = "https://github.com/Chris00/ocaml-${pname}/releases/download/${version}/csv-${version}.tbz";
+    sha256 = "13m9n8mdss6jfbiw7d5bybxn4n85vmg4zw7dc968qrgjfy0w9zhk";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  preConfigure = ''
+    substituteInPlace src/dune --replace '(libraries bytes)' ""
+  '';
 
-  createFindlibDestdir = true;
+  duneVersion = "3";
 
-  configurePhase = "ocaml setup.ml -configure --prefix $out --enable-tests";
-
-  buildPhase = "ocaml setup.ml -build";
-
-  doCheck = true;
-  checkPhase = "ocaml setup.ml -test";
-
-  installPhase = "ocaml setup.ml -install";
-
-  meta = with stdenv.lib; {
+  meta = {
     description = "A pure OCaml library to read and write CSV files";
-    homepage = https://github.com/Chris00/ocaml-csv;
-    license = licenses.lgpl21;
-    maintainers = [ maintainers.vbgl ];
-    platforms = ocaml.meta.platforms or [];
+    license = lib.licenses.lgpl21;
+    maintainers = [ lib.maintainers.vbgl ];
+    homepage = "https://github.com/Chris00/ocaml-csv";
   };
 }

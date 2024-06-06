@@ -1,21 +1,66 @@
-{ stdenv, fetchurl, pkgconfig, djvulibre, poppler, fontconfig, libjpeg }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, autoreconfHook
+, gettext
+, libtool
+, pkg-config
+, djvulibre
+, exiv2
+, fontconfig
+, graphicsmagick
+, libjpeg
+, libuuid
+, poppler
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.9.4";
-  name = "pdf2djvu-${version}";
+  version = "0.9.19";
+  pname = "pdf2djvu";
 
-  src = fetchurl {
-    url = "https://bitbucket.org/jwilk/pdf2djvu/downloads/${name}.tar.xz";
-    sha256 = "1a1gwr6yzbiximbpgg4rc69dq8g3jmxwcbcwqk0fhfbgzj1j4w65";
+  src = fetchFromGitHub {
+    owner = "jwilk";
+    repo = "pdf2djvu";
+    rev = version;
+    sha256 = "sha256-j4mYdmLZ56qTA1KbWBjBvyTyLaeuIITKYsALRIO7lj0=";
   };
 
-  buildInputs = [ pkgconfig djvulibre poppler fontconfig libjpeg ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [
+    djvulibre
+    exiv2
+    fontconfig
+    graphicsmagick
+    libjpeg
+    libuuid
+    poppler
+  ];
+
+  postPatch = ''
+    substituteInPlace private/autogen \
+      --replace /usr/share/gettext ${gettext}/share/gettext \
+      --replace /usr/share/libtool ${libtool}/share/libtool
+
+    substituteInPlace configure.ac \
+      --replace '$djvulibre_bin_path' ${djvulibre.bin}/bin
+  '';
+
+  preAutoreconf = ''
+    private/autogen
+  '';
+
+  enableParallelBuilding = true;
+
+  # Required by Poppler on darwin
+  # https://github.com/jwilk/pdf2djvu/commit/373e065faf2f0d868a3700788d20a96e9528bb12
+  CXXFLAGS = "-std=c++17";
+
+  meta = with lib; {
     description = "Creates djvu files from PDF files";
-    homepage = http://code.google.com/p/pdf2djvu/;
-    license = licenses.gpl2;
+    homepage = "https://jwilk.net/software/pdf2djvu";
+    license = licenses.gpl2Only;
     maintainers = with maintainers; [ pSub ];
-    inherit version;
+    mainProgram = "pdf2djvu";
   };
 }

@@ -1,19 +1,27 @@
-{ stdenv, fetchurl, SDL2 }:
+{ lib, stdenv, darwin, fetchurl, pkg-config, SDL2, testers }:
 
-stdenv.mkDerivation rec {
-  name = "SDL2_gfx-${version}";
-  version = "1.0.1";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "SDL2_gfx";
+  version = "1.0.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/sdl2gfx/${name}.tar.gz";
-    sha256 = "16jrijzdp095qf416zvj9gs2fqqn6zkyvlxs5xqybd0ip37cp6yn";
+    url = "http://www.ferzkopp.net/Software/${finalAttrs.pname}/${finalAttrs.pname}-${finalAttrs.version}.tar.gz";
+    sha256 = "0qk2ax7f7grlxb13ba0ll3zlm8780s7j8fmrhlpxzjgdvldf1q33";
   };
 
-  buildInputs = [ SDL2 ];
+  nativeBuildInputs = [ pkg-config ];
 
-  configureFlags = [ "--enable-mmx" ];
+  buildInputs = [ SDL2 ]
+    ++ lib.optional stdenv.isDarwin darwin.libobjc;
 
-  meta = with stdenv.lib; {
+  configureFlags = [(if stdenv.hostPlatform.isx86 then "--enable-mmx" else "--disable-mmx")]
+     ++ lib.optional stdenv.isDarwin "--disable-sdltest";
+
+  passthru.tests.pkg-config = testers.hasPkgConfigModules {
+    package = finalAttrs.finalPackage;
+  };
+
+  meta = with lib; {
     description = "SDL graphics drawing primitives and support functions";
 
     longDescription = ''
@@ -34,10 +42,10 @@ stdenv.mkDerivation rec {
       code. Its is written in plain C and can be used in C++ code.
     '';
 
-    homepage = "https://sourceforge.net/projects/sdlgfx/";
+    homepage = "http://www.ferzkopp.net/wordpress/2016/01/02/sdl_gfx-sdl2_gfx/";
     license = licenses.zlib;
-
-    maintainers = with maintainers; [ bjg ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ cpages ];
+    platforms = platforms.unix;
+    pkgConfigModules = [ "SDL2_gfx" ];
   };
-}
+})

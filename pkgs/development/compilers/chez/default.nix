@@ -1,52 +1,76 @@
-{ stdenv, fetchgit, coreutils, ncurses, libX11 }:
+{ lib, stdenv, fetchurl
+, coreutils, cctools
+, darwin
+, ncurses, libiconv, libX11, libuuid, testers
+}:
 
-stdenv.mkDerivation rec {
-  name    = "chez-scheme-${version}";
-  version = "9.4-${dver}";
-  dver    = "20160507";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "chez-scheme";
+  version = "10.0.0";
 
-  src = fetchgit {
-    url    = "https://github.com/cisco/chezscheme.git";
-    rev    = "65df1d1f7c37f5b5a93cd7e5b475dda9dbafe03c";
-    sha256 = "1b273il3njnn04z55w1hnygvcqllc6p5qg9mcwh10w39fwsd8fbs";
-    fetchSubmodules = true;
+  src = fetchurl {
+    url = "https://github.com/cisco/ChezScheme/releases/download/v${finalAttrs.version}/csv${finalAttrs.version}.tar.gz";
+    hash = "sha256-03GZASte0ZhcQGnWqH/xjl4fWi3yfkApkfr0XcTyIyw=";
   };
 
-  enableParallelBuilding = true;
-  buildInputs = [ ncurses libX11 ];
+  nativeBuildInputs = lib.optionals stdenv.isDarwin [
+    cctools
+  ] ++ lib.optionals (stdenv.isDarwin && stdenv.isAarch64) [
+    darwin.autoSignDarwinBinariesHook
+  ];
+  buildInputs = [ ncurses libiconv libX11 libuuid ];
 
-  /* We patch out a very annoying 'feature' in ./configure, which
-  ** tries to use 'git' to update submodules.
-  **
-  ** We have to also fix a few occurrences to tools with absolute
+  enableParallelBuilding = true;
+
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isGNU "-Wno-error=format-truncation";
+
+  /*
+  ** We have to fix a few occurrences to tools with absolute
   ** paths in some helper scripts, otherwise the build will fail on
   ** NixOS or in any chroot build.
   */
   patchPhase = ''
-    substituteInPlace ./configure \
-      --replace "git submodule init && git submodule update || exit 1" ""
-
-    substituteInPlace ./workarea \
-      --replace "/bin/ln" "${coreutils}/bin/ln" \
-      --replace "/bin/cp" "${coreutils}/bin/cp"
-
     substituteInPlace ./makefiles/installsh \
-      --replace "/usr/bin/true" "${coreutils}/bin/true"
+      --replace-warn "/usr/bin/true" "${coreutils}/bin/true"
+
+    substituteInPlace zlib/configure \
+      --replace-warn "/usr/bin/libtool" libtool
   '';
 
-  /* Don't use configureFlags, since that just implicitly appends
+  /*
+  ** Don't use configureFlags, since that just implicitly appends
   ** everything onto a --prefix flag, which ./configure gets very angry
   ** about.
+  **
+  ** Also, carefully set a manual workarea argument, so that we
+  ** can later easily find the machine type that we built Chez
+  ** for.
   */
   configurePhase = ''
-    ./configure --threads --installprefix=$out --installman=$out/share/man
+    ./configure --as-is --threads --installprefix=$out --installman=$out/share/man
   '';
 
-  meta = {
-    description = "A powerful and incredibly fast R6RS Scheme compiler";
-    homepage    = "http://www.scheme.com";
-    license     = stdenv.lib.licenses.asl20;
-    platforms   = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ thoughtpolice ];
+  /*
+  ** Clean up some of the examples from the build output.
+  */
+  postInstall = ''
+    rm -rf $out/lib/csv${finalAttrs.version}/examples
+  '';
+
+  setupHook = ./setup-hook.sh;
+
+  passthru.tests = {
+    version = testers.testVersion {
+      package = finalAttrs.finalPackage;
+    };
   };
-}
+
+  meta = {
+    description  = "A powerful and incredibly fast R6RS Scheme compiler";
+    homepage     = "https://cisco.github.io/ChezScheme/";
+    license      = lib.licenses.asl20;
+    maintainers  = with lib.maintainers; [ thoughtpolice ];
+    platforms    = lib.platforms.unix;
+    mainProgram  = "scheme";
+  };
+})

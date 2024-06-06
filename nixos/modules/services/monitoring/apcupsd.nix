@@ -38,14 +38,14 @@ let
   ];
 
   shellCmdsForEventScript = eventname: commands: ''
-    echo "#!${pkgs.stdenv.shell}" > "$out/${eventname}"
+    echo "#!${pkgs.runtimeShell}" > "$out/${eventname}"
     echo '${commands}' >> "$out/${eventname}"
     chmod a+x "$out/${eventname}"
   '';
 
   eventToShellCmds = event: if builtins.hasAttr event cfg.hooks then (shellCmdsForEventScript event (builtins.getAttr event cfg.hooks)) else "";
 
-  scriptDir = pkgs.runCommand "apcupsd-scriptdir" {} (''
+  scriptDir = pkgs.runCommand "apcupsd-scriptdir" { preferLocalBuild = true; } (''
     mkdir "$out"
     # Copy SCRIPTDIR from apcupsd package
     cp -r ${pkgs.apcupsd}/etc/apcupsd/* "$out"/
@@ -62,6 +62,21 @@ let
 
   );
 
+  # Ensure the CLI uses our generated configFile
+  wrappedBinaries = pkgs.runCommandLocal "apcupsd-wrapped-binaries"
+    { nativeBuildInputs = [ pkgs.makeWrapper ]; }
+    ''
+      for p in "${lib.getBin pkgs.apcupsd}/bin/"*; do
+          bname=$(basename "$p")
+          makeWrapper "$p" "$out/bin/$bname" --add-flags "-f ${configFile}"
+      done
+    '';
+
+  apcupsdWrapped = pkgs.symlinkJoin {
+    name = "apcupsd-wrapped";
+    # Put wrappers first so they "win"
+    paths = [ wrappedBinaries pkgs.apcupsd ];
+  };
 in
 
 {
@@ -91,7 +106,7 @@ in
           BATTERYLEVEL 50
           MINUTES 5
         '';
-        type = types.string;
+        type = types.lines;
         description = ''
           Contents of the runtime configuration file, apcupsd.conf. The default
           settings makes apcupsd autodetect USB UPSes, limit network access to
@@ -104,9 +119,9 @@ in
       hooks = mkOption {
         default = {};
         example = {
-          doshutdown = ''# shell commands to notify that the computer is shutting down'';
+          doshutdown = "# shell commands to notify that the computer is shutting down";
         };
-        type = types.attrsOf types.string;
+        type = types.attrsOf types.lines;
         description = ''
           Each attribute in this option names an apcupsd event and the string
           value it contains will be executed in a shell, in response to that
@@ -138,7 +153,7 @@ in
     } ];
 
     # Give users access to the "apcaccess" tool
-    environment.systemPackages = [ pkgs.apcupsd ];
+    environment.systemPackages = [ apcupsdWrapped ];
 
     # NOTE 1: apcupsd runs as root because it needs permission to run
     # "shutdown"
@@ -180,7 +195,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         ExecStart = "${pkgs.apcupsd}/bin/apcupsd --killpower -f ${configFile}";
-        TimeoutSec = 0;
+        TimeoutSec = "infinity";
         StandardOutput = "tty";
         RemainAfterExit = "yes";
       };

@@ -1,42 +1,72 @@
-{ stdenv, fetchurl, perl, libX11, libjpeg, libpng, libtiff, pkgconfig,
-librsvg, glib, gtk2, libXext, libXxf86vm, poppler, xineLib }:
+{ lib, stdenv, fetchurl, perl, libX11, libXinerama, libjpeg, libpng, libtiff
+, libwebp, pkg-config, librsvg, glib, gtk2, libXext, libXxf86vm, poppler, vlc
+, ghostscript, makeWrapper, tzdata, makeDesktopItem, copyDesktopItems
+, directoryListingUpdater }:
 
 stdenv.mkDerivation rec {
-  name = "eaglemode-0.86.0";
+  pname = "eaglemode";
+  version = "0.96.1";
 
   src = fetchurl {
-    url = "mirror://sourceforge/eaglemode/${name}.tar.bz2";
-    sha256 = "1a2hzyck95g740qg4p4wd4fjwsmlknh75i9sbx5r5v9pyr4i3m4f";
+    url = "mirror://sourceforge/eaglemode/${pname}-${version}.tar.bz2";
+    hash = "sha256-FIhCcMghzLg7Odcsou9hBw7kIaqLVUFEAKUk9uwRNNw=";
   };
 
-  buildInputs = [ perl libX11 libjpeg libpng libtiff pkgconfig
-    librsvg glib gtk2 libXxf86vm libXext poppler xineLib ];
+  # Fixes "Error: No time zones found." on the clock
+  postPatch = ''
+    substituteInPlace src/emClock/emTimeZonesModel.cpp --replace "/usr/share/zoneinfo" "${tzdata}/share/zoneinfo"
+  '';
 
-  # The program tries to dlopen both Xxf86vm and Xext, so we use the
+  nativeBuildInputs = [ pkg-config makeWrapper copyDesktopItems ];
+  buildInputs = [ perl libX11 libXinerama libjpeg libpng libtiff libwebp
+    librsvg glib gtk2 libXxf86vm libXext poppler vlc ghostscript ];
+
+  # The program tries to dlopen Xxf86vm, Xext and Xinerama, so we use the
   # trick on NIX_LDFLAGS and dontPatchELF to make it find them.
-  # I use 'yes y' to skip a build error linking with xineLib,
-  # because xine stopped exporting "_x_vo_new_port"
-  #  http://sourceforge.net/projects/eaglemode/forums/forum/808824/topic/5115261
   buildPhase = ''
-    export NIX_LDFLAGS="$NIX_LDFLAGS -lXxf86vm -lXext"
+    runHook preBuild
+    export NIX_LDFLAGS="$NIX_LDFLAGS -lXxf86vm -lXext -lXinerama"
     perl make.pl build
+    runHook postBuild
   '';
 
   dontPatchELF = true;
+  # eaglemode expects doc to be in the root directory
+  forceShare = [ "man" "info" ];
 
   installPhase = ''
+    runHook preInstall
     perl make.pl install dir=$out
-    # I don't like this... but it seems the way they plan to run it by now.
-    # Run 'eaglemode.sh', not 'eaglemode'.
-    ln -s $out/eaglemode.sh $out/bin/eaglemode.sh
+    wrapProgram $out/bin/eaglemode --set EM_DIR "$out" --prefix LD_LIBRARY_PATH : "$out/lib" --prefix PATH : "${ghostscript}/bin"
+    for i in 32 48 96; do
+      mkdir -p $out/share/icons/hicolor/''${i}x''${i}/apps
+      ln -s $out/res/icons/${pname}$i.png $out/share/icons/hicolor/''${i}x''${i}/apps/${pname}.png
+    done
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = "http://eaglemode.sourceforge.net";
+  desktopItems = [
+    (makeDesktopItem {
+      name = pname;
+      exec = pname;
+      icon = pname;
+      desktopName = "Eagle Mode";
+      genericName = meta.description;
+      categories = [ "Game" "Graphics" "System" "Utility" ];
+    })
+  ];
+
+  passthru.updateScript = directoryListingUpdater {
+    url = "https://eaglemode.sourceforge.net/download.html";
+    extraRegex = "(?!.*(x86_64|setup64|livecd)).*";
+  };
+
+  meta = with lib; {
+    homepage = "https://eaglemode.sourceforge.net";
     description = "Zoomable User Interface";
+    changelog = "https://eaglemode.sourceforge.net/ChangeLog.html";
     license = licenses.gpl3;
-    maintainers = with maintainers; [ viric ];
+    maintainers = with maintainers; [ chuangzhu ehmry ];
     platforms = platforms.linux;
-    hydraPlatforms = [];
   };
 }

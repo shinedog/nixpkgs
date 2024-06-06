@@ -1,22 +1,62 @@
-{ stdenv, fetchurl, netcdf, netcdfcxx4, gsl, udunits, antlr, which, curl }:
+{ antlr2
+, coreutils
+, curl
+, fetchFromGitHub
+, flex
+, gsl
+, lib
+, libtool
+, netcdf
+, netcdfcxx4
+, stdenv
+, udunits
+, which
+}:
 
-stdenv.mkDerivation rec {
-  version = "4.5.5";
-  name = "nco-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "nco";
+  version = "5.2.4";
 
-  buildInputs = [ netcdf netcdfcxx4 gsl udunits antlr which curl ];
-
-  src = fetchurl {
-    url = "https://github.com/nco/nco/archive/${version}.tar.gz";
-    sha256 = "bc6f5b976fdfbdec51f2ebefa158fa54672442c2fd5f042ba884f9f32c2ad666";
+  src = fetchFromGitHub {
+    owner = "nco";
+    repo = "nco";
+    rev = finalAttrs.version;
+    hash = "sha256-1+nC5Io459T/Czr6bTfdGy2GB5MMrhK+EBLQIPIX5QM=";
   };
 
-  meta = { 
+  nativeBuildInputs = [
+    antlr2
+    flex
+    which
+  ];
+
+  buildInputs = [
+    coreutils
+    curl
+    gsl
+    netcdf
+    netcdfcxx4
+    udunits
+  ];
+
+  postPatch = ''
+    substituteInPlace src/nco/nco_fl_utl.c \
+      --replace "/bin/cp" "${coreutils}/bin/cp"
+
+    substituteInPlace src/nco/nco_fl_utl.c \
+      --replace "/bin/mv" "${coreutils}/bin/mv"
+  '';
+
+  makeFlags = lib.optionals stdenv.isDarwin [ "LIBTOOL=${libtool}/bin/libtool" ];
+
+  enableParallelBuilding = true;
+
+  meta = {
     description = "NetCDF Operator toolkit";
+    homepage = "https://nco.sourceforge.net/";
+    license = lib.licenses.bsd3;
     longDescription = "The NCO (netCDF Operator) toolkit manipulates and analyzes data stored in netCDF-accessible formats, including DAP, HDF4, and HDF5";
-    homepage = http://nco.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.bzizou ];
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with lib.maintainers; [ bzizou ];
+    platforms = lib.platforms.unix;
   };
-}
+})

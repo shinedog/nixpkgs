@@ -1,21 +1,77 @@
-{ fetchurl, stdenv, binutils
-, pkgconfig, gtk2, glib, pango, libglade }:
+{ stdenv
+, lib
+, desktop-file-utils
+, fetchurl
+, gettext
+, glib
+, gtk4
+, json-glib
+, itstool
+, libadwaita
+, libdex
+, libpanel
+, libunwind
+, libxml2
+, meson
+, ninja
+, pkg-config
+, polkit
+, shared-mime-info
+, systemd
+, wrapGAppsHook4
+, gnome
+}:
 
 stdenv.mkDerivation rec {
-  name = "sysprof-1.2.0";
+  pname = "sysprof";
+  version = "46.0";
+
+  outputs = [ "out" "lib" "dev" ];
 
   src = fetchurl {
-    url = "http://www.sysprof.com/sysprof-1.2.0.tar.gz";
-    sha256 = "1wb4d844rsy8qjg3z5m6rnfm72da4xwzrrkkb1q5r10sq1pkrw5s";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.major version}/${pname}-${version}.tar.xz";
+    hash = "sha256-c6p+deurPk4JRqBacj335u5CSeO56ITbo1UAq6Kh0XY=";
   };
 
-  buildInputs = [ binutils pkgconfig gtk2 glib pango libglade ];
+  nativeBuildInputs = [
+    desktop-file-utils
+    gettext
+    itstool
+    libxml2
+    meson
+    ninja
+    pkg-config
+    shared-mime-info
+    wrapGAppsHook4
+  ];
 
-  meta = {
-    homepage = http://sysprof.com/;
+  buildInputs = [
+    glib
+    gtk4
+    json-glib
+    polkit
+    systemd
+    libadwaita
+    libdex
+    libpanel
+    libunwind
+  ];
+
+  mesonFlags = [
+    "-Dsystemdunitdir=lib/systemd/system"
+    # In a separate libsysprof-capture package
+    "-Dinstall-static=false"
+  ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+    };
+  };
+
+  meta = with lib; {
     description = "System-wide profiler for Linux";
-    license = stdenv.lib.licenses.gpl2Plus;
-
+    homepage = "https://gitlab.gnome.org/GNOME/sysprof";
     longDescription = ''
       Sysprof is a sampling CPU profiler for Linux that uses the perf_event_open
       system call to profile the entire system, not just a single
@@ -23,6 +79,8 @@ stdenv.mkDerivation rec {
       do not need to be recompiled.  In fact they don't even have to
       be restarted.
     '';
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.gpl3Plus;
+    maintainers = teams.gnome.members;
+    platforms = platforms.unix;
   };
 }

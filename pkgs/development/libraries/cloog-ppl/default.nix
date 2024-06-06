@@ -1,10 +1,11 @@
-{ fetchurl, stdenv, ppl, autoreconfHook }:
+{ fetchurl, lib, stdenv, ppl, autoreconfHook }:
 
 stdenv.mkDerivation rec {
-  name = "cloog-ppl-0.15.11";
+  pname = "cloog-ppl";
+  version = "0.15.11";
 
   src = fetchurl {
-    url = "mirror://gcc/infrastructure/${name}.tar.gz";
+    url = "mirror://gcc/infrastructure/${pname}-${version}.tar.gz";
     sha256 = "0psdm0bn5gx60glfh955x5b3b23zqrd92idmjr0b00dlnb839mkw";
   };
 
@@ -14,20 +15,17 @@ stdenv.mkDerivation rec {
 
   patches = [ ./fix-ppl-version.patch ];
 
-  configureFlags = "--with-ppl=${ppl}";
+  configureFlags = [ "--with-ppl=${ppl}" ];
 
   preAutoreconf = ''
     touch NEWS ChangeLog AUTHORS
   '';
 
-  crossAttrs = {
-    configureFlags = "--with-ppl=${ppl.crossDrv}";
-  };
-
   doCheck = true;
 
   meta = {
     description = "CLooG-PPL, the Chunky Loop Generator";
+    mainProgram = "cloog";
 
     longDescription = ''
       CLooG is a free software library to generate code for scanning
@@ -44,9 +42,9 @@ stdenv.mkDerivation rec {
     '';
 
     # CLooG-PPL is actually a port of GLooG from PolyLib to PPL.
-    homepage = http://www.cloog.org/;
+    homepage = "http://www.cloog.org/";
 
-    license = stdenv.lib.licenses.gpl2Plus;
+    license = lib.licenses.gpl2Plus;
 
     maintainers = [ ];
 
@@ -69,6 +67,6 @@ stdenv.mkDerivation rec {
        make[3]: *** [Box.lo] Error 1
 
     */
-    platforms = with stdenv.lib.platforms; allBut cygwin;
+    platforms = lib.platforms.unix; # Once had cygwin problems
   };
 }

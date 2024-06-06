@@ -7,36 +7,30 @@ let
 
   boolToStr = b: if b then "yes" else "no";
 
-  configFile = ''
+  configFilePam = ''
     [duo]
-    ikey=${cfg.ikey}
-    skey=${cfg.skey}
+    ikey=${cfg.integrationKey}
     host=${cfg.host}
-    ${optionalString (cfg.group != "") ("group="+cfg.group)}
+    ${optionalString (cfg.groups != "") ("groups="+cfg.groups)}
     failmode=${cfg.failmode}
     pushinfo=${boolToStr cfg.pushinfo}
     autopush=${boolToStr cfg.autopush}
-    motd=${boolToStr cfg.motd}
     prompts=${toString cfg.prompts}
-    accept_env_factor=${boolToStr cfg.acceptEnvFactor}
     fallback_local_ip=${boolToStr cfg.fallbackLocalIP}
   '';
 
-  loginCfgFile = optional cfg.ssh.enable
-    { source = pkgs.writeText "login_duo.conf" configFile;
-      mode   = "0600";
-      uid    = config.ids.uids.sshd;
-      target = "duo/login_duo.conf";
-    };
-
-  pamCfgFile = optional cfg.pam.enable
-    { source = pkgs.writeText "pam_duo.conf" configFile;
-      mode   = "0600";
-      uid    = config.ids.uids.sshd;
-      target = "duo/pam_duo.conf";
-    };
+  configFileLogin = configFilePam + ''
+    motd=${boolToStr cfg.motd}
+    accept_env_factor=${boolToStr cfg.acceptEnvFactor}
+  '';
 in
 {
+  imports = [
+    (mkRenamedOptionModule [ "security" "duosec" "group" ] [ "security" "duosec" "groups" ])
+    (mkRenamedOptionModule [ "security" "duosec" "ikey" ] [ "security" "duosec" "integrationKey" ])
+    (mkRemovedOptionModule [ "security" "duosec" "skey" ] "The insecure security.duosec.skey option has been replaced by a new security.duosec.secretKeyFile option. Use this new option to store a secure copy of your key instead.")
+  ];
+
   options = {
     security.duosec = {
       ssh.enable = mkOption {
@@ -51,14 +45,18 @@ in
         description = "If enabled, protect logins with Duo Security using PAM support.";
       };
 
-      ikey = mkOption {
+      integrationKey = mkOption {
         type = types.str;
         description = "Integration key.";
       };
 
-      skey = mkOption {
-        type = types.str;
-        description = "Secret key.";
+      secretKeyFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          A file containing your secret key. The security of your Duo application is tied to the security of your secret key.
+        '';
+        example = "/run/keys/duo-skey";
       };
 
       host = mkOption {
@@ -66,14 +64,20 @@ in
         description = "Duo API hostname.";
       };
 
-      group = mkOption {
+      groups = mkOption {
         type = types.str;
         default = "";
-        description = "Use Duo authentication for users only in this group.";
+        example = "users,!wheel,!*admin guests";
+        description = ''
+          If specified, Duo authentication is required only for users
+          whose primary group or supplementary group list matches one
+          of the space-separated pattern lists. Refer to
+          <https://duo.com/docs/duounix> for details.
+        '';
       };
 
       failmode = mkOption {
-        type = types.enum [ "safe" "enum" ];
+        type = types.enum [ "safe" "secure" ];
         default = "safe";
         description = ''
           On service or configuration errors that prevent Duo
@@ -95,13 +99,13 @@ in
         type = types.bool;
         default = false;
         description = ''
-          If <literal>true</literal>, Duo Unix will automatically send
+          If `true`, Duo Unix will automatically send
           a push login request to the user’s phone, falling back on a
           phone call if push is unavailable. If
-          <literal>false</literal>, the user will be prompted to
+          `false`, the user will be prompted to
           choose an authentication method. When configured with
-          <literal>autopush = yes</literal>, we recommend setting
-          <literal>prompts = 1</literal>.
+          `autopush = yes`, we recommend setting
+          `prompts = 1`.
         '';
       };
 
@@ -109,7 +113,7 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Print the contents of <literal>/etc/motd</literal> to screen
+          Print the contents of `/etc/motd` to screen
           after a successful login.
         '';
       };
@@ -124,14 +128,14 @@ in
           display before denying access. Must be 1, 2, or 3. Default
           is 3.
 
-          For example, when <literal>prompts = 1</literal>, the user
+          For example, when `prompts = 1`, the user
           will have to successfully authenticate on the first prompt,
-          whereas if <literal>prompts = 2</literal>, if the user
+          whereas if `prompts = 2`, if the user
           enters incorrect information at the initial prompt, he/she
           will be prompted to authenticate again.
 
-          When configured with <literal>autopush = true</literal>, we
-          recommend setting <literal>prompts = 1</literal>.
+          When configured with `autopush = true`, we
+          recommend setting `prompts = 1`.
         '';
       };
 
@@ -140,7 +144,7 @@ in
         default = false;
         description = ''
           Look for factor selection or passcode in the
-          <literal>$DUO_PASSCODE</literal> environment variable before
+          `$DUO_PASSCODE` environment variable before
           prompting the user for input.
 
           When $DUO_PASSCODE is non-empty, it will override
@@ -157,7 +161,7 @@ in
           Duo Unix reports the IP address of the authorizing user, for
           the purposes of authorization and whitelisting. If Duo Unix
           cannot detect the IP address of the client, setting
-          <literal>fallbackLocalIP = yes</literal> will cause Duo Unix
+          `fallbackLocalIP = yes` will cause Duo Unix
           to send the IP address of the server it is running on.
 
           If you are using IP whitelisting, enabling this option could
@@ -180,26 +184,70 @@ in
   };
 
   config = mkIf (cfg.ssh.enable || cfg.pam.enable) {
-    assertions =
-      [ { assertion = !cfg.pam.enable;
-          message   = "PAM support is currently not implemented.";
-        }
-      ];
+    environment.systemPackages = [ pkgs.duo-unix ];
 
-     environment.systemPackages = [ pkgs.duo-unix ];
-     security.setuidPrograms    = [ "login_duo" ];
-     environment.etc = loginCfgFile ++ pamCfgFile;
+    security.wrappers.login_duo =
+      { setuid = true;
+        owner = "root";
+        group = "root";
+        source = "${pkgs.duo-unix.out}/bin/login_duo";
+      };
 
-     /* If PAM *and* SSH are enabled, then don't do anything special.
-     If PAM isn't used, set the default SSH-only options. */
-     services.openssh.extraConfig = mkIf (cfg.ssh.enable || cfg.pam.enable) (
-     if cfg.pam.enable then "UseDNS no" else ''
-       # Duo Security configuration
-       ForceCommand ${config.security.wrapperDir}/login_duo
-       PermitTunnel no
-       ${optionalString (!cfg.allowTcpForwarding) ''
-         AllowTcpForwarding no
-       ''}
-     '');
+    systemd.services.login-duo = lib.mkIf cfg.ssh.enable {
+      wantedBy = [ "sysinit.target" ];
+      before = [ "sysinit.target" "shutdown.target" ];
+      conflicts = [ "shutdown.target" ];
+      unitConfig.DefaultDependencies = false;
+      script = ''
+        if test -f "${cfg.secretKeyFile}"; then
+          mkdir -p /etc/duo
+          chmod 0755 /etc/duo
+
+          umask 0077
+          conf="$(mktemp)"
+          {
+            cat ${pkgs.writeText "login_duo.conf" configFileLogin}
+            printf 'skey = %s\n' "$(cat ${cfg.secretKeyFile})"
+          } >"$conf"
+
+          chown sshd "$conf"
+          mv -fT "$conf" /etc/duo/login_duo.conf
+        fi
+      '';
+    };
+
+    systemd.services.pam-duo = lib.mkIf cfg.ssh.enable {
+      wantedBy = [ "sysinit.target" ];
+      before = [ "sysinit.target" "shutdown.target" ];
+      conflicts = [ "shutdown.target" ];
+      unitConfig.DefaultDependencies = false;
+      script = ''
+        if test -f "${cfg.secretKeyFile}"; then
+          mkdir -p /etc/duo
+          chmod 0755 /etc/duo
+
+          umask 0077
+          conf="$(mktemp)"
+          {
+            cat ${pkgs.writeText "login_duo.conf" configFilePam}
+            printf 'skey = %s\n' "$(cat ${cfg.secretKeyFile})"
+          } >"$conf"
+
+          mv -fT "$conf" /etc/duo/pam_duo.conf
+        fi
+      '';
+    };
+
+    /* If PAM *and* SSH are enabled, then don't do anything special.
+    If PAM isn't used, set the default SSH-only options. */
+    services.openssh.extraConfig = mkIf (cfg.ssh.enable || cfg.pam.enable) (
+    if cfg.pam.enable then "UseDNS no" else ''
+      # Duo Security configuration
+      ForceCommand ${config.security.wrapperDir}/login_duo
+      PermitTunnel no
+      ${optionalString (!cfg.allowTcpForwarding) ''
+        AllowTcpForwarding no
+      ''}
+    '');
   };
 }

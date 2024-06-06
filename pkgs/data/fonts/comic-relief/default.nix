@@ -1,34 +1,30 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "comic-relief-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "comic-relief";
   version = "1.1";
 
-  src = fetchurl {
-    url = "https://dl.dropbox.com/u/56493902/loudifier/comicrelief.zip";
-    sha256 = "0wpf10m9zmcfvcxgc7dxzdm3syam7d7qxlfabgr1nxzq299kh8ch";
+  src = fetchzip {
+    url = "https://fontlibrary.org/assets/downloads/comic-relief/45c456b6db2aaf2f7f69ac66b5ac7239/comic-relief.zip";
+    stripRoot = false;
+    hash = "sha256-lvkMfaQvLMZ8F0Q5JnpmMsIAkR+XfihoHIoS4z5QEvA=";
   };
 
-  buildInputs = [unzip];
-
-  phases = ["unpackPhase" "installPhase"];
-
-  unpackCmd = ''
-    mkdir -p ${name}
-    unzip -qq -d ${name} $src
-  '';
-
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/etc/fonts/conf.d
-    mkdir -p $out/share/doc/${name}
+    mkdir -p $out/share/doc/${pname}-${version}
     mkdir -p $out/share/fonts/truetype
-    cp -v *.ttf $out/share/fonts/truetype
-    cp -v ${./comic-sans-ms-alias.conf} $out/etc/fonts/conf.d/30-comic-sans-ms.conf
-    cp -v FONTLOG.txt $out/share/doc/${name}
+    cp -v ${./comic-sans-ms-alias.conf}     $out/etc/fonts/conf.d/30-comic-sans-ms.conf
+    cp *.ttf      -d $out/share/fonts/truetype
+    cp FONTLOG.txt -d $out/share/doc/${pname}-${version}
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://loudifier.com/comic-relief/;
+  meta = with lib; {
+    homepage = "https://fontlibrary.org/en/font/comic-relief";
     description = "A font metric-compatible with Microsoft Comic Sans";
     longDescription = ''
       Comic Relief is a typeface designed to be metrically equivalent
@@ -39,7 +35,7 @@ stdenv.mkDerivation rec {
     '';
     license = licenses.ofl;
     platforms = platforms.all;
-    maintainers = [maintainers.rycee];
+    maintainers = [ maintainers.rycee ];
 
     # Reduce the priority of this package. The intent is that if you
     # also install the `corefonts` package, then you probably will not

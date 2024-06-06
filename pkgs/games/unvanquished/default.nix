@@ -1,69 +1,236 @@
-{ stdenv, fetchurl, cmake, mesa, SDL, libjpeg, libpng, glew, libwebp, ncurses
-, gmp, curl, nettle, openal, speex, libogg, libvorbis, libtheora, xvidcore
-, makeWrapper }:
-stdenv.mkDerivation rec {
-  name = "unvanquished-${version}";
-  version = "0.13.1";
-  src = fetchurl {
-    url = "https://github.com/Unvanquished/Unvanquished/archive/v${version}.tar.gz";
-    sha256 = "1k7mlpwalimn6xb2s760f124xncpg455qvls6z3x0ii5x0wc1mp2";
+{ lib
+, stdenv
+, fetchzip
+, fetchFromGitHub
+, SDL2
+, buildFHSEnv
+, cmake
+, copyDesktopItems
+, curl
+, freetype
+, gcc
+, geoip
+, glew
+, gmp
+, libGL
+, libjpeg
+, libogg
+, libopus
+, libpng
+, libvorbis
+, libwebp
+, lua5
+, makeDesktopItem
+, ncurses
+, nettle
+, openal
+, opusfile
+, zlib
+# to download assets
+, aria2
+, cacert
+}:
+
+let
+  version = "0.54.1";
+  binary-deps-version = "10";
+
+  src = fetchFromGitHub {
+    owner = "Unvanquished";
+    repo = "Unvanquished";
+    rev = "v${version}";
+    fetchSubmodules = true;
+    sha256 = "sha256-F8U9UBFCe0PcFYZ2DThQwhouO22jKyWb0/ABhprHXCU=";
   };
-  buildInputs = [ cmake mesa SDL libjpeg libpng glew libwebp ncurses gmp curl
-                  nettle openal speex libogg libvorbis libtheora xvidcore 
-                  makeWrapper ];
-  preConfigure = ''prefix="$prefix/opt"'';
-  postInstall = ''
-    # cp -r ../main "$prefix/Unvanquished/"
-    mkdir -p "$out/bin"
-    substituteInPlace download-pk3.sh --replace /bin/bash ${stdenv.shell}
-    cp -v download-pk3.sh "$out/bin/unvanquished-download-pk3"
-    makeWrapper "$prefix/Unvanquished/daemon" "$out/bin/unvanquished" \
-                --run '[ -f ~/.Unvanquished/main/md5sums ] &&
-                       cd ~/.Unvanquished/main/ &&
-                       md5sum --quiet -c md5sums ||
-                       unvanquished-download-pk3' \
-                --run "cd '$prefix/Unvanquished'"
-    makeWrapper "$prefix/Unvanquished/daemonded" "$out/bin/unvanquished-ded" \
-                --run '[ -f ~/.Unvanquished/main/md5sums ] &&
-                       cd ~/.Unvanquished/main/ &&
-                       md5sum --quiet -c md5sums ||
-                       unvanquished-download-pk3' \
-                --run "cd '$prefix/Unvanquished'"
+
+  unvanquished-binary-deps = stdenv.mkDerivation rec {
+    # DISCLAIMER: this is selected binary crap from the NaCl SDK
+    name = "unvanquished-binary-deps";
+    version = binary-deps-version;
+
+    src = fetchzip {
+      url = "https://dl.unvanquished.net/deps/linux-amd64-default_${version}.tar.xz ";
+      sha256 = "sha256-5n8gRvTuke4e7EaZ/5G+dtCG6qmnawhtA1IXIFQPkzA=";
+    };
+
+    dontPatchELF = true;
+
+    preFixup = ''
+      # We are not using the autoPatchelfHook, because it would make
+      # nacl_bootstrap_helper unable to load nacl_loader:
+      # "nacl_loader: ELF file has unreasonable e_phnum=13"
+      interpreter="$(< "$NIX_CC/nix-support/dynamic-linker")"
+      for f in pnacl/bin/*; do
+        if [ -f "$f" && -x "$f" ]; then
+          echo "Patching $f"
+          patchelf --set-interpreter "$interpreter" "$f"
+        fi
+      done
+    '';
+
+    preCheck = ''
+      # check it links correctly
+      pnacl/bin/clang -v
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out
+      cp -R ./* $out/
+
+      runHook postInstall
+    '';
+  };
+
+  libstdcpp-preload-for-unvanquished-nacl = stdenv.mkDerivation {
+    name = "libstdcpp-preload-for-unvanquished-nacl";
+
+    propagatedBuildInputs = [ gcc.cc.lib ];
+
+    buildCommand = ''
+      mkdir $out/etc -p
+      echo ${gcc.cc.lib}/lib/libstdc++.so.6 > $out/etc/ld-nix.so.preload
+    '';
+  };
+
+  fhsEnv = buildFHSEnv {
+    name = "unvanquished-fhs-wrapper";
+
+    targetPkgs = pkgs: [ libstdcpp-preload-for-unvanquished-nacl ];
+  };
+
+  wrapBinary = binary: wrappername: ''
+    cat > $out/lib/${binary}-wrapper <<-EOT
+    #!/bin/sh
+    exec $out/lib/${binary} -pakpath ${unvanquished-assets} "\$@"
+    EOT
+    chmod +x $out/lib/${binary}-wrapper
+
+    cat > $out/bin/${wrappername} <<-EOT
+    #!/bin/sh
+    exec ${fhsEnv}/bin/unvanquished-fhs-wrapper $out/lib/${binary}-wrapper "\$@"
+    EOT
+    chmod +x $out/bin/${wrappername}
+  '';
+
+  unvanquished-assets = stdenv.mkDerivation {
+    pname = "unvanquished-assets";
+    inherit version src;
+
+    outputHash = "sha256-xb8gKQHSyscWM29r0BWK0YsALull9uYjX7e+l1DHFPg=";
+    outputHashMode = "recursive";
+
+    nativeBuildInputs = [ aria2 cacert ];
+
+    buildCommand = ''
+      bash $src/download-paks --cache=$(pwd) --version=${version} $out
+    '';
+  };
+
+# this really is the daemon game engine, the game itself is in the assets
+in stdenv.mkDerivation rec {
+  pname = "unvanquished";
+  inherit version src binary-deps-version;
+
+  preConfigure = ''
+    TARGET="linux-amd64-default_${binary-deps-version}"
+    mkdir daemon/external_deps/"$TARGET"
+    cp -r ${unvanquished-binary-deps}/* daemon/external_deps/"$TARGET"/
+    chmod +w -R daemon/external_deps/"$TARGET"/
+  '';
+
+  nativeBuildInputs = [
+    cmake
+    unvanquished-binary-deps
+    copyDesktopItems
+  ];
+
+  buildInputs = [
+    gmp
+    libGL
+    zlib
+    ncurses
+    geoip
+    lua5
+    nettle
+    curl
+    SDL2
+    freetype
+    glew
+    openal
+    libopus
+    opusfile
+    libogg
+    libvorbis
+    libjpeg
+    libwebp
+    libpng
+  ];
+
+  cmakeFlags = [
+    "-DBUILD_CGAME=NO"
+    "-DBUILD_SGAME=NO"
+    "-DUSE_HARDENING=TRUE"
+    "-DUSE_LTO=TRUE"
+    "-DOpenGL_GL_PREFERENCE=LEGACY" # https://github.com/DaemonEngine/Daemon/issues/474
+  ];
+
+  desktopItems = [
+    (makeDesktopItem {
+      name = "net.unvanquished.Unvanquished.desktop";
+      desktopName = "Unvanquished";
+      comment = "FPS/RTS Game - Aliens vs. Humans";
+      icon = "unvanquished";
+      exec = "unvanquished";
+      categories = [ "Game" "ActionGame" "StrategyGame" ];
+      prefersNonDefaultGPU = true;
+    })
+    (makeDesktopItem {
+      name = "net.unvanquished.UnvanquishedProtocolHandler.desktop";
+      desktopName = "Unvanquished (protocol handler)";
+      noDisplay = true;
+      exec = "unvanquished -connect %u";
+      mimeTypes = [ "x-scheme-handler/unv" ];
+      prefersNonDefaultGPU = true;
+    })
+  ];
+
+  installPhase = ''
+    runHook preInstall
+
+    for f in daemon daemon-tty daemonded nacl_loader nacl_helper_bootstrap; do
+      install -Dm0755 -t $out/lib/ $f
+    done
+    install -Dm0644 -t $out/lib/ irt_core-amd64.nexe
+
+    mkdir $out/bin/
+    ${wrapBinary "daemon"     "unvanquished"}
+    ${wrapBinary "daemon-tty" "unvanquished-tty"}
+    ${wrapBinary "daemonded"  "unvanquished-server"}
+
+    for d in ${src}/dist/icons/*; do
+      install -Dm0644 -t $out/share/icons/hicolor/$(basename $d)/apps/ $d/unvanquished.png
+    done
+
+    runHook postInstall
   '';
 
   meta = {
-    description = "FPS game set in a futuristic, sci-fi setting";
-    longDescription = ''
-      Unvanquished is a free, open-source first-person shooter
-      combining real-time strategy elements with a futuristic, sci-fi
-      setting. It is available for Windows, Linux, and Mac OS X.
-
-      Features:
-
-      * Two teams
-        Play as either the technologically advanced humans or the highly
-        adaptable aliens, with a fresh gameplay experience on both
-        sides.
-
-      * Build a base
-        Construct and maintain your base with a variety of useful
-        structures, or group up with teammates to take on the other
-        team.
-
-      * Level up
-        Earn rewards for victories against the other team, whether it's
-        a deadly new weapon or access to a whole new alien form.
-
-      * Customize
-        Compatibility with Quake 3 file formats and modification tools
-        allows for extensive customization of the game and its
-        setting.
-    '';
-    homepage = http://unvanquished.net;
-    #license = "unknown";
-    maintainers = with stdenv.lib.maintainers; [ astsmtl ];
-    platforms = stdenv.lib.platforms.linux;
-    # This package can take a lot of disk space, so unavailable from channel
-    hydraPlatforms = [];
+    homepage = "https://unvanquished.net/";
+    downloadPage = "https://unvanquished.net/download/";
+    description = "A fast paced, first person strategy game";
+    # don't replace the following lib.licenses.zlib with just "zlib",
+    # or you would end up with the package instead
+    license = with lib.licenses; [
+      mit gpl3Plus lib.licenses.zlib bsd3 # engine
+      cc-by-sa-25 cc-by-sa-30 cc-by-30 cc-by-sa-40 cc0 # assets
+    ];
+    sourceProvenance = with lib.sourceTypes; [
+      fromSource
+      binaryNativeCode  # unvanquished-binary-deps
+    ];
+    maintainers = with lib.maintainers; [ afontain ];
+    platforms = [ "x86_64-linux" ];
   };
 }

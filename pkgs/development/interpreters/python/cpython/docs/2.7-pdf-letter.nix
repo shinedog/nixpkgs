@@ -2,17 +2,19 @@
 
 { stdenv, fetchurl, lib }:
 
-stdenv.mkDerivation rec {
-  name = "python27-docs-pdf-letter-2.7.3";
+stdenv.mkDerivation {
+  pname = "python27-docs-pdf-letter";
+  version = "2.7.18";
+
   src = fetchurl {
-    url = http://docs.python.org/ftp/python/doc/2.7.3/python-2.7.3-docs-pdf-letter.tar.bz2;
-    sha256 = "0x41phsdrpivhzkchswsliyx3a10n7gzc9irkrw6rz22j81bfydg";
+    url = "http://www.python.org/ftp/python/doc/2.7.18/python-2.7.18-docs-pdf-letter.tar.bz2";
+    sha256 = "07hbqvrdlq01cb95r1574bxqqhiqbkj4f92wzlq4d6dq1l272nan";
   };
   installPhase = ''
     mkdir -p $out/share/doc/python27
     cp -R ./ $out/share/doc/python27/pdf-letter
   '';
   meta = {
-    maintainers = [ lib.maintainers.chaoflow ];
+    maintainers = [ ];
   };
 }

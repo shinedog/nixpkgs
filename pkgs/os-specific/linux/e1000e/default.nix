@@ -1,11 +1,14 @@
-{ stdenv, fetchurl, kernel }:
+{ lib, stdenv, fetchurl, kernel }:
 
-stdenv.mkDerivation {
-  name = "e1000e-3.3.1-${kernel.version}";
+assert lib.versionOlder kernel.version "4.10";
+
+stdenv.mkDerivation rec {
+  name = "e1000e-${version}-${kernel.version}";
+  version = "3.8.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/e1000/e1000e-3.3.1.tar.gz";
-    sha256 = "07hg6xxqgqshnys1qs9wbl9qr7d4ixdkd1y1fj27cg6bn8s2n797";
+    url = "mirror://sourceforge/e1000/e1000e-${version}.tar.gz";
+    sha256 = "1q8dbqh14c7r15q6k6iv5k0d6xpi74i71d5r54py60gr099m2ha4";
   };
 
   hardeningDisable = [ "pic" ];
@@ -13,7 +16,8 @@ stdenv.mkDerivation {
   configurePhase = ''
     cd src
     kernel_version=${kernel.modDirVersion}
-    sed -i -e 's|/lib/modules|${kernel.dev}/lib/modules|' Makefile
+    substituteInPlace common.mk \
+      --replace "/lib/modules" "${kernel.dev}/lib/modules"
     export makeFlags="BUILD_KERNEL=$kernel_version"
   '';
 
@@ -28,6 +32,6 @@ stdenv.mkDerivation {
   meta = {
     description = "Linux kernel drivers for Intel Ethernet adapters and LOMs (LAN On Motherboard)";
     homepage = "http://e1000.sf.net/";
-    license = stdenv.lib.licenses.gpl2;
+    license = lib.licenses.gpl2;
   };
 }

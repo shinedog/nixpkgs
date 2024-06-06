@@ -1,33 +1,41 @@
-{ stdenv, fetchurl, qt4, qmake4Hook, poppler_qt4, zlib, pkgconfig, poppler }:
+{ lib, mkDerivation, fetchurl, qtbase, qtscript, qtwebengine, qmake, zlib, pkg-config, poppler, wrapGAppsHook3 }:
 
-stdenv.mkDerivation rec {
+mkDerivation rec {
   pname = "texmaker";
-  version = "4.5";
-  name = "${pname}-${version}";
+  version = "5.1.4";
 
   src = fetchurl {
-    url = "http://www.xm1math.net/texmaker/${name}.tar.bz2";
-    sha256 = "056njk6j8wma23mlp7xa3rgfaxx0q8ynwx8wkmj7iy0b85p9ds9c";
+    url = "http://www.xm1math.net/texmaker/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-MgUE1itxtZHAa30LEgKsdQoxEv4soyjjBYAFXrMI/qY=";
   };
 
-  buildInputs = [ qt4 poppler_qt4 zlib ];
-  nativeBuildInputs = [ pkgconfig poppler qmake4Hook ];
-  NIX_CFLAGS_COMPILE="-I${poppler.dev}/include/poppler";
+  buildInputs = [ qtbase qtscript poppler zlib qtwebengine ];
+  nativeBuildInputs = [ pkg-config poppler qmake wrapGAppsHook3 ];
+  env.NIX_CFLAGS_COMPILE = "-I${poppler.dev}/include/poppler";
 
-  preConfigure = ''
-    qmakeFlags="$qmakeFlags DESKTOPDIR=$out/share/applications ICONDIR=$out/share/pixmaps"
+  qmakeFlags = [
+    "DESKTOPDIR=${placeholder "out"}/share/applications"
+    "ICONDIR=${placeholder "out"}/share/pixmaps"
+    "METAINFODIR=${placeholder "out"}/share/metainfo"
+  ];
+
+  dontWrapGApps = true;
+
+  preFixup = ''
+    qtWrapperArgs+=("''${gappsWrapperArgs[@]}")
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "TeX and LaTeX editor";
     longDescription=''
-	This editor is a full fledged IDE for TeX and
-	LaTeX editing with completion, structure viewer, preview,
-	spell checking and support of any compilation chain.
-	'';
+      This editor is a full fledged IDE for TeX and
+      LaTeX editing with completion, structure viewer, preview,
+      spell checking and support of any compilation chain.
+    '';
     homepage = "http://www.xm1math.net/texmaker/";
     license = licenses.gpl2Plus;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ cfouche ];
+    maintainers = with maintainers; [ cfouche markuskowa ];
+    mainProgram = "texmaker";
   };
 }

@@ -1,33 +1,102 @@
-{ stdenv, fetchgit, autoreconfHook, fltk13
-, libjpeg, libpng, mesa, pkgconfig }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, wrapGAppsHook3
+, at-spi2-core
+, cairo
+, dbus
+, eigen
+, freetype
+, fontconfig
+, glew
+, gtkmm3
+, json_c
+, libdatrie
+, libepoxy
+, libGLU
+, libpng
+, libselinux
+, libsepol
+, libspnav
+, libthai
+, libxkbcommon
+, pangomm
+, pcre
+, util-linuxMinimal # provides libmount
+, xorg
+, zlib
+}:
 
-stdenv.mkDerivation {
-  name = "solvespace-2.0";
-  src = fetchgit {
-    url = "https://github.com/jwesthues/solvespace.git";
-    sha256 = "0m6zlx1kiqxkm6szdsnywwr6spnb7xjg6vqsq30nrr44cx37w861";
-    rev = "e587d0e";
+stdenv.mkDerivation rec {
+  pname = "solvespace";
+  version = "3.1";
+
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-sSDht8pBrOG1YpsWfC/CLTTWh2cI5pn2PXGH900Z0yA=";
+    fetchSubmodules = true;
   };
 
-  # e587d0e fails with undefined reference errors if make is called
-  # twice. Ugly workaround: Build while installing.
-  dontBuild = true;
-  enableParallelBuilding = false;
-
-  buildInputs = [
-    autoreconfHook
-    fltk13
-    libjpeg
-    libpng
-    mesa
-    pkgconfig
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    wrapGAppsHook3
   ];
 
-  meta = {
+  buildInputs = [
+    at-spi2-core
+    cairo
+    dbus
+    eigen
+    freetype
+    fontconfig
+    glew
+    gtkmm3
+    json_c
+    libdatrie
+    libepoxy
+    libGLU
+    libpng
+    libselinux
+    libsepol
+    libspnav
+    libthai
+    libxkbcommon
+    pangomm
+    pcre
+    util-linuxMinimal
+    xorg.libpthreadstubs
+    xorg.libXdmcp
+    xorg.libXtst
+    zlib
+  ];
+
+  postPatch = ''
+    patch CMakeLists.txt <<EOF
+    @@ -20,9 +20,9 @@
+     # NOTE TO PACKAGERS: The embedded git commit hash is critical for rapid bug triage when the builds
+     # can come from a variety of sources. If you are mirroring the sources or otherwise build when
+     # the .git directory is not present, please comment the following line:
+    -include(GetGitCommitHash)
+    +# include(GetGitCommitHash)
+     # and instead uncomment the following, adding the complete git hash of the checkout you are using:
+    -# set(GIT_COMMIT_HASH 0000000000000000000000000000000000000000)
+    +set(GIT_COMMIT_HASH $version)
+    EOF
+  '';
+
+  cmakeFlags = [ "-DENABLE_OPENMP=ON" ];
+
+  meta = with lib; {
     description = "A parametric 3d CAD program";
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = with stdenv.lib.maintainers; [ the-kenny ];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = http://solvespace.com;
+    license = licenses.gpl3Plus;
+    maintainers = [ maintainers.edef ];
+    platforms = platforms.linux;
+    homepage = "https://solvespace.com";
+    changelog = "https://github.com/solvespace/solvespace/raw/v${version}/CHANGELOG.md";
   };
 }

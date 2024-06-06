@@ -1,23 +1,24 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub, openssl }:
 
 stdenv.mkDerivation rec {
-  name = "hiredis-${version}";
-  version = "0.13.3";
+  pname = "hiredis";
+  version = "1.2.0";
+  nativeBuildInputs = [openssl];
 
   src = fetchFromGitHub {
     owner = "redis";
     repo = "hiredis";
     rev = "v${version}";
-    sha256 = "1qxiv61bsp6s847hhkxqj7vnbdlac089r2qdp3zgxhhckaflhb7r";
+    sha256 = "sha256-ZxUITm3OcbERcvaNqGQU46bEfV+jN6safPalG0TVfBg=";
   };
 
   PREFIX = "\${out}";
+  USE_SSL = 1;
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/redis/hiredis;
+  meta = with lib; {
+    homepage = "https://github.com/redis/hiredis";
     description = "Minimalistic C client for Redis >= 1.2";
     license = licenses.bsd3;
     platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
   };
 }

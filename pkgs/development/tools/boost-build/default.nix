@@ -1,46 +1,74 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, bison
+# boost derivation to use for the src and version.
+# This is used by the boost derivation to build
+# a b2 matching their version (by overriding this
+# argument). Infinite recursion is not an issue
+# since we only look at src and version of boost.
+, useBoost ? {}
+}:
 
-stdenv.mkDerivation rec {
-  name = "boost-build-2.0-m12";
+let
+  defaultVersion = "4.4.1";
+in
 
-  src = fetchurl {
-    url = "mirror://sourceforge/boost/${name}.tar.bz2";
-    sha256 = "10sbbkx2752r4i1yshyp47nw29lyi1p34sy6hj7ivvnddiliayca";
-  };
+stdenv.mkDerivation {
+  pname = "boost-build";
+  version =
+    if useBoost ? version
+    then "boost-${useBoost.version}"
+    else defaultVersion;
 
-  hardeningDisable = [ "format" ];
+  src = useBoost.src or (fetchFromGitHub {
+    owner = "boostorg";
+    repo = "build";
+    rev = defaultVersion;
+    sha256 = "1r4rwlq87ydmsdqrik4ly5iai796qalvw7603mridg2nwcbbnf54";
+  });
 
-  patchPhase = ''
-    grep -r '/usr/share/boost-build' \
-      | awk '{split($0,a,":"); print a[1];}' \
-      | xargs sed -i "s,/usr/share/boost-build,$out/share/boost-build,"
+  # b2 is in a subdirectory of boost source tarballs
+  postUnpack = lib.optionalString (useBoost ? src) ''
+    sourceRoot="$sourceRoot/tools/build"
   '';
 
+  patches = useBoost.boostBuildPatches or [];
+
+  # Upstream defaults to gcc on darwin, but we use clang.
+  postPatch = ''
+    substituteInPlace src/build-system.jam \
+    --replace "default-toolset = darwin" "default-toolset = clang-darwin"
+  '' + lib.optionalString (useBoost ? version && lib.versionAtLeast useBoost.version "1.82") ''
+    patchShebangs --build src/engine/build.sh
+  '';
+
+  nativeBuildInputs = [
+    bison
+  ];
+
   buildPhase = ''
-    cd jam_src
-    ./build.sh
+    runHook preBuild
+    ./bootstrap.sh
+    runHook postBuild
   '';
 
   installPhase = ''
-    # Install Bjam
-    mkdir -p $out/bin
-    cd "$(ls | grep bin)"
-    cp -a bjam $out/bin
+    runHook preInstall
 
-    # Bjam is B2
-    ln -s bjam $out/bin/b2
+    ./b2 install --prefix="$out"
 
-    # Install the shared files (don't include jam_src)
-    cd ../..
-    rm -rf jam_src
-    mkdir -p $out/share
-    cp -a . $out/share/boost-build
+    # older versions of b2 created this symlink,
+    # which we want to support building via useBoost.
+    test -e "$out/bin/bjam" || ln -s b2 "$out/bin/bjam"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://www.boost.org/boost-build2/;
-    license = stdenv.lib.licenses.boost;
+  meta = with lib; {
+    homepage = "https://www.boost.org/build/";
+    license = lib.licenses.boost;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+    maintainers = with maintainers; [ ivan-tkatchev ];
   };
 }

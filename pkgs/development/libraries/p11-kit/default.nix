@@ -1,30 +1,93 @@
-{ stdenv, fetchurl, libiconv, pkgconfig, libffi, libtasn1 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, libtasn1
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_43
+, gettext
+, libffi
+, libintl
+}:
 
 stdenv.mkDerivation rec {
-  name = "p11-kit-0.23.2";
+  pname = "p11-kit";
+  version = "0.25.3";
 
-  src = fetchurl {
-    url = "${meta.homepage}releases/${name}.tar.gz";
-    sha256 = "1w7szm190phlkg7qx05ychlj2dbvkgkhx9gw6dx4d5rw62l6wwms";
+  src = fetchFromGitHub {
+    owner = "p11-glue";
+    repo = pname;
+    rev = version;
+    hash = "sha256-zIbkw0pwt4TdyjncnSDeTN6Gsx7cc+x7Un4rnagZxQk=";
+    fetchSubmodules = true;
   };
 
-  outputs = [ "out" "dev" "devdoc" ];
-  outputBin = "dev";
+  outputs = [ "out" "bin" "dev" ];
 
-  buildInputs = [ pkgconfig libffi libtasn1 libiconv ];
+  strictDeps = true;
 
-  configureFlags = [
-    "--sysconfdir=/etc"
-    "--localstatedir=/var"
-    "--without-trust-paths"
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    libtasn1 # asn1Parser
+    libxslt # xsltproc
+    docbook-xsl-nons
+    docbook_xml_dtd_43
+    gettext
   ];
 
-  installFlags = [ "exampledir=\${out}/etc/pkcs11" ];
+  buildInputs = [
+    libffi
+    libtasn1
+    libintl
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://p11-glue.freedesktop.org/;
+  mesonFlags = [
+    "--sysconfdir=/etc"
+    (lib.mesonBool "man" true)
+    (lib.mesonEnable "systemd" false)
+    (lib.mesonOption "bashcompdir" "${placeholder "bin"}/share/bash-completion/completions")
+    (lib.mesonOption "trust_paths" (lib.concatStringsSep ":" [
+      "/etc/ssl/trust-source" # p11-kit trust source
+      "/etc/ssl/certs/ca-certificates.crt" # NixOS + Debian/Ubuntu/Arch/Gentoo...
+      "/etc/pki/tls/certs/ca-bundle.crt" # Fedora/CentOS
+      "/var/lib/ca-certificates/ca-bundle.pem" # openSUSE
+      "/etc/ssl/cert.pem" # Darwin/macOS
+    ]))
+  ];
+
+  doCheck = stdenv.buildPlatform.canExecute stdenv.hostPlatform;
+
+  postPatch = ''
+    # Install sample config files to $out/etc even though they will be loaded from /etc.
+    substituteInPlace p11-kit/meson.build \
+      --replace 'install_dir: prefix / p11_system_config' "install_dir: '$out/etc/pkcs11'"
+  '';
+
+  preCheck = ''
+    # Tests run in fakeroot for non-root users (with Nix single-user install)
+    if [ "$(id -u)" != "0" ]; then
+      export FAKED_MODE=1
+    fi
+  '';
+
+  meta = with lib; {
+    description = "Library for loading and sharing PKCS#11 modules";
+    longDescription = ''
+      Provides a way to load and enumerate PKCS#11 modules.
+      Provides a standard configuration setup for installing
+      PKCS#11 modules in such a way that they're discoverable.
+    '';
+    homepage = "https://p11-glue.github.io/p11-glue/p11-kit.html";
+    changelog = [
+      "https://github.com/p11-glue/p11-kit/raw/${version}/NEWS"
+      "https://github.com/p11-glue/p11-kit/releases/tag/${version}"
+    ];
     platforms = platforms.all;
-    maintainers = with maintainers; [ urkud wkennington ];
-    license = licenses.mit;
+    license = licenses.bsd3;
   };
 }

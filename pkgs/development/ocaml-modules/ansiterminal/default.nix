@@ -1,34 +1,29 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild }:
+{ lib, buildDunePackage, fetchurl }:
 
-stdenv.mkDerivation {
-
-  name = "ansiterminal-0.6.5";
+buildDunePackage rec {
+  pname = "ANSITerminal";
+  version = "0.8.5";
 
   src = fetchurl {
-    url = "https://forge.ocamlcore.org/frs/download.php/1206/ANSITerminal-0.6.5.tar.gz";
-    sha256 = "1j9kflv2i16vf9hy031cl6z8hv6791mjbhnd9bw07y1pswdlx1r6";
+    url = "https://github.com/Chris00/ANSITerminal/releases/download/${version}/ANSITerminal-${version}.tbz";
+    hash = "sha256-q3OyGLajAmfSu8QzEtzzE5gbiwvsVV2SsGuHZkst0w4=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  postPatch = ''
+    substituteInPlace src/dune --replace 'libraries unix bytes' 'libraries unix'
+  '';
 
-  configurePhase = "ocaml setup.ml -configure --prefix $out";
+  doCheck = true;
 
-  buildPhase = "ocaml setup.ml -build";
-
-  installPhase = "ocaml setup.ml -install";
-
-  createFindlibDestdir = true;
-
-  meta = with stdenv.lib; {
-    homepage = "https://forge.ocamlcore.org/projects/ansiterminal";
+  meta = with lib; {
     description = "A module allowing to use the colors and cursor movements on ANSI terminals";
     longDescription = ''
       ANSITerminal is a module allowing to use the colors and cursor
       movements on ANSI terminals. It also works on the windows shell (but
       this part is currently work in progress).
     '';
+    homepage = "https://github.com/Chris00/ANSITerminal";
     license = licenses.lgpl3;
-    platforms = ocaml.meta.platforms or [];
     maintainers = [ maintainers.jirkamarsik ];
   };
 }

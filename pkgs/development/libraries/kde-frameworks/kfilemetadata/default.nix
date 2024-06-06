@@ -1,13 +1,38 @@
-{ kdeFramework, lib, copyPathsToStore, ecm
-, attr, ebook_tools, exiv2, ffmpeg, karchive, ki18n, poppler, qtbase, taglib
+{ mkDerivation
+, lib
+, stdenv
+, extra-cmake-modules
+, attr
+, ebook_tools
+, exiv2
+, ffmpeg
+, karchive
+, kcoreaddons
+, ki18n
+, poppler
+, qtbase
+, qtmultimedia
+, taglib
 }:
 
-kdeFramework {
-  name = "kfilemetadata";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  patches = copyPathsToStore (lib.readPathsFromFile ./. ./series);
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [
-    attr ebook_tools exiv2 ffmpeg karchive ki18n poppler qtbase taglib
+mkDerivation {
+  pname = "kfilemetadata";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = lib.optionals stdenv.isLinux [
+    attr
+  ] ++ [
+    ebook_tools
+    exiv2
+    ffmpeg
+    karchive
+    kcoreaddons
+    ki18n
+    poppler
+    qtbase
+    qtmultimedia
+    taglib
+  ];
+  patches = [
+    ./cmake-install-paths.patch
   ];
 }

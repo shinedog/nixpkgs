@@ -1,49 +1,41 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opam, uutf }:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg, uutf }:
 
 let
-  inherit (stdenv.lib) getVersion versionAtLeast;
-
   pname = "otfm";
-  version = "0.2.0";
-  webpage = "http://erratique.ch/software/${pname}";
+  version = "0.4.0";
+  webpage = "https://erratique.ch/software/${pname}";
 in
 
-assert versionAtLeast (getVersion ocaml) "4.01.0";
+stdenv.mkDerivation {
 
-stdenv.mkDerivation rec {
-
-  name = "ocaml-${pname}-${version}";
+  pname = "ocaml${ocaml.version}-${pname}";
+  inherit version;
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "1wgi9plf98gd7x3b7fzjxds089sivsap97bl1bw2lj73nxwnyb9c";
+    hash = "sha256-02U23mYTy0ZJgSObDoyygPTGEMC4/Zge5bux4wshaEE=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [ topkg ];
 
   propagatedBuildInputs = [ uutf ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  unpackCmd = "tar xjf $src";
+  inherit (topkg) buildPhase installPhase;
 
-  buildPhase = "ocaml pkg/build.ml native=true native-dynlink=true";
-
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install | sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${getVersion ocaml}/site-lib/${pname}
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "OpenType font decoder for OCaml";
     longDescription = ''
       Otfm is an in-memory decoder for the OpenType font data format. It
       provides low-level access to font tables and functions to decode some
       of them.
     '';
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = webpage;
     license = licenses.bsd3;
     maintainers = [ maintainers.jirkamarsik ];
+    mainProgram = "otftrip";
+    inherit (ocaml.meta) platforms;
   };
 }

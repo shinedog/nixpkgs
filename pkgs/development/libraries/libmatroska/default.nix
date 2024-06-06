@@ -1,23 +1,30 @@
-{ stdenv, fetchurl, pkgconfig, libebml }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config, libebml }:
 
 stdenv.mkDerivation rec {
-  name = "libmatroska-1.4.5";
+  pname = "libmatroska";
+  version = "1.7.1";
 
-  src = fetchurl {
-    url = "http://dl.matroska.org/downloads/libmatroska/${name}.tar.bz2";
-    sha256 = "1g2p2phmhkp86ldd2zqx6q0s33r7d38rsfnr4wmmdr81d6j3y0kr";
+  src = fetchFromGitHub {
+    owner  = "Matroska-Org";
+    repo   = "libmatroska";
+    rev    = "release-${version}";
+    sha256 = "sha256-hfu3Q1lIyMlWFWUM2Pu70Hie0rlQmua7Kq8kSIWnfHE=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
   buildInputs = [ libebml ];
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=YES"
+    "-DCMAKE_INSTALL_PREFIX="
+  ];
+
+  meta = with lib; {
     description = "A library to parse Matroska files";
-    homepage = http://matroska.org/;
+    homepage = "https://matroska.org/";
     license = licenses.lgpl21;
-    maintainers = [ maintainers.spwhitt ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.unix;
   };
 }
-

@@ -1,43 +1,45 @@
-{ stdenv, fetchurl, fetchpatch, gnu-efi }:
+{ lib
+, stdenv
+, fetchurl
+, gnu-efi
+, nixosTests
+, efibootmgr
+, openssl
+, withSbsigntool ? false # currently, cross compiling sbsigntool is broken, so default to false
+, sbsigntool
+, makeWrapper
+}:
 
 let
   archids = {
-    "x86_64-linux" = { hostarch = "x86_64"; efiPlatform = "x64"; };
-    "i686-linux" = rec { hostarch = "ia32"; efiPlatform = hostarch; };
+    x86_64-linux = { hostarch = "x86_64"; efiPlatform = "x64"; };
+    i686-linux = rec { hostarch = "ia32"; efiPlatform = hostarch; };
+    aarch64-linux = { hostarch = "aarch64"; efiPlatform = "aa64"; };
   };
 
   inherit
-    (archids.${stdenv.system} or (throw "unsupported system: ${stdenv.system}"))
+    (archids.${stdenv.hostPlatform.system} or (throw "unsupported system: ${stdenv.hostPlatform.system}"))
     hostarch efiPlatform;
 in
 
 stdenv.mkDerivation rec {
-  name = "refind-${version}";
-  version = "0.10.3";
-  srcName = "refind-src-${version}";
+  pname = "refind";
+  version = "0.14.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/project/refind/${version}/${srcName}.tar.gz";
-    sha256 = "1r2qp29mz08lx36i7x52i2598773bxvfhwryd954ssq2baifjav5";
+    url = "mirror://sourceforge/project/refind/${version}/refind-src-${version}.tar.gz";
+    hash = "sha256-99k86A2na4bFZygeoiW2qHkHzob/dyM8k1elIsEVyPA=";
   };
 
   patches = [
-    (fetchpatch {
-      url = "https://bugs.debian.org/cgi-bin/bugreport.cgi?att=1;bug=831258;filename=002-efiprot.patch;msg=10";
-      sha256 = "17h03h5mgkpamcj9jcq8h6x2admpknysrbdwccg7yxirlc52fc2s";
-      name = "002-efiprot.patch";
-    })
+    # Removes hardcoded toolchain for aarch64, allowing successful aarch64 builds.
+    ./0001-toolchain.patch
   ];
 
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ gnu-efi ];
 
   hardeningDisable = [ "stackprotector" ];
-
-  postPatch = ''
-    sed -e 's|-DEFI_FUNCTION_WRAPPER|-DEFI_FUNCTION_WRAPPER -maccumulate-outgoing-args|g' -i Make.common
-    sed -e 's|-DEFIX64|-DEFIX64 -maccumulate-outgoing-args|g' -i Make.common
-    sed -e 's|-m64|-maccumulate-outgoing-args -m64|g' -i filesystems/Make.gnuefi
-  '';
 
   makeFlags =
     [ "prefix="
@@ -46,11 +48,17 @@ stdenv.mkDerivation rec {
       "GNUEFILIB=${gnu-efi}/lib"
       "EFICRT0=${gnu-efi}/lib"
       "HOSTARCH=${hostarch}"
+      "ARCH=${hostarch}"
+    ] ++ lib.optional stdenv.isAarch64 [
+      # aarch64 is special for GNU-EFI, see BUILDING.txt
+      "GNUEFI_ARM64_TARGET_SUPPORT=y"
     ];
 
   buildFlags = [ "gnuefi" "fs_gnuefi" ];
 
   installPhase = ''
+    runHook preInstall
+
     install -d $out/bin/
     install -d $out/share/refind/drivers_${efiPlatform}/
     install -d $out/share/refind/tools_${efiPlatform}/
@@ -71,7 +79,7 @@ stdenv.mkDerivation rec {
     install -D -m0644 gptsync/gptsync_${efiPlatform}.efi $out/share/refind/tools_${efiPlatform}/gptsync_${efiPlatform}.efi
 
     # helper scripts
-    install -D -m0755 refind-install $out/share/refind/refind-install
+    install -D -m0755 refind-install $out/bin/refind-install
     install -D -m0755 mkrlconf $out/bin/refind-mkrlconf
     install -D -m0755 mvrefind $out/bin/refind-mvrefind
     install -D -m0755 fonts/mkfont.sh $out/bin/refind-mkfont
@@ -100,33 +108,31 @@ stdenv.mkDerivation rec {
     # keys
     install -D -m0644 keys/* $out/share/refind/keys/
 
-    # The refind-install script assumes that all resource files are
-    # installed under the same directory as the script itself. To avoid
-    # having to patch around this assumption, generate a wrapper that
-    # cds into $out/share/refind and executes the real script from
-    # there.
-    cat >$out/bin/refind-install <<EOF
-#! ${stdenv.shell}
-cd $out/share/refind && exec -a $out/bin/refind-install ./refind-install \$*
-EOF
-    chmod +x $out/bin/refind-install
+    # Fix variable definition of 'RefindDir' which is used to locate ressource files.
+    sed -i "s,\bRefindDir=\"\$This.*,RefindDir=$out/share/refind,g" $out/bin/refind-install
 
-    # Patch uses of `which`.  We could patch in calls to efibootmgr,
-    # openssl, convert, and openssl, but that would greatly enlarge
-    # refind's closure (from ca 28MB to over 400MB).
-    sed -i 's,`which \(.*\)`,`type -p \1`,g' $out/share/refind/refind-install
-    sed -i 's,`which \(.*\)`,`type -p \1`,g' $out/bin/refind-mvrefind
-    sed -i 's,`which \(.*\)`,`type -p \1`,g' $out/bin/refind-mkfont
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    wrapProgram $out/bin/refind-install \
+      --prefix PATH : ${lib.makeBinPath ( [ efibootmgr openssl ] ++ lib.optional withSbsigntool sbsigntool )}
+    wrapProgram $out/bin/refind-mvrefind \
+      --prefix PATH : ${lib.makeBinPath [ efibootmgr ]}
+  '';
+
+  passthru.tests = {
+    uefiCdrom = nixosTests.boot.uefiCdrom;
+  };
+
+  meta = with lib; {
     description = "A graphical {,U}EFI boot manager";
     longDescription = ''
       rEFInd is a graphical boot manager for EFI- and UEFI-based
       computers, such as all Intel-based Macs and recent (most 2011
       and later) PCs. rEFInd presents a boot menu showing all the EFI
       boot loaders on the EFI-accessible partitions, and optionally
-      BIOS-bootable partitions on Macs. EFI-compatbile OSes, including
+      BIOS-bootable partitions on Macs. EFI-compatible OSes, including
       Linux, provide boot loaders that rEFInd can detect and
       launch. rEFInd can launch Linux EFI boot loaders such as ELILO,
       GRUB Legacy, GRUB 2, and 3.3.0 and later kernels with EFI stub
@@ -136,9 +142,10 @@ EOF
       runtime makes it very easy to use, particularly when paired with
       Linux kernels that provide EFI stub support.
     '';
-    homepage = http://refind.sourceforge.net/;
-    maintainers = [ maintainers.AndersonTorres ];
-    platforms = [ "i686-linux" "x86_64-linux" ];
+    homepage = "http://refind.sourceforge.net/";
+    maintainers = with maintainers; [ AndersonTorres samueldr chewblacka ];
+    platforms = [ "i686-linux" "x86_64-linux" "aarch64-linux" ];
+    license = licenses.gpl3Plus;
   };
 
 }

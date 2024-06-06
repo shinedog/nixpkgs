@@ -1,26 +1,37 @@
-{ stdenv, fetchurl, python27Packages, wmctrl }:
+{ lib, fetchFromGitHub, python3Packages, wmctrl, qtbase, mkDerivationWith }:
 
-python27Packages.buildPythonPackage rec {
-  name = "plover-${version}";
-  version = "3.1.0";
+{
+  stable = throw "plover.stable was removed because it used Python 2. Use plover.dev instead."; # added 2022-06-05
 
-  meta = with stdenv.lib; {
-    description = "OpenSteno Plover stenography software";
-    maintainers = with maintainers; [ twey kovirobi ];
-    license = licenses.gpl2;
-  };
+  dev = with python3Packages; mkDerivationWith buildPythonPackage rec {
+    pname = "plover";
+    version = "4.0.0.dev10";
 
-  src = fetchurl {
-    url = "https://github.com/openstenoproject/plover/archive/v${version}.tar.gz";
-    sha256 = "1zdlgyjp93sfvk6by7rsh9hj4ijzplglrxpcpkcir6c3nq2bixl4";
-  };
+    meta = with lib; {
+      broken = stdenv.isDarwin;
+      description = "OpenSteno Plover stenography software";
+      maintainers = with maintainers; [ twey kovirobi ];
+      license     = licenses.gpl2;
+    };
 
-  # This is a fix for https://github.com/pypa/pip/issues/3624 causing regression https://github.com/pypa/pip/issues/3781
-  postPatch = ''
-    substituteInPlace setup.py --replace " in sys_platform" " == sys_platform"
+    src = fetchFromGitHub {
+      owner = "openstenoproject";
+      repo = "plover";
+      rev = "v${version}";
+      sha256 = "sha256-oJ7+R3ZWhUbNTTAw1AfMg2ur8vW1XEbsa5FgSTam1Ns=";
+    };
+
+    # I'm not sure why we don't find PyQt5 here but there's a similar
+    # sed on many of the platforms Plover builds for
+    postPatch = "sed -i /PyQt5/d setup.cfg";
+
+    nativeCheckInputs           = [ pytest mock ];
+    propagatedBuildInputs = [ babel pyqt5 xlib pyserial appdirs wcwidth setuptools ];
+
+    dontWrapQtApps = true;
+
+    preFixup = ''
+      makeWrapperArgs+=("''${qtWrapperArgs[@]}")
     '';
-
-  buildInputs = with python27Packages; [ pytest mock ];
-  propagatedBuildInputs = with python27Packages; [ six setuptools pyserial appdirs hidapi
-    wxPython xlib wmctrl ];
+  };
 }

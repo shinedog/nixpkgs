@@ -1,39 +1,35 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, opam }:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, topkg }:
 let
   pname = "xmlm";
-  webpage = "http://erratique.ch/software/${pname}";
+  webpage = "https://erratique.ch/software/${pname}";
 in
 
-assert stdenv.lib.versionAtLeast ocaml.version "3.12";
+if lib.versionOlder ocaml.version "4.05"
+then throw "xmlm is not available for OCaml ${ocaml.version}"
+else
 
 stdenv.mkDerivation rec {
-  name = "ocaml-${pname}-${version}";
-  version = "1.2.0";
+  name = "ocaml${ocaml.version}-${pname}-${version}";
+  version = "1.4.0";
 
   src = fetchurl {
     url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "1jywcrwn5z3gkgvicr004cxmdaqfmq8wh72f81jqz56iyn5024nh";
+    sha256 = "sha256-CRJSJY490WMgw85N2yG81X79nIwuv7eZ7mpUPtSS2fo=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild topkg ];
+  buildInputs = [ topkg ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  unpackCmd = "tar xjf $src";
+  inherit (topkg) buildPhase installPhase;
 
-  buildPhase = "./pkg/build true";
-
-  installPhase = ''
-    opam-installer --script --prefix=$out ${pname}.install > install.sh
-    sh install.sh
-    ln -s $out/lib/${pname} $out/lib/ocaml/${ocaml.version}/site-lib/
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "An OCaml streaming codec to decode and encode the XML data format";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = webpage;
+    license = licenses.isc;
     maintainers = [ maintainers.vbgl ];
-    license = licenses.bsd3;
+    mainProgram = "xmltrip";
+    inherit (ocaml.meta) platforms;
   };
 }

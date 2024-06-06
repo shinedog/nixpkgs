@@ -1,37 +1,37 @@
-{ fetchurl, stdenv, openssl, static ? false }:
+{ stdenv, lib, fetchFromGitHub, autoreconfHook, openssl, readline, fetchurl }:
 
 let
-  pkgname = "ipmitool";
-  version = "1.8.15";
-in
-stdenv.mkDerivation {
-  name = "${pkgname}-${version}";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/${pkgname}/${pkgname}-${version}.tar.gz";
-    sha256 = "0y6g8xg9p854n7xm3kds8m3d53jrsllnknp8lcr3jscf99j4x5ph";
+  iana-enterprise-numbers = fetchurl {
+    url = "https://web.archive.org/web/20230312103209id_/https://www.iana.org/assignments/enterprise-numbers.txt";
+    sha256 = "sha256-huFWygMEylBKBMLV16UE6xLWP6Aw1FGYk5h1q5CErUs=";
   };
 
-  patchPhase = stdenv.lib.optionalString stdenv.isDarwin ''
-    substituteInPlace src/plugins/ipmi_intf.c --replace "s6_addr16" "s6_addr"
+in stdenv.mkDerivation rec {
+  pname = "ipmitool";
+  version = "1.8.19";
+
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = "IPMITOOL_${lib.replaceStrings ["."] ["_"] version}";
+    hash = "sha256-VVYvuldRIHhaIUibed9cLX8Avfy760fdBLNO8MoUKCk=";
+  };
+
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ openssl readline ];
+
+  postPatch = ''
+    substituteInPlace configure.ac \
+      --replace 'AC_MSG_WARN([** Neither wget nor curl could be found.])' 'AM_CONDITIONAL([DOWNLOAD], [true])'
+    cp ${iana-enterprise-numbers} enterprise-numbers
   '';
 
-  buildInputs = [ openssl ];
-
-  preConfigure = ''
-    configureFlagsArray=(
-      --infodir=$out/share/info
-      --mandir=$out/share/man
-      ${if static then "LDFLAGS=-static --enable-static --disable-shared" else "--enable-shared"}
-    )
-  '';
-  makeFlags = if static then "AM_LDFLAGS=-all-static" else "";
-  dontDisableStatic = static;
-
-  meta = {
-    description = ''Command-line interface to IPMI-enabled devices'';
-    license = stdenv.lib.licenses.bsd3;
-    homepage = http://ipmitool.sourceforge.net;
-    platforms = stdenv.lib.platforms.unix;
+  meta = with lib; {
+    description = "Command-line interface to IPMI-enabled devices";
+    license = licenses.bsd3;
+    homepage = "https://github.com/ipmitool/ipmitool";
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ fpletz ];
   };
 }

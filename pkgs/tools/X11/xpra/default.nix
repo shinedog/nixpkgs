@@ -1,84 +1,219 @@
-{ stdenv, lib, fetchurl, python2Packages, pkgconfig
-, xorg, gtk2, glib, pango, cairo, gdk_pixbuf, atk
-, makeWrapper, xkbcomp, xorgserver, getopt, xauth, utillinux, which, fontsConf, xkeyboard_config
-, ffmpeg, x264, libvpx, libwebp
+{ lib
+, fetchurl
+, substituteAll
+, pkg-config
+, runCommand
+, writeText
+, wrapGAppsHook3
+, withNvenc ? false
+, atk
+, cairo
+, cudatoolkit
+, ffmpeg
+, gdk-pixbuf
+, getopt
+, glib
+, gobject-introspection
+, gst_all_1
+, gtk3
+, libappindicator
 , libfakeXinerama
-, gst_all_1, pulseaudioLight, gobjectIntrospection }:
-
-with lib;
+, librsvg
+, libvpx
+, libwebp
+, lz4
+, nv-codec-headers-10
+, nvidia_x11 ? null
+, pam
+, pandoc
+, pango
+, pulseaudio
+, python3
+, util-linux
+, which
+, x264
+, x265
+, xauth
+, xorg
+, xorgserver
+}:
 
 let
-  inherit (python2Packages) python cython buildPythonApplication;
+  inherit (python3.pkgs) cython buildPythonApplication;
+
+  xf86videodummy = xorg.xf86videodummy.overrideDerivation (p: {
+    patches = [
+      # patch provided by Xpra upstream
+      ./0002-Constant-DPI.patch
+      # https://github.com/Xpra-org/xpra/issues/349
+      ./0003-fix-pointer-limits.patch
+    ];
+  });
+
+  xorgModulePaths = writeText "module-paths" ''
+    Section "Files"
+      ModulePath "${xorgserver}/lib/xorg/modules"
+      ModulePath "${xorgserver}/lib/xorg/modules/extensions"
+      ModulePath "${xorgserver}/lib/xorg/modules/drivers"
+      ModulePath "${xf86videodummy}/lib/xorg/modules/drivers"
+    EndSection
+  '';
+
+  nvencHeaders = runCommand "nvenc-headers" {
+    inherit nvidia_x11;
+  } ''
+    mkdir -p $out/include $out/lib/pkgconfig
+    cp ${nv-codec-headers-10}/include/ffnvcodec/nvEncodeAPI.h $out/include
+    substituteAll ${./nvenc.pc} $out/lib/pkgconfig/nvenc.pc
+  '';
 in buildPythonApplication rec {
-  name = "xpra-0.17.6";
-  namePrefix = "";
+  pname = "xpra";
+  version = "4.4.6";
+
   src = fetchurl {
-    url = "http://xpra.org/src/${name}.tar.xz";
-    sha256 = "1z7v58m45g10icpv22qg4dipafcfsdqkxqz73z3rwsb6r0kdyrpj";
+    url = "https://xpra.org/src/${pname}-${version}.tar.xz";
+    hash = "sha256-BWf3nypfSrYCzpJ0OfBkecoHGbG1lEgu5jLZhfkIejQ=";
   };
 
-  buildInputs = [
-    cython pkgconfig
-
-    xorg.libX11 xorg.renderproto xorg.libXrender xorg.libXi xorg.inputproto xorg.kbproto
-    xorg.randrproto xorg.damageproto xorg.compositeproto xorg.xextproto xorg.recordproto
-    xorg.xproto xorg.fixesproto xorg.libXtst xorg.libXfixes xorg.libXcomposite xorg.libXdamage
-    xorg.libXrandr xorg.libxkbfile
-
-    pango cairo gdk_pixbuf atk gtk2 glib
-
-    ffmpeg libvpx x264 libwebp
-
-    gobjectIntrospection
-    gst_all_1.gstreamer
-    gst_all_1.gst-plugins-base
-    gst_all_1.gst-plugins-good
-    gst_all_1.gst-plugins-bad
-    gst_all_1.gst-libav
-
-    makeWrapper
+  patches = [
+    (substituteAll {  # correct hardcoded paths
+      src = ./fix-paths.patch;
+      inherit libfakeXinerama;
+    })
+    ./fix-41106.patch  # https://github.com/NixOS/nixpkgs/issues/41106
+    ./fix-122159.patch # https://github.com/NixOS/nixpkgs/issues/122159
   ];
 
-  propagatedBuildInputs = with python2Packages; [
-    pillow pygtk pygobject2 rencode pycrypto cryptography pycups lz4 dbus-python
-    netifaces numpy websockify pygobject3 gst-python
-  ];
+  INCLUDE_DIRS = "${pam}/include";
 
-  preBuild = ''
-    export NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE $(pkg-config --cflags gtk+-2.0) $(pkg-config --cflags pygtk-2.0) $(pkg-config --cflags xtst)"
-  '';
-  setupPyBuildFlags = ["--with-Xdummy" "--without-strict"];
+  nativeBuildInputs = [
+    gobject-introspection
+    pkg-config
+    wrapGAppsHook3
+    pandoc
+  ] ++ lib.optional withNvenc cudatoolkit;
 
-  preInstall = ''
-    # see https://bitbucket.org/pypa/setuptools/issue/130/install_data-doesnt-respect-prefix
-    ${python}/bin/${python.executable} setup.py install_data --install-dir=$out --root=$out
-    sed -i '/ = data_files/d' setup.py
+  buildInputs = with xorg; [
+    libX11
+    libXcomposite
+    libXdamage
+    libXfixes
+    libXi
+    libxkbfile
+    libXrandr
+    libXrender
+    libXres
+    libXtst
+    xorgproto
+  ] ++ (with gst_all_1; [
+    gst-libav
+    gst-plugins-bad
+    gst-plugins-base
+    gst-plugins-good
+    gstreamer
+  ]) ++ [
+    atk.out
+    cairo
+    cython
+    ffmpeg
+    gdk-pixbuf
+    glib
+    gtk3
+    libappindicator
+    librsvg
+    libvpx
+    libwebp
+    lz4
+    pam
+    pango
+    x264
+    x265
+  ] ++ lib.optional withNvenc nvencHeaders;
+
+  propagatedBuildInputs = with python3.pkgs; ([
+    cryptography
+    dbus-python
+    gst-python
+    idna
+    lz4
+    netifaces
+    numpy
+    opencv4
+    pam
+    paramiko
+    pillow
+    pycairo
+    pycrypto
+    pycups
+    pygobject3
+    pyinotify
+    pyopengl
+    python-uinput
+    pyxdg
+    rencode
+    invoke
+  ] ++ lib.optionals withNvenc [
+    pycuda
+    pynvml
+  ]);
+
+  # error: 'import_cairo' defined but not used
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=unused-function";
+
+  setupPyBuildFlags = [
+    "--with-Xdummy"
+    "--without-Xdummy_wrapper"
+    "--without-strict"
+    "--with-gtk3"
+    # Override these, setup.py checks for headers in /usr/* paths
+    "--with-pam"
+    "--with-vsock"
+  ] ++ lib.optional withNvenc "--with-nvenc";
+
+  dontWrapGApps = true;
+
+  preFixup = ''
+    makeWrapperArgs+=(
+      "''${gappsWrapperArgs[@]}"
+      --set XPRA_INSTALL_PREFIX "$out"
+      --set XPRA_COMMAND "$out/bin/xpra"
+      --set XPRA_XKB_CONFIG_ROOT "${xorg.xkeyboardconfig}/share/X11/xkb"
+      --set XORG_CONFIG_PREFIX ""
+      --prefix LD_LIBRARY_PATH : ${libfakeXinerama}/lib
+      --prefix PATH : ${lib.makeBinPath [ getopt xorgserver xauth which util-linux pulseaudio ]}
+  '' + lib.optionalString withNvenc ''
+      --prefix LD_LIBRARY_PATH : ${nvidia_x11}/lib
+  '' + ''
+    )
   '';
 
   postInstall = ''
-    wrapProgram $out/bin/xpra \
-      --set FONTCONFIG_FILE "${fontsConf}" \
-      --set XPRA_LOG_DIR "\$HOME/.xpra" \
-      --set XPRA_INSTALL_PREFIX "$out" \
-      --set GI_TYPELIB_PATH "$GI_TYPELIB_PATH" \
-      --set GST_PLUGIN_SYSTEM_PATH_1_0 "$GST_PLUGIN_SYSTEM_PATH_1_0" \
-      --prefix LD_LIBRARY_PATH : ${libfakeXinerama}/lib \
-      --prefix PATH : ${stdenv.lib.makeBinPath [ getopt xorgserver xauth which utillinux pulseaudioLight ]} \
+    # append module paths to xorg.conf
+    cat ${xorgModulePaths} >> $out/etc/xpra/xorg.conf
+    cat ${xorgModulePaths} >> $out/etc/xpra/xorg-uinput.conf
+
+    # make application icon visible to desktop environemnts
+    icon_dir="$out/share/icons/hicolor/64x64/apps"
+    mkdir -p "$icon_dir"
+    ln -sr "$out/share/icons/xpra.png" "$icon_dir"
   '';
 
-  preCheck = "exit 0";
+  doCheck = false;
 
-  #TODO: replace postInstall with postFixup to avoid double wrapping of xpra; needs more work though
-  #postFixup = ''
-  #  sed -i '3iexport FONTCONFIG_FILE="${fontsConf}"' $out/bin/xpra
-  #  sed -i '4iexport PATH=${stdenv.lib.makeBinPath [ getopt xorgserver xauth which utillinux ]}\${PATH:+:}\$PATH' $out/bin/xpra
-  #'';
+  enableParallelBuilding = true;
 
+  passthru = {
+    inherit xf86videodummy;
+    updateScript = ./update.sh;
+  };
 
-  meta = {
-    homepage = http://xpra.org/;
+  meta = with lib; {
+    homepage = "https://xpra.org/";
+    downloadPage = "https://xpra.org/src/";
     description = "Persistent remote applications for X";
+    changelog = "https://github.com/Xpra-org/xpra/releases/tag/v${version}";
     platforms = platforms.linux;
-    maintainers = with maintainers; [ tstrobel offline ];
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ offline numinit mvnetbiz ];
   };
 }

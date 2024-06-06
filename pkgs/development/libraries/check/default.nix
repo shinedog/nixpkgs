@@ -1,22 +1,25 @@
-{ fetchurl, stdenv
+{ fetchurl, lib, stdenv
 , CoreServices
 }:
 
 stdenv.mkDerivation rec {
-  name = "check-${version}";
-  version = "0.10.0";
+  pname = "check";
+  version = "0.15.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/check/${version}/check-${version}.tar.gz";
-    sha256 = "0lhhywf5nxl3dd0hdakra3aasl590756c9kmvyifb3vgm9k0gxgm";
+    url = "https://github.com/libcheck/check/releases/download/${version}/check-${version}.tar.gz";
+    sha256 = "02m25y9m46pb6n46s51av62kpd936lkfv3b13kfpckgvmh5lxpm8";
   };
 
-  # Test can randomly fail: http://hydra.nixos.org/build/7243912
+  # fortify breaks the libcompat vsnprintf implementation
+  hardeningDisable = lib.optionals (stdenv.hostPlatform.isMusl && (stdenv.hostPlatform != stdenv.buildPlatform)) [ "fortify" ];
+
+  # Test can randomly fail: https://hydra.nixos.org/build/7243912
   doCheck = false;
 
-  buildInputs = stdenv.lib.optional stdenv.isDarwin CoreServices;
+  buildInputs = lib.optional stdenv.isDarwin CoreServices;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Unit testing framework for C";
 
     longDescription =
@@ -28,10 +31,10 @@ stdenv.mkDerivation rec {
          can be used within source code editors and IDEs.
       '';
 
-    homepage = http://check.sourceforge.net/;
+    homepage = "https://libcheck.github.io/check/";
 
     license = licenses.lgpl2Plus;
+    mainProgram = "checkmk";
     platforms = platforms.all;
-    maintainers = with maintainers; [ wkennington ];
   };
 }

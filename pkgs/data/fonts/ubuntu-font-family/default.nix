@@ -1,29 +1,32 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "ubuntu-font-family-0.83";
-  buildInputs = [unzip];
+stdenvNoCC.mkDerivation rec {
+  pname = "ubuntu-font-family";
+  version = "0.83";
 
-  src = fetchurl {
-    url = "http://font.ubuntu.com/download/${name}.zip";
-    sha256 = "0hjvq2x758dx0sfwqhzflns0ns035qm7h6ygskbx1svzg517sva5";
+  src = fetchzip {
+    url = "https://assets.ubuntu.com/v1/fad7939b-ubuntu-font-family-${version}.zip";
+    hash = "sha256-FAg1xn8Gcbwmuvqtg9SquSet4oTT9nqE+Izeq7ZMVcA=";
   };
 
-  installPhase =
-    ''
-      mkdir -p $out/share/fonts/ubuntu
-      cp *.ttf $out/share/fonts/ubuntu
-    '';
+  installPhase = ''
+    runHook preInstall
 
-  meta = {
+    mkdir -p $out/share/fonts/ubuntu
+    mv *.ttf $out/share/fonts/ubuntu
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
     description = "Ubuntu Font Family";
     longDescription = "The Ubuntu typeface has been specially
     created to complement the Ubuntu tone of voice. It has a
     contemporary style and contains characteristics unique to
     the Ubuntu brand that convey a precise, reliable and free attitude.";
-    homepage = http://font.ubuntu.com/;
-    license = stdenv.lib.licenses.free;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.antono ];
+    homepage = "http://font.ubuntu.com/";
+    license = licenses.ufl;
+    platforms = platforms.all;
+    maintainers = [ maintainers.antono ];
   };
 }

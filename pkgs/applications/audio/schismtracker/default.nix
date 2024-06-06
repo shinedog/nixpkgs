@@ -1,23 +1,48 @@
-{ stdenv, fetchurl, alsaLib, python, SDL }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, alsa-lib
+, python3
+, SDL2
+, libXext
+, Cocoa
+}:
 
 stdenv.mkDerivation rec {
-  version = "20120105";
-  name = "schismtracker-${version}";
+  pname = "schismtracker";
+  version = "20240328";
 
-  src = fetchurl {
-    url = "http://schismtracker.org/dl/${name}.tar.bz2";
-    sha256 = "1ny7wv2wxm1av299wvpskall6438wjjpadphmqc7c0h6d0zg5kii";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-hoP/14lbqsuQ37oJDErPoQWWk04UshImmApCFrf5wno=";
   };
 
-  configureFlags = "--enable-dependency-tracking";
+  configureFlags = [ "--enable-dependency-tracking" ]
+    ++ lib.optional stdenv.isDarwin "--disable-sdltest";
 
-  buildInputs = [ alsaLib python SDL ];
+  nativeBuildInputs = [ autoreconfHook python3 ];
 
-  meta = {
+  buildInputs = [ SDL2 ]
+    ++ lib.optionals stdenv.isLinux [ alsa-lib libXext ]
+    ++ lib.optionals stdenv.isDarwin [ Cocoa ];
+
+  enableParallelBuilding = true;
+
+  # Our Darwin SDL2 doesn't have a SDL2main to link against
+  preConfigure = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace configure.ac \
+      --replace '-lSDL2main' '-lSDL2'
+  '';
+
+  meta = with lib; {
     description = "Music tracker application, free reimplementation of Impulse Tracker";
     homepage = "http://schismtracker.org/";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = [ "x86_64-linux" "i686-linux" ];
-    maintainers = [ stdenv.lib.maintainers.ftrvxmtrx ];
+    license = licenses.gpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ ftrvxmtrx ];
+    mainProgram = "schismtracker";
   };
 }

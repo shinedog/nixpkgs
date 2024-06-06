@@ -1,48 +1,96 @@
-{stdenv, fetchurl, fetchFromGitHub, callPackage, makeWrapper, doxygen
-, ffmpeg, python3Packages, qt55}:
-
-with stdenv.lib;
+{ lib
+, stdenv
+, mkDerivationWith
+, fetchFromGitHub
+, doxygen
+, gtk3
+, libopenshot
+, python3
+, qtbase
+, qtsvg
+, qtwayland
+, wayland
+, waylandSupport ? stdenv.isLinux
+, wrapGAppsHook3
+}:
 
 let
-  libopenshot = callPackage ./libopenshot.nix {};
-in
-stdenv.mkDerivation rec {
-  name = "openshot-qt-${version}";
-  version = "2.1.0";
-
+  pname = "openshot-qt";
+  version = "3.1.1";
   src = fetchFromGitHub {
     owner = "OpenShot";
     repo = "openshot-qt";
     rev = "v${version}";
-    sha256 = "1cyr5m1n6qcb9bzkhh3v6ka91a6x9c50dl5j0ilrc8vj0mb43g8c";
+    hash = "sha256-kEz1APBitWLlnIbyloYMsqNrwC9RqU04kyyWzm5klYc=";
   };
+in
+mkDerivationWith python3.pkgs.buildPythonApplication {
+  inherit pname version src;
 
-  buildInputs = [doxygen python3Packages.python makeWrapper ffmpeg];
+  outputs = [ "out" ]; # "lib" can't be split
 
-  propagatedBuildInputs = [
-    qt55.qtbase
-    qt55.qtmultimedia
-    libopenshot
+  nativeBuildInputs = [
+    doxygen
+    wrapGAppsHook3
   ];
 
-  installPhase = ''
-    mkdir -p $(toPythonPath $out)
-    cp -r src/* $(toPythonPath $out)
-    mkdir -p $out/bin
-    echo "#/usr/bin/env sh" >$out/bin/openshot-qt
-    echo "exec ${python3Packages.python.interpreter} $(toPythonPath $out)/launch.py" >>$out/bin/openshot-qt
-    chmod +x $out/bin/openshot-qt
-    wrapProgram $out/bin/openshot-qt \
-      --prefix PYTHONPATH : "$(toPythonPath $out):$(toPythonPath ${libopenshot}):$(toPythonPath ${python3Packages.pyqt5}):$(toPythonPath ${python3Packages.sip}):$(toPythonPath ${python3Packages.httplib2}):$(toPythonPath ${python3Packages.pyzmq}):$PYTHONPATH"
+  buildInputs = [
+    gtk3
+  ] ++ lib.optionals waylandSupport [
+    qtwayland
+    wayland
+  ];
+
+  propagatedBuildInputs = with python3.pkgs; [
+    httplib2
+    libopenshot
+    pyqtwebengine
+    pyzmq
+    requests
+    sip4
+  ];
+
+  strictDeps = true;
+
+  preConfigure = ''
+    # the builder tries to create caching directories during install
+    export HOME=$(mktemp -d)
   '';
 
   doCheck = false;
 
+  dontWrapGApps = true;
+  dontWrapQtApps = true;
+
+  postFixup = ''
+    wrapProgram $out/bin/openshot-qt \
+  ''
+  # Fix toolbar icons on Darwin
+  + lib.optionalString stdenv.isDarwin ''
+    --suffix QT_PLUGIN_PATH : "${lib.getBin qtsvg}/${qtbase.qtPluginPrefix}" \
+  '' + ''
+    "''${gappsWrapperArgs[@]}" \
+    "''${qtWrapperArgs[@]}"
+  '';
+
+  passthru = {
+    inherit libopenshot;
+    inherit (libopenshot) libopenshot-audio;
+  };
+
   meta = {
     homepage = "http://openshot.org/";
     description = "Free, open-source video editor";
-    license = licenses.gpl3Plus;
-    maintainers = [maintainers.tohl];
-    platforms = platforms.linux;
+    longDescription = ''
+      OpenShot Video Editor is a free, open-source video editor for Linux.
+      OpenShot can take your videos, photos, and music files and help you create
+      the film you have always dreamed of. Easily add sub-titles, transitions,
+      and effects, and then export your film to DVD, YouTube, Vimeo, Xbox 360,
+      and many other common formats.
+    '';
+    license = with lib.licenses; [ gpl3Plus ];
+    mainProgram = "openshot-qt";
+    maintainers = with lib.maintainers; [ AndersonTorres ];
+    platforms = lib.platforms.unix;
   };
 }

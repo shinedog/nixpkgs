@@ -1,28 +1,34 @@
-{ fetchurl, stdenv, libuuid, popt, icu, ncurses }:
+{ fetchurl, lib, stdenv, libuuid, popt, icu, ncurses, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "gptfdisk-${version}";
-  version = "1.0.1";
+  pname = "gptfdisk";
+  version = "1.0.10";
 
   src = fetchurl {
-    # http://www.rodsbooks.com/gdisk/${name}.tar.gz also works, but the home
+    # https://www.rodsbooks.com/gdisk/${name}.tar.gz also works, but the home
     # page clearly implies a preference for using SourceForge's bandwidth:
-    url = "mirror://sourceforge/gptfdisk/${name}.tar.gz";
-    sha256 = "1izazbyv5n2d81qdym77i8mg9m870hiydmq4d0s51npx5vp8lk46";
+    url = "mirror://sourceforge/gptfdisk/${pname}-${version}.tar.gz";
+    sha256 = "sha256-Kr7WG8bSuexJiXPARAuLgEt6ctcUQGm1qSCbKtaTooI=";
   };
 
-  patchPhase = stdenv.lib.optionalString stdenv.isDarwin ''
+  postPatch = ''
+    patchShebangs gdisk_test.sh
+  '' + lib.optionalString stdenv.isDarwin ''
     substituteInPlace Makefile.mac --replace \
       "-mmacosx-version-min=10.4" "-mmacosx-version-min=10.6"
     substituteInPlace Makefile.mac --replace \
       " -arch i386" ""
     substituteInPlace Makefile.mac --replace \
+      "-arch x86_64" ""
+    substituteInPlace Makefile.mac --replace \
+      "-arch arm64" ""
+    substituteInPlace Makefile.mac --replace \
       " -I/opt/local/include -I /usr/local/include -I/opt/local/include" ""
     substituteInPlace Makefile.mac --replace \
-      "/opt/local/lib/libncurses.a" "${ncurses.out}/lib/libncurses.dylib"
+      "/usr/local/Cellar/ncurses/6.2/lib/libncurses.dylib" "${ncurses.out}/lib/libncurses.dylib"
   '';
 
-  buildPhase = stdenv.lib.optionalString stdenv.isDarwin "make -f Makefile.mac";
+  buildPhase = lib.optionalString stdenv.isDarwin "make -f Makefile.mac";
   buildInputs = [ libuuid popt icu ncurses ];
 
   installPhase = ''
@@ -35,11 +41,15 @@ stdenv.mkDerivation rec {
     done
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests = lib.optionalAttrs stdenv.hostPlatform.isx86 {
+    installer-simpleLabels = nixosTests.installer.simpleLabels;
+  };
+
+  meta = with lib; {
     description = "Set of text-mode partitioning tools for Globally Unique Identifier (GUID) Partition Table (GPT) disks";
-    license = licenses.gpl2;
-    homepage = http://www.rodsbooks.com/gdisk/;
-    maintainers = with maintainers; [ nckx ];
+    license = licenses.gpl2Plus;
+    homepage = "https://www.rodsbooks.com/gdisk/";
     platforms = platforms.all;
+    maintainers = [ maintainers.ehmry ];
   };
 }

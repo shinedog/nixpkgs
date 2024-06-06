@@ -1,7 +1,7 @@
-{ stdenv, fetchurl, pkgconfig, glib, libwnck3, libnotify, dbus_glib, makeWrapper, gnome3 }:
+{ lib, stdenv, fetchurl, pkg-config, glib, libwnck, libnotify, dbus-glib, makeWrapper, gsettings-desktop-schemas }:
 
 stdenv.mkDerivation rec {
-  name = "notify-osd-${version}";
+  pname = "notify-osd";
   version = "0.9.34";
 
   src = fetchurl {
@@ -9,21 +9,23 @@ stdenv.mkDerivation rec {
     sha256 = "0g5a7a680b05x27apz0y1ldl5csxpp152wqi42s107jymbp0s20j";
   };
 
+  nativeBuildInputs = [ pkg-config makeWrapper ];
   buildInputs = [
-    pkgconfig glib libwnck3 libnotify dbus_glib makeWrapper
-    gnome3.gsettings_desktop_schemas
+    glib libwnck libnotify dbus-glib
+    gsettings-desktop-schemas
   ];
 
-  configureFlags = "--libexecdir=$(out)/bin";
+  configureFlags = [ "--libexecdir=$(out)/bin" ];
 
   preFixup = ''
     wrapProgram "$out/bin/notify-osd" \
       --prefix XDG_DATA_DIRS : "$GSETTINGS_SCHEMAS_PATH"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Daemon that displays passive pop-up notifications";
-    homepage = https://launchpad.net/notify-osd;
+    mainProgram = "notify-osd";
+    homepage = "https://launchpad.net/notify-osd";
     license = licenses.gpl3;
     maintainers = [ maintainers.bodil ];
     platforms = platforms.linux;

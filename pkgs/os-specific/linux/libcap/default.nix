@@ -1,38 +1,55 @@
-{ stdenv, fetchurl, attr, perl, pam ? null }:
-assert pam != null -> stdenv.isLinux;
+{ stdenv, lib, buildPackages, fetchurl, attr, runtimeShell
+, usePam ? !isStatic, pam ? null
+, isStatic ? stdenv.hostPlatform.isStatic
+
+# passthru.tests
+, bind
+, chrony
+, htop
+, libgcrypt
+, libvirt
+, ntp
+, qemu
+, squid
+, tor
+, uwsgi
+}:
+
+assert usePam -> pam != null;
 
 stdenv.mkDerivation rec {
-  name = "libcap-${version}";
-  version = "2.25";
+  pname = "libcap";
+  version = "2.69";
 
   src = fetchurl {
-    url = "mirror://kernel/linux/libs/security/linux-privs/libcap2/${name}.tar.xz";
-    sha256 = "0qjiqc5pknaal57453nxcbz3mn1r4hkyywam41wfcglq3v2qlg39";
+    url = "mirror://kernel/linux/libs/security/linux-privs/libcap2/${pname}-${version}.tar.xz";
+    sha256 = "sha256-8xH489rYRpnQVm0db37JQ6kpiyj3FMrjyTHf1XSS1+s=";
   };
 
-  outputs = [ "out" "dev" "lib" "doc" ]
-    ++ stdenv.lib.optional (pam != null) "pam";
+  outputs = [ "out" "dev" "lib" "man" "doc" ]
+    ++ lib.optional usePam "pam";
 
-  nativeBuildInputs = [ perl ];
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
 
-  buildInputs = [ pam ];
+  buildInputs = lib.optional usePam pam;
 
   propagatedBuildInputs = [ attr ];
 
   makeFlags = [
     "lib=lib"
-    (stdenv.lib.optional (pam != null) "PAM_CAP=yes")
-  ];
+    "PAM_CAP=${if usePam then "yes" else "no"}"
+    "BUILD_CC=$(CC_FOR_BUILD)"
+    "CC:=$(CC)"
+    "CROSS_COMPILE=${stdenv.cc.targetPrefix}"
+  ] ++ lib.optionals isStatic [ "SHARED=no" "LIBCSTATIC=yes" ];
 
-  prePatch = ''
-    # use relative bash path
-    substituteInPlace progs/capsh.c --replace "/bin/bash" "bash"
+  postPatch = ''
+    patchShebangs ./progs/mkcapshdoc.sh
 
-    # ensure capsh can find bash in $PATH
-    substituteInPlace progs/capsh.c --replace execve execvpe
-  '';
+    # use full path to bash
+    substituteInPlace progs/capsh.c --replace "/bin/bash" "${runtimeShell}"
 
-  preInstall = ''
+    # set prefixes
     substituteInPlace Make.Rules \
       --replace 'prefix=/usr' "prefix=$lib" \
       --replace 'exec_prefix=' "exec_prefix=$out" \
@@ -41,19 +58,35 @@ stdenv.mkDerivation rec {
       --replace 'man_prefix=$(prefix)' "man_prefix=$doc"
   '';
 
-  installFlags = "RAISE_SETFCAP=no";
+  installFlags = [ "RAISE_SETFCAP=no" ];
 
   postInstall = ''
-    rm "$lib"/lib/*.a
-    mkdir -p "$doc/share/doc/${name}"
-    cp License "$doc/share/doc/${name}/"
-  '' + stdenv.lib.optionalString (pam != null) ''
+    ${lib.optionalString (!isStatic) ''rm "$lib"/lib/*.a''}
+    mkdir -p "$doc/share/doc/${pname}-${version}"
+    cp License "$doc/share/doc/${pname}-${version}/"
+  '' + lib.optionalString usePam ''
     mkdir -p "$pam/lib/security"
     mv "$lib"/lib/security "$pam/lib"
   '';
 
+  passthru.tests = {
+    inherit
+      bind
+      chrony
+      htop
+      libgcrypt
+      libvirt
+      ntp
+      qemu
+      squid
+      tor
+      uwsgi;
+  };
+
   meta = {
     description = "Library for working with POSIX capabilities";
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://sites.google.com/site/fullycapable";
+    platforms = lib.platforms.linux;
+    license = lib.licenses.bsd3;
   };
 }

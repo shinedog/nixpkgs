@@ -1,36 +1,47 @@
-{ stdenv, fetchFromGitHub, coreutils, qtbase, qtdeclarative, qmakeHook, texlive }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, qtbase
+, qtdeclarative
+, cmake
+, ninja
+, version ? "42.1.6"
+, hash ? "sha256-VjCXT4sl3HsFILrqTc3JJSeRedZaOXUbf4KvSzTo0uc="
+}:
 
 stdenv.mkDerivation rec {
-  name = "dwarf-therapist-original-${version}";
-  version = "37.0.0";
+  pname = "dwarf-therapist";
+
+  inherit version;
 
   src = fetchFromGitHub {
-    owner = "splintermind";
+    owner = "Dwarf-Therapist";
     repo = "Dwarf-Therapist";
     rev = "v${version}";
-    sha256 = "0dw86b4x5hjhb7h4ynvwjgcinpqywfc5l48ljb5sahz08rfnx63d";
+    inherit hash;
   };
 
-  outputs = [ "out" "layouts" ];
+  nativeBuildInputs = [ cmake ninja ];
   buildInputs = [ qtbase qtdeclarative ];
-  nativeBuildInputs = [ texlive qmakeHook ];
 
-  enableParallelBuilding = false;
+  enableParallelBuilding = true;
 
-  # Move layout files so they cannot be found by Therapist
-  postInstall = ''
-    mkdir -p $layouts
-    mv $out/share/dwarftherapist/memory_layouts/* $layouts
-    rmdir $out/share/dwarftherapist/memory_layouts
-    # Useless symlink
-    rm $out/bin/dwarftherapist
-  '';
+  cmakeFlags = [ "-GNinja" ];
 
-  meta = with stdenv.lib; {
-    description = "Tool to manage dwarves in in a running game of Dwarf Fortress";
-    maintainers = with maintainers; [ the-kenny abbradar ];
+  installPhase =
+    if stdenv.isDarwin then ''
+      mkdir -p $out/Applications
+      cp -r DwarfTherapist.app $out/Applications
+    '' else null;
+
+  dontWrapQtApps = true;
+
+  meta = with lib; {
+    mainProgram = "dwarftherapist";
+    description = "Tool to manage dwarves in a running game of Dwarf Fortress";
+    maintainers = with maintainers; [ abbradar bendlas numinit jonringer ];
     license = licenses.mit;
-    platforms = platforms.linux;
-    homepage = "https://github.com/splintermind/Dwarf-Therapist";
+    platforms = platforms.x86;
+    homepage = "https://github.com/Dwarf-Therapist/Dwarf-Therapist";
   };
 }

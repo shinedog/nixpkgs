@@ -1,22 +1,45 @@
-{ stdenv, fetchurl, libjpeg }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, libjpeg
+, libpng
+, ncurses
+, autoreconfHook
+, autoconf-archive
+, pkg-config
+, bash-completion
+}:
 
 stdenv.mkDerivation rec {
-  version = "1.0.6";
-  name = "jp2a-${version}";
+  version = "1.2.0";
+  pname = "jp2a";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/jp2a/${name}.tar.gz";
-    sha256 = "076frk3pa16s4r1b10zgy81vdlz0385zh3ykbnkaij25jn5aqc09";
+  src = fetchFromGitHub {
+    owner = "Talinx";
+    repo = "jp2a";
+    rev = "v${version}";
+    sha256 = "sha256-TyXEaHemKfCMyGwK6P2vVL9gPWRLbkaNP0g+/UYGSVc=";
   };
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [ "PREFIX=$(out)" ];
 
-  buildInputs = [ libjpeg ];
+  nativeBuildInputs = [
+    autoreconfHook
+    autoconf-archive
+    pkg-config
+    bash-completion
+  ];
+  buildInputs = [ libjpeg libpng ncurses ];
 
-  meta = with stdenv.lib; {
-    homepage = https://csl.name/jp2a/;
+  installFlags = [ "bashcompdir=\${out}/share/bash-completion/completions" ];
+
+  meta = with lib; {
+    broken = stdenv.isDarwin;
+    homepage = "https://csl.name/jp2a/";
     description = "A small utility that converts JPG images to ASCII";
-    license = licenses.gpl2;
+    license = licenses.gpl2Only;
+    maintainers = [ maintainers.FlorianFranzen ];
     platforms = platforms.unix;
+    mainProgram = "jp2a";
   };
 }

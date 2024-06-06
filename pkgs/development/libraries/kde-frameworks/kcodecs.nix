@@ -1,7 +1,9 @@
-{ kdeFramework, lib, ecm }:
+{ mkDerivation, extra-cmake-modules, qtbase, qttools, gperf }:
 
-kdeFramework {
-  name = "kcodecs";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
+mkDerivation {
+  pname = "kcodecs";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ qttools gperf ];
+  propagatedBuildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

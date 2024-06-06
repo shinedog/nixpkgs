@@ -1,21 +1,31 @@
-{ stdenv, fetchFromGitHub, cmake, alsaLib, libjack2Unstable, libpulseaudio }:
+{ lib, stdenv, fetchFromGitHub, cmake, alsa-lib, libjack2, libpulseaudio, AudioUnit }:
 
 stdenv.mkDerivation rec {
-  version = "1.1.0";
-  name = "libsoundio-${version}";
+  version = "2.0.0";
+  pname = "libsoundio";
 
   src = fetchFromGitHub {
     owner = "andrewrk";
     repo = "libsoundio";
-    rev = "${version}";
-    sha256 = "0mw197l4bci1cjc2z877gxwsvk8r43dr7qiwci2hwl2cjlcnqr2p";
+    rev = version;
+    sha256 = "12l4rvaypv87vigdrmjz48d4d6sq4gfxf5asvnc4adyabxb73i4x";
   };
 
-  buildInputs = [ cmake alsaLib libjack2Unstable libpulseaudio ];
+  nativeBuildInputs = [ cmake ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ libjack2 ]
+    ++ lib.optionals stdenv.isLinux [ libpulseaudio alsa-lib ]
+    ++ lib.optional stdenv.isDarwin AudioUnit;
+
+  cmakeFlags = lib.optionals stdenv.isDarwin [
+    "-DBUILD_TESTS=OFF"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-Wno-strict-prototypes";
+
+  meta = with lib; {
     description = "Cross platform audio input and output";
-    homepage = http://libsound.io/;
+    homepage = "http://libsound.io/";
     license = licenses.mit;
     platforms = platforms.unix;
     maintainers = [ maintainers.andrewrk ];

@@ -1,26 +1,24 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenv, fetchFromGitHub }:
 
-let
-  version = "0.2";
-in
-stdenv.mkDerivation {
-  name = "lr-${version}";
-  inherit version;
+stdenv.mkDerivation rec {
+  pname = "lr";
+  version = "1.6";
 
   src = fetchFromGitHub {
     owner = "chneukirchen";
     repo = "lr";
     rev = "v${version}";
-    sha256 = "1wn1j0cf84r4nli92myf3waackh2p6r2hkavgx6533x15kdyfnf7";
+    sha256 = "sha256-TcP0jLFemdmWzGa4/RX7N6xUUTgKsI7IEOD7GfuuPWI=";
   };
 
-  makeFlags = "PREFIX=$(out)";
+  makeFlags = [ "PREFIX=$(out)" ];
 
-  meta = {
-    homepage = "http://github.com/chneukirchen/lr";
+  meta = with lib; {
+    homepage = "https://github.com/chneukirchen/lr";
     description = "List files recursively";
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [stdenv.lib.maintainers.globin];
+    license = licenses.mit;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ vikanezrimaya ];
+    mainProgram = "lr";
   };
 }

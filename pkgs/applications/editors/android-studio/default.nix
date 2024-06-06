@@ -1,101 +1,46 @@
-{ bash
-, buildFHSUserEnv
-, coreutils
-, fetchurl
-, findutils
-, file
-, git
-, glxinfo
-, gnugrep
-, gnutar
-, gzip
-, jdk
-, libpulseaudio
-, libX11
-, libXrandr
-, makeWrapper
-, pciutils
-, pkgsi686Linux
-, setxkbmap
-, stdenv
-, unzip
-, which
-, writeTextFile
-, xkeyboard_config
-, zlib
-}:
+{ callPackage, makeFontsConf, gnome2, buildFHSEnv, tiling_wm ? false }:
 
 let
-
-  version = "2.1.3.0";
-  build = "143.3101438";
-
-  androidStudio = stdenv.mkDerivation {
-    name = "android-studio";
-    buildInputs = [
-      makeWrapper
-      unzip
-    ];
-    installPhase = ''
-      cp -r . $out
-      wrapProgram $out/bin/studio.sh --set PATH "${stdenv.lib.makeBinPath [
-
-        # Checked in studio.sh
-        coreutils
-        findutils
-        gnugrep
-        jdk
-        which
-
-        # For Android emulator
-        file
-        glxinfo
-        pciutils
-        setxkbmap
-
-        # Used during setup wizard
-        gnutar
-        gzip
-
-        # Runtime stuff
-        git
-
-      ]}" --prefix LD_LIBRARY_PATH : "${stdenv.lib.makeLibraryPath [
-        # Gradle wants libstdc++.so.6
-        stdenv.cc.cc.lib
-        # mksdcard wants 32 bit libstdc++.so.6
-        pkgsi686Linux.stdenv.cc.cc.lib
-
-        # aapt wants libz.so.1
-        zlib
-        pkgsi686Linux.zlib
-        # Support multiple monitors
-        libXrandr
-
-        # For Android emulator
-        libpulseaudio
-        libX11
-      ]}" --set QT_XKB_CONFIG_ROOT "${xkeyboard_config}/share/X11/xkb"
-    '';
-    src = fetchurl {
-      url = "https://dl.google.com/dl/android/studio/ide-zips/${version}/android-studio-ide-${build}-linux.zip";
-      sha256 = "1xlz3ibqrm4ckw4lgbkzbxvpgg0y8hips9b54p4d15f34i0r8bvj";
+  mkStudio = opts: callPackage (import ./common.nix opts) {
+    fontsConf = makeFontsConf {
+      fontDirectories = [];
     };
+    inherit (gnome2) GConf gnome_vfs;
+    inherit buildFHSEnv;
+    inherit tiling_wm;
   };
-
-  # Android Studio downloads prebuilt binaries as part of the SDK. These tools
-  # (e.g. `mksdcard`) have `/lib/ld-linux.so.2` set as the interpreter. An FHS
-  # environment is used as a work around for that.
-  fhsEnv = buildFHSUserEnv {
-    name = "android-studio-fhs-env";
+  stableVersion = {
+    version = "2023.3.1.19"; # "Android Studio Jellyfish | 2023.3.1 Patch 1"
+    sha256Hash = "sha256-FyscJPusmK33UPIexV20GXQ4Z5X8mfNRFPu/2Xeg5ts=";
   };
+  betaVersion = {
+    version = "2023.3.1.17"; # "Android Studio Jellyfish | 2023.3.1.1 RC 2"
+    sha256Hash = "sha256-zROBKzQiP4V2P67HgOIkHgn8q/M0zy5MkZozVSiQsWU=";
+  };
+  latestVersion = {
+    version = "2024.1.1.4"; # "Android Studio Koala | 2024.1.1 Canary 6"
+    sha256Hash = "sha256-lfig7lFyF7XZowTQKpo6zGeR23VHq/f7vvUDWCs7jeo=";
+  };
+in {
+  # Attributes are named by their corresponding release channels
 
-in writeTextFile {
-  name = "android-studio-${version}";
-  destination = "/bin/android-studio";
-  executable = true;
-  text = ''
-    #!${bash}/bin/bash
-    ${fhsEnv}/bin/android-studio-fhs-env ${androidStudio}/bin/studio.sh
-  '';
+  stable = mkStudio (stableVersion // {
+    channel = "stable";
+    pname = "android-studio";
+  });
+
+  beta = mkStudio (betaVersion // {
+    channel = "beta";
+    pname = "android-studio-beta";
+  });
+
+  dev = mkStudio (latestVersion // {
+    channel = "dev";
+    pname = "android-studio-dev";
+  });
+
+  canary = mkStudio (latestVersion // {
+    channel = "canary";
+    pname = "android-studio-canary";
+  });
 }

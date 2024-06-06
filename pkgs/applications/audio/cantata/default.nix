@@ -1,33 +1,44 @@
-{ stdenv, fetchurl, cmake
-, withQt4 ? false, qt4
-, withQt5 ? true, qtbase, qtsvg, qttools, makeQtWrapper
+{ mkDerivation
+, lib
+, fetchFromGitHub
+, cmake
+, pkg-config
+, qtbase
+, qtsvg
+, qttools
+, perl
 
-# I'm unable to make KDE work here, crashes at runtime so I simply
-# make Qt4 the default until someone who wants KDE can figure it out.
-, withKDE4 ? false, kde4
+  # Cantata doesn't build with cdparanoia enabled so we disable that
+  # default for now until I (or someone else) figure it out.
+, withCdda ? false
+, cdparanoia
+, withCddb ? false
+, libcddb
+, withLame ? false
+, lame
+, withMusicbrainz ? false
+, libmusicbrainz5
 
-# Cantata doesn't build with cdparanoia enabled so we disable that
-# default for now until I (or someone else) figure it out.
-, withCdda ? false, cdparanoia
-, withCddb ? false, libcddb
-, withLame ? false, lame
-, withMusicbrainz ? false, libmusicbrainz5
-
-, withTaglib ? true, taglib, taglib_extras
-, withReplaygain ? true, ffmpeg, speex, mpg123
-, withMtp ? true, libmtp
+, withTaglib ? true
+, taglib
+, taglib_extras
+, withHttpStream ? true
+, qtmultimedia
+, withReplaygain ? true
+, ffmpeg
+, speex
+, mpg123
+, withMtp ? true
+, libmtp
 , withOnlineServices ? true
-, withDevices ? true, udisks2
+, withDevices ? true
+, udisks2
 , withDynamic ? true
 , withHttpServer ? true
+, withLibVlc ? false
+, libvlc
 , withStreams ? true
 }:
-
-# One and only one front-end.
-assert withQt5 -> withQt4 == false && withKDE4 == false;
-assert withQt4 -> withQt5 == false && withKDE4 == false;
-assert withKDE4 -> withQt4 == false && withQt5 == false;
-assert withQt4 || withQt5 || withKDE4;
 
 # Inter-dependencies.
 assert withCddb -> withCdda && withTaglib;
@@ -37,79 +48,75 @@ assert withMtp -> withTaglib;
 assert withMusicbrainz -> withCdda && withTaglib;
 assert withOnlineServices -> withTaglib;
 assert withReplaygain -> withTaglib;
+assert withLibVlc -> withHttpStream;
 
 let
-  version = "1.5.1";
-  pname = "cantata";
-  fstat = x: fn: "-DENABLE_" + fn + "=" + (if x then "ON" else "OFF");
-  fstats = x: map (fstat x);
-in
+  fstat = x: fn:
+    "-DENABLE_${fn}=${if x then "ON" else "OFF"}";
 
-stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
+  withUdisks = (withTaglib && withDevices);
 
-  src = fetchurl {
-    inherit name;
-    url = "https://drive.google.com/uc?export=download&id=0Bzghs6gQWi60UktwaTRMTjRIUW8";
-    sha256 = "0y7y3nbiqgh1ghb47n4lfyp163wvazvhavlshb1c18ik03fkn5sp";
-  };
-
-  buildInputs =
-    [ cmake ]
-    ++ stdenv.lib.optional withQt4 qt4
-    ++ stdenv.lib.optionals withQt5 [ qtbase qtsvg qttools ]
-    ++ stdenv.lib.optional withKDE4 kde4.kdelibs
-    ++ stdenv.lib.optionals withTaglib [ taglib taglib_extras ]
-    ++ stdenv.lib.optionals withReplaygain [ ffmpeg speex mpg123 ]
-    ++ stdenv.lib.optional withCdda cdparanoia
-    ++ stdenv.lib.optional withCddb libcddb
-    ++ stdenv.lib.optional withLame lame
-    ++ stdenv.lib.optional withMtp libmtp
-    ++ stdenv.lib.optional withMusicbrainz libmusicbrainz5
-    ++ stdenv.lib.optional (withTaglib && !withKDE4 && withDevices) udisks2;
-
-  nativeBuildInputs = stdenv.lib.optional withQt5 makeQtWrapper;
-
-  unpackPhase = "tar -xvf $src";
-  sourceRoot = "${name}";
-
-  # Qt4 is implicit when KDE is switched off.
-  cmakeFlags = stdenv.lib.flatten [
-    (fstats withKDE4 [ "KDE" "KWALLET" ])
-    (fstat withQt5 "QT5")
-    (fstats withTaglib [ "TAGLIB" "TAGLIB_EXTRAS" ])
-    (fstats withReplaygain [ "FFMPEG" "MPG123" "SPEEXDSP" ])
-    (fstat withCdda "CDPARANOIA")
-    (fstat withCddb "CDDB")
-    (fstat withLame "LAME")
-    (fstat withMtp "MTP")
-    (fstat withMusicbrainz "MUSICBRAINZ")
-    (fstat withOnlineServices "ONLINE_SERVICES")
-    (fstat withDynamic "DYNAMIC")
-    (fstat withDevices "DEVICES_SUPPORT")
-    (fstat withHttpServer "HTTP_SERVER")
-    (fstat withStreams "STREAMS")
-    "-DENABLE_HTTPS_SUPPORT=ON"
-    "-DENABLE_UDISKS2=ON"
+  options = [
+    { names = [ "CDDB" ]; enable = withCddb; pkgs = [ libcddb ]; }
+    { names = [ "CDPARANOIA" ]; enable = withCdda; pkgs = [ cdparanoia ]; }
+    { names = [ "DEVICES_SUPPORT" ]; enable = withDevices; pkgs = [ ]; }
+    { names = [ "DYNAMIC" ]; enable = withDynamic; pkgs = [ ]; }
+    { names = [ "FFMPEG" "MPG123" "SPEEXDSP" ]; enable = withReplaygain; pkgs = [ ffmpeg speex mpg123 ]; }
+    { names = [ "HTTPS_SUPPORT" ]; enable = true; pkgs = [ ]; }
+    { names = [ "HTTP_SERVER" ]; enable = withHttpServer; pkgs = [ ]; }
+    { names = [ "HTTP_STREAM_PLAYBACK" ]; enable = withHttpStream; pkgs = [ qtmultimedia ]; }
+    { names = [ "LAME" ]; enable = withLame; pkgs = [ lame ]; }
+    { names = [ "LIBVLC" ]; enable = withLibVlc; pkgs = [ libvlc ]; }
+    { names = [ "MTP" ]; enable = withMtp; pkgs = [ libmtp ]; }
+    { names = [ "MUSICBRAINZ" ]; enable = withMusicbrainz; pkgs = [ libmusicbrainz5 ]; }
+    { names = [ "ONLINE_SERVICES" ]; enable = withOnlineServices; pkgs = [ ]; }
+    { names = [ "STREAMS" ]; enable = withStreams; pkgs = [ ]; }
+    { names = [ "TAGLIB" "TAGLIB_EXTRAS" ]; enable = withTaglib; pkgs = [ taglib taglib_extras ]; }
+    { names = [ "UDISKS2" ]; enable = withUdisks; pkgs = [ udisks2 ]; }
   ];
 
-  # This is already fixed upstream but not released yet. Maybe in version 2.
-  preConfigure = ''
-    sed -i -e 's/STRLESS/VERSION_LESS/g' cmake/FindTaglib.cmake
+in
+mkDerivation rec {
+  pname = "cantata";
+  version = "2.5.0";
+
+  src = fetchFromGitHub {
+    owner = "CDrummond";
+    repo = "cantata";
+    rev = "v${version}";
+    sha256 = "sha256-UaZEKZvCA50WsdQSSJQQ11KTK6rM4ouCHDX7pn3NlQw=";
+  };
+
+  patches = [
+    # Cantata wants to check if perl is in the PATH at runtime, but we
+    # patchShebangs the playlists scripts, making that unnecessary (perl will
+    # always be available because it's a dependency)
+    ./dont-check-for-perl-in-PATH.diff
+  ];
+
+  postPatch = ''
+    patchShebangs playlists
   '';
 
-  postInstall = stdenv.lib.optionalString withQt5 ''
-    wrapQtProgram "$out/bin/cantata"
-  '';
+  buildInputs = [
+    qtbase
+    qtsvg
+    (perl.withPackages (ppkgs: with ppkgs; [ URI ]))
+  ]
+  ++ lib.flatten (builtins.catAttrs "pkgs" (builtins.filter (e: e.enable) options));
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/cdrummond/cantata;
+  nativeBuildInputs = [ cmake pkg-config qttools ];
+
+  cmakeFlags = lib.flatten (map (e: map (f: fstat e.enable f) e.names) options);
+
+  meta = with lib; {
     description = "A graphical client for MPD";
-    license = licenses.gpl3;
-
-    # Technically Cantata can run on Windows so if someone wants to
+    mainProgram = "cantata";
+    homepage = "https://github.com/cdrummond/cantata";
+    license = licenses.gpl3Only;
+    maintainers = with maintainers; [ peterhoeg ];
+    # Technically, Cantata should run on Darwin/Windows so if someone wants to
     # bother figuring that one out, be my guest.
     platforms = platforms.linux;
-    maintainers = [ maintainers.fuuzetsu ];
   };
 }

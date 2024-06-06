@@ -1,26 +1,46 @@
-{ stdenv, fetchurl, pkgconfig, guile, texinfo }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, guile
+, pkg-config
+, texinfo
+}:
 
-stdenv.mkDerivation {
-  name = "guile-xcb-1.3";
+stdenv.mkDerivation rec {
+  pname = "guile-xcb";
+  version = "unstable-2017-05-29";
 
-  meta = with stdenv.lib; {
+  src = fetchFromGitHub {
+    owner = "mwitmer";
+    repo = pname;
+    rev = "db7d5a393cc37a56f66541b3f33938b40c6f35b3";
+    hash = "sha256-zbIsEIPwNJ1YXMZTDw2DfzufC+IZWfcWgZHbuv7bhJs=";
+  };
+
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
+  ];
+  buildInputs = [
+    guile
+    texinfo
+  ];
+
+  configureFlags = [
+    "--with-guile-site-dir=$(out)/${guile.siteDir}"
+    "--with-guile-site-ccache-dir=$(out)/${guile.siteCcacheDir}"
+  ];
+
+  makeFlags = [
+    "GUILE_AUTO_COMPILE=0"
+  ];
+
+  meta = with lib; {
+    homepage = "https://github.com/mwitmer/guile-xcb";
     description = "XCB bindings for Guile";
-    homepage    = "http://www.markwitmer.com/guile-xcb/guile-xcb.html";
-    license     = licenses.gpl3Plus;
-    platforms   = platforms.linux;
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ vyp ];
+    platforms = guile.meta.platforms;
   };
-
-  src = fetchurl {
-    url = "http://www.markwitmer.com/dist/guile-xcb-1.3.tar.gz";
-    sha256 = "04dvbqdrrs67490gn4gkq9zk8mqy3mkls2818ha4p0ckhh0pm149";
-  };
-
-  buildInputs = [ pkgconfig guile texinfo ];
-
-  preConfigure = ''
-    configureFlags="
-      --with-guile-site-dir=$out/share/guile/site
-      --with-guile-site-ccache-dir=$out/share/guile/site
-    ";
-  '';
 }

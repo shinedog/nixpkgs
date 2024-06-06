@@ -1,17 +1,32 @@
-{ fetchurl, stdenv, smartmontools, gtkmm2, libglademm, pkgconfig, pcre }:
+{ fetchurl, lib, stdenv, smartmontools, autoreconfHook, gettext, gtkmm3, pkg-config, wrapGAppsHook3, pcre-cpp, gnome }:
 
 stdenv.mkDerivation rec {
-  version="0.8.7";
-  name = "gsmartcontrol-${version}";
+  pname = "gsmartcontrol";
+  version = "1.1.4";
 
   src = fetchurl {
-    url = "http://artificialtime.com/gsmartcontrol/gsmartcontrol-${version}.tar.bz2";
-    sha256 = "1ipykzqpfvlr84j38hr7q2cag4imrn1gql10slp8bfrs4h1si3vh";
+    url = "https://github.com/ashaduri/gsmartcontrol/releases/download/v${version}/gsmartcontrol-${version}.tar.bz2";
+    sha256 = "sha256-/ECfK4qEzEC7ED1sgkAbnUwBgtWjsiPJOVnHrWYZGEc=";
   };
 
-  buildInputs = [ smartmontools gtkmm2 libglademm pkgconfig pcre ];
+  patches = [
+    ./fix-paths.patch
+  ];
 
-  #installTargets = "install datainstall";
+  postPatch = ''
+    substituteInPlace data/org.gsmartcontrol.policy --replace "/usr/sbin" $out/bin
+  '';
+
+  nativeBuildInputs = [ autoreconfHook gettext pkg-config wrapGAppsHook3 ];
+  buildInputs = [ gtkmm3 pcre-cpp gnome.adwaita-icon-theme ];
+
+  enableParallelBuilding = true;
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix PATH : "${lib.makeBinPath [ smartmontools ]}"
+    )
+  '';
 
   meta = {
     description = "Hard disk drive health inspection tool";
@@ -24,9 +39,9 @@ stdenv.mkDerivation rec {
       It allows you to inspect the drive's SMART data to determine its health,
       as well as run various tests on it.
     '';
-    homepage = http://gsmartcontrol.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [qknight];
-    platforms = with stdenv.lib.platforms; linux;
+    homepage = "https://gsmartcontrol.shaduri.dev/";
+    license = lib.licenses.gpl2Plus;
+    maintainers = with lib.maintainers; [qknight];
+    platforms = with lib.platforms; linux;
   };
 }

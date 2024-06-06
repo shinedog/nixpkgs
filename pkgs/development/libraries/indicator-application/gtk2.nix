@@ -1,12 +1,10 @@
 { stdenv, fetchurl, lib, file
-, pkgconfig, autoconf
-, glib, dbus_glib, json_glib
+, pkg-config, autoconf
+, glib, dbus-glib, json-glib
 , gtk2, libindicator-gtk2, libdbusmenu-gtk2, libappindicator-gtk2 }:
 
-with lib;
-
 stdenv.mkDerivation rec {
-  name = "indicator-application-gtk2-${version}";
+  pname = "indicator-application-gtk2";
   version = "12.10.0.1";
 
   src = fetchurl {
@@ -14,10 +12,10 @@ stdenv.mkDerivation rec {
     sha256 = "1xqsb6c1pwawabw854f7aybjrgyhc2r1316i9lyjspci51zk5m7v";
   };
 
-  nativeBuildInputs = [ pkgconfig autoconf ];
+  nativeBuildInputs = [ pkg-config autoconf ];
 
   buildInputs = [
-    glib dbus_glib json_glib
+    glib dbus-glib json-glib
     gtk2 libindicator-gtk2 libdbusmenu-gtk2 libappindicator-gtk2
   ];
 
@@ -26,8 +24,10 @@ stdenv.mkDerivation rec {
       --replace 'DBUSSERVICEDIR=`$PKG_CONFIG --variable=session_bus_services_dir dbus-1`' \
                 "DBUSSERVICEDIR=$out/share/dbus-1/services"
     autoconf
-    substituteInPlace {configure,ltmain.sh,m4/libtool.m4} \
-      --replace /usr/bin/file ${file}/bin/file
+    for f in {configure,ltmain.sh,m4/libtool.m4}; do
+      substituteInPlace $f \
+        --replace /usr/bin/file ${file}/bin/file
+    done
     substituteInPlace src/Makefile.in \
       --replace 'applicationlibdir = $(INDICATORDIR)' "applicationlibdir = $out/lib"
   '';
@@ -43,8 +43,8 @@ stdenv.mkDerivation rec {
     "localstatedir=\${TMPDIR}"
   ];
 
-  meta = {
-    description = "Indicator to take menus from applications and place them in the panel (GTK+ 2 library for Xfce/LXDE)";
+  meta = with lib; {
+    description = "Indicator to take menus from applications and place them in the panel (GTK 2 library for Xfce/LXDE)";
     homepage = "https://launchpad.net/indicators-gtk2";
     license = licenses.gpl3;
     platforms = platforms.linux;

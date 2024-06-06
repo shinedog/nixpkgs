@@ -1,69 +1,180 @@
-# install these packages into your profile. Then add
-# ~/.nix-profile/gimp-version-plugins to your plugin list you can find at
-# preferences -> Folders -> Plug-ins
-# same applies for the scripts
+# Use `gimp-with-plugins` package for GIMP with all plug-ins.
+# If you just want a subset of plug-ins, you can specify them explicitly:
+# `gimp-with-plugins.override { plugins = with gimpPlugins; [ gap ]; }`.
 
-{ pkgs, gimp }:
+{ config, lib, pkgs }:
+
 let
-  inherit (pkgs) stdenv fetchurl pkgconfig glib fetchFromGitHub;
-  inherit (gimp) targetPluginDir targetScriptDir;
+  inherit (pkgs) stdenv fetchurl fetchpatch fetchpatch2 pkg-config intltool glib fetchFromGitHub fetchFromGitLab;
+in
 
-  pluginDerivation = a: stdenv.mkDerivation ({
+lib.makeScope pkgs.newScope (self:
+
+let
+  # Use GIMP from the scope.
+  inherit (self) gimp;
+
+  pluginDerivation = attrs: let
+    name = attrs.name or "${attrs.pname}-${attrs.version}";
+  in stdenv.mkDerivation ({
     prePhases = "extraLib";
     extraLib = ''
       installScripts(){
-        mkdir -p ${targetScriptDir};
-        for p in "$@"; do cp "$p" ${targetScriptDir}; done
+        mkdir -p $out/${gimp.targetScriptDir}/${name};
+        for p in "$@"; do cp "$p" -r $out/${gimp.targetScriptDir}/${name}; done
       }
-      installPlugins(){
-        mkdir -p ${targetPluginDir};
-        for p in "$@"; do cp "$p" ${targetPluginDir}; done
+      installPlugin() {
+        # The base name of the first argument is the plug-in name and the main executable.
+        # GIMP only allows a single plug-in per directory:
+        # https://gitlab.gnome.org/GNOME/gimp/-/commit/efae55a73e98389e38fa0e59ebebcda0abe3ee96
+        pluginDir=$out/${gimp.targetPluginDir}/$(basename "$1")
+        install -Dt "$pluginDir" "$@"
       }
     '';
   }
-  // a
-    # don't call this gimp-* unless you want nix replace gimp by a plugin :-)
-  // { name = "${a.name}-${gimp.name}-plugin"; }
-  );
+  // attrs
+  // {
+    name = "${gimp.pname}-plugin-${name}";
+    buildInputs = [
+      gimp
+      gimp.gtk
+      glib
+    ] ++ (attrs.buildInputs or []);
 
-  scriptDerivation = {name, src} : pluginDerivation {
-    inherit name; phases = "extraLib installPhase";
-    installPhase = "installScripts ${src}";
-  };
+    nativeBuildInputs = [
+      pkg-config
+      intltool
+    ] ++ (attrs.nativeBuildInputs or []);
 
- libLQR = pluginDerivation {
-    name = "liblqr-1-0.4.1";
-    # required by lqrPlugin, you don't havet to install this lib explicitely
-    buildInputs = [ gimp ] ++ gimp.nativeBuildInputs;
-    src = fetchurl {
-      url = http://registry.gimp.org/files/liblqr-1-0.4.1.tar.bz2;
-      sha256 = "02g90wag7xi5rjlmwq8h0qs666b1i2sa90s4303hmym40il33nlz";
+    # Override installation paths.
+    env = {
+      PKG_CONFIG_GIMP_2_0_GIMPLIBDIR = "${placeholder "out"}/${gimp.targetLibDir}";
+      PKG_CONFIG_GIMP_2_0_GIMPDATADIR = "${placeholder "out"}/${gimp.targetDataDir}";
+    } // attrs.env or { };
+  });
+
+  scriptDerivation = {src, ...}@attrs : pluginDerivation ({
+    prePhases = "extraLib";
+    dontUnpack = true;
+    installPhase = ''
+      runHook preInstall
+      installScripts ${src}
+      runHook postInstall
+    '';
+  } // attrs);
+in
+{
+  # Allow overriding GIMP package in the scope.
+  inherit (pkgs) gimp;
+
+  bimp = pluginDerivation rec {
+    /* menu:
+       File/Batch Image Manipulation...
+    */
+    pname = "bimp";
+    version = "2.6";
+
+    src = fetchFromGitHub {
+      owner = "alessandrofrancesconi";
+      repo = "gimp-plugin-bimp";
+      rev = "v${version}";
+      hash = "sha256-IJ3+/9UwxJTRo0hUdzlOndOHwso1wGv7Q4UuhbsFkco=";
+    };
+
+    patches = [
+      # Allow overriding installation path
+      # https://github.com/alessandrofrancesconi/gimp-plugin-bimp/pull/311
+      (fetchpatch {
+        url = "https://github.com/alessandrofrancesconi/gimp-plugin-bimp/commit/098edb5f70a151a3f377478fd6e0d08ed56b8ef7.patch";
+        sha256 = "2Afx9fmdn6ztbsll2f2j7mfffMWYWyr4BuBy9ySV6vM=";
+      })
+    ];
+
+    nativeBuildInputs = with pkgs; [ which ];
+
+    installFlags = [
+      "SYSTEM_INSTALL_DIR=${placeholder "out"}/${gimp.targetPluginDir}/bimp"
+    ];
+
+    installTargets = [ "install-admin" ];
+
+    meta = with lib; {
+      description = "Batch Image Manipulation Plugin for GIMP";
+      homepage = "https://github.com/alessandrofrancesconi/gimp-plugin-bimp";
+      license = licenses.gpl2Plus;
+      maintainers = with maintainers; [ ];
     };
   };
 
-in
-rec {
   gap = pluginDerivation {
     /* menu:
        Video
     */
-    name = "gap-2.6.0";
-    buildInputs = [ gimp pkgconfig glib pkgs.intltool gimp.gtk ] ++ gimp.nativeBuildInputs;
-    src = fetchurl {
-      url = http://ftp.gimp.org/pub/gimp/plug-ins/v2.6/gap/gimp-gap-2.6.0.tar.bz2;
-      sha256 = "1jic7ixcmsn4kx2cn32nc5087rk6g8xsrz022xy11yfmgvhzb0ql";
+    pname = "gap";
+    version = "2.6.0-unstable-2023-05-20";
+
+    src = fetchFromGitLab {
+      domain = "gitlab.gnome.org";
+      owner = "Archive";
+      repo = "gimp-gap";
+      rev = "b2aa06cc7ee4ae1938f14640fe46b75ef5b15982";
+      hash = "sha256-q5TgCy0+iIfxyqJRXsKxiFrWMFSzBqC0SA9MBGTHXcA=";
     };
-    patchPhase = ''
-      sed -e 's,^\(GIMP_PLUGIN_DIR=\).*,\1'"$out/${gimp.name}-plugins", \
-       -e 's,^\(GIMP_DATA_DIR=\).*,\1'"$out/share/${gimp.name}", -i configure
+
+    nativeBuildInputs = with pkgs; [autoreconfHook];
+
+    postUnpack = ''
+      tar -xf $sourceRoot/extern_libs/ffmpeg.tar.gz -C $sourceRoot/extern_libs
     '';
+
+    postPatch = let
+      ffmpegPatch = fetchpatch2 {
+        name = "fix-ffmpeg-binutil-2.41.patch";
+        url = "https://git.ffmpeg.org/gitweb/ffmpeg.git/patch/effadce6c756247ea8bae32dc13bb3e6f464f0eb";
+        hash = "sha256-vLSltvZVMcQ0CnkU0A29x6fJSywE8/aU+Mp9os8DZYY=";
+      };
+    in ''
+      patch -Np1 -i ${ffmpegPatch} -d extern_libs/ffmpeg
+      ffmpegSrc=$(realpath extern_libs/ffmpeg)
+    '';
+
+    configureFlags = ["--with-ffmpegsrcdir=${placeholder "ffmpegSrc"}"];
+
     hardeningDisable = [ "format" ];
-    meta = with stdenv.lib; {
+
+    env = {
+      NIX_LDFLAGS = "-lm";
+    };
+
+    meta = with lib; {
       description = "The GIMP Animation Package";
-      homepage = http://www.gimp.org;
+      homepage = "https://www.gimp.org";
       # The main code is given in GPLv3, but it has ffmpeg in it, and I think ffmpeg license
       # falls inside "free".
       license = with licenses; [ gpl3 free ];
+    };
+  };
+
+  farbfeld = pluginDerivation rec {
+    pname = "farbfeld";
+    version = "unstable-2019-08-12";
+
+    src = fetchFromGitHub {
+      owner = "ids1024";
+      repo = "gimp-farbfeld";
+      rev = "5feacebf61448bd3c550dda03cd08130fddc5af4";
+      sha256 = "1vmw7k773vrndmfffj0m503digdjmkpcqy2r3p3i5x0qw9vkkkc6";
+    };
+
+    installPhase = ''
+      installPlugin farbfeld
+    '';
+
+    meta = {
+      description = "Gimp plug-in for the farbfeld image format";
+      homepage = "https://github.com/ids1024/gimp-farbfeld";
+      license = lib.licenses.mit;
+      maintainers = with lib.maintainers; [ sikmir ];
     };
   };
 
@@ -72,191 +183,157 @@ rec {
        Filters/Generic/FFT Forward
        Filters/Generic/FFT Inverse
     */
-    name = "fourier-0.4.1";
-    buildInputs = [ gimp pkgs.fftw  pkgconfig glib] ++ gimp.nativeBuildInputs;
-    postInstall = "fail";
-    installPhase = "installPlugins fourier";
+    pname = "fourier";
+    version = "0.4.3";
+
     src = fetchurl {
-      url = "http://registry.gimp.org/files/${name}.tar.gz";
-      sha256 = "1pr3y3zl9w8xs1circdrxpr98myz9m8wfzy022al79z4pdanwvs1";
+      url = "https://www.lprp.fr/files/old-web/soft/gimp/${pname}-${version}.tar.gz";
+      sha256 = "0mf7f8vaqs2madx832x3kcxw3hv3w3wampvzvaps1mkf2kvrjbsn";
+    };
+
+    buildInputs = with pkgs; [ fftw ];
+
+    postPatch = ''
+      substituteInPlace Makefile --replace '$(GCC)' '$(CC)'
+
+      # The tarball contains a prebuilt binary.
+      make clean
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      installPlugin fourier
+
+      runHook postInstall
+    '';
+
+    meta = with lib; {
+      description = "GIMP plug-in to do the fourier transform";
+      homepage = "https://people.via.ecp.fr/~remi/soft/gimp/gimp_plugin_en.php3#fourier";
+      license = with licenses; [ gpl3Plus ];
     };
   };
 
-  focusblur = pluginDerivation rec {
+  resynthesizer = pluginDerivation rec {
     /* menu:
-       Blur/Focus Blur
+      Edit/Fill with pattern seamless...
+      Filters/Enhance/Heal selection...
+      Filters/Enhance/Heal transparency...
+      Filters/Enhance/Sharpen by synthesis...
+      Filters/Enhance/Uncrop...
+      Filters/Map/Style...
+      Filters/Render/Texture...
     */
-    name = "focusblur-3.2.6";
-    buildInputs = [ gimp pkgconfig pkgs.fftwSinglePrec ] ++ gimp.nativeBuildInputs;
-    patches = [ ./patches/focusblur-glib.patch ];
-    postInstall = "fail";
-    installPhase = "installPlugins src/focusblur";
-    src = fetchurl {
-      url = "http://registry.gimp.org/files/${name}.tar.bz2";
-      sha256 = "1gqf3hchz7n7v5kpqkhqh8kwnxbsvlb5cr2w2n7ngrvl56f5xs1h";
-    };
-  };
-
-  resynthesizer = pluginDerivation {
-    /* menu:
-      Filters/Map/Resynthesize
-      Filters/Enhance/Smart enlarge
-      Filters/Enhance/Smart sharpen
-      Filters/Enhance/Smart remove selection
-    */
-    name = "resynthesizer-0.16";
-    buildInputs = [ gimp pkgs.fftw ] ++ gimp.nativeBuildInputs;
-    src = fetchurl {
-      url = http://www.logarithmic.net/pfh-files/resynthesizer/resynthesizer-0.16.tar.gz;
-      sha256 = "1k90a1jzswxmajn56rdxa4r60v9v34fmqsiwfdxqcvx3yf4yq96x";
-    };
-
-    installPhase = "
-      installPlugins resynth
-      installScripts smart-{enlarge,remove}.scm
-    ";
-  };
-
-  resynthesizer2 = pluginDerivation {
-    /* menu:
-      Filters/Map/Resynthesize
-      Filters/Enhance/Smart enlarge
-      Filters/Enhance/Smart sharpen
-      Filters/Enhance/Smart remove selection
-    */
-    name = "resynthesizer-2.0.1";
-    buildInputs = [ gimp pkgs.fftw pkgs.autoreconfHook ] 
-      ++ gimp.nativeBuildInputs;
-    makeFlags = "GIMP_LIBDIR=$out/lib/gimp/2.0/";
+    pname = "resynthesizer";
+    version = "2.0.3";
+    buildInputs = with pkgs; [ fftw ];
+    nativeBuildInputs = with pkgs; [ autoreconfHook ];
+    makeFlags = [ "GIMP_LIBDIR=${placeholder "out"}/${gimp.targetLibDir}" ];
     src = fetchFromGitHub {
       owner = "bootchk";
       repo = "resynthesizer";
-      rev = "2.0.1";
-      sha256 = "1d214s0jsqxz83l9dd8vhnz3siw9fyw7xdhhir25ra7jiwxc99hd";
+      rev = "v${version}";
+      sha256 = "1jwc8bhhm21xhrgw56nzbma6fwg59gc8anlmyns7jdiw83y0zx3j";
+    };
+
+    meta = {
+      broken = !gimp.python2Support;
     };
   };
 
   texturize = pluginDerivation {
-    name = "texturize-2.1";
-    buildInputs = [ gimp ] ++ gimp.nativeBuildInputs;
-    src = fetchurl {
-      url = mirror://sourceforge/gimp-texturize/texturize-2.1_src.tgz;
-      sha256 = "0cdjq25g3yfxx6bzx6nid21kq659s1vl9id4wxyjs2dhcv229cg3";
+    pname = "texturize";
+    version = "2.2+unstable=2021-12-03";
+    src = fetchFromGitHub {
+      owner = "lmanul";
+      repo = "gimp-texturize";
+      rev = "9ceff0d411cda018108e5477320669b8d00d811e";
+      sha256 = "haYS0K3oAPlHtHB8phOCX5/gtWq9uiVQhG5ZhAFX0t0=";
     };
-    patchPhase = ''
-      sed -i '/.*gimpimage_pdb.h.*/ d' src/*.c*
-    '';
-    installPhase = "installPlugins src/texturize";
+    nativeBuildInputs = with pkgs; [
+      meson
+      ninja
+      gettext
+    ];
   };
 
   waveletSharpen = pluginDerivation {
     /* menu:
       Filters/Enhance/Wavelet sharpen
     */
-    name = "wavelet-sharpen-0.1.2";
-    buildInputs = [ gimp ] ++ gimp.nativeBuildInputs;
+    pname = "wavelet-sharpen";
+    version = "0.1.2";
+
     src = fetchurl {
-      url = http://registry.gimp.org/files/wavelet-sharpen-0.1.2.tar.gz;
+      url = "https://github.com/pixlsus/registry.gimp.org_static/raw/master/registry.gimp.org/files/wavelet-sharpen-0.1.2.tar.gz";
       sha256 = "0vql1k67i21g5ivaa1jh56rg427m0icrkpryrhg75nscpirfxxqw";
     };
-    installPhase = "installPlugins src/wavelet-sharpen"; # TODO translations are not copied .. How to do this on nix?
+
+    env = {
+      # Workaround build failure on -fno-common toolchains like upstream
+      # gcc-10. Otherwise build fails as:
+      #   ld: interface.o:(.bss+0xe0): multiple definition of `fimg'; plugin.o:(.bss+0x40): first defined here
+      NIX_CFLAGS_COMPILE = "-fcommon";
+      NIX_LDFLAGS = "-lm";
+    };
+
+    installPhase = "installPlugin src/wavelet-sharpen"; # TODO translations are not copied .. How to do this on nix?
   };
 
-  lqrPlugin = pluginDerivation {
+  lqrPlugin = pluginDerivation rec {
     /* menu:
        Layer/Liquid Rescale
     */
-    name = "lqr-plugin-0.6.1";
-    buildInputs = [ pkgconfig libLQR gimp ] ++ gimp.nativeBuildInputs;
-    src = fetchurl {
-      url = http://registry.gimp.org/files/gimp-lqr-plugin-0.6.1.tar.bz2;
-      sha256 = "00hklkpcimcbpjly4rjhfipaw096cpy768g9wixglwrsyqhil7l9";
+    pname = "lqr-plugin";
+    version = "0.7.2";
+    buildInputs = with pkgs; [ liblqr1 ];
+    src = fetchFromGitHub {
+      owner = "carlobaldassi";
+      repo = "gimp-lqr-plugin";
+      rev = "v${version}";
+      sha256 = "81ajdZ2zQi/THxnBlSeT36tVTEzrS1YqLGpHMhFTKAo=";
     };
-    #postInstall = ''mkdir -p $out/nix-support; echo "${libLQR}" > "$out/nix-support/propagated-user-env-packages"'';
-    installPhase = "installPlugins src/gimp-lqr-plugin";
+    patches = [
+      # Pull upstream fix for -fno-common toolchain support:
+      #   https://github.com/carlobaldassi/gimp-lqr-plugin/pull/6
+      (fetchpatch {
+        name = "fno-common.patch";
+        url = "https://github.com/carlobaldassi/gimp-lqr-plugin/commit/ae3464a82e1395fc577cc94999bdc7c4a7bb35f1.patch";
+        sha256 = "EdjZWM6U1bhUmsOnLA8iJ4SFKuAXHIfNPzxZqel+JrY=";
+      })
+    ];
   };
 
-  gmic =
-    pluginDerivation rec {
-      name = "gmic-1.6.5.0";
-
-      buildInputs = [pkgconfig pkgs.fftw pkgs.opencv gimp] ++ gimp.nativeBuildInputs;
-
-      src = fetchurl {
-        url = http://gmic.eu/files/source/gmic_1.6.5.0.tar.gz;
-        sha256 = "1vb6zm5zpqfnzxjvb9yfvczaqacm55rf010ib0yk9f28b17qrjgb";
-      };
-
-      sourceRoot = "${name}/src";
-
-      buildFlags = "gimp";
-
-      installPhase = "installPlugins gmic_gimp";
-
-      meta = {
-        description = "Script language for image processing which comes with its open-source interpreter";
-        homepage = http://gmic.eu/gimp.shtml;
-        license = stdenv.lib.licenses.cecill20;
-        /*
-        The purpose of this Free Software license agreement is to grant users
-        the right to modify and redistribute the software governed by this
-        license within the framework of an open source distribution model.
-        [ ... ] */
-      };
-  };
-
-  # this is more than a gimp plugin !
-  # either load the raw image with gimp (and the import dialog will popup)
-  # or use the binary
-  ufraw = pluginDerivation rec {
-    name = "ufraw-0.19.2";
-    buildInputs = [pkgs.gtkimageview pkgs.lcms gimp] ++ gimp.nativeBuildInputs;
-      # --enable-mime - install mime files, see README for more information
-      # --enable-extras - build extra (dcraw, nikon-curve) executables
-      # --enable-dst-correction - enable DST correction for file timestamps.
-      # --enable-contrast - enable the contrast setting option.
-      # --enable-interp-none: enable 'None' interpolation (mostly for debugging).
-      # --with-lensfun: use the lensfun library - experimental feature, read this before using it.
-      # --with-prefix=PREFIX - use also PREFIX as an input prefix for the build
-      # --with-dosprefix=PREFIX - PREFIX in the the prefix in dos format (needed only for ms-window
-    configureFlags = "--enable-extras --enable-dst-correction --enable-contrast";
-
-    src = fetchurl {
-      url = "mirror://sourceforge/ufraw/${name}.tar.gz";
-      sha256 = "1lxba7pb3vcsq94dwapg9bk9mb3ww6r3pvvcyb0ah5gh2sgzxgkk";
-    };
-    installPhase = "
-      installPlugins ufraw-gimp
-      mkdir -p $out/bin
-      cp ufraw $out/bin
-    ";
+  gmic = pkgs.gmic-qt.override {
+    variant = "gimp";
   };
 
   gimplensfun = pluginDerivation rec {
-    version = "0.2.4";
-    name = "gimplensfun-${version}";
+    version = "unstable-2018-10-21";
+    pname = "gimplensfun";
 
     src = fetchFromGitHub {
       owner = "seebk";
       repo = "GIMP-Lensfun";
-      rev = version;
-      sha256 = "0zlmp9v732qmzj083mnk5z421s57mnckmpjhiw890wmmwzj2lhxz";
+      rev = "1c5a5c1534b5faf098b7441f8840d22835592f17";
+      sha256 = "1jj3n7spkjc63aipwdqsvq9gi07w13bb1v8iqzvxwzld2kxa3c8w";
     };
 
-    buildInputs = [ gimp pkgconfig glib gimp.gtk pkgs.lensfun pkgs.exiv2 ];
+    buildInputs = with pkgs; [ lensfun gexiv2 ];
 
     installPhase = "
-      installPlugins gimp-lensfun
+      installPlugin gimp-lensfun
     ";
 
     meta = {
       description = "GIMP plugin to correct lens distortion using the lensfun library and database";
 
-      homepage = http://lensfun.sebastiankraft.net/;
+      homepage = "http://lensfun.sebastiankraft.net/";
 
-      license = stdenv.lib.licenses.gpl3Plus;
+      license = lib.licenses.gpl3Plus;
       maintainers = [ ];
-      platforms = stdenv.lib.platforms.gnu;
+      platforms = lib.platforms.gnu ++ lib.platforms.linux;
     };
   };
 
@@ -266,41 +343,17 @@ rec {
   exposureBlend = scriptDerivation {
     name = "exposure-blend";
     src = fetchurl {
-      url = http://tir.astro.utoledo.edu/jdsmith/code/eb/exposure-blend.scm;
+      url = "http://tir.astro.utoledo.edu/jdsmith/code/eb/exposure-blend.scm";
       sha256 = "1b6c9wzpklqras4wwsyw3y3jp6fjmhnnskqiwm5sabs8djknfxla";
     };
+    meta.broken = true;
   };
 
   lightning = scriptDerivation {
     name = "Lightning";
     src = fetchurl {
-      url = http://registry.gimp.org/files/Lightning.scm;
+      url = "https://github.com/pixlsus/registry.gimp.org_static/raw/master/registry.gimp.org/files/Lightning.scm";
       sha256 = "c14a8f4f709695ede3f77348728a25b3f3ded420da60f3f8de3944b7eae98a49";
     };
   };
-
-  /* space in name trouble ?
-
-  rainbowPlasma = scriptDerivation {
-    # http://registry.gimp.org/node/164
-    name = "rainbow-plasma";
-    src = fetchurl {
-      url = "http://registry.gimp.org/files/Rainbow Plasma.scm";
-      sha256 = "34308d4c9441f9e7bafa118af7ec9540f10ea0df75e812e2f3aa3fd7b5344c23";
-      name = "Rainbow-Plasma.scm"; # nix doesn't like spaces, does it?
-    };
-  };
-  */
-
-  /* doesn't seem to be working :-(
-  lightningGate = scriptDerivation {
-    # http://registry.gimp.org/node/153
-    name = "lightning-gate";
-    src = fetchurl {
-      url = http://registry.gimp.org/files/LightningGate.scm;
-      sha256 = "181w1zi9a99kn2mfxjp43wkwcgw5vbb6iqjas7a9mhm8p04csys2";
-    };
-  };
-  */
-
-}
+})

@@ -1,20 +1,56 @@
-{stdenv, fetchurl, jre}:
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  jre,
+}:
 
-stdenv.mkDerivation {
-  name = "aspectj-1.5.2";
-  builder = ./builder.sh;
+let
+  version = "1.9.22.1";
+  versionSnakeCase = builtins.replaceStrings [ "." ] [ "_" ] version;
+in
+stdenvNoCC.mkDerivation {
+  pname = "aspectj";
+  inherit version;
+
+  __structuredAttrs = true;
 
   src = fetchurl {
-    url = http://www.mirrorservice.org/sites/download.eclipse.org/eclipseMirror/technology/aspectj/aspectj-1.5.2.jar;
-    md5 = "64245d451549325147e3ca1ec4c9e57c";
+    url = "https://github.com/eclipse/org.aspectj/releases/download/V${versionSnakeCase}/aspectj-${version}.jar";
+    hash = "sha256-NIyYVhJIGXz+vNVoAQzYsDfmOYc4QrRzJGWeQjS4X0U=";
   };
 
-  inherit jre;
-  buildInputs = [jre];
+  dontUnpack = true;
+
+  nativeBuildInputs = [ jre ];
+
+  installPhase = ''
+    runHook preInstall
+
+    cat >> props <<EOF
+    output.dir=$out
+    context.javaPath=${jre}
+    EOF
+
+    mkdir -p $out
+    java -jar $src -text props
+
+    cat >> $out/bin/aj-runtime-env <<EOF
+    #! ${stdenvNoCC.shell}
+
+    export CLASSPATH=$CLASSPATH:.:$out/lib/aspectjrt.jar
+    EOF
+
+    chmod u+x $out/bin/aj-runtime-env
+
+    runHook postInstall
+  '';
 
   meta = {
-    homepage = http://www.eclipse.org/aspectj/;
+    homepage = "https://www.eclipse.org/aspectj/";
     description = "A seamless aspect-oriented extension to the Java programming language";
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.epl10;
+    platforms = lib.platforms.unix;
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
   };
 }

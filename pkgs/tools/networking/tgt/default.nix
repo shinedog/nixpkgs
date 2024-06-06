@@ -1,40 +1,69 @@
-{ stdenv, fetchFromGitHub, libxslt, libaio, systemd, perl, perlPackages
-, docbook_xsl }:
+{ stdenv, lib, fetchFromGitHub, libxslt, libaio, systemd, perl
+, docbook_xsl, coreutils, lsof, makeWrapper, sg3_utils
+}:
 
-let
-  version = "1.0.63";
-in stdenv.mkDerivation rec {
-  name = "tgt-${version}";
+stdenv.mkDerivation rec {
+  pname = "tgt";
+  version = "1.0.91";
 
   src = fetchFromGitHub {
     owner = "fujita";
-    repo = "tgt";
+    repo = pname;
     rev = "v${version}";
-    sha256 = "1x3irnbfikdqhlikhwqazg0g0hc1df5r2bp001f13sr0nvw28y1n";
+    sha256 = "sha256-/aykQolUWcCU/PV3bYq8cR0oSAS+ojzZC5PBWgIh2dM=";
   };
 
-  buildInputs = [ libxslt systemd libaio docbook_xsl ];
+  nativeBuildInputs = [ libxslt docbook_xsl makeWrapper ];
 
-  DESTDIR = "$(out)";
-  PREFIX = "/";
-  SD_NOTIFY="1";
+  buildInputs = [ systemd libaio ];
+
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+    "SD_NOTIFY=1"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = toString [
+    # Needed with GCC 12
+    "-Wno-error=maybe-uninitialized"
+  ];
+
+  hardeningDisable = lib.optionals stdenv.isAarch64 [
+    # error: 'read' writing 1 byte into a region of size 0 overflows the destination
+    "fortify3"
+  ];
+
+  installFlags = [
+    "sysconfdir=${placeholder "out"}/etc"
+  ];
 
   preConfigure = ''
     sed -i 's|/usr/bin/||' doc/Makefile
     sed -i 's|/usr/include/libaio.h|${libaio}/include/libaio.h|' usr/Makefile
-    sed -i 's|/usr/include/sys/|${stdenv.glibc.dev}/include/sys/|' usr/Makefile
-    sed -i 's|/usr/include/linux/|${stdenv.glibc.dev}/include/linux/|' usr/Makefile
+    sed -i 's|/usr/include/sys/|${stdenv.cc.libc.dev}/include/sys/|' usr/Makefile
+    sed -i 's|/usr/include/linux/|${stdenv.cc.libc.dev}/include/linux/|' usr/Makefile
   '';
 
   postInstall = ''
-    sed -i 's|#!/usr/bin/perl|#! ${perl}/bin/perl -I${perlPackages.ConfigGeneral}/${perl.libPrefix}|' $out/sbin/tgt-admin
+    substituteInPlace $out/sbin/tgt-admin \
+      --replace "#!/usr/bin/perl" "#! ${perl.withPackages (p: [ p.ConfigGeneral ])}/bin/perl"
+    wrapProgram $out/sbin/tgt-admin --prefix PATH : \
+      ${lib.makeBinPath [ lsof sg3_utils (placeholder "out") ]}
+
+    install -D scripts/tgtd.service $out/etc/systemd/system/tgtd.service
+    substituteInPlace $out/etc/systemd/system/tgtd.service \
+      --replace "/usr/sbin/tgt" "$out/bin/tgt"
+
+    # See https://bugzilla.redhat.com/show_bug.cgi?id=848942
+    sed -i '/ExecStart=/a ExecStartPost=${coreutils}/bin/sleep 5' $out/etc/systemd/system/tgtd.service
   '';
 
   enableParallelBuilding = true;
 
-  meta = {
-    description = "iSCSI Target daemon with rdma support";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    description = "iSCSI Target daemon with RDMA support";
+    homepage = "https://github.com/fujita/tgt";
+    license = licenses.gpl2Only;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ johnazoidberg ];
   };
 }

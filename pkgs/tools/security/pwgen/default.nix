@@ -1,13 +1,30 @@
-{stdenv, fetchurl}:
-stdenv.mkDerivation {
-  name = "pwgen-2.07";
+{ lib
+, stdenv
+, autoreconfHook
+, fetchFromGitHub
+}:
 
-  src = fetchurl {
-    url = mirror://sourceforge/pwgen/pwgen-2.07.tar.gz;
-    sha256 = "0mhmw700kkh238fzivcwnwi94bj9f3h36yfh3k3j2v19b0zmjx7b";
+stdenv.mkDerivation rec {
+  pname = "pwgen";
+  version = "2.08";
+
+  src = fetchFromGitHub {
+    owner = "tytso";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "1j6c6m9fcy24jn8mk989x49yk765xb26lpr8yhpiaqk206wlss2z";
   };
-  meta = {
+
+  nativeBuildInputs = [
+    autoreconfHook
+  ];
+
+  meta = with lib; {
     description = "Password generator which creates passwords which can be easily memorized by a human";
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://github.com/tytso/pwgen";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ fab ];
+    mainProgram = "pwgen";
+    platforms = platforms.all;
   };
 }

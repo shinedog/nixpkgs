@@ -1,22 +1,54 @@
-{stdenv, fetchurl, gmp, mpir, mpfr, openblas, ntl}:
+{ lib
+, stdenv
+, fetchurl
+, gmp
+, mpfr
+, ntl
+, openblas ? null, blas, lapack
+, withBlas ? true
+}:
+
+assert withBlas -> openblas != null && blas.implementation == "openblas" && lapack.implementation == "openblas";
+
 stdenv.mkDerivation rec {
-  name = "flint-${version}";
-  version = "2.5.2";
-  # or fetchFromGitHub(owner,repo,rev) or fetchgit(rev)
+  pname = "flint";
+  version = "2.9.0";
+
   src = fetchurl {
-    url = "http://www.flintlib.org/flint-${version}.tar.gz";
-    sha256 = "11syazv1a8rrnac3wj3hnyhhflpqcmq02q8pqk2m6g2k6h0gxwfb";
+    url = "https://www.flintlib.org/flint-${version}.tar.gz";
+    sha256 = "sha256-L8CQ1RAzyTII5sENQGOXpTyYOuU0O5WOsl9ypXpM52o=";
   };
-  buildInputs = [gmp mpir mpfr openblas ntl];
-  configureFlags = "--with-gmp=${gmp} --with-mpir=${mpir} --with-mpfr=${mpfr} --with-blas=${openblas} --with-ntl=${ntl}";
-  meta = {
-    inherit version;
-    description = ''Fast Library for Number Theory'';
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = "http://www.flintlib.org/";
-    downloadPage = "http://www.flintlib.org/downloads.html";
-    updateWalker = true;
+
+  buildInputs = [
+    gmp
+    mpfr
+    ntl
+  ] ++ lib.optionals withBlas [
+    openblas
+  ];
+
+  propagatedBuildInputs = [
+    mpfr # flint.h includes mpfr.h
+  ];
+
+  configureFlags = [
+    "--with-gmp=${gmp}"
+    "--with-mpfr=${mpfr}"
+    "--with-ntl=${ntl}"
+  ] ++ lib.optionals withBlas [
+    "--with-blas=${openblas}"
+  ];
+
+  enableParallelBuilding = true;
+
+  doCheck = true;
+
+  meta = with lib; {
+    description = "Fast Library for Number Theory";
+    license = licenses.gpl2Plus;
+    maintainers = teams.sage.members;
+    platforms = platforms.unix;
+    homepage = "https://www.flintlib.org/";
+    downloadPage = "https://www.flintlib.org/downloads.html";
   };
 }

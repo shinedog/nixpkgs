@@ -23,7 +23,7 @@ let
   wrapTorsocks = name: server: pkgs.writeTextFile {
     name = name;
     text = ''
-        #!${pkgs.stdenv.shell}
+        #!${pkgs.runtimeShell}
         TORSOCKS_CONF_FILE=${pkgs.writeText "torsocks.conf" (configFile server)} ${pkgs.torsocks}/bin/torsocks "$@"
     '';
     executable = true;
@@ -37,8 +37,9 @@ in
       enable = mkOption {
         type        = types.bool;
         default     = config.services.tor.enable && config.services.tor.client.enable;
+        defaultText = literalExpression "config.services.tor.enable && config.services.tor.client.enable";
         description = ''
-          Whether to build <literal>/etc/tor/torsocks.conf</literal>
+          Whether to build `/etc/tor/torsocks.conf`
           containing the specified global torsocks configuration.
         '';
       };
@@ -81,7 +82,7 @@ in
         default = null;
         example = "bob";
         description = ''
-          SOCKS5 username. The <literal>TORSOCKS_USERNAME</literal>
+          SOCKS5 username. The `TORSOCKS_USERNAME`
           environment variable overrides this option if it is set.
         '';
       };
@@ -91,7 +92,7 @@ in
         default = null;
         example = "sekret";
         description = ''
-          SOCKS5 password. The <literal>TORSOCKS_PASSWORD</literal>
+          SOCKS5 password. The `TORSOCKS_PASSWORD`
           environment variable overrides this option if it is set.
         '';
       };
@@ -101,7 +102,7 @@ in
         default = false;
         description = ''
           Set Torsocks to accept inbound connections. If set to
-          <literal>true</literal>, listen() and accept() will be
+          `true`, listen() and accept() will be
           allowed to be used with non localhost address.
         '';
       };
@@ -112,10 +113,9 @@ in
   config = mkIf cfg.enable {
     environment.systemPackages = [ pkgs.torsocks (wrapTorsocks "torsocks-faster" cfg.fasterServer) ];
 
-    environment.etc =
-      [ { source = pkgs.writeText "torsocks.conf" (configFile cfg.server);
-          target = "tor/torsocks.conf";
-        }
-      ];
+    environment.etc."tor/torsocks.conf" =
+      {
+        source = pkgs.writeText "torsocks.conf" (configFile cfg.server);
+      };
   };
 }

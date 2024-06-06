@@ -1,22 +1,23 @@
-{ stdenv, fetchurl, pkgconfig, libtool, gtk2, libpcap, libglade, libgnome, libgnomeui
-, gnomedocutils, scrollkeeper, libxslt }:
+{ lib, stdenv, fetchurl, pkg-config, libtool, gtk3, libpcap, goocanvas2,
+popt, itstool, libxml2 }:
 
 stdenv.mkDerivation rec {
-  name = "etherape-0.9.13";
+  pname = "etherape";
+  version = "0.9.20";
   src = fetchurl {
-    url = "mirror://sourceforge/etherape/${name}.tar.gz";
-    sha256 = "1xq93k1slyak8mgwrw5kymq0xn0kl8chvfcvaablgki4p0l2lg9a";
+    url = "mirror://sourceforge/etherape/etherape-${version}.tar.gz";
+    sha256 = "sha256-9UsQtWOXB1yYofGS4rMIF+ISWBsJKd0DBOFfqOr1n5Y=";
   };
 
-  configureFlags = [ "--disable-scrollkeeper" ];
+  nativeBuildInputs = [ itstool pkg-config (lib.getBin libxml2) ];
   buildInputs = [
-    pkgconfig libtool gtk2 libpcap libglade libgnome libgnomeui gnomedocutils
-    scrollkeeper libxslt
+    libtool gtk3 libpcap goocanvas2 popt
   ];
 
-  meta = {
-    homepage = http://etherape.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = with stdenv.lib.platforms; linux;
+  meta = with lib; {
+    homepage = "http://etherape.sourceforge.net/";
+    license = lib.licenses.gpl2Plus;
+    platforms = with platforms; linux;
+    maintainers = with maintainers; [ symphorien ];
   };
 }

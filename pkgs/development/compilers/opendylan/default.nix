@@ -1,21 +1,24 @@
 # Build Open Dylan from source using the binary builds to bootstrap.
-{stdenv, fetchgit, boehmgc, mps, gnused, opendylan-bootstrap, autoconf, automake, perl, makeWrapper, gcc }:
+{lib, stdenv, fetchFromGitHub, boehmgc, mps, gnused, opendylan-bootstrap, autoconf, automake, perl, makeWrapper, gcc }:
 
 stdenv.mkDerivation {
-  name = "opendylan-2013.2";
+  pname = "opendylan";
+  version = "2016.1pre";
 
-  src = fetchgit {
-    url = https://github.com/dylan-lang/opendylan;
-    rev = "ce9b14dab6cb9ffedc69fae8c6df524c0c79abd3";
-    sha256 = "17jvhv0y63fj25ma05k70b7phcwgjyna5qkrirk48z3xapb8bknd";
+  src = fetchFromGitHub {
+    owner = "dylan-lang";
+    repo = "opendylan";
+    rev = "cd9a8395586d33cc43a8611c1dc0513e69ee82dd";
+    sha256 = "sha256-i1wr4mBUbZhL8ENFGz8gV/mMzSJsj1AdJLd4WU9tIQM=";
     fetchSubmodules = true;
   };
 
-  buildInputs = (if stdenv.system == "i686-linux" then [ mps ] else [ boehmgc ]) ++ [
-    opendylan-bootstrap boehmgc gnused autoconf automake perl makeWrapper
-  ] ;
+  nativeBuildInputs = [ makeWrapper autoconf automake ];
+  buildInputs = (if stdenv.hostPlatform.system == "i686-linux" then [ mps ] else [ boehmgc ]) ++ [
+    opendylan-bootstrap boehmgc perl
+  ];
 
-  preConfigure = if stdenv.system == "i686-linux" then ''
+  preConfigure = if stdenv.hostPlatform.system == "i686-linux" then ''
     mkdir -p $TMPDIR/mps
     tar --strip-components=1 -xf ${mps.src} -C $TMPDIR/mps
     ./autogen.sh
@@ -24,15 +27,18 @@ stdenv.mkDerivation {
     ./autogen.sh
   '';
 
-  configureFlags = if stdenv.system == "i686-linux" then "--with-mps=$(TMPDIR)/mps" else "--with-gc=${boehmgc.out}";
+  configureFlags = [
+    (if stdenv.hostPlatform.system == "i686-linux" then "--with-mps=$(TMPDIR)/mps" else "--with-gc=${boehmgc.out}")
+  ];
   buildPhase = "make 3-stage-bootstrap";
 
   postInstall = "wrapProgram $out/bin/dylan-compiler --suffix PATH : ${gcc}/bin";
 
   meta = {
-    homepage = http://opendylan.org;
+    homepage = "https://opendylan.org";
     description = "A multi-paradigm functional and object-oriented programming language";
-    license = stdenv.lib.licenses.mit;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
+    broken = true; # last successful build 2020-12-11
   };
 }

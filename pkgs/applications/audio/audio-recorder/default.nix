@@ -1,43 +1,33 @@
-{ stdenv, fetchurl, lib
-, pkgconfig, intltool, autoconf, makeWrapper
-, glib, dbus, gtk3, libdbusmenu-gtk3, libappindicator-gtk3, gst_all_1
-, pulseaudioSupport ? true, libpulseaudio ? null }:
-
-with lib;
+{ lib, stdenv, fetchurl
+, pkg-config, intltool
+, glib, dbus, gtk3, libappindicator-gtk3, gst_all_1
+, librsvg, wrapGAppsHook3
+, pulseaudioSupport ? true, libpulseaudio }:
 
 stdenv.mkDerivation rec {
-  name = "audio-recorder-${version}";
-  version = "1.7-5";
+  pname = "audio-recorder";
+  version = "2.1.3";
 
   src = fetchurl {
-    name = "${name}-wily.tar.gz";
-    url = "${meta.homepage}/+archive/ubuntu/ppa/+files/audio-recorder_${version}%7Ewily.tar.gz";
-    sha256 = "1cdlqhfqw2mg51f068j2lhn8mzxggzsbl560l4pl4fxgmpjywpkj";
+    name = "${pname}-${version}.tar.gz";
+    url = "${meta.homepage}/+archive/ubuntu/ppa/+files/audio-recorder_${version}%7Ebionic.tar.gz";
+    sha256 = "160pnmnmc9zwzyclsci3w1qwlgxkfx1y3x5ck6i587w78570an1r";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool autoconf makeWrapper ];
+  # https://bugs.launchpad.net/audio-recorder/+bug/1784622
+  env.NIX_CFLAGS_COMPILE = "-I${glib.dev}/include/gio-unix-2.0";
 
-  buildInputs = with gst_all_1; [
-    glib dbus gtk3 libdbusmenu-gtk3 libappindicator-gtk3
+  nativeBuildInputs = [ pkg-config intltool wrapGAppsHook3 ];
+
+  buildInputs = [
+    glib dbus gtk3 librsvg libappindicator-gtk3
+  ] ++ (with gst_all_1; [
     gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav
-  ] ++ optional pulseaudioSupport libpulseaudio;
+  ]) ++ lib.optional pulseaudioSupport libpulseaudio;
 
-  postPatch = ''
-    substituteInPlace configure.ac \
-      --replace 'PKG_CHECK_MODULES(GIO, gio-2.0 >= $GLIB_REQUIRED)' \
-                'PKG_CHECK_MODULES(GIO, gio-2.0 >= $GLIB_REQUIRED gio-unix-2.0)'
-    autoconf
-    intltoolize
-  '';
-
-  postFixup = ''
-    wrapProgram $out/bin/audio-recorder \
-      --prefix XDG_DATA_DIRS : "$out/share:$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH" \
-      --prefix GST_PLUGIN_SYSTEM_PATH_1_0 ":" "$GST_PLUGIN_SYSTEM_PATH_1_0"
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Audio recorder for GNOME and Unity Desktops";
+    mainProgram = "audio-recorder";
     longDescription = ''
       This program allows you to record your favourite music or audio to a file.
       It can record audio from your system soundcard, microphones, browsers and
@@ -47,7 +37,7 @@ stdenv.mkDerivation rec {
       automatically record your Skype calls. It supports several audio (output)
       formats such as OGG audio, Flac, MP3 and WAV.
     '';
-    homepage = https://launchpad.net/~audio-recorder;
+    homepage = "https://launchpad.net/~audio-recorder";
     license = licenses.gpl3;
     platforms = platforms.linux;
     maintainers = [ maintainers.msteen ];

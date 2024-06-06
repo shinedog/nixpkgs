@@ -1,22 +1,41 @@
-{ stdenv, fetchurl, which, bison, flex, libmaa, zlib, libtool }:
+{ lib, stdenv, fetchurl, which, bison, flex, libmaa, zlib, libtool }:
 
 stdenv.mkDerivation rec {
-  version = "1.12.1";
-  name = "dictd-${version}";
+  pname = "dictd";
+  version = "1.13.1";
 
   src = fetchurl {
     url = "mirror://sourceforge/dict/dictd-${version}.tar.gz";
-    sha256 = "0min6v60b6z5mrymyjfwzx8nv6rdm8pd8phlwl6v2jl5vkngcdx2";
+    sha256 = "sha256-5PGmfRaJTYSUVp19yUQsFcw4wBHyuWMcfxzGInZlKhs=";
   };
 
-  buildInputs = [ flex bison which libmaa zlib libtool ];
+  buildInputs = [ libmaa zlib ];
+
+  nativeBuildInputs = [ bison flex libtool which ];
+
+  # In earlier versions, parallel building was not supported but it's OK with 1.13
+  enableParallelBuilding = true;
 
   patchPhase = "patch -p0 < ${./buildfix.diff}";
-  configureFlags = "--datadir=/var/run/current-system/share/dictd";
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--datadir=/run/current-system/sw/share/dictd"
+    "--sysconfdir=/etc"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = toString (lib.optionals stdenv.cc.isClang [
+    "-Wno-error=implicit-function-declaration"
+  ]);
+
+  postInstall = ''
+    install -Dm444 -t $out/share/doc/${pname} NEWS README
+  '';
+
+  meta = with lib; {
     description = "Dict protocol server and client";
-    maintainers = [ maintainers.mornfall ];
-    platforms = platforms.linux;
+    homepage = "http://www.dict.org";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ sikmir ];
+    platforms = platforms.unix;
   };
 }

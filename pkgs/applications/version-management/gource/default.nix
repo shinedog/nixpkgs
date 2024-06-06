@@ -1,28 +1,36 @@
-{ stdenv, fetchurl, SDL, ftgl, pkgconfig, libpng, libjpeg, pcre
-, SDL_image, freetype, glew, mesa, boost, glm
+{ lib, stdenv, fetchurl, SDL2, ftgl, pkg-config, libpng, libjpeg, pcre2
+, SDL2_image, freetype, glew, libGLU, libGL, boost, glm, tinyxml
 }:
 
 stdenv.mkDerivation rec {
-  version = "0.44";
-  name = "gource-${version}";
+  pname = "gource";
+  version = "0.54";
 
   src = fetchurl {
-    url = "https://github.com/acaudwell/Gource/releases/download/${name}/${name}.tar.gz";
-    sha256 = "0z095zsf5pz8czh7nmlkdy29rm93w83sqyqspg2zsprh892cl116";
+    url = "https://github.com/acaudwell/Gource/releases/download/${pname}-${version}/${pname}-${version}.tar.gz";
+    hash = "sha256-HcvO32XSz01p/gtjPlTCApJsCLgpvK0Lc+r54pzW+uU=";
   };
 
+  postPatch = ''
+    # remove bundled library
+    rm -r src/tinyxml
+  '';
+
+  nativeBuildInputs = [ pkg-config ];
   buildInputs = [
-    glew SDL ftgl pkgconfig libpng libjpeg pcre SDL_image mesa
-    boost glm freetype
+    glew SDL2 ftgl libpng libjpeg pcre2 SDL2_image libGLU libGL
+    boost glm freetype tinyxml
   ];
 
-  configureFlags = [ "--with-boost-libdir=${boost.out}/lib" ];
+  configureFlags = [
+    "--with-boost-libdir=${boost.out}/lib"
+    "--with-tinyxml"
+  ];
 
-  NIX_CFLAGS_COMPILE = "-fpermissive " + # fix build with newer gcc versions
-                       "-std=c++11"; # fix build with glm >= 0.9.6.0
+  enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/gource/;
+  meta = with lib; {
+    homepage = "https://gource.io/";
     description = "A Software version control visualization tool";
     license = licenses.gpl3Plus;
     longDescription = ''
@@ -35,7 +43,8 @@ stdenv.mkDerivation rec {
       Mercurial and Bazaar and SVN. Gource can also parse logs produced
       by several third party tools for CVS repositories.
     '';
-    platforms = platforms.linux;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ pSub ];
+    mainProgram = "gource";
   };
 }

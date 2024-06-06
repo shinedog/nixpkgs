@@ -1,26 +1,28 @@
-{ stdenv, fetchurl, emacs, texlive, ghostscript }:
- 
-let auctex = stdenv.mkDerivation ( rec {
-  version = "11.89";
-  name = "${pname}-${version}";
+{ lib, stdenv, fetchurl, emacs, texliveBasic, ghostscript }:
 
+let auctex = stdenv.mkDerivation ( rec {
   # Make this a valid tex(live-new) package;
   # the pkgs attribute is provided with a hack below.
   pname = "auctex";
+  version = "13.2";
   tlType = "run";
-
 
   outputs = [ "out" "tex" ];
 
   src = fetchurl {
-    url = "mirror://gnu/${pname}/${name}.tar.gz";
-    sha256 = "1cf9fkkmzjxa4jvk6c01zgxdikr4zzb5pcx8i4r0hwdk0xljkbwq";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
+    hash = "sha256-Hn5AKrz4RmlOuncZklvwlcI+8zpeZgIgHHS2ymCUQDU=";
   };
 
-  buildInputs = [ emacs texlive.combined.scheme-basic ghostscript ];
+  buildInputs = [
+    emacs
+    ghostscript
+    (texliveBasic.withPackages (ps: [ ps.etoolbox ps.hypdoc ]))
+  ];
 
   preConfigure = ''
     mkdir -p "$tex"
+    export HOME=$(mktemp -d)
   '';
 
   configureFlags = [
@@ -28,10 +30,11 @@ let auctex = stdenv.mkDerivation ( rec {
     "--with-texmf-dir=\${tex}"
   ];
 
-  meta = {
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/auctex";
     description = "Extensible package for writing and formatting TeX files in GNU Emacs and XEmacs";
-    homepage = http://www.gnu.org/software/auctex;
-    platforms = stdenv.lib.platforms.unix;
+    license = licenses.gpl3Plus;
+    platforms = platforms.unix;
   };
 });
 

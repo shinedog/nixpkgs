@@ -1,33 +1,68 @@
-{ stdenv, fetchurl, python, pkgconfig, readline, talloc
-, libxslt, docbook_xsl, docbook_xml_dtd_42
+{ lib, stdenv
+, fetchurl
+, python3
+, pkg-config
+, cmocka
+, readline
+, talloc
+, libxslt
+, docbook-xsl-nons
+, docbook_xml_dtd_42
+, which
+, wafHook
+, libxcrypt
 }:
 
 stdenv.mkDerivation rec {
-  name = "tevent-0.9.30";
+  pname = "tevent";
+  version = "0.16.1";
 
   src = fetchurl {
-    url = "mirror://samba/tevent/${name}.tar.gz";
-    sha256 = "1gccqiibf6ia129xhqrg18anax3sxwfbwm8h4pvsga3ndxg931ap";
+    url = "mirror://samba/tevent/${pname}-${version}.tar.gz";
+    sha256 = "sha256-Nilx4PMtwZBfb+RzYxnEuDSMItyFqmw/aQoo7+VIAp4=";
   };
 
-  buildInputs = [
-    python pkgconfig readline talloc libxslt docbook_xsl docbook_xml_dtd_42
+  nativeBuildInputs = [
+    pkg-config
+    which
+    python3
+    libxslt
+    docbook-xsl-nons
+    docbook_xml_dtd_42
+    wafHook
   ];
 
+  buildInputs = [
+    python3
+    cmocka
+    readline # required to build python
+    talloc
+    libxcrypt
+  ];
+
+  # otherwise the configure script fails with
+  # PYTHONHASHSEED=1 missing! Don't use waf directly, use ./configure and make!
   preConfigure = ''
-    sed -i 's,#!/usr/bin/env python,#!${python}/bin/python,g' buildtools/bin/waf
+    export PKGCONFIG="$PKG_CONFIG"
+    export PYTHONHASHSEED=1
   '';
 
-  configureFlags = [
+  wafPath = "buildtools/bin/waf";
+
+  wafConfigureFlags = [
     "--bundled-libraries=NONE"
     "--builtin-libraries=replace"
   ];
 
-  meta = with stdenv.lib; {
+  # python-config from build Python gives incorrect values when cross-compiling.
+  # If python-config is not found, the build falls back to using the sysconfig
+  # module, which works correctly in all cases.
+  PYTHON_CONFIG = "/invalid";
+
+  meta = with lib; {
     description = "An event system based on the talloc memory management library";
-    homepage = http://tevent.samba.org/;
+    homepage = "https://tevent.samba.org/";
     license = licenses.lgpl3Plus;
-    maintainers = with maintainers; [ wkennington ];
     platforms = platforms.all;
   };
 }

@@ -1,30 +1,31 @@
-{ stdenv, fetchzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "andagii-${version}";
+stdenvNoCC.mkDerivation rec {
+  pname = "andagii";
   version = "1.0.2";
 
   src = fetchzip {
-    url = http://www.i18nguy.com/unicode/andagii.zip;
-    sha256 = "0a0c43y1fd5ksj50axhng7p00kgga0i15p136g68p35wj7kh5g2k";
-    stripRoot = false;
+    url = "http://www.i18nguy.com/unicode/andagii.zip";
     curlOpts = "--user-agent 'Mozilla/5.0'";
+    hash = "sha256-U7wC55G8jIvMMyPcEiJQ700A7nkWdgWK1LM0F/wgDCg=";
   };
 
-  phases = [ "unpackPhase" "installPhase" ];
-
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/truetype
     cp -v ANDAGII_.TTF $out/share/fonts/truetype/andagii.ttf
+
+    runHook postInstall
   '';
 
   # There are multiple claims that the font is GPL, so I include the
   # package; but I cannot find the original source, so use it on your
   # own risk Debian claims it is GPL - good enough for me.
-  meta = with stdenv.lib; {
-    homepage = http://www.i18nguy.com/unicode/unicode-font.HTML;
+  meta = with lib; {
+    homepage = "http://www.i18nguy.com/unicode/unicode-font.html";
     description = "Unicode Plane 1 Osmanya script font";
-    maintainers = with maintainers; [ raskin rycee ];
+    maintainers = with maintainers; [ raskin ];
     license = "unknown";
     platforms = platforms.all;
   };

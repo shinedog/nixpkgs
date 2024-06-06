@@ -1,22 +1,25 @@
-{ stdenv, fetchurl, makeWrapper, makeDesktopItem
-, jdk, perl, python, unzip, which
+{ lib, stdenv, fetchurl, makeWrapper, makeDesktopItem, which, unzip, libicns, imagemagick
+, jdk, perl
 }:
 
 let
+  version = "22";
   desktopItem = makeDesktopItem {
     name = "netbeans";
     exec = "netbeans";
     comment = "Integrated Development Environment";
-    desktopName = "Netbeans IDE";
+    desktopName = "Apache NetBeans IDE";
     genericName = "Integrated Development Environment";
-    categories = "Application;Development;";
+    categories = [ "Development" ];
+    icon = "netbeans";
   };
 in
 stdenv.mkDerivation {
-  name = "netbeans-8.2";
+  pname = "netbeans";
+  inherit version;
   src = fetchurl {
-    url = http://download.netbeans.org/netbeans/8.2/final/zip/netbeans-8.2-201609300101.zip;
-    sha256 = "0j092qw7aqfc9vpnvr3ix1ii94p4ik6frcnw708iyv4s9crqi65d";
+    url = "mirror://apache/netbeans/netbeans/${version}/netbeans-${version}-bin.zip";
+    hash = "sha256-uuzC2iiTSn3czWod3aBbNh8mVM5bCvmjKUl0ptNdm3M=";
   };
 
   buildCommand = ''
@@ -24,25 +27,49 @@ stdenv.mkDerivation {
     unzip $src
     patchShebangs .
 
+    rm netbeans/bin/*.exe
+
     # Copy to installation directory and create a wrapper capable of starting
     # it.
-    mkdir -p $out/bin
+    mkdir -pv $out/bin
     cp -a netbeans $out
     makeWrapper $out/netbeans/bin/netbeans $out/bin/netbeans \
-      --prefix PATH : ${stdenv.lib.makeBinPath [ jdk which ]} \
+      --prefix PATH : ${lib.makeBinPath [ jdk which ]} \
       --prefix JAVA_HOME : ${jdk.home} \
-      --add-flags "--jdkhome ${jdk.home}"
+      --add-flags "--jdkhome ${jdk.home} \
+      -J-Dawt.useSystemAAFontSettings=on -J-Dswing.aatext=true"
+
+    # Extract pngs from the Apple icon image and create
+    # the missing ones from the 1024x1024 image.
+    icns2png --extract $out/netbeans/nb/netbeans.icns
+    for size in 16 24 32 48 64 128 256 512 1024; do
+      mkdir -pv $out/share/icons/hicolor/"$size"x"$size"/apps
+      if [ -e netbeans_"$size"x"$size"x32.png ]
+      then
+        mv netbeans_"$size"x"$size"x32.png $out/share/icons/hicolor/"$size"x"$size"/apps/netbeans.png
+      else
+        convert -resize "$size"x"$size" netbeans_1024x1024x32.png $out/share/icons/hicolor/"$size"x"$size"/apps/netbeans.png
+      fi
+    done;
 
     # Create desktop item, so we can pick it from the KDE/GNOME menu
-    mkdir -p $out/share/applications
-    cp ${desktopItem}/share/applications/* $out/share/applications
+    mkdir -pv $out/share/applications
+    ln -s ${desktopItem}/share/applications/* $out/share/applications
   '';
 
-  buildInputs = [ makeWrapper perl python unzip ];
+  nativeBuildInputs = [ makeWrapper unzip ];
+  buildInputs = [ perl libicns imagemagick ];
 
   meta = {
     description = "An integrated development environment for Java, C, C++ and PHP";
-    maintainers = [ stdenv.lib.maintainers.sander ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://netbeans.apache.org/";
+    license = lib.licenses.asl20;
+    sourceProvenance = with lib.sourceTypes; [
+      binaryBytecode
+      binaryNativeCode
+    ];
+    maintainers = with lib.maintainers; [ sander rszibele kashw2 ];
+    platforms = lib.platforms.unix;
+    mainProgram = "netbeans";
   };
 }

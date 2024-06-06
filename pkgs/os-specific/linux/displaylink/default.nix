@@ -1,70 +1,85 @@
-{ stdenv, lib, fetchurl, fetchFromGitHub, unzip, kernel, utillinux, libdrm, libusb1, makeWrapper }:
+{ stdenv
+, lib
+, unzip
+, util-linux
+, libusb1
+, evdi
+, makeBinaryWrapper
+, requireFile
+}:
 
 let
-  arch =
-    if stdenv.system == "x86_64-linux" then "x64"
-    else if stdenv.system == "i686-linux" then "x86"
+  bins =
+    if stdenv.hostPlatform.system == "x86_64-linux" then "x64-ubuntu-1604"
+    else if stdenv.hostPlatform.system == "i686-linux" then "x86-ubuntu-1604"
+    else if stdenv.hostPlatform.system == "aarch64-linux" then "aarch64-linux-gnu"
     else throw "Unsupported architecture";
-  libPath = lib.makeLibraryPath [ stdenv.cc.cc utillinux libusb1 ];
+  libPath = lib.makeLibraryPath [ stdenv.cc.cc util-linux libusb1 evdi ];
+in
+stdenv.mkDerivation (finalAttrs: {
+  pname = "displaylink";
+  version = "5.8.0-63.33";
 
-in stdenv.mkDerivation rec {
-  name = "displaylink-${version}";
-  version = "1.1.62";
+  src = requireFile rec {
+    name = "displaylink-580.zip";
+    sha256 = "05m8vm6i9pc9pmvar021lw3ls60inlmq92nling0vj28skm55i92";
+    message = ''
+      In order to install the DisplayLink drivers, you must first
+      comply with DisplayLink's EULA and download the binaries and
+      sources from here:
 
-  src = fetchFromGitHub {
-    owner = "DisplayLink";
-    repo = "evdi";
-    rev = "fe779940ff9fc7b512019619e24a5b22e4070f6a";
-    sha256 = "02hw83f6lscms8hssjzf30hl9zly3b28qcxwmxvnqwfhx1q491z9";
+      https://www.synaptics.com/products/displaylink-graphics/downloads/ubuntu-5.8
+
+      Once you have downloaded the file, please use the following
+      commands and re-run the installation:
+
+      mv \$PWD/"DisplayLink USB Graphics Software for Ubuntu5.8-EXE.zip" \$PWD/${name}
+      nix-prefetch-url file://\$PWD/${name}
+    '';
   };
 
-  daemon = fetchurl {
-    name = "displaylink.zip";
-    url = "http://www.displaylink.com/downloads/file?id=607";
-    sha256 = "0jky3xk4dfzbzg386qya9l9952i4m8zhf55fdl06pi9r82k2iijx";
-  };
+  nativeBuildInputs = [
+    makeBinaryWrapper
+    unzip
+  ];
 
-  nativeBuildInputs = [ unzip makeWrapper ];
-
-  buildInputs = [ kernel libdrm ];
-
-  buildCommand = ''
-    unpackPhase
-    cd $sourceRoot
-    unzip $daemon
-    chmod +x displaylink-driver-${version}.run
-    ./displaylink-driver-${version}.run --target daemon --noexec
-
-    ( cd module
-      export makeFlags="$makeFlags KVER=${kernel.modDirVersion} KDIR=${kernel.dev}/lib/modules/${kernel.modDirVersion}/build"
-      export hardeningDisable="pic format"
-      buildPhase
-      install -Dm755 evdi.ko $out/lib/modules/${kernel.modDirVersion}/kernel/drivers/gpu/drm/evdi/evdi.ko
-    )
-
-    ( cd library
-      buildPhase
-      install -Dm755 libevdi.so $out/lib/libevdi.so
-    )
-
-    fixupPhase
-
-    ( cd daemon
-      install -Dt $out/lib/displaylink *.spkg
-      install -Dm755 ${arch}/DisplayLinkManager $out/bin/DisplayLinkManager
-      patchelf \
-        --set-interpreter $(cat ${stdenv.cc}/nix-support/dynamic-linker) \
-        --set-rpath $out/lib:${libPath} \
-        $out/bin/DisplayLinkManager
-      wrapProgram $out/bin/DisplayLinkManager \
-        --run "cd $out/lib/displaylink"
-    )
+  unpackPhase = ''
+    runHook preUnpack
+    unzip $src
+    chmod +x displaylink-driver-${finalAttrs.version}.run
+    ./displaylink-driver-${finalAttrs.version}.run --target . --noexec --nodiskspace
+    runHook postUnpack
   '';
 
-  meta = with stdenv.lib; {
+  installPhase = ''
+    runHook preInstall
+    install -Dt $out/lib/displaylink *.spkg
+    install -Dm755 ${bins}/DisplayLinkManager $out/bin/DisplayLinkManager
+    mkdir -p $out/lib/udev/rules.d $out/share
+    cp ${./99-displaylink.rules} $out/lib/udev/rules.d/99-displaylink.rules
+    patchelf \
+      --set-interpreter $(cat ${stdenv.cc}/nix-support/dynamic-linker) \
+      --set-rpath ${libPath} \
+      $out/bin/DisplayLinkManager
+    wrapProgram $out/bin/DisplayLinkManager \
+      --chdir "$out/lib/displaylink"
+
+    # We introduce a dependency on the source file so that it need not be redownloaded everytime
+    echo $src >> "$out/share/workspace_dependencies.pin"
+    runHook postInstall
+  '';
+
+  dontStrip = true;
+  dontPatchELF = true;
+
+  meta = with lib; {
     description = "DisplayLink DL-5xxx, DL-41xx and DL-3x00 Driver for Linux";
-    platforms = [ "x86_64-linux" "i686-linux" ];
+    homepage = "https://www.displaylink.com/";
+    hydraPlatforms = [];
     license = licenses.unfree;
-    homepage = "http://www.displaylink.com/";
+    mainProgram = "DisplayLinkManager";
+    maintainers = with maintainers; [ abbradar ];
+    platforms = [ "x86_64-linux" "i686-linux" "aarch64-linux" ];
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
   };
-}
+})

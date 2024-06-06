@@ -1,9 +1,8 @@
-{ stdenv, fetchurl, fetchpatch, autoreconfHook, ghostscript }:
+{ lib, stdenv, autoreconfHook, ghostscript }:
 
 stdenv.mkDerivation {
-  name = "ijs-${ghostscript.version}";
-
-  inherit (ghostscript) src;
+  pname = "ijs";
+  inherit (ghostscript) version src;
 
   postPatch = "cd ijs";
 
@@ -11,9 +10,9 @@ stdenv.mkDerivation {
 
   nativeBuildInputs = [ autoreconfHook ];
 
-  configureFlags = [ "--disable-static" "--enable-shared" ];
+  configureFlags = [ "--enable-shared" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://www.openprinting.org/download/ijs/";
     description = "Raster printer driver architecture";
 

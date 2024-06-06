@@ -1,30 +1,32 @@
 { stdenv, lib, fetchurl, zlib, unzip }:
 
-with lib;
-
 stdenv.mkDerivation rec {
-  name = "sauce-connect-${version}";
-  version = "4.4.0";
+  pname = "sauce-connect";
+  version = "4.9.1";
 
-  src = fetchurl (
-    if stdenv.system == "x86_64-linux" then {
-      url = "https://saucelabs.com/downloads/sc-${version}-linux.tar.gz";
-      sha256 = "19zgnw0qn5f775p581mq5ry086rhcnnhqc6x82hzmwfysbsyl7xs";
-    } else if stdenv.system == "i686-linux" then {
-      url = "https://saucelabs.com/downloads/sc-${version}-linux32.tar.gz";
-      sha256 = "1m4nf1yidwkmlwald0ycwzvnsp5p93nc4bs1xh67phw0b2db99x9";
-    } else {
-      url = "https://saucelabs.com/downloads/sc-${version}-osx.zip";
-      sha256 = "1bpdpwqa9sw2n7vw2g8q4c1mzgh8wgwn4p7sbryc2ki90yz8ibga";
-    }
-  );
+  passthru = {
+    sources = {
+      x86_64-linux = fetchurl {
+        url = "https://saucelabs.com/downloads/sc-${version}-linux.tar.gz";
+        hash = "sha256-S3vzng6b0giB6Zceaxi62pQOEHysIR/vVQmswkEZ0/M=";
+      };
+      x86_64-darwin = fetchurl {
+        url = "https://saucelabs.com/downloads/sc-${version}-osx.zip";
+        hash = "sha256-6tJayqo+p7PMz8M651ikHz6tEjGjRIffOqQBchkpW5Q=";
+      };
+      aarch64-darwin = passthru.sources.x86_64-darwin;
+    };
+  };
 
-  buildInputs = [ unzip ];
+  src = passthru.sources.${stdenv.hostPlatform.system}
+    or (throw "Unsupported system: ${stdenv.hostPlatform.system}");
 
-  patchPhase = stdenv.lib.optionalString stdenv.isLinux ''
+  nativeBuildInputs = [ unzip ];
+
+  patchPhase = lib.optionalString stdenv.isLinux ''
     patchelf \
       --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-      --set-rpath "$out/lib:${makeLibraryPath [zlib]}" \
+      --set-rpath "$out/lib:${lib.makeLibraryPath [zlib]}" \
       bin/sc
   '';
 
@@ -35,11 +37,12 @@ stdenv.mkDerivation rec {
 
   dontStrip = true;
 
-  meta = {
+  meta = with lib; {
     description = "A secure tunneling app for executing tests securely when testing behind firewalls";
+    sourceProvenance = with lib.sourceTypes; [ binaryNativeCode ];
     license = licenses.unfree;
-    homepage = https://docs.saucelabs.com/reference/sauce-connect/;
-    maintainers = with maintainers; [offline];
-    platforms = platforms.linux ++ platforms.darwin;
+    homepage = "https://docs.saucelabs.com/reference/sauce-connect/";
+    maintainers = with maintainers; [ offline ];
+    platforms = builtins.attrNames passthru.sources;
   };
 }

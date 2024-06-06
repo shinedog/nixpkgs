@@ -1,26 +1,55 @@
-{stdenv, fetchurl, openssl, bison, flex, pam, zlib, usePAM ? stdenv.isLinux }:
+{ lib
+, stdenv
+, fetchurl
+, darwin
+, bison
+, flex
+, zlib
+, libxcrypt
+, usePAM ? stdenv.hostPlatform.isLinux
+, pam
+, useSSL ? true
+, openssl
+}:
 
 stdenv.mkDerivation rec {
-  name = "monit-5.20.0";
+  pname = "monit";
+  version = "5.34.0";
 
   src = fetchurl {
-    url = "${meta.homepage}dist/${name}.tar.gz";
-    sha256 = "13drg4k9r9drn7bpj3n04kkf1l29q05jdccdar6yc6hcqmg3kb7b";
+    url = "https://mmonit.com/monit/dist/monit-${version}.tar.gz";
+    sha256 = "sha256-N/UUzYlzu84QTLhRf/P8UEBSoINwPu4NDoc9smuRmCA=";
   };
 
-  nativeBuildInputs = [ bison flex ];
-  buildInputs = [ openssl zlib.dev ] ++ stdenv.lib.optionals usePAM [ pam ];
+  nativeBuildInputs = [ bison flex ] ++
+    lib.optionals stdenv.hostPlatform.isDarwin [
+      darwin.apple_sdk.frameworks.DiskArbitration
+      darwin.apple_sdk.frameworks.System
+    ];
+
+  buildInputs = [ zlib.dev libxcrypt ] ++
+    lib.optionals useSSL [ openssl ] ++
+    lib.optionals usePAM [ pam ];
 
   configureFlags = [
+    (lib.withFeature usePAM "pam")
+  ] ++ (if useSSL then [
     "--with-ssl-incl-dir=${openssl.dev}/include"
-    "--with-ssl-lib-dir=${openssl.out}/lib"
-  ] ++ stdenv.lib.optionals (! usePAM) [ "--without-pam" ];
+    "--with-ssl-lib-dir=${lib.getLib openssl}/lib"
+  ] else [
+    "--without-ssl"
+  ]) ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    # will need to check both these are true for musl
+    "libmonit_cv_setjmp_available=yes"
+    "libmonit_cv_vsnprintf_c99_conformant=yes"
+  ];
 
   meta = {
-    homepage = http://mmonit.com/monit/;
+    homepage = "https://mmonit.com/monit/";
     description = "Monitoring system";
-    license = stdenv.lib.licenses.agpl3;
-    maintainers = with stdenv.lib.maintainers; [ raskin wmertens ];
-    platforms = with stdenv.lib.platforms; linux;
+    license = lib.licenses.agpl3Plus;
+    maintainers = with lib.maintainers; [ raskin wmertens ryantm ];
+    platforms = with lib; platforms.linux ++ platforms.darwin;
+    mainProgram = "monit";
   };
 }

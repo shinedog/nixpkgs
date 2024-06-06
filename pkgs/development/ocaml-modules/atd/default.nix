@@ -1,26 +1,24 @@
-{stdenv, menhir, easy-format, buildOcaml, fetchurl, which}:
+{ lib, atdgen-codec-runtime, cmdliner, menhir, easy-format, buildDunePackage, re, yojson, nixosTests }:
 
-buildOcaml rec {
-  name = "atd";
-  version = "1.1.2";
+buildDunePackage rec {
+  pname = "atd";
+  inherit (atdgen-codec-runtime) version src;
 
-  src = fetchurl {
-    url = "https://github.com/mjambon/atd/archive/v${version}.tar.gz";
-    sha256 = "0ef10c63192aed75e9a4274e89c5f9ca27efb1ef230d9949eda53ad4a9a37291";
+  minimalOCamlVersion = "4.08";
+
+  nativeBuildInputs = [ menhir ];
+  buildInputs = [ cmdliner ];
+  propagatedBuildInputs = [ easy-format re yojson ];
+
+  passthru.tests = {
+    smoke-test = nixosTests.atd;
   };
 
-  installPhase = ''
-    mkdir -p $out/bin
-    make PREFIX=$out install
-  '';
-
-  buildInputs = [ which ];
-  propagatedBuildInputs = [ menhir easy-format ];
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mjambon/atd;
+  meta = with lib; {
     description = "Syntax for cross-language type definitions";
-    license = licenses.bsd3;
-    maintainers = [ maintainers.jwilberding ];
+    homepage = "https://github.com/mjambon/atd";
+    license = licenses.mit;
+    maintainers = with maintainers; [ aij ];
+    mainProgram = "atdcat";
   };
 }

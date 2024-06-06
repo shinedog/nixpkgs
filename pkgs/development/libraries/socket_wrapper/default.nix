@@ -1,20 +1,20 @@
-{ stdenv, fetchurl, cmake, pkgconfig }:
+{ lib, stdenv, fetchurl, cmake, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "socket_wrapper-1.1.5";
+  pname = "socket_wrapper";
+  version = "1.4.2";
 
   src = fetchurl {
-    url = "mirror://samba/cwrap/${name}.tar.gz";
-    sha256 = "01gn21kbicwfn3vlnnir8c11z2g54b532bj3qrpdrhgrcm3ifi45";
+    url = "mirror://samba/cwrap/socket_wrapper-${version}.tar.gz";
+    sha256 = "sha256-CgjsJJ3Z/7s7FtV3s1LVc1YfV77uw1lhgqxuyORrmrY=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A library passing all socket communications through unix sockets";
-    homepage = "https://git.samba.org/?p=socket_wrapper.git;a=summary";
+    homepage = "https://git.samba.org/?p=socket_wrapper.git;a=summary;";
     license = licenses.bsd3;
-    maintainers = with maintainers; [ wkennington ];
     platforms = platforms.all;
   };
 }

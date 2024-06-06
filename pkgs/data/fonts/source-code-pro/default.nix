@@ -1,29 +1,28 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "source-code-pro-${version}";
-  version = "2.030";
+stdenvNoCC.mkDerivation rec {
+  pname = "source-code-pro";
+  version = "2.042";
 
-  src = fetchFromGitHub {
-    owner = "adobe-fonts";
-    repo = "source-code-pro";
-    rev = "2.030R-ro/1.050R-it";
-    name = "2.030R-ro-1.050R-it";
-    sha256 = "0hc5kflr8xzqgdm0c3gbgb1paygznxmnivkylid69ipc7wnicx1n";
+  src = fetchzip {
+    url = "https://github.com/adobe-fonts/source-code-pro/releases/download/${version}R-u%2F1.062R-i%2F1.026R-vf/OTF-source-code-pro-${version}R-u_1.062R-i.zip";
+    stripRoot = false;
+    hash = "sha256-+BnfmD+AjObSoVxPvFAqbnMD2j5qf2YmbXGQtXoaiy0=";
   };
 
-  phases = "unpackPhase installPhase";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    find . -name "*.otf" -exec cp {} $out/share/fonts/opentype \;
+    runHook preInstall
+
+    install -Dm644 OTF/*.otf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
   meta = {
-    description = "A set of monospaced OpenType fonts designed for coding environments";
-    maintainers = with stdenv.lib.maintainers; [ relrod ];
-    platforms = with stdenv.lib.platforms; all;
-    homepage = "http://blog.typekit.com/2012/09/24/source-code-pro/";
-    license = stdenv.lib.licenses.ofl;
+    description = "Monospaced font family for user interface and coding environments";
+    maintainers = with lib.maintainers; [ relrod ];
+    platforms = with lib.platforms; all;
+    homepage = "https://adobe-fonts.github.io/source-code-pro/";
+    license = lib.licenses.ofl;
   };
 }

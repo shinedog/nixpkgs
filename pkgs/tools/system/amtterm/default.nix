@@ -1,27 +1,27 @@
-{ fetchurl, stdenv, makeWrapper, perl, perlPackages }:
+{ fetchurl, lib, stdenv, makeWrapper, perl, perlPackages }:
 
-let version = "1.4"; in
-stdenv.mkDerivation {
-  name = "amtterm-"+version;
+
+stdenv.mkDerivation (finalAttrs: {
+  pname = "amtterm";
+  version = "1.7-1";
 
   buildInputs = with perlPackages; [ perl SOAPLite ];
   nativeBuildInputs = [ makeWrapper ];
 
   src = fetchurl {
-    url = "https://www.kraxel.org/cgit/amtterm/snapshot/amtterm-a75e48e010e92dc5540e2142efc445ccb0ab1a42.tar.gz";
-    sha256 = "0i4ny5dyf3fy3sd65zw9v4xxw3rc3qyn8r8y8gwwgankj6iqkqp4";
+    url = "https://www.kraxel.org/cgit/amtterm/snapshot/amtterm-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-WrYWAXLW74hb/DfSiPyiFIGAUfDQFdNEPx+XevZYcyk=";
   };
 
-  makeFlags = [ "prefix=$(out)" ];
+  makeFlags = [ "prefix=$(out)" "STRIP=" ];
 
   postInstall =
     "wrapProgram $out/bin/amttool --prefix PERL5LIB : $PERL5LIB";
 
-  meta = with stdenv.lib;
+  meta = with lib;
     { description = "Intel AMT® SoL client + tools";
       homepage = "https://www.kraxel.org/cgit/amtterm/";
-      license = licenses.gpl2;
-      maintainers = [ maintainers.ehmry ];
+      license = licenses.gpl2Plus;
       platforms = platforms.linux;
     };
-}
+})

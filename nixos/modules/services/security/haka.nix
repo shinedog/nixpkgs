@@ -57,19 +57,12 @@ in
 
       enable = mkEnableOption "Haka";
 
-      package = mkOption {
-        default = pkgs.haka;
-        defaultText = "pkgs.haka";
-        type = types.package;
-        description = "
-          Which Haka derivation to use.
-        ";
-      };
+      package = mkPackageOption pkgs "haka" { };
 
       configFile = mkOption {
         default = "empty.lua";
         example = "/srv/haka/myfilter.lua";
-        type = types.string;
+        type = types.str;
         description = ''
           Specify which configuration file Haka uses.
           It can be absolute path or a path relative to the sample directory of
@@ -80,7 +73,7 @@ in
       interfaces = mkOption {
         default = [ "eth0" ];
         example = [ "any" ];
-        type = with types; listOf string;
+        type = with types; listOf str;
         description = ''
           Specify which interface(s) Haka listens to.
           Use 'any' to listen to all interfaces.
@@ -99,7 +92,6 @@ in
 
       pcap = mkOption {
         default = true;
-        example = false;
         type = types.bool;
         description = "Whether to enable pcap";
       };

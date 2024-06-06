@@ -1,20 +1,27 @@
-{ stdenv, fetchurl, adns, curl, gettext, gmp, gnutls, libextractor
+{ lib, stdenv, fetchurl, adns, curl, gettext, gmp, gnutls, libextractor
 , libgcrypt, libgnurl, libidn, libmicrohttpd, libtool, libunistring
-, makeWrapper, ncurses, pkgconfig, libxml2, sqlite, zlib }:
+, makeWrapper, ncurses, pkg-config, libxml2, sqlite, zlib
+, libpulseaudio, libopus, libogg, jansson, libsodium
+
+, postgresqlSupport ? true, postgresql }:
 
 stdenv.mkDerivation rec {
-  name = "gnunet-0.10.1";
+  pname = "gnunet";
+  version = "0.21.1";
 
   src = fetchurl {
-    url = "mirror://gnu/gnunet/${name}.tar.gz";
-    sha256 = "04wxzm3wkgqbn42b8ksr4cx6m5cckyig5cls1adh0nwdczwvnp7n";
+    url = "mirror://gnu/gnunet/gnunet-${version}.tar.gz";
+    hash = "sha256-k+aLPqynCHJz49doX+auOLLoBV5MnnANNg3UBVJJeFw=";
   };
 
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [ pkg-config libtool makeWrapper ];
   buildInputs = [
-    adns curl gettext gmp gnutls libextractor libgcrypt libgnurl libidn
-    libmicrohttpd libtool libunistring libxml2 makeWrapper ncurses
-    pkgconfig sqlite zlib
-  ];
+    adns curl gmp gnutls libextractor libgcrypt libgnurl libidn
+    libmicrohttpd libunistring libxml2 ncurses gettext libsodium
+    sqlite zlib libpulseaudio libopus libogg jansson
+  ] ++ lib.optional postgresqlSupport postgresql;
 
   preConfigure = ''
     # Brute force: since nix-worker chroots don't provide
@@ -27,29 +34,17 @@ stdenv.mkDerivation rec {
     # builds.
     find . \( -iname \*test\*.c -or -name \*.conf \) | \
       xargs sed -ie "s|/tmp|$TMPDIR|g"
-
-    # Ensure NSS installation works fine
-    configureFlags="$configureFlags --with-nssdir=$out/lib"
-    patchShebangs src/gns/nss/install-nss-plugin.sh
-
-    sed -ie 's|@LDFLAGS@|@LDFLAGS@ $(Z_LIBS)|g' \
-      src/regex/Makefile.in \
-      src/fs/Makefile.in
   '';
 
+  # unfortunately, there's still a few failures with impure tests
   doCheck = false;
+  checkPhase = ''
+    export GNUNET_PREFIX="$out"
+    export PATH="$out/bin:$PATH"
+    make -k check
+  '';
 
-  /* FIXME: Tests must be run this way, but there are still a couple of
-     failures.
-
-  postInstall =
-    '' export GNUNET_PREFIX="$out"
-       export PATH="$out/bin:$PATH"
-       make -k check
-    '';
-  */
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "GNU's decentralized anonymous and censorship-resistant P2P framework";
 
     longDescription = ''
@@ -67,11 +62,10 @@ stdenv.mkDerivation rec {
       network are rewarded with better service.
     '';
 
-    homepage = http://gnunet.org/;
-
-    license = licenses.gpl2Plus;
-
-    maintainers = with maintainers; [ viric vrthra ];
-    platforms = platforms.gnu;
+    homepage = "https://gnunet.org/";
+    license = licenses.agpl3Plus;
+    maintainers = with maintainers; [ pstn vrthra ];
+    platforms = platforms.unix;
+    changelog = "https://git.gnunet.org/gnunet.git/tree/ChangeLog?h=v${version}";
   };
 }

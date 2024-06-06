@@ -1,25 +1,28 @@
-{ stdenv, fetchurl, autoreconfHook, pkgconfig, gtk3 }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config, gtk3 }:
 
 stdenv.mkDerivation rec {
-  name = "screen-message-${version}";
-  version = "0.24";
+  pname = "screen-message";
+  version = "0.28";
 
-  src = fetchurl {
-    url = "mirror://debian/pool/main/s/screen-message/screen-message_${version}.orig.tar.gz";
-    sha256 = "1v03axr7471fmzxccl3ckv73j8gfcj615y5maxvm5phy0sd6rl49";
+  src = fetchFromGitHub {
+    owner = "nomeata";
+    repo = "screen-message";
+    rev = version;
+    hash = "sha256-KHJL1N72Hc1B1m0olxoZxBHIpq/d/T3m2VdS5XC9+tk=";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
   buildInputs = [ gtk3 ];
 
   # screen-message installs its binary in $(prefix)/games per default
   makeFlags = [ "execgamesdir=$(out)/bin" ];
 
   meta = {
-    homepage = "http://darcs.nomeata.de/cgi-bin/darcsweb.cgi?r=screen-message.debian";
+    homepage = "https://www.joachim-breitner.de/en/projects#screen-message";
     description = "Displays a short text fullscreen in an X11 window";
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [ stdenv.lib.maintainers.fpletz ];
-    platforms = stdenv.lib.platforms.unix;
+    license = lib.licenses.gpl2Plus;
+    maintainers = [ lib.maintainers.fpletz ];
+    mainProgram = "sm";
+    platforms = lib.platforms.unix;
   };
 }

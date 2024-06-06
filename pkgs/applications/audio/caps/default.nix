@@ -1,11 +1,12 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 stdenv.mkDerivation rec {
-  name = "caps-${version}";
-  version = "0.9.24";
+  pname = "caps";
+  version = "0.9.26";
   src = fetchurl {
     url = "http://www.quitte.de/dsp/caps_${version}.tar.bz2";
-    sha256 = "081zx0i2ysw5nmy03j60q9j11zdlg1fxws81kwanncdgayxgwipp";
+    sha256 = "1jcq9y51vdnk93q27r566y9qmddvadhr4ddnvkiypaq5rrdnqjg7";
   };
+
   configurePhase = ''
     echo "PREFIX = $out" > defines.make
   '';
@@ -21,9 +22,9 @@ stdenv.mkDerivation rec {
       considerations are latency-free realtime operation, modesty of
       resource demands and meaningful control interfaces.
     '';
-    homepage = http://www.quitte.de/dsp/caps.html;
-    license = stdenv.lib.licenses.gpl3;
-    maintainers = [ stdenv.lib.maintainers.astsmtl ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "http://www.quitte.de/dsp/caps.html";
+    license = lib.licenses.gpl3;
+    maintainers = [ lib.maintainers.astsmtl ];
+    platforms = lib.platforms.linux;
   };
 }

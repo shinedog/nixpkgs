@@ -1,32 +1,106 @@
-{ stdenv, fetchurl, dbus, dbus_glib, glib, pkgconfig, libxml2, gnome2, libxslt }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, intltool
+, meson
+, mesonEmulatorHook
+, ninja
+, pkg-config
+, gtk-doc
+, docbook-xsl-nons
+, docbook_xml_dtd_412
+, glib
+, json-glib
+, libsoup_3
+, libnotify
+, gdk-pixbuf
+, modemmanager
+, avahi
+, glib-networking
+, python3
+, wrapGAppsHook3
+, gobject-introspection
+, vala
+, withDemoAgent ? false
+}:
 
 stdenv.mkDerivation rec {
-  name = "geoclue-0.12.0";
-  src = fetchurl {
-    url = "https://launchpad.net/geoclue/trunk/0.12/+download/${name}.tar.gz";
-    sha256 = "15j619kvmdgj2hpma92mkxbzjvgn8147a7500zl3bap9g8bkylqg";
+  pname = "geoclue";
+  version = "2.7.0";
+
+  outputs = [ "out" "dev" "devdoc" ];
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "geoclue";
+    repo = "geoclue";
+    rev = version;
+    hash = "sha256-vzarUg4lBEXYkH+n9SY8SYr0gHUX94PSTDmKd957gyc=";
   };
 
-  buildInputs = [ pkgconfig libxml2 gnome2.GConf libxslt ];
+  patches = [
+    ./add-option-for-installation-sysconfdir.patch
+  ];
 
-  propagatedBuildInputs = [dbus glib dbus_glib];
+  nativeBuildInputs = [
+    pkg-config
+    intltool
+    meson
+    ninja
+    wrapGAppsHook3
+    python3
+    vala
+    gobject-introspection
+    # devdoc
+    gtk-doc
+    docbook-xsl-nons
+    docbook_xml_dtd_412
+  ] ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+    mesonEmulatorHook
+  ];
 
-  hardeningDisable = [ "format" ];
+  buildInputs = [
+    glib
+    json-glib
+    libsoup_3
+    avahi
+  ] ++ lib.optionals withDemoAgent [
+    libnotify gdk-pixbuf
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    modemmanager
+  ];
 
-  preConfigure = ''
-    sed -e '/-Werror/d' -i configure
+  propagatedBuildInputs = [
+    glib
+    glib-networking
+  ];
+
+  mesonFlags = [
+    "-Dsystemd-system-unit-dir=${placeholder "out"}/etc/systemd/system"
+    "-Ddemo-agent=${lib.boolToString withDemoAgent}"
+    "--sysconfdir=/etc"
+    "-Dsysconfdir_install=${placeholder "out"}/etc"
+    "-Dmozilla-api-key=5c28d1f4-9511-47ff-b11a-2bef80fc177c"
+    "-Ddbus-srv-user=geoclue"
+    "-Ddbus-sys-dir=${placeholder "out"}/share/dbus-1/system.d"
+  ] ++ lib.optionals stdenv.isDarwin [
+    "-D3g-source=false"
+    "-Dcdma-source=false"
+    "-Dmodem-gps-source=false"
+    "-Dnmea-source=false"
+  ];
+
+  postPatch = ''
+    chmod +x demo/install-file.py
+    patchShebangs demo/install-file.py
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
+    broken = stdenv.isDarwin && withDemoAgent;
     description = "Geolocation framework and some data providers";
-    maintainers = with maintainers; [ raskin ];
-    platforms = platforms.linux;
-    license = licenses.lgpl2;
-  };
-
-  passthru = {
-    updateInfo = {
-      downloadPage = "http://folks.o-hand.com/jku/geoclue-releases/";
-    };
+    homepage = "https://gitlab.freedesktop.org/geoclue/geoclue/wikis/home";
+    maintainers = with maintainers; [ raskin mimame ];
+    platforms = with platforms; linux ++ darwin;
+    license = licenses.lgpl2Plus;
   };
 }

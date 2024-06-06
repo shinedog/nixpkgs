@@ -1,40 +1,49 @@
-{ stdenv, fetchurl, devicemapper, libuuid, gettext, readline, perl, python2
-, utillinux, check, enableStatic ? false, hurd ? null }:
+{ lib, stdenv
+, fetchurl
+, lvm2
+, libuuid
+, gettext
+, readline
+, dosfstools
+, e2fsprogs
+, perl
+, python3
+, util-linux
+, check
+, enableStatic ? stdenv.hostPlatform.isStatic
+}:
 
 stdenv.mkDerivation rec {
-  name = "parted-3.2";
+  pname = "parted";
+  version = "3.6";
 
   src = fetchurl {
-    url = "mirror://gnu/parted/${name}.tar.xz";
-    sha256 = "1r3qpg3bhz37mgvp9chsaa3k0csby3vayfvz8ggsqz194af5i2w5";
+    url = "mirror://gnu/parted/parted-${version}.tar.xz";
+    sha256 = "sha256-O0Pb4zzKD5oYYB66tWt4UrEo7Bo986mzDM3l5zNZ5hI=";
   };
 
-  patches = stdenv.lib.optional doCheck ./gpt-unicode-test-fix.patch;
+  outputs = [ "out" "dev" "man" "info" ];
 
-  postPatch = stdenv.lib.optionalString doCheck ''
+  postPatch = ''
     patchShebangs tests
   '';
 
   buildInputs = [ libuuid ]
-    ++ stdenv.lib.optional (readline != null) readline
-    ++ stdenv.lib.optional (gettext != null) gettext
-    ++ stdenv.lib.optional (devicemapper != null) devicemapper
-    ++ stdenv.lib.optional (hurd != null) hurd
-    ++ stdenv.lib.optionals doCheck [ check perl python2 ];
+    ++ lib.optional (readline != null) readline
+    ++ lib.optional (gettext != null) gettext
+    ++ lib.optional (lvm2 != null) lvm2;
 
   configureFlags =
        (if (readline != null)
         then [ "--with-readline" ]
         else [ "--without-readline" ])
-    ++ stdenv.lib.optional (devicemapper == null) "--disable-device-mapper"
-    ++ stdenv.lib.optional enableStatic "--enable-static";
+    ++ lib.optional (lvm2 == null) "--disable-device-mapper"
+    ++ lib.optional enableStatic "--enable-static";
 
-  doCheck = true;
-
-  preCheck =
-    stdenv.lib.optionalString doCheck
-      # The `t0400-loop-clobber-infloop.sh' test wants `mkswap'.
-      "export PATH=\"${utillinux}/sbin:$PATH\"";
+  # Tests were previously failing due to Hydra running builds as uid 0.
+  # That should hopefully be fixed now.
+  doCheck = !stdenv.hostPlatform.isMusl; /* translation test */
+  nativeCheckInputs = [ check dosfstools e2fsprogs perl python3 util-linux ];
 
   meta = {
     description = "Create, destroy, resize, check, and copy partitions";
@@ -49,14 +58,14 @@ stdenv.mkDerivation rec {
       which also serves as a sample implementation and script backend.
     '';
 
-    homepage = http://www.gnu.org/software/parted/;
-    license = stdenv.lib.licenses.gpl3Plus;
+    homepage = "https://www.gnu.org/software/parted/";
+    license = lib.licenses.gpl3Plus;
 
     maintainers = [
       # Add your name here!
     ];
 
     # GNU Parted requires libuuid, which is part of util-linux-ng.
-    platforms = stdenv.lib.platforms.linux;
+    platforms = lib.platforms.linux;
   };
 }

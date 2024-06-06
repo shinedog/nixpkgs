@@ -1,27 +1,24 @@
-{ stdenv, fetchzip, ocaml, findlib, cstruct }:
+{ lib, fetchurl, buildDunePackage, cstruct }:
 
-let version = "1.0.0"; in
+buildDunePackage rec {
+  pname = "hex";
+  version = "1.5.0";
 
-stdenv.mkDerivation {
-  name = "ocaml-hex-${version}";
+  duneVersion = "3";
+  minimalOCamlVersion = "4.08";
 
-  src = fetchzip {
-    url = "https://github.com/mirage/ocaml-hex/archive/${version}.tar.gz";
-    sha256 = "0g4cq4bsksga15fa5ln083gkglawknbnhi2s4k8yk0yi5xngvwm4";
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-${pname}/releases/download/v${version}/hex-${version}.tbz";
+    hash = "sha256-LmfuyhsDBJMHowgxtc1pS8stPn8qa0+1l/vbZHNRtNw=";
   };
 
-  buildInputs = [ ocaml findlib ];
   propagatedBuildInputs = [ cstruct ];
-  configureFlags = "--enable-tests";
   doCheck = true;
-  checkTarget = "test";
-  createFindlibDestdir = true;
 
   meta = {
     description = "Mininal OCaml library providing hexadecimal converters";
-    homepage = https://github.com/mirage/ocaml-hex;
-    license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/mirage/ocaml-hex";
+    license = lib.licenses.isc;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
 }

@@ -1,42 +1,62 @@
-{
-  kdeDerivation, kdeWrapper, fetchFromGitHub, fetchurl, lib,
-  ecm, kdoctools,
-  baloo, kconfig, kfilemetadata, kinit, kirigami, plasma-framework
+{ stdenv
+, fetchurl
+, lib
+, extra-cmake-modules
+, kdoctools
+, wrapQtAppsHook
+, baloo
+, karchive
+, kconfig
+, kcrash
+, kfilemetadata
+, kinit
+, kirigami2
+, knewstuff
+, okular
+, plasma-framework
 }:
 
-let
+stdenv.mkDerivation (finalAttrs: {
   pname = "peruse";
-  version = "1.1";
-  unarr = fetchFromGitHub {
-    owner  = "zeniko";
-    repo   = "unarr";
-    rev    = "d1be8c43a82a4320306c8e835a86fdb7b2574ca7";
-    sha256 = "03ds5da69zipa25rsp76l6xqivrh3wcgygwyqa5x2rgcz3rjnlpr";
-  };
-  unwrapped = kdeDerivation rec {
-    name = "${pname}-${version}";
+  # while technically a beta, the latest release is from 2016 and doesn't build without a lot of
+  # patching
+  version = "1.80";
 
-    src = fetchurl {
-      url = "mirror://kde/stable/${pname}/${name}.tar.xz";
-      sha256 = "1akk9hg12y6iis0rb5kdkznm3xk7hk04r9ccqyz8lr6y073n5f9j";
-    };
-
-    nativeBuildInputs = [ ecm kdoctools ];
-
-    propagatedBuildInputs = [ baloo kconfig kfilemetadata kinit kirigami plasma-framework ];
-
-    preConfigure = ''
-      rmdir src/qtquick/karchive-rar/external/unarr
-      ln -s ${unarr} src/qtquick/karchive-rar/external/unarr
-    '';
-
-    meta = with lib; {
-      license = licenses.gpl2;
-      maintainers = with maintainers; [ peterhoeg ];
-    };
-
+  src = fetchurl {
+    url = "mirror://kde/stable/peruse/peruse-${finalAttrs.version}.tar.xz";
+    hash = "sha256-xnSVnKF20jbxVoFW41A22NZWVZUry/F7G+Ts5NK6M1E=";
   };
 
-in kdeWrapper unwrapped {
-  targets = [ "bin/peruse" ];
-}
+  nativeBuildInputs = [
+    extra-cmake-modules
+    kdoctools
+    wrapQtAppsHook
+  ];
+
+  propagatedBuildInputs = [
+    baloo
+    karchive
+    kconfig
+    kcrash
+    kfilemetadata
+    kinit
+    kirigami2
+    knewstuff
+    okular
+    plasma-framework
+  ];
+
+  # the build is otherwise crazy loud
+  cmakeFlags = [ "-Wno-dev" ];
+
+  pathsToLink = [ "/etc/xdg/peruse.knsrc" ];
+
+  meta = with lib; {
+    description = "A comic book reader";
+    homepage = "https://peruse.kde.org";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ peterhoeg ];
+    mainProgram = "peruse";
+    inherit (kirigami2.meta) platforms;
+  };
+})

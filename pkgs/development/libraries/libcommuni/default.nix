@@ -1,33 +1,46 @@
-{ stdenv, fetchFromGitHub, qtbase, qtdeclarative, qmakeHook, which
+{ lib, stdenv, fetchFromGitHub
+, qtbase, qtdeclarative, qmake, which
 }:
 
 stdenv.mkDerivation rec {
-  name = "libcommuni-${version}";
-  version = "2016-08-17";
+  pname = "libcommuni";
+  version = "3.7.0";
 
   src = fetchFromGitHub {
     owner = "communi";
     repo = "libcommuni";
-    rev = "dedba6faf57c31c8c70fd563ba12d75a9caee8a3";
-    sha256 = "0wvs53z34vfs5xlln4a6sbd4981svag89xm0f4k20mb1i052b20i";
+    rev = "v${version}";
+    sha256 = "sha256-9eYJpmjW1J48RD6wVJOHmsAgTbauNeeCrXe076ufq1I=";
   };
 
   buildInputs = [ qtbase qtdeclarative ];
-  nativeBuildInputs = [ qmakeHook which ];
+  nativeBuildInputs = [ qmake which ];
 
   enableParallelBuilding = true;
 
   dontUseQmakeConfigure = true;
-  configureFlags = "-config release";
+  configureFlags = [ "-config" "release" ]
+    # Build mixes up dylibs/frameworks if one is not explicitly specified.
+    ++ lib.optionals stdenv.isDarwin [ "-config" "qt_framework" ];
+
+  dontWrapQtApps = true;
+
   preConfigure = ''
     sed -i -e 's|/bin/pwd|pwd|g' configure
   '';
 
-  doCheck = true;
+  # The tests fail on darwin because of install_name if they run
+  # before the frameworks are installed.
+  doCheck = false;
+  doInstallCheck = true;
+  installCheckTarget = "check";
 
-  meta = with stdenv.lib; {
+  # Hack to avoid TMPDIR in RPATHs.
+  preFixup = "rm -rf lib";
+
+  meta = with lib; {
     description = "A cross-platform IRC framework written with Qt";
-    homepage = https://communi.github.io;
+    homepage = "https://communi.github.io";
     license = licenses.bsd3;
     platforms = platforms.all;
     maintainers = with maintainers; [ hrdinka ];

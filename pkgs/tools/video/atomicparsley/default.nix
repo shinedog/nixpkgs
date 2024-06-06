@@ -1,38 +1,50 @@
-{ stdenv, pkgs, fetchurl }:
+{ lib, stdenv, fetchFromGitHub, cmake, zlib, Cocoa }:
 
 stdenv.mkDerivation rec {
-  name = "atomicparsley-${version}";
-  product = "AtomicParsley";
-  version = "0.9.0";
+  pname = "atomicparsley";
+  version = "20221229.172126.d813aa6";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/atomicparsley/${product}-source-${version}.zip";
-    sha256 = "de83f219f95e6fe59099b277e3ced86f0430ad9468e845783092821dff15a72e";
+  src = fetchFromGitHub {
+    owner = "wez";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-3otyOpDdiltZ0SR1hImfIDBi53PKuAvh93yq1X3Xkmo=";
   };
 
-  buildInputs = with pkgs; [ unzip ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ darwin.apple_sdk.frameworks.Cocoa ];
-  patches = [ ./casts.patch ];
-  setSourceRoot = "sourceRoot=${product}-source-${version}";
-  buildPhase = "bash build";
-  installPhase = "install -D AtomicParsley $out/bin/AtomicParsley";
+  nativeBuildInputs = [ cmake ];
 
-  postPatch = ''
-    substituteInPlace build \
-      --replace 'g++' 'c++'
-    substituteInPlace AP_NSImage.mm \
-      --replace '_NSBitmapImageFileType' 'NSBitmapImageFileType'
+  buildInputs = [ zlib ]
+                ++ lib.optionals stdenv.isDarwin [ Cocoa ];
+
+  installPhase = ''
+    runHook preInstall
+    install -D AtomicParsley $out/bin/AtomicParsley
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    description = ''
-      A lightweight command line program for reading, parsing and
-      setting metadata into MPEG-4 files
-    '';
+  doCheck = true;
 
-    homepage = http://atomicparsley.sourceforge.net/;
-    license = licenses.gpl2;
+  postPatch = ''
+    patchShebangs tests/test.sh
+  '';
+
+  # copying files so that we dont need to patch the test.sh
+  checkPhase = ''
+    (
+    cp AtomicParsley ../tests
+    cd ../tests
+    mkdir tests
+    mv *.mp4 tests
+    ./test.sh
+    )
+  '';
+
+  meta = with lib; {
+    description = "A CLI program for reading, parsing and setting metadata into MPEG-4 files";
+    homepage = "https://github.com/wez/atomicparsley";
+    license = licenses.gpl2Plus;
     platforms = platforms.unix;
     maintainers = with maintainers; [ pjones ];
+    mainProgram = "AtomicParsley";
   };
 }

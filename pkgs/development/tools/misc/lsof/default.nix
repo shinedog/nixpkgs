@@ -1,58 +1,69 @@
-{ stdenv, fetchurl, ncurses }:
+{ lib, stdenv, fetchFromGitHub, buildPackages, perl, which, ncurses, nukeReferences }:
+
+let
+  dialect = with lib; last (splitString "-" stdenv.hostPlatform.system);
+in
 
 stdenv.mkDerivation rec {
-  name = "lsof-${version}";
-  version = "4.89";
+  pname = "lsof";
+  version = "4.99.3";
 
-  buildInputs = [ ncurses ];
-
-  src = fetchurl {
-    urls =
-      ["ftp://lsof.itap.purdue.edu/pub/tools/unix/lsof/lsof_${version}.tar.bz2"]
-      ++ map (
-        # the tarball is moved after new version is released
-        isOld: "ftp://sunsite.ualberta.ca/pub/Mirror/lsof/"
-        + "${stdenv.lib.optionalString isOld "OLD/"}lsof_${version}.tar.bz2"
-      ) [ false true ]
-      ++ map (
-        # the tarball is moved after new version is released
-        isOld: "http://www.mirrorservice.org/sites/lsof.itap.purdue.edu/pub/tools/unix/lsof/"
-        + "${stdenv.lib.optionalString isOld "OLD/"}lsof_${version}.tar.bz2"
-      ) [ false true ]
-      ;
-    sha256 = "061p18v0mhzq517791xkjs8a5dfynq1418a1mwxpji69zp2jzb41";
+  src = fetchFromGitHub {
+    owner = "lsof-org";
+    repo = "lsof";
+    rev = version;
+    hash = "sha256-XW3l+E9D8hgI9jGJGKkIAKa8O9m0JHgZhEASqg4gYuw=";
   };
 
-  unpackPhase = "tar xvjf $src; cd lsof_*; tar xvf lsof_*.tar; sourceRoot=$( echo lsof_*/); ";
- 
-  patches = [ ./dfile.patch ];
-
-  configurePhase = ''
-    # Stop build scripts from searching global include paths
-    export LSOF_INCLUDE=${stdenv.cc.libc}/include
-    ./Configure -n ${if stdenv.isDarwin then "darwin" else "linux"}
+  postPatch = ''
+    patchShebangs --build lib/dialects/*/Mksrc
+    # Do not re-build version.h in every 'make' to allow nuke-refs below.
+    # We remove phony 'FRC' target that forces rebuilds:
+    #   'version.h: FRC ...' is translated to 'version.h: ...'.
+    sed -i lib/dialects/*/Makefile -e 's/version.h:\s*FRC/version.h:/'
+  '' + lib.optionalString stdenv.isDarwin ''
+    sed -i 's|lcurses|lncurses|g' Configure
   '';
-  
+
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ nukeReferences perl which ];
+  buildInputs = [ ncurses ];
+
+  # Stop build scripts from searching global include paths
+  LSOF_INCLUDE = "${lib.getDev stdenv.cc.libc}/include";
+  configurePhase = "LINUX_CONF_CC=$CC_FOR_BUILD LSOF_CC=$CC LSOF_AR=\"$AR cr\" LSOF_RANLIB=$RANLIB ./Configure -n ${dialect}";
+
   preBuild = ''
-    sed -i Makefile -e 's/^CFGF=/&	-DHASIPv6=1/;' -e 's/-lcurses/-lncurses/'
-  '';
+    for filepath in $(find dialects/${dialect} -type f); do
+      sed -i "s,/usr/include,$LSOF_INCLUDE,g" $filepath
+    done
 
+    # Wipe out development-only flags from CFLAGS embedding
+    make version.h
+    nuke-refs version.h
+  '';
 
   installPhase = ''
+    # Fix references from man page https://github.com/lsof-org/lsof/issues/66
+    substituteInPlace Lsof.8 \
+      --replace ".so ./00DIALECTS" "" \
+      --replace ".so ./version" ".ds VN ${version}"
     mkdir -p $out/bin $out/man/man8
-    cp lsof.8 $out/man/man8/
+    cp Lsof.8 $out/man/man8/lsof.8
     cp lsof $out/bin
   '';
 
-  meta = {
-    homepage = ftp://lsof.itap.purdue.edu/pub/tools/unix/lsof/;
+  meta = with lib; {
+    homepage = "https://github.com/lsof-org/lsof";
     description = "A tool to list open files";
+    mainProgram = "lsof";
     longDescription = ''
       List open files. Can show what process has opened some file,
       socket (IPv6/IPv4/UNIX local), or partition (by opening a file
       from it).
     '';
-    maintainers = [ stdenv.lib.maintainers.mornfall ];
-    platforms = stdenv.lib.platforms.linux;
+    license = licenses.purdueBsd;
+    maintainers = with maintainers; [ dezgeg ];
+    platforms = platforms.unix;
   };
 }

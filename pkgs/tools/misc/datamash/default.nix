@@ -1,17 +1,17 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "datamash-${version}";
-  version = "1.1.0";
+  pname = "datamash";
+  version = "1.8";
 
   src = fetchurl {
-    url = "mirror://gnu/datamash/${name}.tar.gz";
-    sha256 = "1c2bj0jrm4fxkf0ykxkzgyk1l9s0idqm8rbzmk3n9pgldb4arrd9";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-etl+jH72Ft0DqlvWeuJMSIJy2z59H1d0FhwYt18p9v0=";
   };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A command-line program which performs basic numeric,textual and statistical operations on input textual data files";
-    homepage = http://www.gnu.org/software/datamash/;
+    homepage = "https://www.gnu.org/software/datamash/";
     license = licenses.gpl3Plus;
     platforms = platforms.all;
     maintainers = with maintainers; [ pSub vrthra ];

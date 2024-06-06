@@ -1,27 +1,28 @@
-{ stdenv, fetchFromGitHub, pkgconfig, glib, fuse, autoreconfHook }:
+{ lib, stdenv, callPackage, fetchpatch }:
 
-stdenv.mkDerivation rec {
-  version = "2.7";
-  name = "sshfs-fuse-${version}";
-  
-  src = fetchFromGitHub {
-    repo = "sshfs";
-    owner = "libfuse";
-    rev = "sshfs-${version}";
-    sha256 = "17l9b89zy5qzfcknw3krk74rfrqaa8q1r8jwdsahaqajsy09h4x4";
-  };
-  
-  buildInputs = [ pkgconfig glib fuse autoreconfHook ];
+let mkSSHFS = args: callPackage (import ./common.nix args) { };
+in if stdenv.isDarwin then
+  mkSSHFS {
+    version = "2.10"; # macFUSE isn't yet compatible with libfuse 3.x
+    sha256 = "1dmw4kx6vyawcywiv8drrajnam0m29mxfswcp4209qafzx3mjlp1";
+    patches = [
+      # remove reference to fuse_darwin.h which doens't exist on recent macFUSE
+      ./fix-fuse-darwin-h.patch
 
-  postInstall = ''
-    mkdir -p $out/sbin
-    ln -sf $out/bin/sshfs $out/sbin/mount.sshfs
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/libfuse/sshfs;
-    description = "FUSE-based filesystem that allows remote filesystems to be mounted over SSH";
-    platforms = platforms.linux;
-    maintainers = with maintainers; [ jgeerds ];
-  };
-}
+      # From https://github.com/libfuse/sshfs/pull/185:
+      # > With this patch, setting I/O size to a reasonable large value, will
+      # > result in much improved performance, e.g.: -o iosize=1048576
+      (fetchpatch {
+        name = "fix-configurable-blksize.patch";
+        url = "https://github.com/libfuse/sshfs/commit/667cf34622e2e873db776791df275c7a582d6295.patch";
+        sha256 = "0d65lawd2g2aisk1rw2vl65dgxywf4vqgv765n9zj9zysyya8a54";
+      })
+    ];
+    platforms = lib.platforms.darwin;
+  }
+else
+  mkSSHFS {
+    version = "3.7.3";
+    sha256 = "0s2hilqixjmv4y8n67zaq374sgnbscp95lgz5ignp69g3p1vmhwz";
+    platforms = lib.platforms.linux;
+  }

@@ -1,12 +1,11 @@
-{ kdeFramework, lib
-, ecm
+{ mkDerivation
+, extra-cmake-modules
 , kparts
 , kxmlgui
 }:
 
-kdeFramework {
-  name = "kmediaplayer";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ kparts kxmlgui ];
+mkDerivation {
+  pname = "kmediaplayer";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ kparts kxmlgui ];
 }

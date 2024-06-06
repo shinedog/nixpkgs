@@ -1,32 +1,68 @@
-{ stdenv, fetchFromGitHub, cmake, mesa, libXrandr, libXi, libXxf86vm, libXfixes, xlibsWrapper
-, libXinerama, libXcursor
+{ stdenv, lib, fetchFromGitHub, cmake
+, libGL, libXrandr, libXinerama, libXcursor, libX11, libXi, libXext
+, Carbon, Cocoa, Kernel, OpenGL, fixDarwinDylibNames
+, extra-cmake-modules, wayland
+, wayland-scanner, wayland-protocols, libxkbcommon
 }:
 
 stdenv.mkDerivation rec {
-  version = "3.2.1";
-  name = "glfw-${version}";
+  version = "3.4";
+  pname = "glfw";
 
   src = fetchFromGitHub {
     owner = "glfw";
     repo = "GLFW";
-    rev = "${version}";
-    sha256 = "0gq6ad38b3azk0w2yy298yz2vmg2jmf9g0ydidqbmiswpk25ills";
+    rev = version;
+    sha256 = "sha256-FcnQPDeNHgov1Z07gjFze0VMz2diOrpbKZCsI96ngz0=";
   };
 
-  enableParallelBuilding = true;
+  # Fix linkage issues on X11 (https://github.com/NixOS/nixpkgs/issues/142583)
+  patches = ./x11.patch;
 
-  buildInputs = [
-    cmake mesa libXrandr libXi libXxf86vm libXfixes xlibsWrapper
-    libXinerama libXcursor
+  propagatedBuildInputs =
+    lib.optionals stdenv.isDarwin [ OpenGL ]
+    ++ lib.optionals stdenv.isLinux [ libGL ];
+
+  nativeBuildInputs = [ cmake extra-cmake-modules ]
+    ++ lib.optional stdenv.isDarwin fixDarwinDylibNames
+    ++ lib.optionals stdenv.isLinux [ wayland-scanner ];
+
+  buildInputs =
+    lib.optionals stdenv.isDarwin [ Carbon Cocoa Kernel ]
+    ++ lib.optionals stdenv.isLinux [
+      wayland
+      wayland-protocols
+      libxkbcommon
+      libX11
+      libXrandr
+      libXinerama
+      libXcursor
+      libXi
+      libXext
+    ];
+
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=ON"
+  ] ++ lib.optionals (!stdenv.isDarwin && !stdenv.hostPlatform.isWindows) [
+    "-DCMAKE_C_FLAGS=-D_GLFW_GLX_LIBRARY='\"${lib.getLib libGL}/lib/libGL.so.1\"'"
+    "-DCMAKE_C_FLAGS=-D_GLFW_EGL_LIBRARY='\"${lib.getLib libGL}/lib/libEGL.so.1\"'"
   ];
 
-  cmakeFlags = "-DBUILD_SHARED_LIBS=ON";
+  postPatch = lib.optionalString stdenv.isLinux ''
+    substituteInPlace src/wl_init.c \
+      --replace "libxkbcommon.so.0" "${lib.getLib libxkbcommon}/lib/libxkbcommon.so.0"
+  '';
 
-  meta = with stdenv.lib; { 
+  # glfw may dlopen libwayland-client.so:
+  postFixup = lib.optionalString stdenv.isLinux ''
+    patchelf ''${!outputLib}/lib/libglfw.so --add-rpath ${lib.getLib wayland}/lib
+  '';
+
+  meta = with lib; {
     description = "Multi-platform library for creating OpenGL contexts and managing input, including keyboard, mouse, joystick and time";
-    homepage = "http://www.glfw.org/";
+    homepage = "https://www.glfw.org/";
     license = licenses.zlib;
-    maintainers = with maintainers; [ marcweber ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ marcweber twey ];
+    platforms = platforms.unix ++ platforms.windows;
   };
 }

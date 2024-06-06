@@ -1,26 +1,48 @@
-{ fetchurl, stdenv, gettext, perl, pkgconfig, libxml2, pango, cairo, groff
-, tcl-8_5 }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, gettext
+, perl
+, pkg-config
+, libxml2
+, pango
+, cairo
+, groff
+, tcl
+, darwin
+}:
 
-stdenv.mkDerivation rec {
-  name = "rrdtool-1.5.5";
-  src = fetchurl {
-    url = "http://oss.oetiker.ch/rrdtool/pub/${name}.tar.gz";
-    sha256 = "1xm6ikzx8iaa6r7v292k8s7srkzhnifamp1szkimgmh5ki26sa1s";
+perl.pkgs.toPerlModule (stdenv.mkDerivation rec {
+  pname = "rrdtool";
+  version = "1.8.0";
+
+  src = fetchFromGitHub {
+    owner = "oetiker";
+    repo = "rrdtool-1.x";
+    rev = "v${version}";
+    hash = "sha256-a+AxU1+YpkGoFs1Iu/CHAEZ4XIkWs7Vsnr6RcfXzsBE=";
   };
-  buildInputs = [ gettext perl pkgconfig libxml2 pango cairo groff ]
-    ++ stdenv.lib.optional stdenv.isDarwin tcl-8_5;
-  
+
+  nativeBuildInputs = [
+    pkg-config
+    autoreconfHook
+  ];
+
+  buildInputs = [ gettext perl libxml2 pango cairo groff ]
+    ++ lib.optionals stdenv.isDarwin [ tcl darwin.apple_sdk.frameworks.ApplicationServices ];
+
   postInstall = ''
     # for munin and rrdtool support
-    mkdir -p $out/lib/perl5/site_perl/
-    mv $out/lib/perl/5* $out/lib/perl5/site_perl/
+    mkdir -p $out/${perl.libPrefix}
+    mv $out/lib/perl/5* $out/${perl.libPrefix}
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://oss.oetiker.ch/rrdtool/;
+  meta = with lib; {
+    homepage = "https://oss.oetiker.ch/rrdtool/";
     description = "High performance logging in Round Robin Databases";
-    license = licenses.gpl2;
+    license = licenses.gpl2Only;
     platforms = platforms.linux ++ platforms.darwin;
     maintainers = with maintainers; [ pSub ];
   };
-}
+})

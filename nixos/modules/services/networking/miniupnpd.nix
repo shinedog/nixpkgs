@@ -13,8 +13,17 @@ let
       listening_ip=${range}
     '') cfg.internalIPs}
 
+    ${lib.optionalString (firewall == "nftables") ''
+      upnp_table_name=miniupnpd
+      upnp_nat_table_name=miniupnpd
+    ''}
+
     ${cfg.appendConfig}
   '';
+  firewall = if config.networking.nftables.enable then "nftables" else "iptables";
+  miniupnpd = pkgs.miniupnpd.override { inherit firewall; };
+  firewallScripts = lib.optionals (firewall == "iptables")
+    ([ "iptables"] ++ lib.optional (config.networking.enableIPv6) "ip6tables");
 in
 {
   options = {
@@ -57,41 +66,51 @@ in
   };
 
   config = mkIf cfg.enable {
-    # from miniupnpd/netfilter/iptables_init.sh
-    networking.firewall.extraCommands = ''
-      iptables -t nat -N MINIUPNPD
-      iptables -t nat -A PREROUTING -i ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t mangle -N MINIUPNPD
-      iptables -t mangle -A PREROUTING -i ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t filter -N MINIUPNPD
-      iptables -t filter -A FORWARD -i ${cfg.externalInterface} ! -o ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t nat -N MINIUPNPD-PCP-PEER
-      iptables -t nat -A POSTROUTING -o ${cfg.externalInterface} -j MINIUPNPD-PCP-PEER
-    '';
+    networking.firewall.extraCommands = lib.mkIf (firewallScripts != []) (builtins.concatStringsSep "\n" (map (fw: ''
+      EXTIF=${cfg.externalInterface} ${pkgs.bash}/bin/bash -x ${miniupnpd}/etc/miniupnpd/${fw}_init.sh
+    '') firewallScripts));
 
-    # from miniupnpd/netfilter/iptables_removeall.sh
-    networking.firewall.extraStopCommands = ''
-      iptables -t nat -F MINIUPNPD
-      iptables -t nat -D PREROUTING -i ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t nat -X MINIUPNPD
-      iptables -t mangle -F MINIUPNPD
-      iptables -t mangle -D PREROUTING -i ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t mangle -X MINIUPNPD
-      iptables -t filter -F MINIUPNPD
-      iptables -t filter -D FORWARD -i ${cfg.externalInterface} ! -o ${cfg.externalInterface} -j MINIUPNPD
-      iptables -t filter -X MINIUPNPD
-      iptables -t nat -F MINIUPNPD-PCP-PEER
-      iptables -t nat -D POSTROUTING -o ${cfg.externalInterface} -j MINIUPNPD-PCP-PEER
-      iptables -t nat -X MINIUPNPD-PCP-PEER
-    '';
+    networking.firewall.extraStopCommands = lib.mkIf (firewallScripts != []) (builtins.concatStringsSep "\n" (map (fw: ''
+      EXTIF=${cfg.externalInterface} ${pkgs.bash}/bin/bash -x ${miniupnpd}/etc/miniupnpd/${fw}_removeall.sh
+    '') firewallScripts));
+
+    networking.nftables = lib.mkIf (firewall == "nftables") {
+      # see nft_init in ${miniupnpd-nftables}/etc/miniupnpd
+      tables.miniupnpd = {
+        family = "inet";
+        # The following is omitted because it's expected that the firewall is to be responsible for it.
+        #
+        # chain forward {
+        #   type filter hook forward priority filter; policy drop;
+        #   jump miniupnpd
+        # }
+        #
+        # Otherwise, it quickly gets ugly with (potentially) two forward chains with "policy drop".
+        # This means the chain "miniupnpd" never actually gets triggered and is simply there to satisfy
+        # miniupnpd. If you're doing it yourself (without networking.firewall), the easiest way to get
+        # it to work is adding a rule "ct status dnat accept" - this is what networking.firewall does.
+        # If you don't want to simply accept forwarding for all "ct status dnat" packets, override
+        # upnp_table_name with whatever your table is, create a chain "miniupnpd" in your table and
+        # jump into it from your forward chain.
+        content = ''
+          chain miniupnpd {}
+          chain prerouting_miniupnpd {
+            type nat hook prerouting priority dstnat; policy accept;
+          }
+          chain postrouting_miniupnpd {
+            type nat hook postrouting priority srcnat; policy accept;
+          }
+        '';
+      };
+    };
 
     systemd.services.miniupnpd = {
       description = "MiniUPnP daemon";
       after = [ "network.target" ];
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
-        ExecStart = "${pkgs.miniupnpd}/bin/miniupnpd -f ${configFile}";
-        PIDFile = "/var/run/miniupnpd.pid";
+        ExecStart = "${miniupnpd}/bin/miniupnpd -f ${configFile}";
+        PIDFile = "/run/miniupnpd.pid";
         Type = "forking";
       };
     };

@@ -1,32 +1,63 @@
-{ stdenv, fetchurl, ncurses }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, autoreconfHook
+, makeWrapper
+, pkg-config
+, lrzsz
+, ncurses
+, libiconv
+, IOKit
+}:
 
 stdenv.mkDerivation rec {
-  name = "minicom-2.7";
+  pname = "minicom";
+  version = "2.9";
 
-  src = fetchurl {
-    url = "http://alioth.debian.org/frs/download.php/file/3977/${name}.tar.gz";
-    sha256 = "1x04m4k7c71j5cnhzpjrbz43dd96k4mpkd0l87v5skrgp1isdhws";
+  src = fetchFromGitLab {
+    domain = "salsa.debian.org";
+    owner = "minicom-team";
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-+fKvHrApDXm94LItXv+xSDIE5zD7rTY5IeNSuzQglpg=";
   };
 
-  buildInputs = [ncurses];
+  buildInputs = [ ncurses ] ++ lib.optionals stdenv.isDarwin [ libiconv IOKit ];
 
-  configureFlags = [ "--sysconfdir=/etc" "--enable-lock-dir=/var/lock" ];
+  nativeBuildInputs = [ autoreconfHook makeWrapper pkg-config ];
 
-  preConfigure =
+  enableParallelBuilding = true;
+
+  configureFlags = [
+    "--sysconfdir=/etc"
+    "--enable-lock-dir=/var/lock"
+  ];
+
+  patches = [ ./xminicom_terminal_paths.patch ];
+
+  preConfigure = ''
     # Have `configure' assume that the lock directory exists.
-    '' sed -i "configure" -e's/test -d \$UUCPLOCK/true/g'
-    '';
+    substituteInPlace configure \
+      --replace 'test -d $UUCPLOCK' true
+  '';
 
-  meta = {
+  postInstall = ''
+    for f in $out/bin/*minicom ; do
+      wrapProgram $f \
+        --prefix PATH : ${lib.makeBinPath [ lrzsz ]}:$out/bin
+    done
+  '';
+
+  meta = with lib; {
     description = "Modem control and terminal emulation program";
-    homepage = http://alioth.debian.org/projects/minicom/;
-
-    longDescription =
-      '' Minicom is a menu driven communications program.  It emulates ANSI
-         and VT102 terminals.  It has a dialing directory and auto zmodem
-         download.
-      '';
-
-    platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
+    homepage = "https://salsa.debian.org/minicom-team/minicom";
+    license = licenses.gpl2Plus;
+    longDescription = ''
+      Minicom is a menu driven communications program. It emulates ANSI
+      and VT102 terminals. It has a dialing directory and auto zmodem
+      download.
+    '';
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = platforms.unix;
   };
 }

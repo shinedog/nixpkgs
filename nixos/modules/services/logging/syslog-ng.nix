@@ -25,6 +25,10 @@ let
   ];
 
 in {
+  imports = [
+    (mkRemovedOptionModule [ "services" "syslog-ng" "serviceName" ] "")
+    (mkRemovedOptionModule [ "services" "syslog-ng" "listenToJournal" ] "")
+  ];
 
   options = {
 
@@ -36,37 +40,27 @@ in {
           Whether to enable the syslog-ng daemon.
         '';
       };
-      package = mkOption {
-        type = types.package;
-        default = pkgs.syslogng;
-        defaultText = "pkgs.syslogng";
-        description = ''
-          The package providing syslog-ng binaries.
-        '';
-      };
+      package = mkPackageOption pkgs "syslogng" { };
       extraModulePaths = mkOption {
         type = types.listOf types.str;
         default = [];
-        example = literalExample ''
-          [ "''${pkgs.syslogng_incubator}/lib/syslog-ng" ]
-        '';
         description = ''
           A list of paths that should be included in syslog-ng's
-          <literal>--module-path</literal> option. They should usually
-          end in <literal>/lib/syslog-ng</literal>
+          `--module-path` option. They should usually
+          end in `/lib/syslog-ng`
         '';
       };
       extraConfig = mkOption {
         type = types.lines;
         default = "";
         description = ''
-          Configuration added to the end of <literal>syslog-ng.conf</literal>.
+          Configuration added to the end of `syslog-ng.conf`.
         '';
       };
       configHeader = mkOption {
         type = types.lines;
         default = ''
-          @version: 3.6
+          @version: 4.4
           @include "scl.conf"
         '';
         description = ''
@@ -85,9 +79,11 @@ in {
       after = [ "multi-user.target" ]; # makes sure hostname etc is set
       serviceConfig = {
         Type = "notify";
+        PIDFile = pidFile;
         StandardOutput = "null";
         Restart = "on-failure";
         ExecStart = "${cfg.package}/sbin/syslog-ng ${concatStringsSep " " syslogngOptions}";
+        ExecReload = "${pkgs.coreutils}/bin/kill -HUP $MAINPID";
       };
     };
   };

@@ -1,41 +1,87 @@
-{ stdenv, fetchurl, substituteAll, libpcap }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, libpcap
+, libxcrypt
+, pkg-config
+, autoreconfHook
+, openssl
+, bash
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  version = "2.4.7";
-  name = "ppp-${version}";
+  version = "2.5.0";
+  pname = "ppp";
 
-  src = fetchurl {
-    url = "mirror://samba/ppp/${name}.tar.gz";
-    sha256 = "0c7vrjxl52pdwi4ckrvfjr08b31lfpgwf3pp0cqy76a77vfs7q02";
+  src = fetchFromGitHub {
+    owner = "ppp-project";
+    repo = pname;
+    rev = "ppp-${version}";
+    sha256 = "sha256-J7udiLiJiJ1PzNxD+XYAUPXZ+ABGXt2U3hSFUWJXe94=";
   };
 
-  patches =
-    [ ( substituteAll {
-        src = ./nix-purity.patch;
-        inherit libpcap;
-        glibc = stdenv.cc.libc.dev or stdenv.cc.libc;
-      })
-      # Without nonpriv.patch, pppd --version doesn't work when not run as
-      # root.
-      ./nonpriv.patch
-    ];
+  configureFlags = [
+    "--localstatedir=/var"
+    "--sysconfdir=/etc"
+    "--with-openssl=${openssl.dev}"
+  ];
 
-  buildInputs = [ libpcap ];
+  nativeBuildInputs = [
+    pkg-config
+    autoreconfHook
+  ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    make install
-    install -D -m 755 scripts/{pon,poff,plog} $out/bin
+  buildInputs = [
+    libpcap
+    libxcrypt
+    openssl
+    bash
+  ];
+
+  postPatch = ''
+    for file in $(find -name Makefile.linux); do
+      substituteInPlace "$file" --replace '-m 4550' '-m 550'
+    done
+
+    patchShebangs --host \
+      scripts/{pon,poff,plog}
+  '';
+
+  enableParallelBuilding = true;
+
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+  ];
+
+  NIX_LDFLAGS = "-lcrypt";
+
+  installFlags = [
+    "sysconfdir=$(out)/etc"
+  ];
+
+  postInstall = ''
+    install -Dm755 -t $out/bin scripts/{pon,poff,plog}
   '';
 
   postFixup = ''
-    substituteInPlace $out/bin/{pon,poff,plog} --replace "/usr/sbin" "$out/bin"
+    substituteInPlace "$out/bin/pon" --replace "/usr/sbin" "$out/bin"
   '';
 
-  meta = {
-    homepage = https://ppp.samba.org/;
-    description = "Point-to-point implementation for Linux and Solaris";
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.falsifian ];
+  passthru.tests = {
+    inherit (nixosTests) pppd;
+  };
+
+  meta = with lib; {
+    homepage = "https://ppp.samba.org";
+    description = "Point-to-point implementation to provide Internet connections over serial lines";
+    license = with licenses; [
+      bsdOriginal
+      publicDomain
+      gpl2Only
+      lgpl2
+    ];
+    platforms = platforms.linux;
+    maintainers = [ ];
   };
 }

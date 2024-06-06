@@ -1,37 +1,54 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl, zlib }:
 
+let
+  ARCH = {
+    x86_64-linux = "linux64";
+    aarch64-linux = "linux64";
+    x86_64-cygwin = "cygwin64";
+    x86_64-darwin = "mac64";
+    aarch64-darwin = "mac64";
+  }."${stdenv.hostPlatform.system}" or (throw "Unsupported system: ${stdenv.hostPlatform.system}");
+in
 stdenv.mkDerivation {
-  name = "picat-1.9-4";
+  pname = "picat";
+  version = "3.6";
 
   src = fetchurl {
-    url = http://picat-lang.org/download/picat19_src.tar.gz;
-    sha256 = "0wvl95gf4pjs93632g4wi0mw1glzzhjp9g4xg93ll2zxggbxibli";
+    url = "http://picat-lang.org/download/picat36_src.tar.gz";
+    hash = "sha256-DjP1cjKxRLxMjiHmYX42+kaG5//09IrPIc1O75gLA6k=";
   };
 
-  ARCH = if stdenv.system == "i686-linux" then "linux32"
-         else if stdenv.system == "x86_64-linux" then "linux64"
-         else throw "Unsupported system";
+  buildInputs = [ zlib ];
+
+  inherit ARCH;
 
   hardeningDisable = [ "format" ];
+  enableParallelBuilding = true;
 
   buildPhase = ''
     cd emu
-    make -f Makefile.picat.$ARCH
+    make -j $NIX_BUILD_CORES -f Makefile.$ARCH
   '';
-
   installPhase = ''
-    mkdir -p $out/bin
-    cp picat_$ARCH $out/bin/picat
+    mkdir -p $out/bin $out/share
+    cp picat $out/bin/
+    cp -r ../doc $out/share/doc
+    cp -r ../exs $out/share/examples
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Logic-based programming langage";
-    longDescription = ''
-      Picat is a simple, and yet powerful, logic-based multi-paradigm
-      programming language aimed for general-purpose applications.
-    '';
-    homepage = http://picat-lang.org/;
-    license = stdenv.lib.licenses.mpl20;
-    platforms = stdenv.lib.platforms.linux;
+    mainProgram = "picat";
+    homepage    = "http://picat-lang.org/";
+    license     = licenses.mpl20;
+    platforms   = [
+      "x86_64-linux"
+      "aarch64-linux"
+      "x86_64-cygwin"
+      "x86_64-darwin"
+      "aarch64-darwin"
+    ];
+    maintainers = with maintainers; [ earldouglas thoughtpolice ];
   };
 }
+

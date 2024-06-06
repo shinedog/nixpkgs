@@ -1,28 +1,78 @@
-{ stdenv, fetchFromGitHub, cmake, pkgconfig, openssl, libxml2, boost }:
+{ lib
+, stdenv
+, fetchurl
+, cmake
+, pkg-config
+, openssl
+, libxml2
+, boost
+, python3
+, libuuid
+, curl
+, gsoap
+, Security
+, enableTools ? true
+  # Use libcurl instead of libneon
+  # Note that the libneon used is bundled in the project
+  # See https://github.com/cern-fts/davix/issues/23
+, defaultToLibcurl ? false
+, enableIpv6 ? true
+, enableTcpNodelay ? true
+  # Build davix_copy.so
+, enableThirdPartyCopy ? false
+}:
 
+let
+  boolToUpper = b: lib.toUpper (lib.boolToString b);
+in
 stdenv.mkDerivation rec {
-  name = "davix-0.6.4";
-  buildInputs = [ stdenv pkgconfig cmake openssl libxml2 boost ];
+  version = "0.8.6";
+  pname = "davix" + lib.optionalString enableThirdPartyCopy "-copy";
+  nativeBuildInputs = [ cmake pkg-config python3 ];
+  buildInputs = [
+    openssl
+    libxml2
+    boost
+    curl
+  ]
+  ++ lib.optional stdenv.isDarwin Security
+  ++ lib.optional (!stdenv.isDarwin) libuuid
+  ++ lib.optional (enableThirdPartyCopy) gsoap;
 
-  src = fetchFromGitHub {
-    owner = "cern-it-sdc-id";
-    repo = "davix";
-    rev = "R_0_6_4";
-    sha256 = "10hg7rs6aams96d4ghldgkrrnikskdpmn8vy6hj5j0s17a2yms6q";
+  # using the url below since the github release page states
+  # "please ignore the GitHub-generated tarballs, as they are incomplete"
+  # https://github.com/cern-fts/davix/releases/tag/R_0_8_0
+  src = fetchurl {
+    url = "https://github.com/cern-fts/davix/releases/download/R_${lib.replaceStrings ["."] ["_"] version}/davix-${version}.tar.gz";
+    sha256 = "sha256-c4O29llcd6ncjAPFSDxn3DK9bSN1HpVs+cF0do5+61s=";
   };
 
+  preConfigure = ''
+    find . -mindepth 1 -maxdepth 1 -type f -name "patch*.sh" -print0 | while IFS= read -r -d ''' file; do
+      patchShebangs "$file"
+    done
+  '';
 
-  meta = with stdenv.lib; {
+  cmakeFlags = [
+    "-DENABLE_TOOLS=${boolToUpper enableTools}"
+    "-DEMBEDDED_LIBCURL=OFF"
+    "-DLIBCURL_BACKEND_BY_DEFAULT=${boolToUpper defaultToLibcurl}"
+    "-DENABLE_IPV6=${boolToUpper enableIpv6}"
+    "-DENABLE_TCP_NODELAY=${boolToUpper enableTcpNodelay}"
+    "-DENABLE_THIRD_PARTY_COPY=${boolToUpper enableThirdPartyCopy}"
+  ];
+
+  meta = with lib; {
     description = "Toolkit for Http-based file management";
 
-    longDescription = "Davix is a toolkit designed for file 
+    longDescription = "Davix is a toolkit designed for file
     operations with Http based protocols (WebDav, Amazon S3, ...).
     Davix provides an API and a set of command line tools";
 
-    license     = licenses.lgpl2Plus;
-    homepage    = http://dmc.web.cern.ch/projects/davix/home;
-    maintainers = [ maintainers.adev ];
-    platforms   = platforms.all;
-  };  
+    license = licenses.lgpl2Plus;
+    homepage = "https://github.com/cern-fts/davix";
+    changelog = "https://github.com/cern-fts/davix/blob/R_${lib.replaceStrings ["."] ["_"] version}/RELEASE-NOTES.md";
+    maintainers = with maintainers; [ adev ];
+    platforms = platforms.all;
+  };
 }
-

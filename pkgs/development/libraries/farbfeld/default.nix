@@ -1,23 +1,29 @@
-{ stdenv, fetchgit, libpng, libjpeg }:
+{ lib, stdenv, fetchurl, makeWrapper, file, libpng, libjpeg }:
 
 stdenv.mkDerivation rec {
-  name = "farbfeld-${version}";
-  version = "2";
+  pname = "farbfeld";
+  version = "4";
 
-  src = fetchgit {
-    url = "http://git.suckless.org/farbfeld";
-    rev = "refs/tags/${version}";
-    sha256 = "1rj6pqn50v6r7l3j7m872fgynxsh22zx863jg0jzmb4x6wx2m2qv";
+  src = fetchurl {
+    url = "https://dl.suckless.org/farbfeld/farbfeld-${version}.tar.gz";
+    sha256 = "0ap7rcngffhdd57jw9j22arzkbrhwh0zpxhwbdfwl8fixlhmkpy7";
   };
 
   buildInputs = [ libpng libjpeg ];
+  nativeBuildInputs = [ makeWrapper ];
 
-  installFlags = "PREFIX=/ DESTDIR=$(out)";
+  makeFlags = [ "CC:=$(CC)" ];
 
-  meta = with stdenv.lib; {
+  installFlags = [ "PREFIX=$(out)" ];
+  postInstall = ''
+    wrapProgram "$out/bin/2ff" --prefix PATH : "${file}/bin"
+  '';
+
+  meta = with lib; {
     description = "Suckless image format with conversion tools";
-    license = licenses.mit;
-    platforms = platforms.linux;
+    homepage = "https://tools.suckless.org/farbfeld/";
+    license = licenses.isc;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ pSub ];
   };
 }

@@ -1,23 +1,33 @@
-{ stdenv, fetchurl, libev, ocaml, findlib, ocamlbuild, ocaml_lwt, ocaml_react, zed }:
+{ lib, fetchFromGitHub, buildDunePackage, ocaml, zed, lwt_log, lwt_react, mew_vi, uucp, logs }:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4.01";
+let params =
+  if lib.versionAtLeast ocaml.version "4.08" then {
+    version = "3.3.2";
+    sha256 = "sha256-T2DDpHqLar1sgmju0PLvhAZef5VzOpPWcFVhuZlPQmM=";
+  } else {
+    version = "3.1.0";
+    sha256 = "1k0ykiz0vhpyyj9fkss29ajas4fh1xh449j702xkvayqipzj1mkg";
+  }
+; in
 
-stdenv.mkDerivation rec {
-  version = "1.10";
-  name = "lambda-term-${version}";
+buildDunePackage rec {
+  pname = "lambda-term";
+  inherit (params) version;
 
-  src = fetchurl {
-    url = "https://github.com/diml/lambda-term/archive/${version}.tar.gz";
-    sha256 = "1kwpsqds51xmy3z3ddkam92hkl7arlzy9awhzsq62ysxcl91fb8m";
+  duneVersion = if lib.versionAtLeast ocaml.version "4.08" then "3" else "2";
+
+  src = fetchFromGitHub {
+    owner = "ocaml-community";
+    repo = pname;
+    rev = version;
+    inherit (params) sha256;
   };
 
-  buildInputs = [ libev ocaml findlib ocamlbuild ocaml_react ];
+  propagatedBuildInputs = [ zed lwt_log lwt_react mew_vi ]
+    ++ lib.optionals (lib.versionAtLeast version "3.3.1") [ uucp logs ] ;
 
-  propagatedBuildInputs = [ zed ocaml_lwt ];
-
-  createFindlibDestdir = true;
-
-  meta = { description = "Terminal manipulation library for OCaml";
+  meta = {
+    description = "Terminal manipulation library for OCaml";
     longDescription = ''
     Lambda-term is a cross-platform library for
     manipulating the terminal. It provides an abstraction for keys,
@@ -33,11 +43,9 @@ stdenv.mkDerivation rec {
     console applications.
     '';
 
-    homepage = https://github.com/diml/lambda-term;
-    license = stdenv.lib.licenses.bsd3;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = [
-      stdenv.lib.maintainers.gal_bolle
-    ];
+    inherit (src.meta) homepage;
+    license = lib.licenses.bsd3;
+    maintainers = [ lib.maintainers.gal_bolle ];
+    mainProgram = "lambda-term-actions";
   };
 }

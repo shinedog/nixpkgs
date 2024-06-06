@@ -1,24 +1,46 @@
-{ stdenv, fetchurl, libelf }:
+{ stdenv
+, lib
+, fetchgit
+, autoreconfHook
+, libelf
+, libiberty
+}:
 
-let
-  version = "20130503";
-in
 stdenv.mkDerivation rec {
-  name = "prelink-${version}";
+  pname = "prelink";
+  version = "unstable-2019-06-24";
 
-  buildInputs = [
-    libelf stdenv.cc.libc (stdenv.lib.getOutput "static" stdenv.cc.libc)
-  ];
-
-  src = fetchurl {
-    url = "http://people.redhat.com/jakub/prelink/prelink-${version}.tar.bz2";
-    sha256 = "1w20f6ilqrz8ca51qhrn1n13h7q1r34k09g33d6l2vwvbrhcffb3";
+  src = fetchgit {
+    url = "https://git.yoctoproject.org/git/prelink-cross";
+    branchName = "cross_prelink";
+    rev = "f9975537dbfd9ade0fc813bd5cf5fcbe41753a37";
+    sha256 = "sha256-O9/oZooLRyUBBZX3SFcB6LFMmi2vQqkUlqtZnrq5oZc=";
   };
 
-  meta = {
-    homepage = http://people.redhat.com/jakub/prelink/;
-    license = "GPL";
+  strictDeps = true;
+
+  configurePlatforms = [ "build" "host" ];
+
+  nativeBuildInputs = [
+    autoreconfHook
+  ];
+
+  buildInputs = [
+    stdenv.cc.libc
+    libelf
+    libiberty
+  ];
+
+  # most tests fail
+  doCheck = false;
+
+  enableParallelBuilding = true;
+
+  meta = with lib;{
     description = "ELF prelinking utility to speed up dynamic linking";
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://wiki.yoctoproject.org/wiki/Cross-Prelink";
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ artturin ];
   };
 }

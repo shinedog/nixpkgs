@@ -1,28 +1,34 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "hanazono-${version}";
-  version = "20141012";
+stdenvNoCC.mkDerivation rec {
+  pname = "hanazono";
+  version = "20170904";
 
-  src = fetchurl {
-    url = "mirror://sourceforgejp/hanazono-font/62072/hanazono-20141012.zip";
-    sha256 = "020jhqnzm9jvkmfvvyk1my26ncwxbnb9yc8v7am252jwrifji9q6";
+  src = fetchzip {
+    url = "mirror://osdn/hanazono-font/68253/hanazono-${version}.zip";
+    stripRoot = false;
+    hash = "sha256-qd0q4wQnHBGLT7C+UQIiOHnxCnRCscMZcj3P5RRxD1U=";
   };
 
-  buildInputs = [ unzip ];
-
-  sourceRoot = ".";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/hanazono
-    cp *.ttf $out/share/fonts/hanazono
-    mkdir -p $out/share/doc/hanazono
-    cp *.txt $out/share/doc/hanazono
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/truetype
+    install -Dm644 *.txt -t $out/share/doc/hanazono
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    description = "Free kanji font containing 96,327 characters";
-    homepage = http://fonts.jp/hanazono/;
+  meta = with lib; {
+    description = "Japanese Mincho-typeface TrueType font";
+    homepage = "https://fonts.jp/hanazono/";
+    longDescription = ''
+      Hanazono Mincho typeface is a Japanese TrueType font that developed with a
+      support of Grant-in-Aid for Publication of Scientific Research Results
+      from Japan Society for the Promotion of Science and the International
+      Research Institute for Zen Buddhism (IRIZ), Hanazono University. also with
+      volunteers who work together on glyphwiki.org.
+    '';
 
     # Dual-licensed under OFL and the following:
     # This font is a free software.

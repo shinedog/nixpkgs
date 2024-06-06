@@ -1,41 +1,44 @@
-{ stdenv, fetchurl, pkgconfig, intltool, perl, perlXMLParser
-, goffice, gnome3, makeWrapper, gtk3, bison, pythonPackages
+{ lib, stdenv, fetchurl, pkg-config, intltool, perlPackages
+, goffice, gnome, wrapGAppsHook3, gtk3, bison, python3Packages
+, itstool
 }:
 
 let
-  inherit (pythonPackages) python pygobject3;
+  inherit (python3Packages) python pygobject3;
 in stdenv.mkDerivation rec {
-  name = "gnumeric-1.12.32";
+  pname = "gnumeric";
+  version = "1.12.57";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/gnumeric/1.12/${name}.tar.xz";
-    sha256 = "a07bc83e2adaeb94bfa2c737c9a19d90381a19cb203dd7c4d5f7d6cfdbee6de8";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "r/ULG2I0DCT8z0U9X60+f7c/S8SzT340tsPS2a9qHk8=";
   };
 
-  configureFlags = "--disable-component";
+  configureFlags = [ "--disable-component" ];
+
+  nativeBuildInputs = [ pkg-config intltool bison itstool wrapGAppsHook3 ];
 
   # ToDo: optional libgda, introspection?
   buildInputs = [
-    pkgconfig intltool perl perlXMLParser bison
-    goffice gtk3 makeWrapper gnome3.defaultIconTheme
+    goffice gtk3 gnome.adwaita-icon-theme
     python pygobject3
-  ];
+  ] ++ (with perlPackages; [ perl XMLParser ]);
 
   enableParallelBuilding = true;
 
-  preFixup = ''
-    for f in "$out"/bin/gnumeric-*; do
-      wrapProgram $f \
-        --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH" \
-        ${stdenv.lib.optionalString (!stdenv.isDarwin) "--prefix GIO_EXTRA_MODULES : '${gnome3.dconf}/lib/gio/modules'"}
-    done
-  '';
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "odd-unstable";
+    };
+  };
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The GNOME Office Spreadsheet";
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = http://projects.gnome.org/gnumeric/;
-    platforms = platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    homepage = "http://projects.gnome.org/gnumeric/";
+    platforms = platforms.unix;
+    broken = with stdenv; isDarwin && isAarch64;
     maintainers = [ maintainers.vcunat ];
   };
 }

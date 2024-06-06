@@ -1,38 +1,56 @@
-{ stdenv, fetchurl, ncurses, libiconv }:
+{ lib, stdenv, fetchurl, ncurses, libiconv }:
 
 stdenv.mkDerivation rec {
-  name = "stfl-0.22";
+  pname = "stfl";
+  version = "0.24";
 
   src = fetchurl {
-    url = "http://www.clifford.at/stfl/${name}.tar.gz";
-    sha256 = "062lqlf3qhp8bcapbpc0k3wym7x6ngncql8jmx5x06p6679szp9d";
+    url = "http://www.clifford.at/stfl/stfl-${version}.tar.gz";
+    sha256 = "1460d5lc780p3q38l3wc9jfr2a7zlyrcra0li65aynj738cam9yl";
   };
+
+  makeFlags = [ "CC=${stdenv.cc.targetPrefix}cc" ];
 
   buildInputs = [ ncurses libiconv ];
 
-  buildPhase = ''
+  # Silence warnings related to use of implicitly declared library functions and implicit ints.
+  # TODO: Remove and/or fix with patches the next time this package is updated.
+  env = lib.optionalAttrs stdenv.cc.isClang {
+    NIX_CFLAGS_COMPILE = toString [
+      "-Wno-error=implicit-function-declaration"
+      "-Wno-error=implicit-int"
+    ];
+  };
+
+  preBuild = ''
     sed -i s/gcc/cc/g Makefile
     sed -i s%ncursesw/ncurses.h%ncurses.h% stfl_internals.h
-  '' + ( stdenv.lib.optionalString stdenv.isDarwin ''
-    sed -i 's/LDLIBS += -lncursesw/LDLIBS += -lncursesw -liconv/' Makefile
+  '' + lib.optionalString stdenv.isDarwin ''
     sed -i s/-soname/-install_name/ Makefile
-  '' ) + ''
-    make
-  '';
+  ''
+  # upstream builds shared library unconditionally. Also, it has no
+  # support for cross-compilation.
+  + lib.optionalString stdenv.hostPlatform.isStatic ''
+    sed -i 's/all:.*/all: libstfl.a stfl.pc/' Makefile
+    sed -i 's/\tar /\t${stdenv.cc.targetPrefix}ar /' Makefile
+    sed -i 's/\tranlib /\t${stdenv.cc.targetPrefix}ranlib /' Makefile
+    sed -i '/install -m 644 libstfl.so./d' Makefile
+    sed -i '/ln -fs libstfl.so./d' Makefile
+  '' ;
 
   installPhase = ''
     DESTDIR=$out prefix=\"\" make install
-
-    # some programs rely on libstfl.so.0 to be present, so link it
-    ln -s $out/lib/libstfl.so.0.22 $out/lib/libstfl.so.0
+  ''
+  # some programs rely on libstfl.so.0 to be present, so link it
+  + lib.optionalString (!stdenv.hostPlatform.isStatic) ''
+    ln -s $out/lib/libstfl.so.0.24 $out/lib/libstfl.so.0
   '';
 
   meta = {
-    homepage    = http://www.clifford.at/stfl/;
+    homepage = "http://www.clifford.at/stfl/";
     description = "A library which implements a curses-based widget set for text terminals";
-    maintainers = with stdenv.lib.maintainers; [ lovek323 ];
-    license     = stdenv.lib.licenses.lgpl3;
-    platforms   = stdenv.lib.platforms.unix;
+    maintainers = with lib.maintainers; [ lovek323 ];
+    license = lib.licenses.lgpl3;
+    platforms = lib.platforms.unix;
   };
 }
-

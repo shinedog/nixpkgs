@@ -1,24 +1,48 @@
-{ stdenv, fetchurl, pkgconfig, libftdi, pciutils }:
+{ fetchurl
+, stdenv
+, installShellFiles
+, lib
+, libftdi1
+, libjaylink
+, libusb1
+, pciutils
+, pkg-config
+, jlinkSupport ? false
+}:
 
-let version = "0.9.9"; in
 stdenv.mkDerivation rec {
-  name = "flashrom-${version}";
+  pname = "flashrom";
+  version = "1.3.0";
 
   src = fetchurl {
-    url = "http://download.flashrom.org/releases/${name}.tar.bz2";
-    sha256 = "0i9wg1lyfg99bld7d00zqjm9f0lk6m0q3h3n9c195c9yysq5ccfb";
+    url = "https://download.flashrom.org/releases/flashrom-v${version}.tar.bz2";
+    hash = "sha256-oFMjRFPM0BLnnzRDvcxhYlz5e3/Xy0zdi/v/vosUliM=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libftdi pciutils ];
+  nativeBuildInputs = [ pkg-config installShellFiles ];
+  buildInputs = [ libftdi1 libusb1 ]
+    ++ lib.optionals (!stdenv.isDarwin) [ pciutils ]
+    ++ lib.optional jlinkSupport libjaylink;
 
-  preConfigure = "export PREFIX=$out";
+  postPatch = ''
+    substituteInPlace util/flashrom_udev.rules \
+      --replace 'GROUP="plugdev"' 'TAG+="uaccess", TAG+="udev-acl"'
+  '';
 
-  meta = {
-    homepage = "http://www.flashrom.org";
+  makeFlags = [ "PREFIX=$(out)" "libinstall" ]
+    ++ lib.optional jlinkSupport "CONFIG_JLINK_SPI=yes"
+    ++ lib.optionals (stdenv.isDarwin && stdenv.isx86_64) [ "CONFIG_INTERNAL_X86=no" "CONFIG_INTERNAL_DMI=no" "CONFIG_RAYER_SPI=no" ];
+
+  postInstall = ''
+    install -Dm644 util/flashrom_udev.rules $out/lib/udev/rules.d/flashrom.rules
+  '';
+
+  meta = with lib; {
+    homepage = "https://www.flashrom.org";
     description = "Utility for reading, writing, erasing and verifying flash ROM chips";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.funfunctor ];
-    platforms = with stdenv.lib.platforms; linux;
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ fpletz felixsinger ];
+    platforms = platforms.all;
+    mainProgram = "flashrom";
   };
 }

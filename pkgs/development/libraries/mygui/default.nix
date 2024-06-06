@@ -1,30 +1,70 @@
-{  stdenv, fetchFromGitHub, libX11, unzip, cmake, ois, freetype, libuuid,
-   boost, pkgconfig, withOgre ? false, ogre ? null, mesa ? null } :
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pkg-config
+, boost
+, freetype
+, libuuid
+, ois
+, withOgre ? false
+, ogre
+, libGL
+, libGLU
+, libX11
+, Cocoa
+}:
 
 let
   renderSystem = if withOgre then "3" else "4";
-in stdenv.mkDerivation rec {
-  name = "mygui-${version}";
-  version = "3.2.2";
+in
+stdenv.mkDerivation rec {
+  pname = "mygui";
+  version = "3.4.2";
 
   src = fetchFromGitHub {
     owner = "MyGUI";
     repo = "mygui";
     rev = "MyGUI${version}";
-    sha256 = "1wk7jmwm55rhlqqcyvqsxdmwvl70bysl9azh4kd9n57qlmgk3zmw";
+    hash = "sha256-yBV0ImOFJlqBPqqOjXYe4SFO2liSGZCEwvehED5Ubj4=";
   };
 
-  enableParallelBuilding = true;
+  patches = [
+    ./disable-framework.patch
+  ];
 
-  buildInputs = [ libX11 unzip cmake ois freetype libuuid boost pkgconfig (if withOgre then ogre else mesa) ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+  ];
+
+  buildInputs = [
+    boost
+    freetype
+    libuuid
+    ois
+  ] ++ lib.optionals withOgre [
+    ogre
+  ] ++ lib.optionals (!withOgre && stdenv.isLinux) [
+    libGL
+    libGLU
+  ] ++ lib.optionals stdenv.isLinux [
+    libX11
+  ] ++ lib.optionals stdenv.isDarwin [
+    Cocoa
+  ];
 
   # Tools are disabled due to compilation failures.
-  cmakeFlags = [ "-DMYGUI_BUILD_TOOLS=OFF" "-DMYGUI_BUILD_DEMOS=OFF" "-DMYGUI_RENDERSYSTEM=${renderSystem}" ];
+  cmakeFlags = [
+    "-DMYGUI_BUILD_TOOLS=OFF"
+    "-DMYGUI_BUILD_DEMOS=OFF"
+    "-DMYGUI_RENDERSYSTEM=${renderSystem}"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://mygui.info/;
+  meta = with lib; {
+    homepage = "http://mygui.info/";
     description = "Library for creating GUIs for games and 3D applications";
-    license = licenses.lgpl3Plus;
-    platforms = platforms.linux;
+    license = licenses.mit;
+    platforms = platforms.unix;
   };
 }

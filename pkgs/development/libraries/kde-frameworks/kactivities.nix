@@ -1,14 +1,14 @@
-{ kdeFramework, lib, ecm, boost, kcmutils, kconfig
-, kcoreaddons, kdbusaddons, kdeclarative, kglobalaccel, ki18n
-, kio, kservice, kwindowsystem, kxmlgui, qtdeclarative
+{
+  mkDerivation,
+  extra-cmake-modules,
+  boost, kconfig, kcoreaddons, kio, kwindowsystem, qtbase, qtdeclarative,
 }:
 
-kdeFramework {
-  name = "kactivities";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [
-    boost kcmutils kconfig kcoreaddons kdbusaddons kdeclarative kglobalaccel
-    ki18n kio kservice kwindowsystem kxmlgui qtdeclarative
+mkDerivation {
+  pname = "kactivities";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [
+    boost kconfig kcoreaddons kio kwindowsystem qtdeclarative
   ];
+  propagatedBuildInputs = [ qtbase ];
 }

@@ -1,66 +1,75 @@
-{ lib, buildGoPackage, fetchFromGitLab, fetchurl, go-bindata }:
+{ lib, buildGoModule, fetchFromGitLab, bash }:
 
 let
-  version = "1.8.0";
-  # Gitlab runner embeds some docker images these are prebuilt for arm and x86_64
-  docker_x86_64 = fetchurl {
-    url = "https://gitlab-ci-multi-runner-downloads.s3.amazonaws.com/v${version}/docker/prebuilt-x86_64.tar.xz";
-    sha256 = "0fa8hfdxg903n1dqrqbm4069sr8rq6zx7zzybfyj7qz4mmayp24m";
-  };
-
-  docker_arm = fetchurl {
-    url = "https://gitlab-ci-multi-runner-downloads.s3.amazonaws.com/v${version}/docker/prebuilt-arm.tar.xz";
-    sha256 = "1rvvz34rsjxrgg59rda6v4k8zw16slwprnh4h5b16yhyp7lcx93q";
-  };
+  version = "16.11.1";
 in
-buildGoPackage rec {
+buildGoModule rec {
   inherit version;
-  name = "gitlab-runner-${version}";
-  goPackagePath = "gitlab.com/gitlab-org/gitlab-ci-multi-runner";
-  commonPackagePath = "${goPackagePath}/common";
-  buildFlagsArray = ''
-    -ldflags=
-      -X ${commonPackagePath}.NAME=gitlab-runner
-      -X ${commonPackagePath}.VERSION=${version}
-      -X ${commonPackagePath}.REVISION=v${version}
-  '';
+  pname = "gitlab-runner";
+
+  commonPackagePath = "gitlab.com/gitlab-org/gitlab-runner/common";
+  ldflags = [
+    "-X ${commonPackagePath}.NAME=gitlab-runner"
+    "-X ${commonPackagePath}.VERSION=${version}"
+    "-X ${commonPackagePath}.REVISION=v${version}"
+  ];
+
+  # For patchShebangs
+  buildInputs = [ bash ];
+
+  vendorHash = "sha256-ms93Ea2Un/F9TDmNttSxi/CtZGsOnmptCf/hjtgCMB0=";
 
   src = fetchFromGitLab {
     owner = "gitlab-org";
-    repo = "gitlab-ci-multi-runner";
+    repo = "gitlab-runner";
     rev = "v${version}";
-    sha256 = "0svmy2dc4h6jll80y8j2ml7k0a9krknsp9d0zpsfkw3wcz1wfipl";
+    sha256 = "sha256-ISL11AvKIy/tW/3MhVZ2/XT5RcaYj+x9rHKWAB/9TdU=";
   };
 
-  buildInputs = [ go-bindata ];
+  patches = [
+    ./fix-shell-path.patch
+    ./remove-bash-test.patch
+  ];
 
-  preBuild = ''
-    (
-    # go-bindata names the assets after the filename thus we create a symlink with the name we want
-    cd go/src/${goPackagePath}
-    ln -sf ${docker_x86_64} prebuilt-x86_64.tar.xz
-    ln -sf ${docker_arm} prebuilt-arm.tar.xz
-    go-bindata \
-        -pkg docker \
-        -nocompress \
-        -nomemcopy \
-        -o executors/docker/bindata.go \
-        prebuilt-x86_64.tar.xz \
-        prebuilt-arm.tar.xz
-    )
+  prePatch = ''
+    # Remove some tests that can't work during a nix build
+
+    # Requires to run in a git repo
+    sed -i "s/func TestCacheArchiverAddingUntrackedFiles/func OFF_TestCacheArchiverAddingUntrackedFiles/" commands/helpers/file_archiver_test.go
+    sed -i "s/func TestCacheArchiverAddingUntrackedUnicodeFiles/func OFF_TestCacheArchiverAddingUntrackedUnicodeFiles/" commands/helpers/file_archiver_test.go
+
+    # No writable developer environment
+    rm common/build_test.go
+    rm common/build_settings_test.go
+    rm executors/custom/custom_test.go
+
+    # No docker during build
+    rm executors/docker/terminal_test.go
+    rm executors/docker/docker_test.go
+    rm helpers/docker/auth/auth_test.go
+    rm executors/docker/services_test.go
   '';
 
+  excludedPackages = [
+    # CI helper script for pushing images to Docker and ECR registries
+    # https://gitlab.com/gitlab-org/gitlab-runner/-/merge_requests/4139
+    "./scripts/sync-docker-images"
+  ];
+
   postInstall = ''
-    install -d $out/bin
-    # The recommended name is gitlab-runner so we create a symlink with that name
-    ln -sf gitlab-ci-multi-runner $bin/bin/gitlab-runner
+    install packaging/root/usr/share/gitlab-runner/clear-docker-cache $out/bin
+  '';
+
+  preCheck = ''
+    # Make the tests pass outside of GitLab CI
+    export CI=0
   '';
 
   meta = with lib; {
-    description = "GitLab Runner the continous integration executor of GitLab";
+    description = "GitLab Runner the continuous integration executor of GitLab";
     license = licenses.mit;
-    homepage = "https://about.gitlab.com/gitlab-ci/";
-    platforms = platforms.unix;
-    maintainers = [ lib.maintainers.bachp ];
+    homepage = "https://docs.gitlab.com/runner/";
+    platforms = platforms.unix ++ platforms.darwin;
+    maintainers = with maintainers; [ bachp zimbatm ] ++ teams.gitlab.members;
   };
 }

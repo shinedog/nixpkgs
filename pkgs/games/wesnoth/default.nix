@@ -1,29 +1,34 @@
-{ stdenv, fetchurl, cmake, pkgconfig, SDL, SDL_image, SDL_mixer, SDL_net, SDL_ttf
-, pango, gettext, boost, freetype, libvorbis, fribidi, dbus, libpng, pcre
-, enableTools ? false
+{ lib, stdenv, fetchFromGitHub
+, cmake, pkg-config, SDL2, SDL2_image, SDL2_mixer, SDL2_net, SDL2_ttf
+, pango, gettext, boost, libvorbis, fribidi, dbus, libpng, pcre, openssl, icu
+, lua, curl
+, Cocoa, Foundation
 }:
 
 stdenv.mkDerivation rec {
   pname = "wesnoth";
-  version = "1.12.6";
+  version = "1.18.0";
 
-  name = "${pname}-${version}";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/sourceforge/${pname}/${name}.tar.bz2";
-    sha256 = "0kifp6g1dsr16m6ngjq2hx19h851fqg326ps3krnhpyix963h3x5";
+  src = fetchFromGitHub {
+    rev = version;
+    owner = "wesnoth";
+    repo = "wesnoth";
+    hash = "sha256-Db1OwBTA/2jjhu/fOZhwGo7dWV3mZ40y6hTNCCjaRJQ=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  buildInputs = [ SDL SDL_image SDL_mixer SDL_net SDL_ttf pango gettext boost
-                  libvorbis fribidi dbus libpng pcre ];
+  buildInputs = [ SDL2 SDL2_image SDL2_mixer SDL2_net SDL2_ttf pango gettext boost
+                  libvorbis fribidi dbus libpng pcre openssl icu lua curl ]
+                ++ lib.optionals stdenv.isDarwin [ Cocoa Foundation];
 
-  cmakeFlags = [ "-DENABLE_TOOLS=${if enableTools then "ON" else "OFF"}" ];
+  cmakeFlags = [
+    "-DENABLE_SYSTEM_LUA=ON"
+  ];
 
-  enableParallelBuilding = true;
+  NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-framework AppKit";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "The Battle for Wesnoth, a free, turn-based strategy game with a fantasy theme";
     longDescription = ''
       The Battle for Wesnoth is a Free, turn-based tactical strategy
@@ -33,9 +38,9 @@ stdenv.mkDerivation rec {
       adventures.
     '';
 
-    homepage = "http://www.wesnoth.org/";
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ kkallio abbradar ];
-    platforms = platforms.linux;
+    homepage = "https://www.wesnoth.org/";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ abbradar ];
+    platforms = platforms.unix;
   };
 }

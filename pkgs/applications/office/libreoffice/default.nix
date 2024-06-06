@@ -1,263 +1,628 @@
-{ stdenv, fetchurl, pam, python3, libxslt, perl, ArchiveZip
-, CompressZlib, zlib, libjpeg, expat, pkgconfigUpstream, freetype, libwpd
-, libxml2, db, sablotron, curl, fontconfig, libsndfile, neon
-, bison, flex, zip, unzip, gtk3, gtk2, libmspack, getopt, file, cairo, which
-, icu, boost, jdk, ant, cups, xorg, libcmis
-, openssl, gperf, cppunit, GConf, ORBit2, poppler
-, librsvg, gnome_vfs, mesa, bsh, CoinMP, libwps, libabw
-, autoconf, automake, openldap, bash, hunspell, librdf_redland, nss, nspr
-, libwpg, dbus_glib, glibc, qt4, kde4, clucene_core, libcdr, lcms, vigra
-, unixODBC, mdds, sane-backends, mythes, libexttextcat, libvisio
-, fontsConf, pkgconfig, libzip, bluez5, libtool, maven
-, libatomic_ops, graphite2, harfbuzz, libodfgen
-, librevenge, libe-book, libmwaw, glm, glew, gst_all_1
-, gdb, commonsLogging, librdf_rasqal, makeWrapper, gsettings_desktop_schemas
-, defaultIconTheme, glib, ncurses
-, langs ? [ "en-US" "en-GB" "ca" "ru" "eo" "fr" "nl" "de" "sl" "pl" ]
+{ stdenv
+, fetchurl
+, lib
+, pam
+, python3
+, libxslt
+, perl
+, perlPackages
+, box2d
+, gettext
+, zlib
+, libjpeg
+, liblangtag
+, expat
+, freetype
+, libwpd
+, libxml2
+, db
+, curl
+, fontconfig
+, libsndfile
+, neon
+, bison
+, flex
+, zip
+, unzip
+, gtk3
+, libmspack
+, getopt
+, file
+, cairo
+, which
+, icu
+, boost
+, jdk17
+, ant
+, cups
+, xorg
+, fontforge
+, jre17_minimal
+, openssl
+, gperf
+, cppunit
+, poppler
+, util-linux
+, librsvg
+, libGLU
+, libGL
+, bsh
+, CoinMP
+, libwps
+, libabw
+, libargon2
+, libmysqlclient
+, autoconf
+, automake
+, openldap
+, bash
+, hunspell
+, librdf_rasqal
+, librdf_redland
+, nss
+, nspr
+, libwpg
+, dbus-glib
+, clucene_core_2
+, libcdr
+, lcms2
+, unixODBC
+, mdds
+, sane-backends
+, mythes
+, libexttextcat
+, libvisio
+, pkg-config
+, bluez5
+, libtool
+, libatomic_ops
+, graphite2
+, harfbuzz
+, libodfgen
+, libzmf
+, librevenge
+, libe-book
+, libmwaw
+, glm
+, gst_all_1
+, gdb
+, gnome
+, glib
+, ncurses
+, libepoxy
+, gpgme
+, libwebp
+, abseil-cpp
+, libepubgen
+, libetonyek
+, liborcus
+, libpng
+, langs ? [ "ar" "ca" "cs" "da" "de" "en-GB" "en-US" "eo" "es" "fi" "fr" "hu" "it" "ja" "nl" "pl" "pt" "pt-BR" "ro" "ru" "sl" "tr" "uk" "zh-CN" ]
 , withHelp ? true
 , kdeIntegration ? false
+, qtbase ? null
+, qtx11extras ? null
+, qtwayland ? null
+, ki18n ? null
+, kconfig ? null
+, kcoreaddons ? null
+, kio ? null
+, kwindowsystem ? null
+, variant ? "fresh"
+, symlinkJoin
+, postgresql
+, makeFontsConf
+, amiri
+, caladea
+, carlito
+, dejavu_fonts
+, rubik
+, liberation-sans-narrow
+, liberation_ttf_v2
+, libertine
+, libertine-g
+, noto-fonts
+, noto-fonts-cjk-sans
+# The rest are used only in passthru, for the wrapper
+, kauth ? null
+, kcompletion ? null
+, kconfigwidgets ? null
+, kglobalaccel ? null
+, kitemviews ? null
+, knotifications ? null
+, ktextwidgets ? null
+, kwidgetsaddons ? null
+, kxmlgui ? null
+, phonon ? null
+, qtdeclarative ? null
+, qtquickcontrols ? null
+, qtsvg ? null
+, qttools ? null
+, solid ? null
+, sonnet ? null
 }:
 
-let
-  primary-src = import ./default-primary-src.nix { inherit fetchurl; };
-in
-
-with { inherit (primary-src) major minor subdir version; };
+assert builtins.elem variant [ "fresh" "still" ];
 
 let
-  lib = stdenv.lib;
-  langsSpaces = lib.concatStringsSep " " langs;
+  inherit (lib)
+    flatten flip
+    concatMapStrings concatStringsSep
+    getDev getLib
+    optionals optionalString;
 
-  fetchSrc = {name, sha256}: fetchurl {
-    url = "http://download.documentfoundation.org/libreoffice/src/${subdir}/libreoffice-${name}-${version}.tar.xz";
-    inherit sha256;
+  fontsConf = makeFontsConf {
+    fontDirectories = [
+      amiri
+      caladea
+      carlito
+      dejavu_fonts
+      rubik
+      liberation-sans-narrow
+      liberation_ttf_v2
+      libertine
+      libertine-g
+      noto-fonts
+      noto-fonts-cjk-sans
+    ];
   };
 
-  srcs = {
-    third_party = [ (let md5 = "185d60944ea767075d27247c3162b3bc"; in fetchurl rec {
-        url = "http://dev-www.libreoffice.org/extern/${md5}-${name}";
-        sha256 = "1infwvv1p6i21scywrldsxs22f62x85mns4iq8h6vr6vlx3fdzga";
+  jre' = jre17_minimal.override {
+    modules = [ "java.base" "java.desktop" "java.logging" "java.sql" ];
+  };
+
+  importVariant = f: import (./. + "/src-${variant}/${f}");
+  # Update these files with:
+  # nix-shell maintainers/scripts/update.nix --argstr package libreoffice-$VARIANT.unwrapped
+  version = importVariant "version.nix";
+  srcsAttributes = {
+    main = importVariant "main.nix";
+    help = importVariant "help.nix";
+    translations = importVariant "translations.nix";
+    deps = (importVariant "deps.nix") ++ [
+      # TODO: Why is this needed?
+      (rec {
         name = "unowinreg.dll";
-      }) ] ++ (map (x : ((fetchurl {inherit (x) url sha256 name;}) // {inherit (x) md5name md5;})) (import ./libreoffice-srcs.nix));
-
-    translations = fetchSrc {
-      name = "translations";
-      sha256 = "0j0ajli1cbfwbgzrcqkx3db174jv1fgm22ds0gqlgkci9cffa0c4";
-    };
-
-    # TODO: dictionaries
-
-    help = fetchSrc {
-      name = "help";
-      sha256 = "0fndi6cv8rw426c3l071z130ks9sqf6ca5yas7am9d666mmy4fs4";
-    };
-
+        url = "https://dev-www.libreoffice.org/extern/${md5name}";
+        sha256 = "1infwvv1p6i21scywrldsxs22f62x85mns4iq8h6vr6vlx3fdzga";
+        md5 = "185d60944ea767075d27247c3162b3bc";
+        md5name = "${md5}-${name}";
+      })
+    ];
   };
-in stdenv.mkDerivation rec {
-  name = "libreoffice-${version}";
+  srcs = {
+    third_party = map (x:
+      (fetchurl {
+        inherit (x) url sha256 name;
+      }) // {
+        inherit (x) md5name md5;
+      }) srcsAttributes.deps;
+    translations = fetchurl srcsAttributes.translations;
+    help = fetchurl srcsAttributes.help;
+  };
 
-  inherit (primary-src) src;
+  qtMajor = lib.versions.major qtbase.version;
 
-  # Openoffice will open libcups dynamically, so we link it directly
-  # to make its dlopen work.
-  # It also seems not to mention libdl explicitly in some places.
-  NIX_LDFLAGS = "-lcups -ldl";
+  # See `postPatch` for details
+  kdeDeps = symlinkJoin {
+    name = "libreoffice-kde-dependencies-${version}";
+    paths = flatten (map (e: [ (getDev e) (getLib e) ]) [
+      qtbase
+      qtx11extras
+      kconfig
+      kcoreaddons
+      ki18n
+      kio
+      kwindowsystem
+    ]);
+  };
+  tarballPath = "external/tarballs";
 
-  # For some reason librdf_redland sometimes refers to rasqal.h instead 
-  # of rasqal/rasqal.h
-  # curl upgrade to 7.50.0 (#17152) changes the libcurl headers slightly and
-  # therefore requires the -fpermissive flag until this package gets updated
-  NIX_CFLAGS_COMPILE="-I${librdf_rasqal}/include/rasqal -fpermissive";
-
-  # If we call 'configure', 'make' will then call configure again without parameters.
-  # It's their system.
-  configureScript = "./autogen.sh";
-  dontUseCmakeConfigure = true;
+in stdenv.mkDerivation (finalAttrs: {
+  pname = "libreoffice";
+  inherit version;
+  src = fetchurl srcsAttributes.main;
 
   postUnpack = ''
-    mkdir -v $sourceRoot/src
-  '' + (stdenv.lib.concatMapStrings (f: "ln -sfv ${f} $sourceRoot/src/${f.md5 or f.outputHash}-${f.name}\nln -sfv ${f} $sourceRoot/src/${f.name}\n") srcs.third_party)
-  + ''
-    ln -sv ${srcs.help} $sourceRoot/src/${srcs.help.name}
-    ln -svf ${srcs.translations} $sourceRoot/src/${srcs.translations.name}
+    mkdir -v $sourceRoot/${tarballPath}
+
+    ${flip concatMapStrings srcs.third_party (f: ''
+      ln -sfv ${f} $sourceRoot/${tarballPath}/${f.md5name}
+      ln -sfv ${f} $sourceRoot/${tarballPath}/${f.name}
+    '')}
+
+    ln -sv ${srcs.help} $sourceRoot/${tarballPath}/${srcs.help.name}
+    ln -svf ${srcs.translations} $sourceRoot/${tarballPath}/${srcs.translations.name}
+
+    tar -xf ${srcs.help}
+    tar -xf ${srcs.translations}
   '';
 
-  QT4DIR = qt4;
+  patches = [
+    # Skip some broken tests:
+    # - tdf160386 does not fall back to a CJK font properly for some reason
+    # - the remaining tests have notes in the patch
+    # FIXME: get rid of this ASAP
+    ./skip-broken-tests.patch
+  ] ++ lib.optionals (variant == "still") [
+    # Remove build config to reduce the amount of `-dev` outputs in the
+    # runtime closure. This behavior was introduced by upstream in commit
+    # cbfac11330882c7d0a817b6c37a08b2ace2b66f4
+    ./0001-Strip-away-BUILDCONFIG.patch
+    # See above
+    ./skip-broken-tests-still.patch
+  ] ++ lib.optionals (variant == "fresh") [
+    # Revert part of https://github.com/LibreOffice/core/commit/6f60670877208612b5ea320b3677480ef6508abb that broke zlib linking
+    ./readd-explicit-zlib-link.patch
+    # See above
+    ./skip-broken-tests-fresh.patch
+  ];
 
-  # Fix boost 1.59 compat
-  # Try removing in the next version
-  CPPFLAGS = "-DBOOST_ERROR_CODE_HEADER_ONLY -DBOOST_SYSTEM_NO_DEPRECATED";
+  postPatch = ''
+    # configure checks for header 'gpgme++/gpgmepp_version.h',
+    # and if it is found (no matter where) uses a hardcoded path
+    # in what presumably is an effort to make it possible to write
+    # '#include <context.h>' instead of '#include <gpgmepp/context.h>'.
+    #
+    # Fix this path to point to where the headers can actually be found instead.
+    substituteInPlace configure.ac --replace-fail \
+      'GPGMEPP_CFLAGS=-I/usr/include/gpgme++' \
+      'GPGMEPP_CFLAGS=-I${gpgme.dev}/include/gpgme++'
+  '';
+
+  nativeBuildInputs = [
+    autoconf
+    automake
+    bison
+    fontforge
+    gdb
+    jdk17
+    libtool
+    pkg-config
+  ];
+
+  buildInputs = finalAttrs.passthru.gst_packages ++ [
+    # Make libpng not handle APNG images, so LibreOffice's own handler kicks in
+    # This should be ordered first, so it gets picked up before any other
+    # propagated libpng
+    # See: https://www.mail-archive.com/libreoffice@lists.freedesktop.org/msg334080.html
+    (libpng.override { apngSupport = false; })
+    perlPackages.ArchiveZip
+    CoinMP
+    perlPackages.IOCompress
+    abseil-cpp
+    ant
+    bluez5
+    boost
+    box2d
+    cairo
+    clucene_core_2
+    cppunit
+    cups
+    curl
+    db
+    dbus-glib
+    expat
+    file
+    flex
+    fontconfig
+    freetype
+    getopt
+    gettext
+    glib
+    glm
+    gnome.adwaita-icon-theme
+    gperf
+    gpgme
+    graphite2
+    gtk3
+    (harfbuzz.override { withIcu = true; })
+    hunspell
+    icu
+    jre'
+    lcms2
+    libGL
+    libGLU
+    xorg.libX11
+    xorg.libXaw
+    xorg.libXdmcp
+    xorg.libXext
+    xorg.libXi
+    xorg.libXinerama
+    xorg.libXtst
+    libabw
+    libargon2
+    libatomic_ops
+    libcdr
+    libe-book
+    libepoxy
+    libepubgen
+    libetonyek
+    libexttextcat
+    libjpeg
+    liblangtag
+    libmspack
+    libmwaw
+    libmysqlclient
+    libodfgen
+    liborcus
+    xorg.libpthreadstubs
+    librdf_redland
+    librevenge
+    librsvg
+    libsndfile
+    libvisio
+    libwpd
+    libwpg
+    libwps
+    libxml2
+    xorg.libxshmfence
+    libxslt
+    libzmf
+    libwebp
+    mdds
+    mythes
+    ncurses
+    neon
+    nspr
+    nss
+    openldap
+    openssl
+    pam
+    perl
+    poppler
+    postgresql
+    python3
+    sane-backends
+    unixODBC
+    unzip
+    util-linux
+    which
+    zip
+    zlib
+  ] ++ optionals kdeIntegration [
+    qtbase
+    qtx11extras
+    kcoreaddons
+    kio
+  ];
 
   preConfigure = ''
     configureFlagsArray=(
       "--with-parallelism=$NIX_BUILD_CORES"
-      "--with-lang=${langsSpaces}"
+      # here because we need to be very specific about spaces
+      "--with-lang=${concatStringsSep " " langs}"
     );
 
-    chmod a+x ./bin/unpack-sources
     patchShebangs .
-    # It is used only as an indicator of the proper current directory
-    touch solenv/inc/target.mk
 
-    # BLFS patch for Glibc 2.23 renaming isnan
-    sed -ire "s@isnan@std::&@g" xmloff/source/draw/ximp3dscene.cxx
-  '';
-
-  # fetch_Download_item tries to interpret the name as a variable name
-  # Let it do so…
-  postConfigure = ''
-    sed -e '1ilibreoffice-translations-${version}.tar.xz=libreoffice-translations-${version}.tar.xz' -i Makefile
-    sed -e '1ilibreoffice-help-${version}.tar.xz=libreoffice-help-${version}.tar.xz' -i Makefile
-
-    # unit test sd_tiledrendering seems to be fragile
-    # http://nabble.documentfoundation.org/libreoffice-5-0-failure-in-CUT-libreofficekit-tiledrendering-td4150319.html
-    echo > ./sd/CppunitTest_sd_tiledrendering.mk
-    sed -e /CppunitTest_sd_tiledrendering/d -i sd/Module_sd.mk
-    # one more fragile test?
-    sed -e '/CPPUNIT_TEST(testTdf96536);/d' -i sw/qa/extras/uiwriter/uiwriter.cxx
-    # rendering-dependent test
-    sed -e '/CPPUNIT_ASSERT_EQUAL(11148L, pOleObj->GetLogicRect().getWidth());/d ' -i sc/qa/unit/subsequent_filters-test.cxx
-    # tilde expansion in path processing checks the existence of $HOME
-    sed -e 's@rtl::OString sSysPath("~/tmp");@& return ; @' -i sal/qa/osl/file/osl_File.cxx
-    # rendering-dependent: on my computer the test table actually doesn't fit…
-    # interesting fact: test disabled on macOS by upstream
-    sed -re '/DECLARE_WW8EXPORT_TEST[(]testTableKeep, "tdf91083.odt"[)]/,+5d' -i ./sw/qa/extras/ww8export/ww8export.cxx
-    # Segfault on DB access — maybe temporarily acceptable for a new version of Fresh?
-    sed -e 's/CppunitTest_dbaccess_empty_stdlib_save//' -i ./dbaccess/Module_dbaccess.mk
-    # one more fragile test?
-    sed -e '/CPPUNIT_TEST(testTdf77014);/d' -i sw/qa/extras/uiwriter/uiwriter.cxx
-  '';
-
-  makeFlags = "SHELL=${bash}/bin/bash";
-
-  enableParallelBuilding = true;
-
-  buildPhase = ''
-    # This is required as some cppunittests require fontconfig configured
-    export FONTCONFIG_FILE=${fontsConf}
-
-    # This to avoid using /lib:/usr/lib at linking
-    sed -i '/gb_LinkTarget_LDFLAGS/{ n; /rpath-link/d;}' solenv/gbuild/platform/unxgcc.mk
-
-    find -name "*.cmd" -exec sed -i s,/lib:/usr/lib,, {} \;
-
-    make
-  '';
-
-  # It installs only things to $out/lib/libreoffice
-  postInstall = ''
-    mkdir -p $out/bin $out/share/desktop
-
-    mkdir -p "$out/share/gsettings-schemas/collected-for-libreoffice/glib-2.0/schemas/"
-
-    for a in sbase scalc sdraw smath swriter spadmin simpress soffice; do
-      ln -s $out/lib/libreoffice/program/$a $out/bin/$a
-      wrapProgram "$out/bin/$a" \
-         --prefix XDG_DATA_DIRS : \
-         "$out/share:$GSETTINGS_SCHEMAS_PATH" \
-         ;
-    done
-
-    ln -s $out/bin/soffice $out/bin/libreoffice
-    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
-
-    for f in $out/share/applications/*.desktop; do
-      substituteInPlace "$f" --replace "Exec=libreofficedev${major}.${minor}" "Exec=libreoffice"
-      substituteInPlace "$f" --replace "Exec=libreoffice${major}.${minor}" "Exec=libreoffice"
-      substituteInPlace "$f" --replace "Exec=libreoffice" "Exec=libreoffice"
-    done
-
-    cp -r sysui/desktop/icons  "$out/share"
-    sed -re 's@Icon=libreofficedev[0-9.]*-?@Icon=@' -i "$out/share/applications/"*.desktop
+    NOCONFIGURE=1 ./autogen.sh
+  '' + optionalString kdeIntegration ''
+    # configure.ac assumes that the first directory that contains headers and
+    # libraries during its checks contains *all* the relevant headers/libs which
+    # obviously doesn't work for us, so we have 2 options:
+    #
+    # 1. patch configure.ac in order to specify the direct paths to various Qt/KDE
+    # dependencies which is ugly and brittle, or
+    #
+    # 2. use symlinkJoin to pull in the relevant dependencies and just patch in
+    # that path which is *also* ugly, but far less likely to break
+    #
+    # The 2nd option is not very Nix'y, but I'll take robust over nice any day.
+    # Additionally, it's much easier to fix if LO breaks on the next upgrade (just
+    # add the missing dependencies to it).
+    export QT${qtMajor}INC=${kdeDeps}/include
+    export QT${qtMajor}LIB=${kdeDeps}/lib
+    export KF${qtMajor}INC="${kdeDeps}/include ${kdeDeps}/include/KF${qtMajor}"
+    export KF${qtMajor}LIB=${kdeDeps}/lib
   '';
 
   configureFlags = [
-    "${if withHelp then "" else "--without-help"}"
-    "--with-boost=${boost.dev}"
-    "--with-boost-libdir=${boost.out}/lib"
+    # Explicitly passing in --host even on non-cross, because
+    # LibreOffice will attempt to detect WSL and cross-compile
+    # itself to Windows automatically, and we don't want it
+    # doing that.
+    "--host=${stdenv.hostPlatform.config}"
+    "--without-buildconfig-recorded"
+
+    (lib.withFeature withHelp "help")
+    "--with-boost=${getDev boost}"
+    "--with-boost-libdir=${getLib boost}/lib"
     "--with-beanshell-jar=${bsh}"
     "--with-vendor=NixOS"
-    "--with-commons-logging-jar=${commonsLogging}/share/java/commons-logging-1.2.jar"
     "--disable-report-builder"
+    "--disable-online-update"
     "--enable-python=system"
     "--enable-dbus"
-    (lib.enableFeature kdeIntegration "kde4")
-    "--with-package-format=installed"
+    "--enable-release-build"
     "--enable-epm"
-    "--with-jdk-home=${jdk.home}"
-    "--with-ant-home=${ant}/lib/ant"
+    "--with-ant-home=${getLib ant}/lib/ant"
     "--with-system-cairo"
     "--with-system-libs"
     "--with-system-headers"
     "--with-system-openssl"
     "--with-system-libabw"
-    "--with-system-libcmis"
+    "--with-system-liblangtag"
+    "--without-system-libcmis"
     "--with-system-libwps"
+    "--with-system-mdds"
     "--with-system-openldap"
     "--with-system-coinmp"
+    "--with-system-postgresql"
 
     # Without these, configure does not finish
     "--without-junit"
 
+    # Schema files for validation are not included in the source tarball
+    "--without-export-validation"
+
+    # We do tarball prefetching ourselves
+    "--disable-fetch-external"
+    "--enable-build-opensymbol"
+
     # I imagine this helps. Copied from go-oo.
     # Modified on every upgrade, though
     "--disable-odk"
-    "--disable-postgresql-sdbc"
     "--disable-firebird-sdbc"
     "--without-fonts"
-    "--without-myspell-dicts"
     "--without-doxygen"
 
     # TODO: package these as system libraries
     "--with-system-beanshell"
     "--without-system-hsqldb"
     "--without-system-altlinuxhyph"
+    "--without-system-frozen"
     "--without-system-lpsolve"
-    "--without-system-libetonyek"
     "--without-system-libfreehand"
-    "--without-system-liblangtag"
     "--without-system-libmspub"
+    "--without-system-libnumbertext"
     "--without-system-libpagemaker"
-    "--without-system-libgltf"
-    # https://github.com/NixOS/nixpkgs/commit/5c5362427a3fa9aefccfca9e531492a8735d4e6f
-    "--without-system-orcus"
+    "--without-system-libstaroffice"
+    "--without-system-libqxp"
+    "--without-system-dragonbox"
+    "--without-system-libfixmath"
+
+    # is packaged but headers can't be found because there is no pkg-config file
+    "--without-system-zxcvbn"
+
+    "--with-system-orcus"
+    "--with-system-libepubgen"
+    "--with-system-libetonyek"
+    "--without-system-xmlsec"
+    "--without-system-zxing"
+  ] ++ optionals kdeIntegration [
+    "--enable-kf${qtMajor}"
+    "--enable-qt${qtMajor}"
+  ] ++ optionals (kdeIntegration && qtMajor == "5") [
+    "--enable-gtk3-kde5"
   ];
 
-  checkPhase = ''
-    make unitcheck
-    make slowcheck
+
+  env = {
+    # FIXME: this is a hack, because the right cflags are not being picked up
+    # from rasqal's .pc file. Needs more investigation.
+    NIX_CFLAGS_COMPILE = "-I${librdf_rasqal}/include/rasqal";
+
+    # Provide all the fonts used in tests.
+    FONTCONFIG_FILE = fontsConf;
+  };
+
+  makeFlags = [ "SHELL=${bash}/bin/bash" ];
+
+  enableParallelBuilding = true;
+
+  buildTargets = [ "build-nocheck" ];
+
+  doCheck = true;
+
+  preCheck = ''
+    export HOME=$(pwd)
   '';
 
-  buildInputs = with xorg;
-    [ ant ArchiveZip autoconf automake bison boost cairo clucene_core
-      CompressZlib cppunit cups curl db dbus_glib expat file flex fontconfig
-      freetype GConf getopt gnome_vfs gperf gtk3 gtk2
-      hunspell icu jdk lcms libcdr libexttextcat unixODBC libjpeg
-      libmspack librdf_redland librsvg libsndfile libvisio libwpd libwpg libX11
-      libXaw libXext libXi libXinerama libxml2 libxslt libXtst
-      libXdmcp libpthreadstubs mesa mythes gst_all_1.gstreamer
-      gst_all_1.gst-plugins-base gsettings_desktop_schemas glib
-      neon nspr nss openldap openssl ORBit2 pam perl pkgconfig poppler
-      python3 sablotron sane-backends unzip vigra which zip zlib
-      mdds bluez5 glibc libcmis libwps libabw
-      libxshmfence libatomic_ops graphite2 harfbuzz
-      librevenge libe-book libmwaw glm glew ncurses
-      libodfgen CoinMP librdf_rasqal defaultIconTheme makeWrapper
-      gdb
-    ]
-    ++ lib.optional kdeIntegration kde4.kdelibs;
+  checkTarget = concatStringsSep " " [
+    "unitcheck"
+    "slowcheck"
+    "--keep-going"  # easier to debug test failures
+  ];
+
+  postInstall = ''
+    mkdir -p $out/share/icons
+
+    cp -r sysui/desktop/icons/hicolor $out/share/icons
+
+    # Rename icons for consistency
+    for file in $out/share/icons/hicolor/*/apps/*; do
+      mv $file "$(dirname $file)/libreoffice-$(basename $file)"
+    done
+
+    ln -s $out/lib/libreoffice/share/xdg $out/share/applications
+
+    # Unversionize desktop files
+    . ./bin/get_config_variables PRODUCTVERSION
+    for file in $out/lib/libreoffice/share/xdg/*.desktop; do
+      substituteInPlace $file \
+        --replace-fail "LibreOffice $PRODUCTVERSION" "LibreOffice" \
+        --replace-warn "Icon=libreoffice$PRODUCTVERSION" "Icon=libreoffice" \
+        --replace-fail "Exec=libreoffice$PRODUCTVERSION" "Exec=libreoffice"
+    done
+  '';
+
+  # Wrapping is done in ./wrapper.nix
+  dontWrapQtApps = true;
 
   passthru = {
     inherit srcs;
+    jdk = jre';
+    updateScript = [
+      ./update.sh
+      # Pass it this file name as argument
+      (builtins.unsafeGetAttrPos "pname" finalAttrs.finalPackage).file
+      # And the variant
+      variant
+    ];
+    inherit kdeIntegration;
+    # For the wrapper.nix
+    inherit gtk3;
+    # Although present in qtPackages, we need qtbase.qtPluginPrefix and
+    # qtbase.qtQmlPrefix
+    inherit qtbase;
+    gst_packages = with gst_all_1; [
+      gst-libav
+      gst-plugins-bad
+      gst-plugins-base
+      gst-plugins-good
+      gst-plugins-ugly
+      gstreamer
+    ];
+    qmlPackages = [
+      ki18n
+      knotifications
+      qtdeclarative
+      qtquickcontrols
+      qtwayland
+      solid
+      sonnet
+    ];
+    qtPackages = [
+      kauth
+      kcompletion
+      kconfigwidgets
+      kglobalaccel
+      ki18n
+      kio
+      kitemviews
+      ktextwidgets
+      kwidgetsaddons
+      kwindowsystem
+      kxmlgui
+      phonon
+      qtbase
+      qtdeclarative
+      qtsvg
+      qttools
+      qtwayland
+      sonnet
+    ];
   };
 
+  # libreoffice tries to reference the BUILDCONFIG (e.g. PKG_CONFIG_PATH)
+  # in the binary causing the closure size to blow up because of many unnecessary
+  # dependencies to dev outputs. This behavior was patched away in nixpkgs
+  # (see above), make sure these don't leak again by accident.
+  # FIXME: disabled for kdeIntegration builds because the weird symlinkJoin setup
+  # leaks all the -dev dependencies :(
+  disallowedRequisites = lib.optionals (!kdeIntegration) (lib.concatMap (x: lib.optional (x?dev) x.dev) finalAttrs.buildInputs);
+
+  requiredSystemFeatures = [ "big-parallel" ];
+
   meta = with lib; {
+    changelog = "https://wiki.documentfoundation.org/ReleaseNotes/${lib.versions.majorMinor version}";
     description = "Comprehensive, professional-quality productivity suite, a variant of openoffice.org";
-    homepage = http://libreoffice.org/;
+    homepage = "https://libreoffice.org/";
+    # at least one jar in dependencies
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.lgpl3;
-    maintainers = with maintainers; [ viric raskin ];
+    maintainers = with maintainers; [ raskin ];
     platforms = platforms.linux;
-    hydraPlatforms = [];
-    requiredSystemFeatures = [ "big-parallel" ];
   };
-}
+})

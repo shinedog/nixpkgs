@@ -1,21 +1,23 @@
-{ stdenv, fetchurl, pkgconfig, gtk2, libxml2, gettext, libical, libnotify
-, libarchive, gtkspell2, webkitgtk2, libgringotts }:
+{ lib, stdenv, fetchurl, pkg-config, gtk3, libxml2, gettext, libical, libnotify
+, libarchive, gspell, webkitgtk, libgringotts, wrapGAppsHook3 }:
 
 stdenv.mkDerivation rec {
-  name = "osmo-${version}";
-  version = "0.2.14";
+  pname = "osmo";
+  version = "0.4.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/osmo-pim/${name}.tar.gz";
-    sha256 = "0vaayrmyiqn010gr11drmhkkg8fkxdmla3gwj9v3zvp5x44kab05";
+    url = "mirror://sourceforge/osmo-pim/${pname}-${version}.tar.gz";
+    sha256 = "19h3dnjgqbawnvgnycyp4n5b6mjsp5zghn3b69b6f3xa3fyi32qy";
   };
 
-  buildInputs = [ pkgconfig gtk2 libxml2 gettext libical libnotify libarchive
-    gtkspell2 webkitgtk2 libgringotts ];
+  nativeBuildInputs = [ pkg-config gettext wrapGAppsHook3 ];
+  buildInputs = [ gtk3 libxml2 libical libnotify libarchive
+    gspell webkitgtk libgringotts ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A handy personal organizer";
-    homepage = http://clayo.org/osmo/;
+    mainProgram = "osmo";
+    homepage = "https://clayo.org/osmo/";
     license = licenses.gpl2;
     platforms = platforms.linux;
     maintainers = with maintainers; [ pSub ];

@@ -1,20 +1,20 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
-assert stdenv.isLinux;
-
-stdenv.mkDerivation {
-  name = "lsscsi-0.28";
+stdenv.mkDerivation rec {
+  pname = "lsscsi";
+  version = "0.32";
 
   src = fetchurl {
-    url = "http://sg.danny.cz/scsi/lsscsi-0.28.tgz";
-    sha256 = "0l6xz8545lnfd9f4z974ar1pbzfdkr6c8r56zjrcaazl3ad00p82";
+    url = "http://sg.danny.cz/scsi/lsscsi-${version}.tgz";
+    sha256 = "sha256-CoAOnpTcoqtwLWXXJ3eujK4Hjj100Ly+1kughJ6AKaE=";
   };
 
   preConfigure = ''
     substituteInPlace Makefile.in --replace /usr "$out"
   '';
 
-  meta = {
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    license = licenses.gpl2;
+    platforms = platforms.linux;
   };
 }

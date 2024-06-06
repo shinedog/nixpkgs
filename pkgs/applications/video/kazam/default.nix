@@ -1,51 +1,63 @@
-{ stdenv, fetchurl, python3Packages, gst_all_1, makeWrapper, gobjectIntrospection
-, gtk3, libwnck3, keybinder, intltool, libcanberra_gtk2 }:
-
+{ lib
+, fetchFromGitHub
+, substituteAll
+, python3Packages
+, gst_all_1
+, wrapGAppsHook3
+, gobject-introspection
+, gtk3
+, libwnck
+, keybinder3
+, intltool
+, libcanberra-gtk3
+, libappindicator-gtk3
+, libpulseaudio
+, libgudev
+}:
 
 python3Packages.buildPythonApplication rec {
-  name = "kazam-${version}";
-  version = "1.4.3";
-  namePrefix = "";
+  pname = "kazam";
+  version = "unstable-2021-06-22";
 
-  src = fetchurl {
-    url = "https://launchpad.net/kazam/stable/${version}/+download/kazam-${version}.tar.gz";
-    sha256 = "00bcn0yj9xrv87sf6xd3wpilsjgjpsj15zzpjh351ffpjnr0ica8";
+  src = fetchFromGitHub {
+    owner = "niknah";
+    repo = "kazam";
+    rev = "13f6ce124e5234348f56358b9134a87121f3438c";
+    sha256 = "1jk6khwgdv3nmagdgp5ivz3156pl0ljhf7b6i4b52w1h5ywsg9ah";
   };
 
-  # TODO: keybinder, appindicator3
-  buildInputs = with python3Packages;
-    [ pygobject3 pyxdg pycairo gst_all_1.gstreamer gst_all_1.gst-plugins-base
-      gst_all_1.gst-plugins-good gobjectIntrospection gtk3 libwnck3 distutils_extra
-      intltool dbus-python ];
+  nativeBuildInputs = [ gobject-introspection python3Packages.distutils-extra intltool wrapGAppsHook3 ];
+  buildInputs = [
+    gst_all_1.gstreamer
+    gst_all_1.gst-plugins-base
+    gst_all_1.gst-plugins-good
+    gtk3
+    libwnck
+    keybinder3
+    libappindicator-gtk3
+    libgudev
+  ];
 
-  # TODO: figure out why PYTHONPATH is not passed automatically for those programs
-  pythonPath = with python3Packages;
-    [ pygobject3 pyxdg pycairo dbus-python ];
+  propagatedBuildInputs = with python3Packages; [ pygobject3 pyxdg pycairo dbus-python xlib ];
 
-  patches = [ ./datadir.patch ./bug_1190693.patch ];
-  prePatch = ''
-    rm setup.cfg
-    substituteInPlace kazam/backend/grabber.py --replace "/usr/bin/canberra-gtk-play" "${libcanberra_gtk2}/bin/canberra-gtk-play"
-  '';
+  patches = [
+    # Fix paths
+    (substituteAll {
+      src = ./fix-paths.patch;
+      libcanberra = libcanberra-gtk3;
+      inherit libpulseaudio;
+    })
+  ];
 
   # no tests
   doCheck = false;
 
-  preFixup = ''
-    wrapProgram $out/bin/kazam \
-      --prefix GI_TYPELIB_PATH : "$GI_TYPELIB_PATH" \
-      --prefix LD_LIBRARY_PATH ":" "${stdenv.lib.makeLibraryPath [ gtk3 gst_all_1.gstreamer keybinder ]}" \
-      --prefix GST_PLUGIN_SYSTEM_PATH : "$GST_PLUGIN_SYSTEM_PATH" \
-      --prefix XDG_DATA_DIRS : "${gtk3.out}/share" \
-      --set GST_REGISTRY "/tmp/kazam.gstreamer.registry";
-  '';
-
-
-  meta = with stdenv.lib; {
-    description = "Cross-platform, Friend-2-Friend and secure decentralised communication platform";
-    homepage = https://code.launchpad.net/kazam;
-    #license = licenses.bsd2;
+  meta = with lib; {
+    description = "A screencasting program created with design in mind";
+    homepage = "https://github.com/niknah/kazam";
+    license = licenses.lgpl3;
     platforms = platforms.linux;
     maintainers = [ maintainers.domenkozar ];
+    mainProgram = "kazam";
   };
 }

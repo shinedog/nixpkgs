@@ -1,120 +1,196 @@
-{ stdenv, fetchurl, makeWrapper, cmake, pkgconfig
-, glibc, gnome_keyring, gtk, gtkmm, pcre, swig, sudo
-, mysql, libxml2, libctemplate, libmysqlconnectorcpp
-, vsqlite, tinyxml, gdal, libiodbc, libpthreadstubs
-, libXdmcp, libuuid, libzip, libgnome_keyring, file
-, pythonPackages, jre, autoconf, automake, libtool
-, boost, glibmm, libsigcxx, pangomm, libX11, openssl
-, proj, cairo, libglade
+{ lib
+, stdenv
+, fetchurl
+, substituteAll
+, cmake
+, ninja
+, pkg-config
+, glibc
+, gtk3
+, gtkmm3
+, pcre
+, swig
+, antlr4_12
+, sudo
+, mysql
+, libxml2
+, libmysqlconnectorcpp
+, vsqlite
+, gdal
+, libiodbc
+, libpthreadstubs
+, libXdmcp
+, libuuid
+, libzip
+, libsecret
+, libssh
+, python3
+, jre
+, boost
+, libsigcxx
+, libX11
+, openssl
+, rapidjson
+, proj
+, cairo
+, libxkbcommon
+, libepoxy
+, wrapGAppsHook3
+, at-spi2-core
+, dbus
+, bash
+, coreutils
+, zstd
 }:
 
 let
-  inherit (pythonPackages) pexpect pycrypto python paramiko;
-in stdenv.mkDerivation rec {
+  inherit (python3.pkgs) paramiko pycairo pyodbc;
+in
+stdenv.mkDerivation (finalAttrs: {
   pname = "mysql-workbench";
-  version = "6.3.7";
-  name = "${pname}-${version}";
+  version = "8.0.36";
 
   src = fetchurl {
-    url = "http://dev.mysql.com/get/Downloads/MySQLGUITools/mysql-workbench-community-${version}-src.tar.gz";
-    sha256 = "1v4k04facdn2qzflf0clf3ir5hghqlabq89ssm2s4x1nqdniz544";
+    url = "https://cdn.mysql.com/Downloads/MySQLGUITools/mysql-workbench-community-${finalAttrs.version}-src.tar.gz";
+    hash = "sha256-Y02KZrbCd3SRBYpgq6gYfpR+TEmg566D3zEvpwcUY3w=";
   };
 
-  buildInputs = [ cmake pkgconfig glibc gnome_keyring gtk gtk.dev gtkmm pcre swig python sudo
-    paramiko mysql libxml2 libctemplate libmysqlconnectorcpp vsqlite tinyxml gdal libiodbc file
-    libpthreadstubs libXdmcp libuuid libzip libgnome_keyring libgnome_keyring.dev jre autoconf
-    automake libtool boost glibmm glibmm.dev libsigcxx pangomm libX11 pexpect pycrypto openssl
-    proj cairo cairo.dev makeWrapper libglade ] ;
+  patches = [
+    (substituteAll {
+      src = ./hardcode-paths.patch;
+      catchsegv = "${glibc.bin}/bin/catchsegv";
+      bash = "${bash}/bin/bash";
+      cp = "${coreutils}/bin/cp";
+      dd = "${coreutils}/bin/dd";
+      ls = "${coreutils}/bin/ls";
+      mkdir = "${coreutils}/bin/mkdir";
+      nohup = "${coreutils}/bin/nohup";
+      rm = "${coreutils}/bin/rm";
+      rmdir = "${coreutils}/bin/rmdir";
+      stat = "${coreutils}/bin/stat";
+      sudo = "${sudo}/bin/sudo";
+    })
 
-  prePatch = ''
-    for f in backend/wbpublic/{grt/spatial_handler.h,grtui/geom_draw_box.h,objimpl/db.query/db_query_Resultset.cpp} ;
-    do
-      sed -i 's@#include <gdal/@#include <@' $f ;
-    done
+    # Fix swig not being able to find headers
+    # https://github.com/NixOS/nixpkgs/pull/82362#issuecomment-597948461
+    (substituteAll {
+      src = ./fix-swig-build.patch;
+      cairoDev = "${cairo.dev}";
+    })
 
-    sed -i '32s@mysqlparser@mysqlparser sqlparser@' library/mysql.parser/CMakeLists.txt
+    # a newer libxml2 version has changed some interfaces
+    ./fix-xml2.patch
 
-    cat <<EOF > ext/antlr-runtime/fix-configure
-    #!${stdenv.shell}
-    echo "fixing bundled antlr3c configure" ;
-    sed -i 's@/usr/bin/file@${file}/bin/file@' configure
-    sed -i '12121d' configure
-    EOF
-    chmod +x ext/antlr-runtime/fix-configure
-    sed -i '236s@&&@& ''${PROJECT_SOURCE_DIR}/ext/antlr-runtime/fix-configure &@' CMakeLists.txt
+    # Don't try to override the ANTLR_JAR_PATH specified in cmakeFlags
+    ./dont-search-for-antlr-jar.patch
+  ];
 
-    substituteInPlace $(pwd)/frontend/linux/workbench/mysql-workbench.in --replace "catchsegv" "${glibc.bin}/bin/catchsegv"
-    substituteInPlace $(pwd)/frontend/linux/workbench/mysql-workbench.in --replace "/usr/lib/x86_64-linux-gnu" "${proj}/lib"
-    patchShebangs $(pwd)/library/mysql.parser/grammar/build-parser
-    patchShebangs $(pwd)/tools/get_wb_version.sh
+  postPatch = ''
+    # For some reason CMakeCache.txt is part of source code, remove it
+    rm -f build/CMakeCache.txt
+
+    patchShebangs tools/get_wb_version.sh
   '';
 
-  NIX_CFLAGS_COMPILE = [
-    "-I${libsigcxx}/lib/sigc++-2.0/include"
-    "-I${pangomm}/lib/pangomm-1.4/include"
-    "-I${glibmm}/lib/giomm-2.4/include"
+  nativeBuildInputs = [
+    cmake
+    ninja
+    pkg-config
+    jre
+    swig
+    wrapGAppsHook3
   ];
+
+  buildInputs = [
+    gtk3
+    gtkmm3
+    libX11
+    antlr4_12.runtime.cpp
+    python3
+    mysql
+    libxml2
+    libmysqlconnectorcpp
+    vsqlite
+    gdal
+    boost
+    libssh
+    openssl
+    rapidjson
+    libiodbc
+    pcre
+    cairo
+    libuuid
+    libzip
+    libsecret
+    libsigcxx
+    proj
+
+    # python dependencies:
+    paramiko
+    pycairo
+    pyodbc
+    # TODO: package sqlanydb and add it here
+
+    # transitive dependencies:
+    libpthreadstubs
+    libXdmcp
+    libxkbcommon
+    libepoxy
+    at-spi2-core
+    dbus
+    zstd
+  ];
+
+  # GCC 13: error: 'int64_t' in namespace 'std' does not name a type
+  # when updating the version make sure this is still needed
+  env.CXXFLAGS = "-include cstdint";
+
+  env.NIX_CFLAGS_COMPILE = toString ([
+    # error: 'OGRErr OGRSpatialReference::importFromWkt(char**)' is deprecated
+    "-Wno-error=deprecated-declarations"
+  ] ++ lib.optionals stdenv.isAarch64 [
+    # error: narrowing conversion of '-1' from 'int' to 'char'
+    "-Wno-error=narrowing"
+  ] ++ lib.optionals (stdenv.cc.isGNU && lib.versionAtLeast stdenv.cc.version "12") [
+    # Needed with GCC 12 but problematic with some old GCCs
+    "-Wno-error=maybe-uninitialized"
+  ]);
 
   cmakeFlags = [
-    "-DCMAKE_CXX_FLAGS=-std=c++11"
     "-DMySQL_CONFIG_PATH=${mysql}/bin/mysql_config"
-    "-DCTemplate_INCLUDE_DIR=${libctemplate}/include"
-    "-DCAIRO_INCLUDE_DIRS=${cairo.dev}/include"
-    "-DGTK2_GDKCONFIG_INCLUDE_DIR=${gtk}/lib/gtk-2.0/include"
-    "-DGTK2_GLIBCONFIG_INCLUDE_DIR=${gtk.dev}/include"
-    "-DGTK2_GTKMMCONFIG_INCLUDE_DIR=${gtkmm}/lib/gtkmm-2.4/include"
-    "-DGTK2_GDKMMCONFIG_INCLUDE_DIR=${gtkmm}/lib/gdkmm-2.4/include"
-    "-DGTK2_GLIBMMCONFIG_INCLUDE_DIR=${glibmm}/lib/glibmm-2.4/include"
+    "-DIODBC_CONFIG_PATH=${libiodbc}/bin/iodbc-config"
+    # mysql-workbench 8.0.21 depends on libmysqlconnectorcpp 1.1.8.
+    # Newer versions of connector still provide the legacy library when enabled
+    # but the headers are in a different location.
+    "-DANTLR_JAR_PATH=${antlr4_12.jarLocation}"
+    "-DMySQLCppConn_INCLUDE_DIR=${libmysqlconnectorcpp}/include/jdbc"
   ];
 
-  postInstall = ''
-    patchShebangs $out/share/mysql-workbench/extras/build_freetds.sh
+  # There is already an executable and a wrapper in bindir
+  # No need to wrap both
+  dontWrapGApps = true;
 
-    for i in $out/lib/mysql-workbench/modules/wb_utils_grt.py \
-             $out/lib/mysql-workbench/modules/wb_server_management.py \
-             $out/lib/mysql-workbench/modules/wb_admin_grt.py; do
-      substituteInPlace $i \
-        --replace "/bin/bash" ${stdenv.shell} \
-        --replace "/usr/bin/sudo" ${sudo}/bin/sudo
-    done
-
-    wrapProgram "$out/bin/mysql-workbench" \
-      --prefix LD_LIBRARY_PATH : "${python}/lib" \
-      --prefix LD_LIBRARY_PATH : "$(cat ${stdenv.cc}/nix-support/orig-cc)/lib64" \
-      --prefix PATH : "${gnome_keyring}/bin" \
-      --prefix PATH : "${python}/bin" \
-      --set PYTHONPATH $PYTHONPATH \
-      --run '
-# The gnome-keyring-daemon must be running.  To allow for environments like
-# kde, xfce where this is not so, we start it first.
-# It is cleaned up using a supervisor subshell which detects that
-# the parent has finished via the closed pipe as terminate signal idiom,
-# used because we cannot clean up after ourselves due to the exec call.
-
-# Start gnome-keyring-daemon, export the environment variables it asks us to set.
-for expr in $( gnome-keyring-daemon --start ) ; do eval "export "$expr ; done
-
-# Prepare fifo pipe.
-FIFOCTL="/tmp/gnome-keyring-daemon-ctl.$$.fifo"
-[ -p $FIFOCTL ] && rm $FIFOCTL
-mkfifo $FIFOCTL
-
-# Supervisor subshell waits reading from pipe, will receive EOF when parent
-# closes pipe on termination.  Negate read with ! operator to avoid subshell
-# quitting when read EOF returns 1 due to -e option being set.
-(
-    exec 19< $FIFOCTL
-    ! read -u 19
-
-    kill $GNOME_KEYRING_PID
-    rm $FIFOCTL
-) &
-
-exec 19> $FIFOCTL
-            '
+  preFixup = ''
+    gappsWrapperArgs+=(
+      --prefix PATH : "${python3}/bin"
+      --prefix PROJSO : "${proj}/lib/libproj.so"
+      --set PYTHONPATH $PYTHONPATH
+    )
   '';
 
-  meta = with stdenv.lib; {
+  # Let’s wrap the programs not ending with bin
+  # until https://bugs.mysql.com/bug.php?id=91948 is fixed
+  postFixup = ''
+    find -L "$out/bin" -type f -executable -print0 \
+      | while IFS= read -r -d ''' file; do
+      if [[ "''${file}" != *-bin ]]; then
+        echo "Wrapping program $file"
+        wrapGApp "$file"
+      fi
+    done
+  '';
+
+  meta = {
     description = "Visual MySQL database modeling, administration and querying tool";
     longDescription = ''
       MySQL Workbench is a modeling tool that allows you to design
@@ -122,10 +198,10 @@ exec 19> $FIFOCTL
       and query development modules where you can manage MySQL server instances
       and execute SQL queries.
     '';
-
-    homepage = http://wb.mysql.com/;
-    license = licenses.gpl2;
-    maintainers = [ maintainers.kkallio ];
-    platforms = [ "x86_64-linux" ];
+    homepage = "http://wb.mysql.com/";
+    license = lib.licenses.gpl2Only;
+    mainProgram = "mysql-workbench";
+    maintainers = with lib.maintainers; [ tomasajt ];
+    platforms = lib.platforms.linux;
   };
-}
+})

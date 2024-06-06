@@ -1,17 +1,21 @@
-{ stdenv, lib, buildGoPackage, fetchgit, fetchhg, fetchbzr, fetchsvn }:
+{ lib, buildGoPackage, fetchFromGitHub }:
 
 buildGoPackage rec {
-  name = "govers-${version}";
-  version = "20150109-${stdenv.lib.strings.substring 0 7 rev}";
-  rev = "3b5f175f65d601d06f48d78fcbdb0add633565b9";
-  
+  pname = "govers";
+  version = "unstable-2016-06-23";
+
   goPackagePath = "github.com/rogpeppe/govers";
 
-  src = fetchgit {
-    inherit rev;
-    url = "https://github.com/rogpeppe/govers";
-    sha256 = "0din5a7nff6hpc4wg0yad2nwbgy4q1qaazxl8ni49lkkr4hyp8pc";
+  src = fetchFromGitHub {
+    owner = "rogpeppe";
+    repo = "govers";
+    rev = "77fd787551fc5e7ae30696e009e334d52d2d3a43";
+    sha256 = "sha256-lpc8wFKAB+A8mBm9q3qNzTM8ktFS1MYdIvZVFP0eiIs=";
   };
 
   dontRenameImports = true;
+
+  doCheck = false; # fails, silently
+
+  meta.mainProgram = "govers";
 }

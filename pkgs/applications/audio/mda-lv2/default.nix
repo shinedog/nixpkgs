@@ -1,24 +1,19 @@
-{ stdenv, fetchurl, fftwSinglePrec, lv2, pkgconfig, python }:
+{ lib, stdenv, fetchurl, fftwSinglePrec, lv2, pkg-config, wafHook, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "mda-lv2-${version}";
-  version = "1.2.2";
+  pname = "mda-lv2";
+  version = "1.2.6";
 
   src = fetchurl {
-    url = "http://download.drobilla.net/${name}.tar.bz2";
-    sha256 = "0hh40c5d2m0k5gb3vw031l6lqn59dg804an3mkmhkc7qv4gc6xm4";
+    url = "https://download.drobilla.net/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-zWYRcCSuBJzzrKg/npBKcCdyJOI6lp9yqcXQEKSYV9s=";
   };
 
-  buildInputs = [ fftwSinglePrec lv2 pkgconfig python ];
+  nativeBuildInputs = [ pkg-config wafHook python3 ];
+  buildInputs = [ fftwSinglePrec lv2 ];
 
-  configurePhase = "python waf configure --prefix=$out";
-
-  buildPhase = "python waf";
-
-  installPhase = "python waf install";
-
-  meta = with stdenv.lib; {
-    homepage = http://drobilla.net/software/mda-lv2/;
+  meta = with lib; {
+    homepage = "http://drobilla.net/software/mda-lv2.html";
     description = "An LV2 port of the MDA plugins by Paul Kellett";
     license = licenses.gpl2Plus;
     maintainers = [ maintainers.goibhniu ];

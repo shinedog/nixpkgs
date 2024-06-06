@@ -1,30 +1,44 @@
-{ stdenv, fetchurl, pkgconfig, libusb, pcsclite }:
+{ lib, stdenv, fetchurl, autoreconfHook, pkg-config, libusb1, pcsclite }:
 
+let
+  version = "3.99.5";
+  suffix = "SP15";
+  tarBall = "${version}final.${suffix}";
+
+in
 stdenv.mkDerivation rec {
-  name = "pcsc-cyberjack-${version}";
-  version = "3.99.5_SP09";
+  pname = "pcsc-cyberjack";
+  inherit version;
 
-  src = with stdenv.lib; let
-    splittedVer = splitString "_" version;
-    mainVer = if length splittedVer >= 1 then head splittedVer else version;
-    spVer = optionalString (length splittedVer >= 1) ("." + last splittedVer);
-    tarballVersion = "${mainVer}final${spVer}";
-  in fetchurl {
-    url = "http://support.reiner-sct.de/downloads/LINUX/V${version}"
-        + "/pcsc-cyberjack-${tarballVersion}.tar.bz2";
-    sha256 = "1m1r26q0k2hrxfi73j4v25qfh20x4b1hcbcpgjgv7qxa33dbi30z";
+  src = fetchurl {
+    url =
+      "https://support.reiner-sct.de/downloads/LINUX/V${version}_${suffix}/${pname}_${tarBall}.tar.bz2";
+    sha256 = "sha256-rLfCgyRQcYdWcTdnxLPvUAgy1lLtUbNRELkQsR69Rno=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libusb pcsclite ];
+  outputs = [ "out" "tools" ];
 
-  configureFlags = [ "--with-usbdropdir=\${prefix}/pcsc/drivers" ];
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ libusb1 pcsclite ];
+
+  enableParallelBuilding = true;
+
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=narrowing";
+
+  configureFlags = [
+    "--with-usbdropdir=${placeholder "out"}/pcsc/drivers"
+    "--bindir=${placeholder "tools"}/bin"
+  ];
+
+  postInstall = "make -C tools/cjflash install";
+
+  meta = with lib; {
     description = "REINER SCT cyberJack USB chipcard reader user space driver";
-    homepage = "http://www.reiner-sct.com/";
+    mainProgram = "cjflash";
+    homepage = "https://www.reiner-sct.com/";
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ aszlig flokli ];
     platforms = platforms.linux;
-    maintainers = with maintainers; [ aszlig ];
   };
 }

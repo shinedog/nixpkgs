@@ -1,40 +1,76 @@
-{ stdenv, fetchFromGitHub, cmake, perl
-, file, glib, gmime, libevent, luajit, openssl, pcre, pkgconfig, sqlite }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, cmake
+, doctest
+, fmt
+, perl
+, glib
+, luajit
+, openssl
+, pcre
+, pkg-config
+, sqlite
+, ragel
+, icu
+, hyperscan
+, jemalloc
+, blas
+, lapack
+, lua
+, libsodium
+, xxHash
+, zstd
+, withBlas ? true
+, withHyperscan ? stdenv.isx86_64
+, withLuaJIT ? stdenv.isx86_64
+, nixosTests
+}:
 
-let libmagic = file;  # libmagic provided by file package ATM
-in
+assert withHyperscan -> stdenv.isx86_64;
 
 stdenv.mkDerivation rec {
-  name = "rspamd-${version}";
-  version = "1.2.7";
+  pname = "rspamd";
+  version = "3.8.4";
 
   src = fetchFromGitHub {
-    owner = "vstakhov";
+    owner = "rspamd";
     repo = "rspamd";
     rev = version;
-    sha256 = "0wr9lndg5fpsrjknm828zj0zy7zvdqrak9bdr6pga3bnq6xabbik";
+    hash = "sha256-3skF+aQv8Y3ATujV+WH4DxwyQ2hXR6CDZz77CkaRso0=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig perl ];
-  buildInputs = [ glib gmime libevent libmagic luajit openssl pcre sqlite];
+  hardeningEnable = [ "pie" ];
 
-  postPatch = ''
-    substituteInPlace conf/common.conf --replace "\$CONFDIR/rspamd.conf.local" "/etc/rspamd/rspamd.conf.local"
-    substituteInPlace conf/common.conf --replace "\$CONFDIR/rspamd.conf.local.override" "/etc/rspamd/rspamd.conf.local.override"
-  '';
+  nativeBuildInputs = [ cmake pkg-config perl ];
+  buildInputs = [ doctest fmt glib openssl pcre sqlite ragel icu jemalloc libsodium xxHash zstd ]
+    ++ lib.optional withHyperscan hyperscan
+    ++ lib.optionals withBlas [ blas lapack ]
+    ++ lib.optional withLuaJIT luajit ++ lib.optional (!withLuaJIT) lua;
 
-  cmakeFlags = ''
-    -DDEBIAN_BUILD=ON
-    -DRUNDIR=/var/run/rspamd
-    -DDBDIR=/var/lib/rspamd
-    -DLOGDIR=/var/log/rspamd
-  '';
+  cmakeFlags = [
+    # pcre2 jit seems to cause crashes: https://github.com/NixOS/nixpkgs/pull/181908
+    "-DENABLE_PCRE2=OFF"
+    "-DDEBIAN_BUILD=ON"
+    "-DRUNDIR=/run/rspamd"
+    "-DDBDIR=/var/lib/rspamd"
+    "-DLOGDIR=/var/log/rspamd"
+    "-DLOCAL_CONFDIR=/etc/rspamd"
+    "-DENABLE_JEMALLOC=ON"
+    "-DSYSTEM_DOCTEST=ON"
+    "-DSYSTEM_FMT=ON"
+    "-DSYSTEM_XXHASH=ON"
+    "-DSYSTEM_ZSTD=ON"
+  ] ++ lib.optional withHyperscan "-DENABLE_HYPERSCAN=ON"
+  ++ lib.optional (!withLuaJIT) "-DENABLE_LUAJIT=OFF";
 
-  meta = with stdenv.lib; {
-    homepage = "https://github.com/vstakhov/rspamd";
+  passthru.tests.rspamd = nixosTests.rspamd;
+
+  meta = with lib; {
+    homepage = "https://rspamd.com";
     license = licenses.asl20;
     description = "Advanced spam filtering system";
-    maintainers = with maintainers; [ avnik fpletz ];
+    maintainers = with maintainers; [ avnik fpletz globin lewo ];
     platforms = with platforms; linux;
   };
 }

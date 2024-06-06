@@ -1,34 +1,59 @@
-{ stdenv, fetchFromGitHub, pcre-cpp, sqlite, ncurses,
-  readline, zlib, bzip2, autoconf, automake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pcre2
+, sqlite
+, ncurses
+, readline
+, zlib
+, bzip2
+, autoconf
+, automake
+, curl
+, buildPackages
+}:
 
 stdenv.mkDerivation rec {
-
-  name = "lnav-${meta.version}";
+  pname = "lnav";
+  version = "0.11.2";
 
   src = fetchFromGitHub {
     owner = "tstack";
     repo = "lnav";
-    rev = "v${meta.version}";
-    sha256 = "06h0hy8k0w692df2490dshxf2x8qcnw5myyp0k5jkc63ai2ra6aq";
-    inherit name;
+    rev = "v${version}";
+    sha256 = "sha256-OuxxcXpdpSxrDdiUqRbEaXvCZBAcWvE4YwaMtLKSqCM=";
   };
 
-  buildInputs = [
+  patches = [ ./0001-Forcefully-disable-docs-build.patch ];
+  postPatch = ''
+    substituteInPlace Makefile.am \
+      --replace "SUBDIRS = tools src test" "SUBDIRS = tools src"
+  '';
+
+  enableParallelBuilding = true;
+
+  strictDeps = true;
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [
     autoconf
     automake
     zlib
+    curl.dev
+  ];
+  buildInputs = [
     bzip2
     ncurses
-    pcre-cpp
+    pcre2
     readline
     sqlite
+    curl
   ];
 
   preConfigure = ''
     ./autogen.sh
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/tstack/lnav";
     description = "The Logfile Navigator";
     longDescription = ''
@@ -42,8 +67,9 @@ stdenv.mkDerivation rec {
     '';
     downloadPage = "https://github.com/tstack/lnav/releases";
     license = licenses.bsd2;
-    version = "0.8.0";
-    maintainers = [ maintainers.dochang ];
+    maintainers = with maintainers; [ dochang ];
+    platforms = platforms.unix;
+    mainProgram = "lnav";
   };
 
 }

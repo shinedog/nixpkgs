@@ -1,29 +1,58 @@
-{ stdenv, fetchurl, cmake, blas, liblapack, gfortran, fltk, libjpeg
-, zlib, mesa, mesa_glu, xorg }:
+{ lib, stdenv, fetchurl, cmake, blas, lapack, gfortran, gmm, fltk, libjpeg
+, zlib, libGL, libGLU, xorg, opencascade-occt
+, python ? null, enablePython ? false }:
 
-let version = "2.12.0"; in
+assert (!blas.isILP64) && (!lapack.isILP64);
+assert enablePython -> (python != null);
 
-stdenv.mkDerivation {
-  name = "gmsh-${version}";
+stdenv.mkDerivation rec {
+  pname = "gmsh";
+  version = "4.13.1";
 
   src = fetchurl {
-    url = "http://gmsh.info/src/gmsh-${version}-source.tgz";
-    sha256 = "02cx2mfbxx6m18s54z4yzbk4ybch3v9489z7cr974y8y0z42xgbz";
+    url = "https://gmsh.info/src/gmsh-${version}-source.tgz";
+    hash = "sha256-d5chRfQxcmAm1QWWpqRPs8HJXCElUhjWaVWAa4btvo0=";
   };
 
-  # The original CMakeLists tries to use some version of the Lapack lib
-  # that is supposed to work without Fortran but didn't for me.
-  patches = [ ./CMakeLists.txt.patch ];
+  buildInputs = [
+    blas lapack gmm fltk libjpeg zlib opencascade-occt
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    libGL libGLU xorg.libXrender xorg.libXcursor xorg.libXfixes
+    xorg.libXext xorg.libXft xorg.libXinerama xorg.libX11 xorg.libSM
+    xorg.libICE
+  ] ++ lib.optional enablePython python;
 
-  buildInputs = [ cmake blas liblapack gfortran fltk libjpeg zlib mesa
-    mesa_glu xorg.libXrender xorg.libXcursor xorg.libXfixes xorg.libXext
-    xorg.libXft xorg.libXinerama xorg.libX11 xorg.libSM xorg.libICE
+  enableParallelBuilding = true;
+
+  patches = [
+    ./fix-python.patch
   ];
+
+  postPatch = ''
+    substituteInPlace api/gmsh.py --subst-var-by LIBPATH ${placeholder "out"}/lib/libgmsh.so
+  '';
+
+  # N.B. the shared object is used by bindings
+  cmakeFlags = [
+    "-DENABLE_BUILD_SHARED=ON"
+    "-DENABLE_BUILD_DYNAMIC=ON"
+    "-DENABLE_OPENMP=ON"
+  ];
+
+  nativeBuildInputs = [ cmake gfortran ];
+
+  postFixup = lib.optionalString enablePython ''
+    mkdir -p $out/lib/python${python.pythonVersion}/site-packages
+    mv $out/lib/gmsh.py $out/lib/python${python.pythonVersion}/site-packages
+    mv $out/lib/*.dist-info $out/lib/python${python.pythonVersion}/site-packages
+  '';
+
+  doCheck = true;
 
   meta = {
     description = "A three-dimensional finite element mesh generator";
-    homepage = http://gmsh.info/;
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.gpl2Plus;
+    mainProgram = "gmsh";
+    homepage = "https://gmsh.info/";
+    license = lib.licenses.gpl2Plus;
   };
 }

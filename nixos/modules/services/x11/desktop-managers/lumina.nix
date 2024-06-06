@@ -10,6 +10,10 @@ let
 in
 
 {
+  meta = {
+    maintainers = teams.lumina.members;
+  };
+
   options = {
 
     services.xserver.desktopManager.lumina.enable = mkOption {
@@ -21,30 +25,20 @@ in
   };
 
 
-  config = mkIf (xcfg.enable && cfg.enable) {
+  config = mkIf cfg.enable {
 
-    services.xserver.desktopManager.session = singleton {
-      name = "lumina";
-      start = ''
-        exec ${pkgs.lumina}/bin/start-lumina-desktop
-      '';
-    };
-
-    environment.systemPackages = [
-      pkgs.fluxbox
-      pkgs.kde5.kwindowsystem
-      pkgs.kde5.oxygen-icons5
-      pkgs.lumina
-      pkgs.numlockx
-      pkgs.qt5.qtsvg
-      pkgs.xscreensaver
+    services.displayManager.sessionPackages = [
+      pkgs.lumina.lumina
     ];
+
+    environment.systemPackages =
+      pkgs.lumina.preRequisitePackages ++
+      pkgs.lumina.corePackages;
 
     # Link some extra directories in /run/current-system/software/share
     environment.pathsToLink = [
-      "/share/desktop-directories"
-      "/share/icons"
       "/share/lumina"
+      # FIXME: modules should link subdirs of `/share` rather than relying on this
       "/share"
     ];
 

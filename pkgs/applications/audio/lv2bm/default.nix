@@ -1,27 +1,29 @@
-{ stdenv, fetchFromGitHub, glib, lilv, lv2, pkgconfig, serd, sord, sratom }:
+{ lib, stdenv, fetchFromGitHub, glib, libsndfile, lilv, lv2, pkg-config, serd, sord, sratom }:
 
 stdenv.mkDerivation rec {
-  name = "lv2bm-${version}";
-  version = "git-2015-04-10";
+  pname = "lv2bm";
+  version = "1.1";
 
   src = fetchFromGitHub {
-    owner = "portalmod";
+    owner = "moddevices";
     repo = "lv2bm";
-    rev = "08681624fc13eb700ec2b5cabedbffdf095e28b3";
-    sha256 = "11pi97jy4f4c3vsaizc8a6sw9hnhnanj6y1fil33yd9x7f8f0kbj";
+    rev = "v${version}";
+    sha256 = "0vlppxfb9zbmffazs1kiyb79py66s8x9hihj36m2vz86zsq7ybl0";
   };
 
-  buildInputs = [ glib lilv lv2 pkgconfig serd sord sratom ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ glib libsndfile lilv lv2 serd sord sratom ];
 
   installPhase = ''
     make install PREFIX=$out
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/portalmod/lv2bm;
+  meta = with lib; {
+    homepage = "https://github.com/portalmod/lv2bm";
     description = "A benchmark tool for LV2 plugins";
     license = licenses.gpl3;
     maintainers = [ maintainers.magnetophon ];
     platforms = platforms.linux;
+    mainProgram = "lv2bm";
   };
 }

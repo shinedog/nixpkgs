@@ -1,30 +1,30 @@
-{ stdenv, fetchurl, autoconf, automake, libiconv }:
+{ lib, stdenv, fetchurl, autoconf, automake, libiconv }:
 
 stdenv.mkDerivation rec {
-  name = "unrtf-${version}";
-  version = "0.21.9";
+  pname = "unrtf";
+  version = "0.21.10";
 
   src = fetchurl {
-    url = "https://www.gnu.org/software/unrtf/${name}.tar.gz";
-    sha256 = "1pcdzf2h1prn393dkvg93v80vh38q0v817xnbwrlwxbdz4k7i8r2";
+    url = "https://ftp.gnu.org/gnu/${pname}/${pname}-${version}.tar.gz";
+    sha256 = "1bil6z4niydz9gqm2j861dkxmqnpc8m7hvidsjbzz7x63whj17xl";
   };
 
   nativeBuildInputs = [ autoconf automake ];
 
-  buildInputs = [ ] ++ stdenv.lib.optional stdenv.isDarwin libiconv;
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-liconv";
+  buildInputs = [ libiconv ];
 
   preConfigure = "./bootstrap";
 
   outputs = [ "out" "man" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A converter from Rich Text Format to other formats";
+    mainProgram = "unrtf";
     longDescription = ''
       UnRTF converts documents in Rich Text Format to other
       formats, including HTML, LaTeX, and RTF itself.
     '';
-    homepage = https://www.gnu.org/software/unrtf/;
+    homepage = "https://www.gnu.org/software/unrtf/";
     license = licenses.gpl3Plus;
     maintainers = with maintainers; [ joachifm ];
     platforms = platforms.unix;

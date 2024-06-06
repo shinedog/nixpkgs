@@ -1,66 +1,94 @@
-{ stdenv, lib, fetchFromGitHub, which, go, go-bindata, makeWrapper, rsync
-, iptables, coreutils
+{ lib
+, buildGoModule
+, fetchFromGitHub
+, which
+, makeWrapper
+, rsync
+, installShellFiles
+, runtimeShell
+, kubectl
+, nixosTests
+
 , components ? [
-    "cmd/kubectl"
     "cmd/kubelet"
     "cmd/kube-apiserver"
     "cmd/kube-controller-manager"
     "cmd/kube-proxy"
-    "plugin/cmd/kube-scheduler"
-    "cmd/kube-dns"
-    "federation/cmd/federation-apiserver"
-    "federation/cmd/federation-controller-manager"
+    "cmd/kube-scheduler"
   ]
 }:
 
-with lib;
-
-stdenv.mkDerivation rec {
-  name = "kubernetes-${version}";
-  version = "1.4.6";
+buildGoModule rec {
+  pname = "kubernetes";
+  version = "1.30.1";
 
   src = fetchFromGitHub {
     owner = "kubernetes";
     repo = "kubernetes";
     rev = "v${version}";
-    sha256 = "1n5ppzr9hnn7ljfdgx40rnkn6n6a9ya0qyrhjhpnbfwz5mdp8ws3";
+    hash = "sha256-nTVjgNMnB6775ubzK7ezOxR5Z0z5PBxx88CxtbxGxrY=";
   };
 
-  buildInputs = [ makeWrapper which go rsync go-bindata ];
+  vendorHash = null;
 
-  outputs = ["out" "man""pause"];
+  doCheck = false;
 
-  postPatch = ''
-    substituteInPlace "hack/lib/golang.sh" --replace "_cgo" ""
-    patchShebangs ./hack
+  nativeBuildInputs = [ makeWrapper which rsync installShellFiles ];
+
+  outputs = [ "out" "man" "pause" ];
+
+  patches = [ ./fixup-addonmanager-lib-path.patch ];
+
+  WHAT = lib.concatStringsSep " " ([
+    "cmd/kubeadm"
+  ] ++ components);
+
+  buildPhase = ''
+    runHook preBuild
+    substituteInPlace "hack/update-generated-docs.sh" --replace "make" "make SHELL=${runtimeShell}"
+    patchShebangs ./hack ./cluster/addons/addon-manager
+    make "SHELL=${runtimeShell}" "WHAT=$WHAT"
+    ./hack/update-generated-docs.sh
+    runHook postBuild
   '';
-
-  WHAT="--use_go_build ${concatStringsSep " " components}";
-
-  postBuild = "(cd build/pause && gcc pause.c -o pause)";
 
   installPhase = ''
-    mkdir -p "$out/bin" "$man/share/man" "$pause/bin"
+    runHook preInstall
+    for p in $WHAT; do
+      install -D _output/local/go/bin/''${p##*/} -t $out/bin
+    done
 
-    cp _output/local/go/bin/* "$out/bin/"
-    cp build/pause/pause "$pause/bin/pause"
-    cp -R docs/man/man1 "$man/share/man"
+    cc build/pause/linux/pause.c -o pause
+    install -D pause -t $pause/bin
+
+    rm docs/man/man1/kubectl*
+    installManPage docs/man/man1/*.[1-9]
+
+    ln -s ${kubectl}/bin/kubectl $out/bin/kubectl
+
+    # Unfortunately, kube-addons-main.sh only looks for the lib file in either the
+    # current working dir or in /opt. We have to patch this for now.
+    substitute cluster/addons/addon-manager/kube-addons-main.sh $out/bin/kube-addons \
+      --subst-var out
+
+    chmod +x $out/bin/kube-addons
+    wrapProgram $out/bin/kube-addons --set "KUBECTL_BIN" "$out/bin/kubectl"
+
+    cp cluster/addons/addon-manager/kube-addons.sh $out/bin/kube-addons-lib.sh
+
+    installShellCompletion --cmd kubeadm \
+      --bash <($out/bin/kubeadm completion bash) \
+      --zsh <($out/bin/kubeadm completion zsh)
+    runHook postInstall
   '';
 
-  preFixup = ''
-    # Remove references to go compiler
-    while read file; do
-      cat $file | sed "s,${go},$(echo "${go}" | sed "s,$NIX_STORE/[^-]*,$NIX_STORE/eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee,"),g" > $file.tmp
-      mv $file.tmp $file
-      chmod +x $file
-    done < <(find $out/bin $pause/bin -type f 2>/dev/null)
-  '';
-
-  meta = {
+  meta = with lib; {
     description = "Production-Grade Container Scheduling and Management";
     license = licenses.asl20;
-    homepage = http://kubernetes.io;
-    maintainers = with maintainers; [offline];
+    homepage = "https://kubernetes.io";
+    maintainers = with maintainers; [ ] ++ teams.kubernetes.members;
     platforms = platforms.linux;
   };
+
+  passthru.tests = nixosTests.kubernetes // { inherit kubectl; };
 }

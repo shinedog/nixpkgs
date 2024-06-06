@@ -1,37 +1,89 @@
-{ stdenv, fetchurl, cmake, SDL, openal, zlib, libpng, python, libvorbis }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, SDL2
+, SDL2_mixer
+, freetype
+, libGL
+, libiconv
+, libpng
+, libvlc
+, libvorbis
+, openal
+, python3
+, zlib
+}:
 
-assert stdenv.cc.libc != null;
+let
+  # the GLES backend on rpi is untested as I don't have the hardware
+  backend =
+    if stdenv.hostPlatform.isx86 then "OpenGL" else "GLES";
 
+  withVLC = stdenv.isDarwin;
+
+  inherit (lib) optional optionalString;
+
+in
 stdenv.mkDerivation rec {
-  name = "gemrb-0.8.1";
-  
-  src = fetchurl {
-    url = "mirror://sourceforge/gemrb/${name}.tar.gz";
-    sha256 = "1g68pc0x4azy6zm5y7813g0qky96q796si9v3vafiy7sa8ph49kl";
+  pname = "gemrb";
+  version = "0.9.2";
+
+  src = fetchFromGitHub {
+    owner = "gemrb";
+    repo = "gemrb";
+    rev = "v${version}";
+    hash = "sha256-riea48Jc9zYb19mf5sBunTp5l27PGRFd/B5KdCUWr6Y=";
   };
 
-  buildInputs = [ cmake python openal SDL zlib libpng libvorbis ];
-  # TODO: make libpng, libvorbis, sdl_mixer, freetype, vlc, glew (and other gl reqs) optional
+  buildInputs = [
+    SDL2
+    SDL2_mixer
+    freetype
+    libGL
+    libiconv
+    libpng
+    libvorbis
+    openal
+    python3
+    zlib
+  ]
+  ++ optional withVLC libvlc;
 
-  # Necessary to find libdl.
-  CMAKE_LIBRARY_PATH = "${stdenv.cc.libc.out}/lib";
+  nativeBuildInputs = [ cmake ];
 
-  # Can't have -werror because of the Vorbis header files.
-  cmakeFlags = "-DDISABLE_WERROR=ON -DCMAKE_VERBOSE_MAKEFILE=ON";
+  # libvlc isn't being detected properly as of 0.9.0, so set it
+  LIBVLC_INCLUDE_PATH = optionalString withVLC "${lib.getDev libvlc}/include";
+  LIBVLC_LIBRARY_PATH = optionalString withVLC "${lib.getLib libvlc}/lib";
 
-  # upstream prefers some symbols to remain
-  dontStrip = true;
+  cmakeFlags = [
+    "-DDATA_DIR=${placeholder "out"}/share/gemrb"
+    "-DEXAMPLE_CONF_DIR=${placeholder "out"}/share/doc/gemrb/examples"
+    "-DSYSCONF_DIR=/etc"
+    # use the Mesa drivers for video on ARM (harmless on x86)
+    "-DDISABLE_VIDEOCORE=ON"
+    "-DLAYOUT=opt"
+    "-DOPENGL_BACKEND=${backend}"
+    "-DOpenGL_GL_PREFERENCE=GLVND"
+  ];
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    for s in 36 48 72 96 144; do
+      install -Dm444 ../artwork/gemrb-logo-glow-''${s}px.png $out/share/icons/hicolor/''${s}x''${s}/gemrb.png
+    done
+    install -Dm444 ../artwork/gemrb-logo.png $out/share/icons/gemrb.png
+  '';
+
+  meta = with lib; {
     description = "A reimplementation of the Infinity Engine, used by games such as Baldur's Gate";
     longDescription = ''
-      GemRB (Game engine made with pre-Rendered Background) is a portable open-source implementation of
-      Bioware's Infinity Engine. It was written to support pseudo-3D role playing games based on the
-      Dungeons & Dragons ruleset (Baldur's Gate and Icewind Dale series, Planescape: Torment).
+      GemRB (Game engine made with pre-Rendered Background) is a portable
+      open-source implementation of Bioware's Infinity Engine. It was written to
+      support pseudo-3D role playing games based on the Dungeons & Dragons
+      ruleset (Baldur's Gate and Icewind Dale series, Planescape: Torment).
     '';
-    homepage = http://gemrb.org/;
-    license = licenses.gpl2;
-    platforms = stdenv.lib.platforms.all;
-    hydraPlatforms = [];
+    homepage = "https://gemrb.org/";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ peterhoeg ];
   };
 }

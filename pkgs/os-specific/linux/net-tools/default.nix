@@ -1,11 +1,12 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "net-tools-1.60_p20120127084908";
+  pname = "net-tools";
+  version = "2.10";
 
   src = fetchurl {
-    url = "mirror://gentoo/distfiles/${name}.tar.xz";
-    sha256 = "408a51964aa142a4f45c4cffede2478abbd5630a7c7346ba0d3611059a2a3c94";
+    url = "mirror://sourceforge/${pname}/${pname}-${version}.tar.xz";
+    sha256 = "sha256-smJDWlJB6Jv6UcPKvVEzdTlS96e3uT8y4Iy52W9YDWk=";
   };
 
   preBuild =
@@ -13,12 +14,23 @@ stdenv.mkDerivation rec {
       cp ${./config.h} config.h
     '';
 
-  makeFlags = "BASEDIR=$(out) mandir=/share/man";
+  makeFlags = [
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "AR=${stdenv.cc.targetPrefix}ar"
+    "BASEDIR=$(out)"
+    "mandir=/share/man"
+    "HAVE_ARP_TOOLS=1"
+    "HAVE_PLIP_TOOLS=1"
+    "HAVE_SERIAL_TOOLS=1"
+    "HAVE_HOSTNAME_TOOLS=1"
+    "HAVE_HOSTNAME_SYMLINKS=1"
+    "HAVE_MII=1"
+  ];
 
   meta = {
-    homepage = http://net-tools.sourceforge.net/;
+    homepage = "http://net-tools.sourceforge.net/";
     description = "A set of tools for controlling the network subsystem in Linux";
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.linux;
   };
 }

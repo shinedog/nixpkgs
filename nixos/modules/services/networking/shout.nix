@@ -1,4 +1,4 @@
-{ pkgs, lib, config, options, ... }:
+{ pkgs, lib, config, ... }:
 
 with lib;
 
@@ -6,7 +6,7 @@ let
   cfg = config.services.shout;
   shoutHome = "/var/lib/shout";
 
-  defaultConfig = pkgs.runCommand "config.js" {} ''
+  defaultConfig = pkgs.runCommand "config.js" { preferLocalBuild = true; } ''
     EDITOR=true ${pkgs.shout}/bin/shout config --home $PWD
     mv config.js $out
   '';
@@ -30,18 +30,18 @@ in {
       default = false;
       description = ''
         Make your shout instance private. You will need to configure user
-        accounts by adding entries in <filename>${shoutHome}/users</filename>.
+        accounts by adding entries in {file}`${shoutHome}/users`.
       '';
     };
 
     listenAddress = mkOption {
-      type = types.string;
+      type = types.str;
       default = "0.0.0.0";
       description = "IP interface to listen on for http connections.";
     };
 
     port = mkOption {
-      type = types.int;
+      type = types.port;
       default = 9000;
       description = "TCP port to listen on for http connections.";
     };
@@ -50,10 +50,10 @@ in {
       type = types.nullOr types.lines;
       default = null;
       description = ''
-        Contents of Shout's <filename>config.js</filename> file.
+        Contents of Shout's {file}`config.js` file.
 
         Used for backward compatibility, recommended way is now to use
-        the <literal>config</literal> option.
+        the `config` option.
 
         Documentation: http://shout-irc.com/docs/server/configuration.html
       '';
@@ -71,7 +71,7 @@ in {
         };
       };
       description = ''
-        Shout <filename>config.js</filename> contents as attribute set (will be
+        Shout {file}`config.js` contents as attribute set (will be
         converted to JSON to generate the configuration file).
 
         The options defined here will be merged to the default configuration file.
@@ -82,13 +82,14 @@ in {
   };
 
   config = mkIf cfg.enable {
-    users.extraUsers = singleton {
-      name = "shout";
-      uid = config.ids.uids.shout;
+    users.users.shout = {
+      isSystemUser = true;
+      group = "shout";
       description = "Shout daemon user";
       home = shoutHome;
       createHome = true;
     };
+    users.groups.shout = {};
 
     systemd.services.shout = {
       description = "Shout web IRC client";

@@ -1,27 +1,70 @@
-{ stdenv, fetchurl, vala_0_23, python, intltool, pkgconfig
-, glib, libgee_0_6, gtk3, dee, libdbusmenu-glib
+{ lib
+, stdenv
+, fetchgit
+, pkg-config
+, glib
+, vala
+, dee
+, gobject-introspection
+, libdbusmenu
+, gtk3
+, intltool
+, python3
+, autoreconfHook
 }:
 
-stdenv.mkDerivation rec {
-  name = "libunity-${version}";
-  version = "6.12.0";
+stdenv.mkDerivation {
+  pname = "libunity";
+  version = "unstable-2021-02-01";
 
-  src = fetchurl {
-    url = "https://launchpad.net/libunity/6.0/${version}/+download/${name}.tar.gz";
-    sha256 = "1nadapl3390x98q1wv2yarh60hzi7ck0d1s8zz9xsiq3zz6msbjd";
+  outputs = [ "out" "dev" "py" ];
+
+  # Obtained from https://git.launchpad.net/ubuntu/+source/libunity/log/
+  src = fetchgit {
+    url = "https://git.launchpad.net/ubuntu/+source/libunity";
+    rev = "import/7.1.4+19.04.20190319-5";
+    sha256 = "LHUs6kl1srS6Xektx+jmm4SXLR47VuQ9IhYbBxf2Wc8=";
   };
 
-  buildInputs = [ glib libgee_0_6 gtk3 ];
-  propagatedBuildInputs = [ dee libdbusmenu-glib ];
-  nativeBuildInputs = [ vala_0_23 python intltool pkgconfig ];
+  patches = [
+    # Fix builf with latest Vala
+    # https://code.launchpad.net/~jtojnar/libunity/libunity
+    # Did not send upstream because Ubuntu is stuck on Vala 0.48.
+    ./fix-vala.patch
+  ];
 
-  enableParallelBuilding = true;
+  nativeBuildInputs = [
+    autoreconfHook
+    gobject-introspection
+    intltool
+    pkg-config
+    python3
+    vala
+  ];
 
-  meta = with stdenv.lib; {
-    description = "A library for instrumenting- and integrating with all aspects of the Unity shell";
+  buildInputs = [
+    glib
+    gtk3
+  ];
+
+  propagatedBuildInputs = [
+    dee
+    libdbusmenu
+  ];
+
+  preConfigure = ''
+    intltoolize
+  '';
+
+  configureFlags = [
+    "--with-pygi-overrides-dir=${placeholder "py"}/${python3.sitePackages}/gi/overrides"
+  ];
+
+  meta = with lib; {
+    description = "A library for instrumenting and integrating with all aspects of the Unity shell";
     homepage = "https://launchpad.net/libunity";
     license = licenses.lgpl3;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ abbradar ];
+    maintainers = with maintainers; [ ];
   };
 }

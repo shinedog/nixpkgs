@@ -1,34 +1,95 @@
-{ stdenv, fetchurl, alsaLib, bash, help2man, pkgconfig, xlibsWrapper, python3, libxslt }:
+{ lib
+, stdenv
+, fetchurl
+, fetchpatch
+, autoreconfHook
+, pkg-config
+, help2man
+, python3
+, linuxHeaders
 
+, alsa-lib
+, libxslt
+, systemd
+, libusb-compat-0_1
+, libftdi1
+, libICE
+, libSM
+, libX11
+}:
+
+let
+  pythonEnv = python3.pythonOnBuildForHost.withPackages (p: with p; [ pyyaml setuptools ]);
+in
 stdenv.mkDerivation rec {
-  name = "lirc-0.9.3";
+  pname = "lirc";
+  version = "0.10.2";
 
   src = fetchurl {
-    url = "mirror://sourceforge/lirc/${name}.tar.bz2";
-    sha256 = "19c6ldjsdnk1md66q3nb035ja1xj217k8iabhxpsb8rs10a6kwi6";
+    url = "mirror://sourceforge/lirc/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-PUTsgnSIHPJi8WCAVkHwgn/8wgreDYXn5vO5Dg09Iio=";
   };
 
-  preBuild = "patchShebangs .";
+  patches = [
+    # Fix installation of Python bindings
+    (fetchpatch {
+      url = "https://sourceforge.net/p/lirc/tickets/339/attachment/0001-Fix-Python-bindings.patch";
+      sha256 = "088a39x8c1qd81qwvbiqd6crb2lk777wmrs8rdh1ga06lglyvbly";
+    })
 
-  buildInputs = [ alsaLib help2man pkgconfig xlibsWrapper python3 libxslt ];
+    # Add a workaround for linux-headers-5.18 until upstream adapts:
+    #   https://sourceforge.net/p/lirc/git/merge-requests/45/
+    ./linux-headers-5.18.patch
+  ];
+
+  postPatch = ''
+    patchShebangs .
+
+    # fix overriding PYTHONPATH
+    sed -i 's,^PYTHONPATH *= *,PYTHONPATH := $(PYTHONPATH):,' \
+      Makefile.in
+    sed -i 's,PYTHONPATH=,PYTHONPATH=$(PYTHONPATH):,' \
+      doc/Makefile.in
+
+    # Pull fix for new pyyaml pending upstream inclusion
+    #   https://sourceforge.net/p/lirc/git/merge-requests/39/
+    substituteInPlace python-pkg/lirc/database.py --replace 'yaml.load(' 'yaml.safe_load('
+
+    # cant import '/build/lirc-0.10.1/python-pkg/lirc/_client.so' while cross-compiling to check the version
+    substituteInPlace python-pkg/setup.py \
+      --replace "VERSION='0.0.0'" "VERSION='${version}'"
+  '';
+
+  preConfigure = ''
+    export PKGCONFIG="$PKG_CONFIG"
+  '';
+
+  strictDeps = true;
+
+  nativeBuildInputs = [ autoreconfHook help2man libxslt pythonEnv pkg-config ];
+
+  buildInputs = [ alsa-lib systemd libusb-compat-0_1 libftdi1 libICE libSM libX11 ];
+
+  DEVINPUT_HEADER = "${linuxHeaders}/include/linux/input-event-codes.h";
 
   configureFlags = [
-    "--with-driver=devinput"
     "--sysconfdir=/etc"
     "--localstatedir=/var"
-    "--enable-sandboxed"
+    "--with-systemdsystemunitdir=$(out)/lib/systemd/system"
+    "--enable-uinput" # explicit activation because build env has no uinput
+    "--enable-devinput" # explicit activation because build env has no /dev/input
+    "--with-lockdir=/run/lirc/lock" # /run/lock is not writable for 'lirc' user
+    "PYTHON=${pythonEnv.interpreter}"
   ];
-
-  makeFlags = [ "m4dir=$(out)/m4" ];
 
   installFlags = [
-    "sysconfdir=\${out}/etc"
-    "localstatedir=\${TMPDIR}"
+    "sysconfdir=$out/etc"
+    "localstatedir=$TMPDIR"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Allows to receive and send infrared signals";
-    homepage = http://www.lirc.org/;
+    homepage = "https://www.lirc.org/";
     license = licenses.gpl2;
     platforms = platforms.linux;
     maintainers = with maintainers; [ pSub ];

@@ -1,28 +1,68 @@
-{ stdenv, fetchurl, pkgconfig, automake, autoconf, libtool
-, glib, gdk_pixbuf, gobjectIntrospection, autoreconfHook }:
+{ lib, stdenv
+, fetchurl
+, meson
+, ninja
+, pkg-config
+, libxslt
+, docbook-xsl-ns
+, glib
+, gdk-pixbuf
+, gnome
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, gobject-introspection
+}:
 
 stdenv.mkDerivation rec {
-  ver_maj = "0.7";
-  ver_min = "6";
-  name = "libnotify-${ver_maj}.${ver_min}";
+  pname = "libnotify";
+  version = "0.8.3";
+
+  outputs = [ "out" "man" "dev" ];
 
   src = fetchurl {
-    url = "mirror://gnome/sources/libnotify/${ver_maj}/${name}.tar.xz";
-    sha256 = "0dyq8zgjnnzcah31axnx6afb21kl7bks1gvrg4hjh3nk02j1rxhf";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    hash = "sha256-7o8++UYVatNAb99F/u29zZMtvSEatPFvdeuk82+y9sA=";
   };
 
-  # see Gentoo ebuild - we don't need to depend on gtk+(2/3)
-  preAutoreconf = ''
-    sed -i -e 's:noinst_PROG:check_PROG:' tests/Makefile.am || die
-    sed -i -e '/PKG_CHECK_MODULES(TESTS/d' configure.ac || die
-  '';
+  mesonFlags = [
+    # disable tests as we don't need to depend on GTK (2/3)
+    "-Dtests=false"
+    "-Ddocbook_docs=disabled"
+    "-Dgtk_doc=false"
+    "-Dintrospection=${if withIntrospection then "enabled" else "disabled"}"
+  ];
 
-  buildInputs = [ pkgconfig automake autoconf autoreconfHook
-                  libtool glib gdk_pixbuf gobjectIntrospection ];
+  strictDeps = true;
 
-  meta = {
-    homepage = http://galago-project.org/; # very obsolete but found no better
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    libxslt
+    docbook-xsl-ns
+    glib # for glib-mkenums needed during the build
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+  ];
+
+  propagatedBuildInputs = [
+    gdk-pixbuf
+    glib
+  ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "none";
+    };
+  };
+
+  meta = with lib; {
     description = "A library that sends desktop notifications to a notification daemon";
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "https://gitlab.gnome.org/GNOME/libnotify";
+    license = licenses.lgpl21;
+    maintainers = teams.gnome.members;
+    mainProgram = "notify-send";
+    platforms = platforms.unix;
   };
 }

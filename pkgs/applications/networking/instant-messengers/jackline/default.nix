@@ -1,32 +1,53 @@
-{stdenv, fetchFromGitHub, ocamlPackages, opam}:
+{ lib, fetchFromGitHub, ocamlPackages }:
 
-assert stdenv.lib.versionAtLeast ocamlPackages.ocaml.version "4.02.2";
+with ocamlPackages;
 
-stdenv.mkDerivation rec {
-  version = "2016-11-18";
-  name = "jackline-${version}";
+buildDunePackage rec {
+  pname = "jackline";
+  version = "unstable-2023-03-09";
+
+  minimalOCamlVersion = "4.08";
 
   src = fetchFromGitHub {
     owner  = "hannesm";
     repo   = "jackline";
-    rev    = "cab34acab004023911997ec9aee8b00a976af7e4";
-    sha256 = "0h7wdsic4v6ys130w61zvxm5s2vc7y574hn7zby12rq88lhhrjh7";
+    rev    = "a7acd19bd8141b842ac69b05146d9a63e729230d";
+    hash = "sha256-AhiFfZkDit9tnGenETc3A1hHqWN+csiS2bVjsGNaHf8=";
   };
 
-  buildInputs = with ocamlPackages; [
-                  ocaml ocamlbuild findlib topkg ppx_sexp_conv
-                  erm_xmpp_0_3 tls nocrypto x509 ocaml_lwt otr astring
-                  ptime notty sexplib_p4 hex uutf opam
-                ];
+  nativeBuildInpts = [
+    ppx_sexp_conv
+    ppx_deriving
+  ];
 
-  buildPhase = with ocamlPackages;
-    "ocaml -I ${findlib}/lib/ocaml/${ocaml.version}/site-lib pkg/pkg.ml build --pinned true";
+  buildInputs = [
+    erm_xmpp
+    tls
+    mirage-crypto-pk
+    x509
+    domain-name
+    lwt
+    otr
+    astring
+    ptime
+    notty
+    sexplib
+    hex
+    uchar
+    uucp
+    uuseg
+    uutf
+    dns-client
+    cstruct
+    base64
+    happy-eyeballs-lwt
+    ppx_sexp_conv
+  ];
 
-  installPhase = "opam-installer --prefix=$out --script | sh";
-
-  meta = with stdenv.lib; {
-    homepage = https://github.com/hannesm/jackline;
-    description = "Terminal-based XMPP client in OCaml";
+  meta = with lib; {
+    homepage = "https://github.com/hannesm/jackline";
+    description = "minimalistic secure XMPP client in OCaml";
+    mainProgram = "jackline";
     license = licenses.bsd2;
     maintainers = with maintainers; [ sternenseemann ];
   };

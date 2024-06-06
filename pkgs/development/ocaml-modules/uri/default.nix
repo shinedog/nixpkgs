@@ -1,36 +1,27 @@
-{ stdenv, fetchzip, ocaml, findlib, re, sexplib_p4, stringext, ounit }:
+{ lib, fetchurl, buildDunePackage, ounit
+, angstrom, stringext
+}:
 
-assert stdenv.lib.versionAtLeast (stdenv.lib.getVersion ocaml) "4";
+buildDunePackage rec {
+  minimalOCamlVersion = "4.03";
+  pname = "uri";
+  version = "4.4.0";
 
-let version = "1.9.1"; in
+  duneVersion = "3";
 
-stdenv.mkDerivation {
-  name = "ocaml-uri-${version}";
-
-  src = fetchzip {
-    url = "https://github.com/mirage/ocaml-uri/archive/v${version}.tar.gz";
-    sha256 = "0v3jxqgyi4kj92r3x83rszfpnvvzy9lyb913basch4q64yka3w85";
+  src = fetchurl {
+    url = "https://github.com/mirage/ocaml-${pname}/releases/download/v${version}/${pname}-${version}.tbz";
+    sha256 = "0szifda6yism5vn5jdizkha3ad0xk6zw4xgfl8g77dnv83ci7h65";
   };
 
-  buildInputs = [ ocaml findlib ounit ];
-  propagatedBuildInputs = [ re sexplib_p4 stringext ];
-
-  configurePhase = "ocaml setup.ml -configure --prefix $out --enable-tests";
-  buildPhase = ''
-    ocaml setup.ml -build
-    ocaml setup.ml -doc
-  '';
+  checkInputs = [ ounit ];
+  propagatedBuildInputs = [ angstrom stringext ];
   doCheck = true;
-  checkPhase = "ocaml setup.ml -test";
-  installPhase = "ocaml setup.ml -install";
-
-  createFindlibDestdir = true;
 
   meta = {
-    homepage = https://github.com/mirage/ocaml-uri;
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://github.com/mirage/ocaml-uri";
     description = "RFC3986 URI parsing library for OCaml";
-    license = stdenv.lib.licenses.isc;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    license = lib.licenses.isc;
+    maintainers = [ lib.maintainers.vbgl ];
   };
 }

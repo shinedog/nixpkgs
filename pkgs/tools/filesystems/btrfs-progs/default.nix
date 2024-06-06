@@ -1,31 +1,76 @@
-{ stdenv, fetchurl, pkgconfig, attr, acl, zlib, libuuid, e2fsprogs, lzo
-, asciidoc, xmlto, docbook_xml_dtd_45, docbook_xsl, libxslt
+{ lib, stdenv, fetchurl
+, buildPackages
+, pkg-config
+, zstd
+, acl, attr, e2fsprogs, libuuid, lzo, udev, zlib
+, runCommand, btrfs-progs
+, gitUpdater
+, udevSupport ? true
 }:
 
-let version = "4.8.2"; in
-
 stdenv.mkDerivation rec {
-  name = "btrfs-progs-${version}";
+  pname = "btrfs-progs";
+  version = "6.8.1";
 
   src = fetchurl {
     url = "mirror://kernel/linux/kernel/people/kdave/btrfs-progs/btrfs-progs-v${version}.tar.xz";
-    sha256 = "0pswcfmdnfc586770h74abp67gn2xv8fd46vxlimnmn837sj7h41";
+    hash = "sha256-DkCgaKJsKWnLAqlbqf74iNemNW4/RX/5KtJHfQhzVng=";
   };
 
-  buildInputs = [
-    pkgconfig attr acl zlib libuuid e2fsprogs lzo
-    asciidoc xmlto docbook_xml_dtd_45 docbook_xsl libxslt
+  nativeBuildInputs = [
+    pkg-config
+  ] ++ [
+    (buildPackages.python3.withPackages (ps: with ps; [
+      sphinx
+      sphinx-rtd-theme
+    ]))
   ];
+
+  buildInputs = [ acl attr e2fsprogs libuuid lzo udev zlib zstd ];
 
   # gcc bug with -O1 on ARM with gcc 4.8
   # This should be fine on all platforms so apply universally
-  patchPhase = "sed -i s/-O1/-O2/ configure";
+  postPatch = "sed -i s/-O1/-O2/ configure";
 
-  meta = with stdenv.lib; {
+  postInstall = ''
+    install -v -m 444 -D btrfs-completion $out/share/bash-completion/completions/btrfs
+  '';
+
+  configureFlags = [
+    # Built separately, see python3Packages.btrfsutil
+    "--disable-python"
+  ] ++ lib.optionals stdenv.hostPlatform.isMusl [
+    "--disable-backtrace"
+  ] ++ lib.optionals (!udevSupport) [
+    "--disable-libudev"
+  ];
+
+  makeFlags = [ "udevruledir=$(out)/lib/udev/rules.d" ];
+
+  enableParallelBuilding = true;
+
+  passthru.tests = {
+    simple-filesystem = runCommand "btrfs-progs-create-fs" {} ''
+      mkdir -p $out
+      truncate -s110M $out/disc
+      ${btrfs-progs}/bin/mkfs.btrfs $out/disc | tee $out/success
+      ${btrfs-progs}/bin/btrfs check $out/disc | tee $out/success
+      [ -e $out/success ]
+    '';
+  };
+
+  passthru.updateScript = gitUpdater {
+    # No nicer place to find latest release.
+    url = "https://github.com/kdave/btrfs-progs.git";
+    rev-prefix = "v";
+  };
+
+  meta = with lib; {
     description = "Utilities for the btrfs filesystem";
-    homepage = https://btrfs.wiki.kernel.org/;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ nckx raskin wkennington ];
+    homepage = "https://btrfs.readthedocs.io/en/latest/";
+    changelog = "https://github.com/kdave/btrfs-progs/raw/v${version}/CHANGES";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ raskin ];
     platforms = platforms.linux;
   };
 }

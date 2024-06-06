@@ -1,19 +1,31 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "iperf-2.0.5";
+  pname = "iperf";
+  version = "2.1.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/iperf/${name}.tar.gz";
-    sha256 = "0nr6c81x55ihs7ly2dwq19v9i1n6wiyad1gacw3aikii0kzlwsv3";
+    url = "mirror://sourceforge/iperf2/files/${pname}-${version}.tar.gz";
+    sha256 = "1yflnj2ni988nm0p158q8lnkiq2gn2chmvsglyn2gqmqhwp3jaq6";
   };
 
   hardeningDisable = [ "format" ];
+  configureFlags = [ "--enable-fastsampling" ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://sourceforge.net/projects/iperf/"; 
+  makeFlags = [ "AR:=$(AR)" ];
+
+  postInstall = ''
+    mv $out/bin/iperf $out/bin/iperf2
+    ln -s $out/bin/iperf2 $out/bin/iperf
+  '';
+
+  meta = with lib; {
+    homepage = "https://sourceforge.net/projects/iperf/";
     description = "Tool to measure IP bandwidth using UDP or TCP";
     platforms = platforms.unix;
-    license = "as-is";
+    license = licenses.mit;
+
+    # prioritize iperf3
+    priority = 10;
   };
 }

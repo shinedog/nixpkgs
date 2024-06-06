@@ -29,7 +29,7 @@ in
       enable = mkEnableOption "Ostinato agent-controller (Drone)";
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 7878;
         description = ''
           Port to listen on.
@@ -50,11 +50,11 @@ in
 
       rpcServer = {
         address = mkOption {
-          type = types.string;
+          type = types.str;
           default = "0.0.0.0";
           description = ''
             By default, the Drone RPC server will listen on all interfaces and
-            local IPv4 adresses for incoming connections from clients.  Specify
+            local IPv4 addresses for incoming connections from clients.  Specify
             a single IPv4 or IPv6 address if you want to restrict that.
             To listen on any IPv6 address, use ::
           '';
@@ -63,9 +63,9 @@ in
 
       portList = {
         include = mkOption {
-          type = types.listOf types.string;
+          type = types.listOf types.str;
           default = [];
-          example = ''[ "eth*" "lo*" ]'';
+          example = [ "eth*" "lo*" ];
           description = ''
             For a port to pass the filter and appear on the port list managed
             by drone, it be allowed by this include list.
@@ -74,7 +74,7 @@ in
         exclude = mkOption {
           type = types.listOf types.str;
           default = [];
-          example = ''[ "usbmon*" "eth0" ]'';
+          example = [ "usbmon*" "eth0" ];
           description = ''
             A list of ports does not appear on the port list managed by drone.
           '';

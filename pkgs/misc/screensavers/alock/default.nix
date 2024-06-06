@@ -1,15 +1,18 @@
-{ stdenv, fetchgit, pkgconfig, autoreconfHook
+{ lib, stdenv, fetchFromGitHub, gitUpdater, pkg-config, autoreconfHook
 , libX11, pam, libgcrypt, libXrender, imlib2 }:
 
 stdenv.mkDerivation rec {
-  date = "20150418";
-  name = "alock-${date}";
+  pname = "alock";
+  version = "2.5.1";
 
-  src = fetchgit {
-    url = https://github.com/Arkq/alock;
-    rev = "69b547602d965733d415f877eb59d05966bd158d";
-    sha256 = "0lv2ng5qxzcq0vwbl61dbwigv79sin4zg90y9cgsz6ydvm4ncpas";
+  src = fetchFromGitHub {
+    owner = "Arkq";
+    repo = "alock";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-xfPhsXZrTlEqea75SvacDfjM9o21MTudrqfNN9xtdcg=";
   };
+
+  PAM_DEFAULT_SERVICE = "login";
 
   configureFlags = [
     "--enable-pam"
@@ -17,24 +20,33 @@ stdenv.mkDerivation rec {
     "--enable-xrender"
     "--enable-imlib2"
   ];
+
+  nativeBuildInputs = [ pkg-config autoreconfHook ];
   buildInputs = [
-    pkgconfig autoreconfHook libX11
+    libX11
     pam libgcrypt libXrender imlib2
   ];
 
-  meta = {
-    homepage = https://github.com/Arkq/alock;
+  passthru.updateScript = gitUpdater {
+    rev-prefix = "v";
+    ignoredVersions = "^[^.]+$"; # ignore versions without a dot
+  };
+
+  meta = with lib; {
+    homepage = "https://github.com/Arkq/alock";
     description = "Simple screen lock application for X server";
+    mainProgram = "alock";
     longDescription = ''
       alock locks the X server until the user enters a password
-      via the keyboard. If the authentification was successful
+      via the keyboard. If the authentication was successful
       the X server is unlocked and the user can continue to work.
 
       alock does not provide any fancy animations like xlock or
-      xscreensaver and never will. Its just for locking the current
+      xscreensaver and never will. It's just for locking the current
       X session.
     '';
-    platforms = with stdenv.lib.platforms; allBut cygwin;
-    maintainers = [ stdenv.lib.maintainers.ftrvxmtrx ];
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ ftrvxmtrx chris-martin ];
+    license = licenses.mit;
   };
 }

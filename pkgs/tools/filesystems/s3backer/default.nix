@@ -1,31 +1,38 @@
-{ stdenv, fetchFromGitHub
-, autoreconfHook, pkgconfig
+{ lib, stdenv, fetchFromGitHub
+, autoreconfHook, pkg-config
 , fuse, curl, expat }:
-  
+
 stdenv.mkDerivation rec {
-  name = "s3backer-${version}";
-  version = "1.4.2";
-  
+  pname = "s3backer";
+  version = "2.1.2";
+
   src = fetchFromGitHub {
-    sha256 = "0b9vmykrfpzs9is31pqb8xvgjraghnax1ph2jkbib1ya0vhxm8dj";
+    sha256 = "sha256-/WdY++rrcQ3N+4ROeaA113Iq1nMGxOp3LzsCaLsxaaM=";
     rev = version;
     repo = "s3backer";
     owner = "archiecobbs";
   };
 
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
+  patches = [
+    # from upstream, after latest release
+    # https://github.com/archiecobbs/s3backer/commit/303a669356fa7cd6bc95ac7076ce51b1cab3970a
+    ./fix-darwin-builds.patch
+  ];
+
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
   buildInputs = [ fuse curl expat ];
 
-  autoreconfPhase = ''
-    patchShebangs ./autogen.sh
-    ./autogen.sh
+  # AC_CHECK_DECLS doesn't work with clang
+  postPatch = lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace configure.ac --replace \
+      'AC_CHECK_DECLS(fdatasync)' ""
   '';
 
-  meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/s3backer/;
+  meta = with lib; {
+    homepage = "https://github.com/archiecobbs/s3backer";
     description = "FUSE-based single file backing store via Amazon S3";
     license = licenses.gpl2Plus;
-    maintainers = with maintainers; [ nckx ];
-    platforms = with platforms; linux;
+    platforms = platforms.unix;
+    mainProgram = "s3backer";
   };
 }

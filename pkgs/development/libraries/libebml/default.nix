@@ -1,19 +1,28 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub, cmake, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "libebml-1.3.4";
+  pname = "libebml";
+  version = "1.4.5";
 
-  src = fetchurl {
-    url = "http://dl.matroska.org/downloads/libebml/${name}.tar.bz2";
-    sha256 = "11zka6z9ncywyjr1gfm5cnii33ln7y3w6s86kiacchip2g7kw3f5";
+  src = fetchFromGitHub {
+    owner  = "Matroska-Org";
+    repo   = "libebml";
+    rev    = "release-${version}";
+    sha256 = "sha256-PIVBePTWceMgiENdaL9lvXIL/RQIrtg7l0OG2tO0SU8=";
   };
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ cmake pkg-config ];
+
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=YES"
+    "-DCMAKE_INSTALL_PREFIX="
+  ];
+
+  meta = with lib; {
     description = "Extensible Binary Meta Language library";
+    homepage = "https://dl.matroska.org/downloads/libebml/";
     license = licenses.lgpl21;
-    homepage = http://dl.matroska.org/downloads/libebml/;
-    maintainers = [ maintainers.spwhitt ];
+    maintainers = with maintainers; [ ];
     platforms = platforms.unix;
   };
 }
-

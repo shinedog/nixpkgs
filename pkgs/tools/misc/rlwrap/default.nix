@@ -1,25 +1,33 @@
-{ stdenv, fetchurl, readline }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, perl, readline }:
 
 stdenv.mkDerivation rec {
-  name = "rlwrap-0.42";
+  pname = "rlwrap";
+  version = "0.46.1";
 
-  src = fetchurl {
-    url = "http://utopia.knoware.nl/~hlub/uck/rlwrap/${name}.tar.gz";
-    sha256 = "0i3yz303wscrysyzpdq04h4nrl9ajz9dbwi80risdl5rkm3dhw2s";
+  src = fetchFromGitHub {
+    owner = "hanslub42";
+    repo = "rlwrap";
+    rev = version;
+    sha256 = "sha256-yKJXfdxfaCsmPtI0KmTzfFKY+evUuytomVrLsSCYDGo=";
   };
+
+  postPatch = ''
+    substituteInPlace src/readline.c \
+      --replace "if(*p >= 0 && *p < ' ')" "if(*p >= 0 && (*p >= 0) && (*p < ' '))"
+  '';
+
+  nativeBuildInputs = [ autoreconfHook perl ];
 
   buildInputs = [ readline ];
 
-  # Be high-bit-friendly
-  preBuild = ''
-    sed -i src/readline.c -e "s@[*]p [<] ' '@(*p >= 0) \\&\\& (*p < ' ')@"
-  '';
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.isDarwin "-Wno-error=implicit-function-declaration";
 
-  meta = {
+  meta = with lib; {
     description = "Readline wrapper for console programs";
-    homepage = http://utopia.knoware.nl/~hlub/uck/rlwrap/;
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = with stdenv.lib.maintainers; [ fuuzetsu ];
+    homepage = "https://github.com/hanslub42/rlwrap";
+    license = licenses.gpl2Plus;
+    platforms = platforms.unix;
+    maintainers = with maintainers; [ jlesquembre ];
+    mainProgram = "rlwrap";
   };
 }

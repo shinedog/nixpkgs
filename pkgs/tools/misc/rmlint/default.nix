@@ -1,29 +1,91 @@
-{ stdenv, fetchurl
-, gettext, glib, json_glib, libelf, pkgconfig, scons, sphinx, utillinux }:
+{ lib, stdenv
+, cairo
+, elfutils
+, fetchFromGitHub
+, glib
+, gobject-introspection
+, gtksourceview3
+, json-glib
+, makeWrapper
+, pango
+, pkg-config
+, polkit
+, python3
+, scons
+, sphinx
+, util-linux
+, wrapGAppsHook3
+, withGui ? false }:
 
-with stdenv.lib;
+assert withGui -> !stdenv.isDarwin;
+
 stdenv.mkDerivation rec {
-  name = "rmlint-${version}";
-  version = "2.4.4";
+  pname = "rmlint";
+  version = "2.10.2";
 
-  src = fetchurl {
-    url = "https://github.com/sahib/rmlint/archive/v${version}.tar.gz";
-    sha256 = "1g38wmf58m9lbdngfsbz3dbkd44yqxppzvgi5mwag0w7r7khhir9";
+  src = fetchFromGitHub {
+    owner = "sahib";
+    repo = "rmlint";
+    rev = "v${version}";
+    sha256 = "sha256-pOo1YfeqHUU6xyBRFbcj2lX1MHJ+a5Hi31BMC1nYZGo=";
   };
 
-  configurePhase = "scons config";
+  patches = [
+    # pass through NIX_* environment variables to scons.
+    ./scons-nix-env.patch
+  ];
 
-  buildInputs = [ gettext glib json_glib libelf pkgconfig scons sphinx utillinux ];
+  nativeBuildInputs = [
+    pkg-config
+    sphinx
+    scons
+  ] ++ lib.optionals withGui [
+    makeWrapper
+    wrapGAppsHook3
+    gobject-introspection
+  ];
 
-  buildPhase = "scons";
+  buildInputs = [
+    glib
+    json-glib
+    util-linux
+  ] ++ lib.optionals withGui [
+    cairo
+    gtksourceview3
+    pango
+    polkit
+    python3
+    python3.pkgs.pygobject3
+  ] ++ lib.optionals (lib.meta.availableOn stdenv.hostPlatform elfutils) [
+    elfutils
+  ];
 
-  installPhase = "scons --prefix=$out install";
+  prePatch = ''
+    # remove sources of nondeterminism
+    substituteInPlace lib/cmdline.c \
+      --replace "__DATE__" "\"Jan  1 1970\"" \
+      --replace "__TIME__" "\"00:00:00\""
+    substituteInPlace docs/SConscript \
+      --replace "gzip -c " "gzip -cn "
+  '';
 
-  meta = {
+  # Otherwise tries to access /usr.
+  prefixKey = "--prefix=";
+
+  sconsFlags = lib.optionals (!withGui) [ "--without-gui" ];
+
+  # in GUI mode, this shells out to itself, and tries to import python modules
+  postInstall = lib.optionalString withGui ''
+    gappsWrapperArgs+=(--prefix PATH : "$out/bin")
+    gappsWrapperArgs+=(--prefix PYTHONPATH : "$(toPythonPath $out):$(toPythonPath ${python3.pkgs.pygobject3}):$(toPythonPath ${python3.pkgs.pycairo})")
+  '';
+
+  meta = with lib; {
     description = "Extremely fast tool to remove duplicates and other lint from your filesystem";
-    homepage = http://rmlint.readthedocs.org;
-    platforms = platforms.linux;
+    homepage = "https://rmlint.readthedocs.org";
+    platforms = platforms.unix;
     license = licenses.gpl3;
-    maintainers = [ maintainers.koral ];
+    maintainers = with maintainers; [ aaschmid koral ];
+    mainProgram = "rmlint";
   };
 }

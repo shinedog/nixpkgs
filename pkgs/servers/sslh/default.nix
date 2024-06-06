@@ -1,26 +1,42 @@
-{ stdenv, fetchurl, libcap, libconfig, perl, tcp_wrappers }:
+{ lib, stdenv, fetchFromGitHub, libcap, libev, libconfig, perl, tcp_wrappers, pcre2, nixosTests }:
 
 stdenv.mkDerivation rec {
-  name = "sslh-${version}";
-  version = "1.18";
+  pname = "sslh";
+  version = "2.1.2";
 
-  src = fetchurl {
-    url = "http://www.rutschle.net/tech/sslh/sslh-v${version}.tar.gz";
-    sha256 = "1ba5fxd2s6jh9n3wbp2a782q7syc4m6qvfrggnscdbywfyrsa08n";
+  src = fetchFromGitHub {
+    owner = "yrutschle";
+    repo = pname;
+    rev = "v${version}";
+    hash = "sha256-+G6xYiytSWW2CljuaeJZfTuXCjkbDCzwU/FSLBmvnGw=";
   };
 
   postPatch = "patchShebangs *.sh";
 
-  buildInputs = [ libcap libconfig perl tcp_wrappers ];
+  buildInputs = [ libev libconfig perl pcre2 ] ++ lib.optionals stdenv.isLinux [ libcap tcp_wrappers ];
 
-  makeFlags = "USELIBCAP=1 USELIBWRAP=1";
+  makeFlags = lib.optionals stdenv.isLinux [ "USELIBCAP=1" "USELIBWRAP=1" ];
 
-  installFlags = "PREFIX=$(out)";
+  postInstall = ''
+    # install all flavours
+    install -p sslh-fork "$out/sbin/sslh-fork"
+    install -p sslh-select "$out/sbin/sslh-select"
+    install -p sslh-ev "$out/sbin/sslh-ev"
+    ln -sf sslh-fork "$out/sbin/sslh"
+  '';
 
-  meta = with stdenv.lib; {
+  installFlags = [ "PREFIX=$(out)" ];
+
+  hardeningDisable = [ "format" ];
+
+  passthru.tests = {
+    inherit (nixosTests) sslh;
+  };
+
+  meta = with lib; {
     description = "Applicative Protocol Multiplexer (e.g. share SSH and HTTPS on the same port)";
     license = licenses.gpl2Plus;
-    homepage = http://www.rutschle.net/tech/sslh.shtml;
+    homepage = "https://www.rutschle.net/tech/sslh/README.html";
     maintainers = with maintainers; [ koral fpletz ];
     platforms = platforms.all;
   };

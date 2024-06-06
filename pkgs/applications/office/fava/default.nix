@@ -1,45 +1,56 @@
-{ stdenv, pkgs, fetchurl, python3Packages, fetchFromGitHub, fetchzip, python3, beancount }:
+{ lib, python3, fetchPypi }:
 
-python3Packages.buildPythonApplication rec {
-  version = "1.0";
-  name = "fava-${version}";
+python3.pkgs.buildPythonApplication rec {
+  pname = "fava";
+  version = "1.27.3";
+  format = "pyproject";
 
-  src = fetchFromGitHub {
-    owner = "aumayr";
-    repo = "fava";
-    rev = "v${version}";
-    sha256 = "0dm4x6z80m04r9qa55psvz7f41qnh13hnj2qhvxkrk22yqmkqrka";
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-GsnXZaazEiOhyjbIinHRD1fdoqlAp3d5csrmtydxmGM=";
   };
 
-  assets = fetchzip {
-    url = "https://github.com/aumayr/fava/releases/download/v${version}/beancount-fava-${version}.tar.gz";
-    sha256 = "1vvidwfn5882dslz6qqkkd84m7w52kd34x10qph8yhipyjv1dimc";
-  };
+  nativeBuildInputs = with python3.pkgs; [ setuptools-scm ];
 
-  buildInputs = with python3Packages; [ pytest_30 ];
+  propagatedBuildInputs = with python3.pkgs; [
+    babel
+    beancount
+    cheroot
+    click
+    flask
+    flask-babel
+    jaraco-functools
+    jinja2
+    markdown2
+    ply
+    simplejson
+    werkzeug
+  ];
 
-  checkPhase = ''
-    # pyexcel is optional
-    # the other 2 tests fail due non-unicode locales
-    PATH=$out/bin:$PATH pytest tests \
-      --ignore tests/test_util_excel.py \
-      --ignore tests/test_cli.py \
-      --ignore tests/test_translations.py \
+  nativeCheckInputs = with python3.pkgs; [
+    pytestCheckHook
+  ];
+
+  postPatch = ''
+    substituteInPlace pyproject.toml \
+      --replace 'setuptools_scm>=8.0' 'setuptools_scm'
   '';
 
-  postInstall = ''
-    cp -r $assets/fava/static/gen $out/${python3.sitePackages}/fava/static
+  preCheck = ''
+    export HOME=$TEMPDIR
   '';
 
-  propagatedBuildInputs = with python3Packages;
-    [ flask dateutil pygments wheel markdown2 flaskbabel tornado
-      click beancount ];
+  disabledTests = [
+    # runs fava in debug mode, which tries to interpret bash wrapper as Python
+    "test_cli"
+  ];
 
-  meta = {
-    homepage = https://github.com/aumayr/fava;
+  meta = with lib; {
     description = "Web interface for beancount";
-    license = stdenv.lib.licenses.mit;
-    maintainers = with stdenv.lib.maintainers; [ matthiasbeyer ];
+    mainProgram = "fava";
+    homepage = "https://beancount.github.io/fava";
+    changelog = "https://beancount.github.io/fava/changelog.html";
+    license = licenses.mit;
+    maintainers = with maintainers; [ bhipple ];
   };
 }
-

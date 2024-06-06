@@ -1,25 +1,21 @@
-{stdenv, fetchurl, texinfo, texLive, perl}:
-let
-  s = # Generated upstream information
-  rec {
-    baseName="asdf";
-    version="3.1.7";
-    name="${baseName}-${version}";
-    hash="16x065q6adidbdr77axsxz4f8c818szfz0b9sw1a4c89y82ylsnn";
-    url="http://common-lisp.net/project/asdf/archives/asdf-3.1.7.tar.gz";
-    sha256="16x065q6adidbdr77axsxz4f8c818szfz0b9sw1a4c89y82ylsnn";
-  };
-  buildInputs = [
-    texinfo texLive perl
-  ];
-in
-stdenv.mkDerivation {
-  inherit (s) name version;
-  inherit buildInputs;
+{ lib, stdenv, fetchurl, texinfo, texLive, perl }:
+
+stdenv.mkDerivation rec {
+  pname = "asdf";
+  version = "3.3.4";
+
   src = fetchurl {
-    inherit (s) url sha256;
+    url = "http://common-lisp.net/project/asdf/archives/asdf-${version}.tar.gz";
+    sha256 = "sha256-/k7cmN0ymZUgpP4K+IWfhq85TkzfPjTR4QdUgV9n1x4=";
   };
-  sourceRoot = ".";
+
+  strictDeps = true;
+  nativeBuildInputs = [
+    texinfo
+    texLive
+    perl
+  ];
+
   buildPhase = ''
     make build/asdf.lisp
     make -C doc asdf.info asdf.html
@@ -29,12 +25,13 @@ stdenv.mkDerivation {
     mkdir -p "$out"/share/doc/asdf/
     cp -r ./* "$out"/lib/common-lisp/asdf/
     cp -r doc/* "$out"/share/doc/asdf/
+    ln -s  "$out"/lib/common-lisp/{asdf/uiop,uiop}
   '';
-  meta = {
-    inherit (s) version;
-    description = ''Standard software-system definition library for Common Lisp'';
-    license = stdenv.lib.licenses.mit ;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
+
+  meta = with lib; {
+    description = "Standard software-system definition library for Common Lisp";
+    license = licenses.mit;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.unix;
   };
 }

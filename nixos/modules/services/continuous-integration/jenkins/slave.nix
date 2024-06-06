@@ -46,23 +46,30 @@ in {
           this is the home of the "jenkins" user.
         '';
       };
+
+      javaPackage = mkPackageOption pkgs "jdk" { };
     };
   };
 
   config = mkIf (cfg.enable && !masterCfg.enable) {
-    users.extraGroups = optional (cfg.group == "jenkins") {
-      name = "jenkins";
-      gid = config.ids.gids.jenkins;
+    users.groups = optionalAttrs (cfg.group == "jenkins") {
+      jenkins.gid = config.ids.gids.jenkins;
     };
 
-    users.extraUsers = optional (cfg.user == "jenkins") {
-      name = "jenkins";
-      description = "jenkins user";
-      createHome = true;
-      home = cfg.home;
-      group = cfg.group;
-      useDefaultShell = true;
-      uid = config.ids.uids.jenkins;
+    users.users = optionalAttrs (cfg.user == "jenkins") {
+      jenkins = {
+        description = "jenkins user";
+        createHome = true;
+        home = cfg.home;
+        group = cfg.group;
+        useDefaultShell = true;
+        uid = config.ids.uids.jenkins;
+      };
+    };
+
+    programs.java = {
+      enable = true;
+      package = cfg.javaPackage;
     };
   };
 }

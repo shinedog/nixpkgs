@@ -1,12 +1,12 @@
-{ stdenv, fetchFromGitLab, git, bash }:
+{ lib, stdenv, fetchFromGitLab, git, bash }:
 
 stdenv.mkDerivation rec {
-  version = "1.1.2";
-  name = "git-latexdiff-${version}";
+  version = "1.6.0";
+  pname = "git-latexdiff";
 
   src = fetchFromGitLab {
-    sha256 = "1alnrjcf3f1qv7fk8h9yachmdz7mjgcynlgsvchfgcb2cpdavxjg";
-    rev = "v${version}";
+    hash = "sha256-DMoGEbCBuqUGjbna3yDpD4WNTikPudYRD4Wy1pPG2mw=";
+    rev = version;
     repo = "git-latexdiff";
     owner = "git-latexdiff";
   };
@@ -15,11 +15,12 @@ stdenv.mkDerivation rec {
 
   dontBuild = true;
 
-  patches = [ ./shebang.patch ./version-test.patch ];
+  patches = [ ./version-test.patch ];
 
   postPatch = ''
     substituteInPlace git-latexdiff \
       --replace "@GIT_LATEXDIFF_VERSION@" "v${version}"
+    patchShebangs git-latexdiff
   '';
 
   installPhase = ''
@@ -28,10 +29,12 @@ stdenv.mkDerivation rec {
     chmod +x $prefix/bin/git-latexdiff
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "View diff on LaTeX source files on the generated PDF files";
-    maintainers = [ maintainers.DamienCassou ];
-    license = licenses.free; # https://gitlab.com/git-latexdiff/git-latexdiff/issues/9
+    homepage = "https://gitlab.com/git-latexdiff/git-latexdiff";
+    maintainers = [ ];
+    license = licenses.bsd3; # https://gitlab.com/git-latexdiff/git-latexdiff/issues/9
     platforms = platforms.unix;
+    mainProgram = "git-latexdiff";
   };
 }

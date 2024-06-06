@@ -1,20 +1,32 @@
-{ stdenv, fetchurl, boost, zlib, bzip2 }:
+{ lib
+, stdenv
+, fetchurl
+, boost
+, zlib
+, bzip2
+, wxGTK32
+}:
 
 stdenv.mkDerivation rec {
-  name = "xylib-${version}";
-  version = "1.4";
+  pname = "xylib";
+  version = "1.6";
 
   src = fetchurl {
-    url = "https://github.com/wojdyr/xylib/releases/download/v${version}/${name}-${version}.tar.bz2";
-    sha256 = "09j426qjbg3damch1hfw16j992kn2hj8gs4lpvqgfqdw61kvqivh";
+    url = "https://github.com/wojdyr/xylib/releases/download/v${version}/${pname}-${version}.tar.bz2";
+    sha256 = "1iqfrfrk78mki5csxysw86zm35ag71w0jvim0f12nwq1z8rwnhdn";
   };
 
-  buildInputs = [ boost zlib bzip2 ];
+  buildInputs = [
+    boost
+    zlib
+    bzip2
+    wxGTK32
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Portable library for reading files that contain x-y data from powder diffraction, spectroscopy and other experimental methods";
     license = licenses.lgpl21;
-    homepage = http://xylib.sourceforge.net/;
+    homepage = "https://xylib.sourceforge.net/";
     platforms = platforms.linux;
     maintainers = with maintainers; [ pSub ];
   };

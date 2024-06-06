@@ -1,47 +1,57 @@
-{ stdenv, fetchurl, pkgconfig
-, lv2, mesa, gtk2, cairo, pango, fftw }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, lv2
+, libGLU
+, libGL
+, gtk2
+, cairo
+, pango
+, fftwFloat
+, libjack2
+}:
 
-let
-  version = "0.8.1";
-  name = "meters.lv2-${version}";
+stdenv.mkDerivation rec {
+  pname = "meters.lv2";
+  version = "0.9.20";
+  robtkVersion = "0.7.5";
 
-  # robtk submodule is pegged to this version
-  robtkVersion = "0.3.0";
-  robtkName = "robtk-${robtkVersion}";
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ lv2 libGLU libGL gtk2 cairo pango fftwFloat libjack2 ];
 
-  src = fetchurl {
-    name = "${name}.tar.gz";
-    url = "https://github.com/x42/meters.lv2/archive/v${version}.tar.gz";
-    sha256 = "142dg0j34mv5b0agajj2x1n9kgsmkfh08n1cjzk0j8n4xk2wb6ri";
+  src = fetchFromGitHub {
+    owner = "x42";
+    repo = "meters.lv2";
+    rev = "v${version}";
+    sha256 = "sha256-eGXTbE83bJEDqTBltL6ZX9qa/OotCFmUxpE/aLqGELU=";
   };
 
-  robtkSrc = fetchurl {
-    name = "${robtkName}.tar.gz";
-    url = "https://github.com/x42/robtk/archive/v${robtkVersion}.tar.gz";
-    sha256 = "1ny89i2sgga56k7fxskp9y8sb7pfhp6wgw5mni842p19z6q7h8rq";
+  robtkSrc = fetchFromGitHub {
+    owner = "x42";
+    repo = "robtk";
+    rev = "v${robtkVersion}";
+    sha256 = "sha256-L1meipOco8esZl+Pgqgi/oYVbhimgh9n8p9Iqj3dZr0=";
   };
 
-in
-stdenv.mkDerivation {
-  inherit name;
+  postUnpack = ''
+    rm -rf $sourceRoot/robtk/
+    ln -s ${robtkSrc} $sourceRoot/robtk
+  '';
 
-  buildInputs = [ pkgconfig lv2 mesa gtk2 cairo pango fftw ];
+  postPatch = ''
+    substituteInPlace Makefile --replace "-msse -msse2 -mfpmath=sse" ""
+  ''; # remove x86-specific flags
 
-  srcs = [ src robtkSrc ];
-  sourceRoot = name;
-
-  postUnpack = "mv ${robtkName}/* ${name}/robtk"; # */
-
-  postPatch = "sed -i 's/fftw3f/fftw3/' Makefile";
-
-  preConfigure = "makeFlagsArray=( PREFIX=$out )";
   meter_VERSION = version;
+  enableParallelBuilding = true;
+  makeFlags = [ "PREFIX=${placeholder "out"}" ];
 
-  meta = with stdenv.lib;
-    { description = "Collection of audio level meters with GUI in LV2 plugin format";
-      homepage = http://x42.github.io/meters.lv2/;
-      maintainers = with maintainers; [ ehmry ];
-      license = licenses.gpl2;
-      platforms = platforms.linux;
-    };
+  meta = with lib; {
+    description = "Collection of audio level meters with GUI in LV2 plugin format";
+    mainProgram = "x42-meter";
+    homepage = "https://x42.github.io/meters.lv2/";
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+  };
 }

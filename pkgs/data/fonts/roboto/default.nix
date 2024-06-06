@@ -1,31 +1,33 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "roboto-${version}";
-  version = "2.134";
+stdenvNoCC.mkDerivation rec {
+  pname = "roboto";
+  version = "2.138";
 
-  src = fetchurl {
+  src = fetchzip {
     url = "https://github.com/google/roboto/releases/download/v${version}/roboto-unhinted.zip";
-    sha256 = "1l033xc2n4754gwakxshh5235cnrnzy7q6zsp5zghn8ib0gdp5rb";
+    stripRoot = false;
+    hash = "sha256-ue3PUZinBpcYgSho1Zrw1KHl7gc/GlN1GhWFk6g5QXE=";
   };
 
-  nativeBuildInputs = [ unzip ];
-
   installPhase = ''
-    mkdir -p $out/share/fonts/truetype
-    cp -a * $out/share/fonts/truetype/
+    runHook preInstall
+
+    install -Dm644 *.ttf -t $out/share/fonts/truetype
+
+    runHook postInstall
   '';
 
   meta = {
-    homepage = https://github.com/google/roboto;
+    homepage = "https://github.com/google/roboto";
     description = "The Roboto family of fonts";
     longDescription = ''
       Google’s signature family of fonts, the default font on Android and
       Chrome OS, and the recommended font for Google’s visual language,
       Material Design.
     '';
-    license = stdenv.lib.licenses.asl20;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
-    platforms = stdenv.lib.platforms.all;
+    license = lib.licenses.asl20;
+    platforms = lib.platforms.all;
+    maintainers = [ lib.maintainers.romildo ];
   };
 }

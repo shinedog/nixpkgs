@@ -1,36 +1,43 @@
-{ stdenv, fetchFromGitHub, freetype, libX11, libXt, libXft
-, version ? "2016-10-08"
-, rev ? "a17c4a9c2a1af2de0a756fe16d482e0db88c0541"
-, sha256 ? "03xmfzlijz4gbmr7l0pb1gl9kmlz1ab3hr8d51innvlasy4g6xgj"
-}:
+{ lib, stdenv, fetchFromGitHub, freetype, libX11, libXi, libXt, libXft }:
 
 stdenv.mkDerivation rec {
-  inherit version;
-  name = "deadpixi-sam-unstable-${version}";
-    src = fetchFromGitHub {
-      inherit sha256 rev;
-      owner = "deadpixi";
-      repo = "sam";
-    };
+  pname = "deadpixi-sam-unstable";
+  version = "2020-07-14";
+
+  src = fetchFromGitHub {
+    owner = "deadpixi";
+    repo = "sam";
+    rev = "5d8acb35d78c327d76f00a54857cbd566ed9bc11";
+    sha256 = "sha256-+vRh6nDPc3UnmEdqROHRel5Te0h5m4eiaERs492xciQ=";
+  };
 
   postPatch = ''
     substituteInPlace config.mk.def \
-      --replace "/usr/include/freetype2" "${freetype.dev}/include/freetype2"
+      --replace "/usr/include/freetype2" "${freetype.dev}/include/freetype2" \
+      --replace "CC=gcc" "CC=${stdenv.cc.targetPrefix}cc" \
+      --replace "RXPATH=/usr/bin/ssh" "RXPATH=ssh"
   '';
 
+  CFLAGS = "-D_DARWIN_C_SOURCE";
   makeFlags = [ "DESTDIR=$(out)" ];
-  buildInputs = [ libX11 libXt libXft ];
+  buildInputs = [ libX11 libXi libXt libXft ];
+  # build fails when run in parallel
+  enableParallelBuilding = false;
 
   postInstall = ''
+    substituteInPlace deadpixi-sam.desktop \
+      --replace "accessories-text-editor" "$out/share/icons/hicolor/scalable/apps/sam.svg"
     mkdir -p $out/share/applications
+    mkdir -p $out/share/icons/hicolor/scalable/apps
     mv deadpixi-sam.desktop $out/share/applications
+    mv sam.svg $out/share/icons/hicolor/scalable/apps
   '';
 
-  meta = with stdenv.lib; {
-    inherit (src.meta) homepage;
+  meta = with lib; {
+    homepage = "https://github.com/deadpixi/sam";
     description = "Updated version of the sam text editor";
-    license = with licenses; lpl-102;
+    license = licenses.lpl-102;
     maintainers = with maintainers; [ ramkromberg ];
-    platforms = with platforms; linux;
+    platforms = platforms.unix;
   };
 }

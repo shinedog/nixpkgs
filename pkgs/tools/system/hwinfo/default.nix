@@ -1,35 +1,57 @@
-{ stdenv, fetchurl, libx86emu, flex, perl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, flex
+, libuuid
+, libx86emu
+, perl
+}:
 
 stdenv.mkDerivation rec {
-  name = "hwinfo-${version}";
-  version = "21.23";
+  pname = "hwinfo";
+  version = "23.2";
 
-  src = fetchurl {
-    url = "https://github.com/opensuse/hwinfo/archive/${version}.tar.gz";
-    sha256 = "1a8815zp3a7n2jx0cn0hcr69rfr6vmw8r8grbn5mv61g90bbcj6p";
+  src = fetchFromGitHub {
+    owner = "opensuse";
+    repo = "hwinfo";
+    rev = version;
+    hash = "sha256-YAhsnE1DJ5UlYAuhDxS/5IpfIJB6DrhCT3E0YiKENjU=";
   };
 
-  patchPhase = ''
-    # VERSION and changelog is usually generated using Git
-    echo "${version}" > VERSION
+  nativeBuildInputs = [
+    flex
+  ];
+
+  buildInputs = [
+    libuuid
+    libx86emu
+    perl
+  ];
+
+  postPatch = ''
+    # VERSION and changelog are usually generated using Git
+    # unless HWINFO_VERSION is defined (see Makefile)
+    export HWINFO_VERSION="${version}"
     sed -i 's|^\(TARGETS\s*=.*\)\<changelog\>\(.*\)$|\1\2|g' Makefile
 
-    sed -i 's|lex isdn_cdb.lex|${flex}/bin/flex isdn_cdb.lex|g' src/isdn/cdb/Makefile
-    sed -i 's|/sbin|/bin|g' Makefile
-    sed -i 's|/usr/|/|g' Makefile
+    substituteInPlace Makefile --replace "/sbin" "/bin" --replace "/usr/" "/"
+    substituteInPlace src/isdn/cdb/Makefile --replace "lex isdn_cdb.lex" "flex isdn_cdb.lex"
+    substituteInPlace hwinfo.pc.in --replace "prefix=/usr" "prefix=$out"
   '';
 
-  installPhase = ''
-    make install DESTDIR=$out
-  '';
+  makeFlags = [
+    "LIBDIR=/lib"
+  ];
 
-  buildInputs = [ libx86emu flex perl ];
+  installFlags = [
+    "DESTDIR=$(out)"
+  ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Hardware detection tool from openSUSE";
-    license = licenses.gpl2;
-    homepage = https://github.com/openSUSE/hwinfo;
+    license = licenses.gpl2Only;
+    homepage = "https://github.com/openSUSE/hwinfo";
     maintainers = with maintainers; [ bobvanderlinden ];
-    platforms = platforms.unix;
+    platforms = platforms.linux;
   };
 }

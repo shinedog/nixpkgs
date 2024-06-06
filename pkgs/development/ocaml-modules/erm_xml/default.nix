@@ -1,24 +1,32 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild }:
+{ stdenv, lib, fetchFromGitHub, ocaml, findlib, ocamlbuild }:
 
-let version = "0.3"; in
+if lib.versionOlder ocaml.version "4.02"
+|| lib.versionAtLeast ocaml.version "5.0"
+then throw "erm_xml is not available for OCaml ${ocaml.version}"
+else
 
-stdenv.mkDerivation {
-  name = "ocaml-erm_xml-${version}";
+stdenv.mkDerivation rec {
+  pname = "ocaml${ocaml.version}-erm_xml";
+  version = "0.3+20180112";
 
-  src = fetchzip {
-    url = "https://github.com/ermine/xml/archive/v${version}.tar.gz";
-    sha256 = "19znk5w0qiw3wij4n6w3h5bcr221yy57jf815fr8k9m8kin710g3";
+  src = fetchFromGitHub {
+    owner = "hannesm";
+    repo = "xml";
+    rev = "bbabdade807d8281fc48806da054b70dfe482479";
+    sha256 = "sha256-OQdLTq9tJZc6XlcuPv2gxzYiQAUGd6AiBzfSi169XL0=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
+  nativeBuildInputs = [ ocaml findlib ocamlbuild ];
+
+  strictDeps = true;
 
   createFindlibDestdir = true;
 
   meta = {
-    homepage = https://github.com/ermine/xml;
+    homepage = "https://github.com/hannesm/xml";
     description = "XML Parser for discrete data";
-    platforms = ocaml.meta.platforms or [];
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    platforms = ocaml.meta.platforms or [ ];
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ vbgl ];
   };
 }

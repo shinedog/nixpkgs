@@ -1,31 +1,65 @@
+{ lib
+, mkDerivation
+, fetchFromGitHub
+, fetchurl
+, povray
+, qmake
+, qttools
+, substituteAll
+, zlib
+}:
+
 /*
 To use aditional parts libraries
 set the variable LEOCAD_LIB=/path/to/libs/ or use option -l /path/to/libs/
 */
 
-{ stdenv, fetchsvn, qt4, qmake4Hook, zlib }:
-
-stdenv.mkDerivation rec {
-  name = "leocad-${version}";
-  version = "0.81";
-
-  src = fetchsvn {
-    url = "http://svn.leocad.org/tags/${name}";
-    sha256 = "1190gb437ls51hhfiwa79fq131026kywpy3j3k4fkdgfr8a9v3q8";
+let
+  parts = fetchurl {
+    url = "https://web.archive.org/web/20210705153544/https://www.ldraw.org/library/updates/complete.zip";
+    sha256 = "sha256-PW3XCbFwRaNkx4EgCnl2rXH7QgmpNgjTi17kZ5bladA=";
   };
 
-  buildInputs = [ qt4 qmake4Hook zlib ];
+in
+mkDerivation rec {
+  pname = "leocad";
+  version = "21.06";
 
-  postPatch = ''
-    sed '1i#include <cmath>' -i common/camera.cpp
-    substituteInPlace common/camera.cpp --replace "isnan(" "std::isnan("
-    export qmakeFlags="$qmakeFlags INSTALL_PREFIX=$out"
-  '';
+  src = fetchFromGitHub {
+    owner = "leozide";
+    repo = "leocad";
+    rev = "v${version}";
+    sha256 = "1ifbxngkbmg6d8vv08amxbnfvlyjdwzykrjp98lbwvgb0b843ygq";
+  };
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ qmake qttools ];
+
+  buildInputs = [ zlib ];
+
+  propagatedBuildInputs = [ povray ];
+
+  patches = [
+    (substituteAll {
+      src = ./povray.patch;
+      inherit povray;
+    })
+  ];
+
+  qmakeFlags = [
+    "INSTALL_PREFIX=${placeholder "out"}"
+    "DISABLE_UPDATE_CHECK=1"
+  ];
+
+  qtWrapperArgs = [
+    "--set-default LEOCAD_LIB ${parts}"
+  ];
+
+  meta = with lib; {
     description = "CAD program for creating virtual LEGO models";
-    homepage = http://www.leocad.org/;
-    license = licenses.gpl2;
-    inherit (qt4.meta) platforms;
+    mainProgram = "leocad";
+    homepage = "https://www.leocad.org/";
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ peterhoeg ];
+    platforms = platforms.linux;
   };
 }

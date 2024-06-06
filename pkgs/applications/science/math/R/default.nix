@@ -1,84 +1,133 @@
-{ stdenv, fetchurl, bzip2, gfortran, libX11, libXmu, libXt, libjpeg, libpng
-, libtiff, ncurses, pango, pcre, perl, readline, tcl, texLive, tk, xz, zlib
-, less, texinfo, graphviz, icu, pkgconfig, bison, imake, which, jdk, openblas
-, curl, Cocoa, Foundation, cf-private, libobjc, tzdata
+{ lib, stdenv, fetchurl, fetchpatch, bzip2, gfortran, libX11, libXmu, libXt, libjpeg, libpng
+, libtiff, ncurses, pango, pcre2, perl, readline, tcl, texlive, texliveSmall, tk, xz, zlib
+, less, texinfo, graphviz, icu, pkg-config, bison, imake, which, jdk, blas, lapack
+, curl, Cocoa, Foundation, libobjc, libcxx, tzdata
 , withRecommendedPackages ? true
 , enableStrictBarrier ? false
+, enableMemoryProfiling ? false
+# R as of writing does not support outputting both .so and .a files; it outputs:
+#     --enable-R-static-lib conflicts with --enable-R-shlib and will be ignored
+, static ? false
+, testers
 }:
 
-stdenv.mkDerivation rec {
-  name = "R-3.2.4";
+assert (!blas.isILP64) && (!lapack.isILP64);
 
-  src = fetchurl {
-    url = "http://cran.r-project.org/src/base/R-3/${name}.tar.gz";
-    sha256 = "0l6k3l3cy6fa9xkn23zvz5ykpw10s45779x88yz3pzn2x5gl1zds";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "R";
+  version = "4.3.3";
+
+  src = let
+    inherit (finalAttrs) pname version;
+  in fetchurl {
+    url = "https://cran.r-project.org/src/base/R-${lib.versions.major version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-gIUSMTk7hb84d+6eObKC51Dthkxexgy9aObhOfBSAzA=";
   };
 
-  buildInputs = [ bzip2 gfortran libX11 libXmu libXt
-    libXt libjpeg libpng libtiff ncurses pango pcre perl readline
-    texLive xz zlib less texinfo graphviz icu pkgconfig bison imake
-    which jdk openblas curl ]
-    ++ stdenv.lib.optionals (!stdenv.isDarwin) [ tcl tk ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ Cocoa Foundation cf-private libobjc ];
+  outputs = [ "out" "tex" ];
 
-  patches = [ ./no-usr-local-search-paths.patch ];
+  dontUseImakeConfigure = true;
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [
+    bzip2 gfortran libX11 libXmu libXt libXt libjpeg libpng libtiff ncurses
+    pango pcre2 perl readline (texliveSmall.withPackages (ps: with ps; [ inconsolata helvetic ps.texinfo fancyvrb cm-super rsfs ])) xz zlib less texinfo graphviz icu
+    bison imake which blas lapack curl tcl tk jdk tzdata
+  ] ++ lib.optionals stdenv.isDarwin [ Cocoa Foundation libobjc libcxx ];
+
+  patches = [
+    ./no-usr-local-search-paths.patch
+    (fetchpatch {
+      # https://hiddenlayer.com/research/r-bitrary-code-execution/
+      name = "CVE-2024-27322.patch";
+      url = "https://github.com/r-devel/r-svn/commit/f7c46500f455eb4edfc3656c3fa20af61b16abb7.patch";
+      hash = "sha256-CH2mMmie9E96JeGSC7UGm7/roUNhK5xv6HO53N2ixEI=";
+    })
+  ];
+
+  # Test of the examples for package 'tcltk' fails in Darwin sandbox. See:
+  # https://github.com/NixOS/nixpkgs/issues/146131
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    substituteInPlace configure \
+      --replace "-install_name libRblas.dylib" "-install_name $out/lib/R/lib/libRblas.dylib" \
+      --replace "-install_name libRlapack.dylib" "-install_name $out/lib/R/lib/libRlapack.dylib" \
+      --replace "-install_name libR.dylib" "-install_name $out/lib/R/lib/libR.dylib"
+    substituteInPlace tests/Examples/Makefile.in \
+      --replace "test-Examples: test-Examples-Base" "test-Examples:" # do not test the examples
+  '';
+
+  dontDisableStatic = static;
 
   preConfigure = ''
     configureFlagsArray=(
       --disable-lto
-      --with${stdenv.lib.optionalString (!withRecommendedPackages) "out"}-recommended-packages
-      --with-blas="-L${openblas}/lib -lopenblas"
-      --with-lapack="-L${openblas}/lib -lopenblas"
+      --with${lib.optionalString (!withRecommendedPackages) "out"}-recommended-packages
+      --with-blas="-L${blas}/lib -lblas"
+      --with-lapack="-L${lapack}/lib -llapack"
       --with-readline
       --with-tcltk --with-tcl-config="${tcl}/lib/tclConfig.sh" --with-tk-config="${tk}/lib/tkConfig.sh"
       --with-cairo
       --with-libpng
       --with-jpeglib
       --with-libtiff
-      --with-system-zlib
-      --with-system-bzlib
-      --with-system-pcre
-      --with-system-xz
       --with-ICU
-      ${stdenv.lib.optionalString enableStrictBarrier "--enable-strict-barrier"}
-      --enable-R-shlib
+      ${lib.optionalString enableStrictBarrier "--enable-strict-barrier"}
+      ${lib.optionalString enableMemoryProfiling "--enable-memory-profiling"}
+      ${if static then "--enable-R-static-lib" else "--enable-R-shlib"}
       AR=$(type -p ar)
       AWK=$(type -p gawk)
-      CC=$(type -p gcc)
-      CXX=$(type -p g++)
+      CC=$(type -p cc)
+      CXX=$(type -p c++)
       FC="${gfortran}/bin/gfortran" F77="${gfortran}/bin/gfortran"
       JAVA_HOME="${jdk}"
       RANLIB=$(type -p ranlib)
+      r_cv_have_curl728=yes
       R_SHELL="${stdenv.shell}"
-  '' + stdenv.lib.optionalString stdenv.isDarwin ''
-      --without-tcltk
-      --without-aqua
+  '' + lib.optionalString stdenv.isDarwin ''
       --disable-R-framework
-      CC="clang"
-      CXX="clang++"
+      --without-x
       OBJC="clang"
+      CPPFLAGS="-isystem ${lib.getDev libcxx}/include/c++/v1"
+      LDFLAGS="-L${lib.getLib libcxx}/lib"
   '' + ''
     )
-    echo "TCLLIBPATH=${tk}/lib" >>etc/Renviron.in
-  '';
-
-  postConfigure = stdenv.lib.optionalString stdenv.isDarwin ''
-    sed -i 's|/usr/share/zoneinfo|${tzdata}/share/zoneinfo|g' src/library/base/R/datetime.R
-    sed -i 's|getenv("R_SHARE_DIR")|"${tzdata}/share"|g' src/extra/tzone/localtime.c
+    echo >>etc/Renviron.in "TCLLIBPATH=${tk}/lib"
+    echo >>etc/Renviron.in "TZDIR=${tzdata}/share/zoneinfo"
   '';
 
   installTargets = [ "install" "install-info" "install-pdf" ];
 
+  # move tex files to $tex for use with texlive.combine
+  # add link in $out since ${R_SHARE_DIR}/texmf is hardcoded in several places
+  postInstall = ''
+    mv -T "$out/lib/R/share/texmf" "$tex"
+    ln -s "$tex" "$out/lib/R/share/texmf"
+  '';
+
+  # The store path to "which" is baked into src/library/base/R/unix/system.unix.R,
+  # but Nix cannot detect it as a run-time dependency because the installed file
+  # is compiled and compressed, which hides the store path.
+  postFixup = "echo ${which} > $out/nix-support/undetected-runtime-dependencies";
+
   doCheck = true;
+  preCheck = "export HOME=$TMPDIR; export TZ=CET; bin/Rscript -e 'sessionInfo()'";
 
   enableParallelBuilding = true;
 
   setupHook = ./setup-hook.sh;
 
-  meta = {
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+
+  # make tex output available to texlive.combine
+  passthru.pkgs = [ finalAttrs.finalPackage.tex ];
+  passthru.tlType = "run";
+  # dependencies (based on \RequirePackage in jss.cls, Rd.sty, Sweave.sty)
+  passthru.tlDeps = with texlive; [ amsfonts amsmath fancyvrb graphics hyperref iftex jknapltx latex lm tools upquote url ];
+
+  meta = with lib; {
     homepage = "http://www.r-project.org/";
     description = "Free software environment for statistical computing and graphics";
-    license = stdenv.lib.licenses.gpl2Plus;
+    license = licenses.gpl2Plus;
 
     longDescription = ''
       GNU R is a language and environment for statistical computing and
@@ -99,9 +148,9 @@ stdenv.mkDerivation rec {
       user-defined recursive functions and input and output facilities.
     '';
 
-    platforms = stdenv.lib.platforms.all;
-    hydraPlatforms = stdenv.lib.platforms.linux;
+    pkgConfigModules = [ "libR" ];
+    platforms = platforms.all;
 
-    maintainers = [ stdenv.lib.maintainers.peti ];
+    maintainers = with maintainers; [ jbedo ] ++ teams.sage.members;
   };
-}
+})

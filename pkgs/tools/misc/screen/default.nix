@@ -1,27 +1,43 @@
-{ stdenv, fetchurl, fetchpatch, ncurses, utmp, pam ? null }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, ncurses
+, libxcrypt
+, utmp
+, pam ? null
+}:
 
 stdenv.mkDerivation rec {
-  name = "screen-4.4.0";
+  pname = "screen";
+  version = "4.9.1";
 
   src = fetchurl {
-    url = "mirror://gnu/screen/${name}.tar.gz";
-    sha256 = "12r12xwhsg59mlprikbbmn60gh8lqhrvyar7mlxg4fwsfma2lwpg";
+    url = "mirror://gnu/screen/${pname}-${version}.tar.gz";
+    hash = "sha256-Js7z48QlccDUhK1vrxEMXBUJH7+HKwb6eqR2bHQFrGk=";
   };
 
-  configureFlags= [
+  configureFlags = [
     "--enable-telnet"
     "--enable-pam"
     "--with-sys-screenrc=/etc/screenrc"
     "--enable-colors256"
+    "--enable-rxvt_osc"
   ];
 
-  buildInputs = [ ncurses ] ++ stdenv.lib.optional stdenv.isLinux pam
-                            ++ stdenv.lib.optional stdenv.isDarwin utmp;
+  nativeBuildInputs = [
+    autoreconfHook
+  ];
+  buildInputs = [
+    ncurses
+    libxcrypt
+  ] ++ lib.optional stdenv.isLinux pam
+    ++ lib.optional stdenv.isDarwin utmp;
 
   doCheck = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://www.gnu.org/software/screen/;
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/screen/";
     description = "A window manager that multiplexes a physical terminal";
     license = licenses.gpl2Plus;
 
@@ -48,6 +64,6 @@ stdenv.mkDerivation rec {
       '';
 
     platforms = platforms.unix;
-    maintainers = with maintainers; [ peti jgeerds vrthra ];
+    maintainers = with maintainers; [ vrthra ];
   };
 }

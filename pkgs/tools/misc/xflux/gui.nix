@@ -1,47 +1,49 @@
-{ stdenv, fetchFromGitHub, pythonPackages
-, gnome_python
-, libappindicator-gtk2, xflux, librsvg, wrapGAppsHook
+{ lib, fetchFromGitHub, buildPythonApplication, python3Packages, wrapGAppsHook3
+, xflux, gtk3, gobject-introspection, pango, gdk-pixbuf, atk
+, pexpect, pygobject3, pyxdg, libappindicator-gtk3
 }:
-pythonPackages.buildPythonApplication rec {
-  name = "xflux-gui-${version}";
-  version = "2016-09-21";
+buildPythonApplication rec {
+  pname = "xflux-gui";
+  version = "1.2.0";
 
   src = fetchFromGitHub {
     repo = "xflux-gui";
     owner = "xflux-gui";
-    rev = "0b56204477494b473a390e8b0db043437ec14f32";
-    sha256 = "15pr8f31jnhqjlpvasnj6cmm6hw5gljphh2pxzav3zd9bp4yl56r";
+    rev = "v${version}";
+    sha256 = "09zphcd9821ink63636swql4g85hg6lpsazqg1mawlk9ikc8zbps";
   };
 
-  propagatedBuildInputs = with pythonPackages; [
-    pexpect
-    pyGtkGlade
-    pygobject2
+  propagatedBuildInputs = [
     pyxdg
-    libappindicator-gtk2
-    gnome_python
+    pexpect
+    pygobject3
   ];
 
-  buildInputs = [ xflux librsvg ];
+  buildInputs = [
+    xflux gtk3
+  ];
 
-  nativeBuildInputs = [ wrapGAppsHook ];
+  nativeBuildInputs = [
+    wrapGAppsHook3 gobject-introspection
+    pango gdk-pixbuf atk libappindicator-gtk3
+  ];
 
   postPatch = ''
-     substituteInPlace src/fluxgui/xfluxcontroller.py --replace "pexpect.spawn(\"xflux\"" "pexpect.spawn(\"${xflux}/bin/xflux\""
+     substituteInPlace src/fluxgui/xfluxcontroller.py \
+       --replace "pexpect.spawn(\"xflux\"" "pexpect.spawn(\"${xflux}/bin/xflux\""
   '';
 
   postFixup = ''
     wrapGAppsHook
-    makeWrapperArgs="''${gappsWrapperArgs[@]}"
     wrapPythonPrograms
-    patchPythonScript $out/${pythonPackages.python.sitePackages}/fluxgui/fluxapp.py
+    patchPythonScript $out/${python3Packages.python.sitePackages}/fluxgui/fluxapp.py
   '';
 
   meta = {
     description = "Better lighting for Linux. Open source GUI for xflux";
-    homepage = https://justgetflux.com/linux.html;
-    license = stdenv.lib.licenses.unfree; # marked as unfree since the source code contains a copy of the unfree xflux binary
-    maintainers = [ stdenv.lib.maintainers.sheenobu ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://justgetflux.com/linux.html";
+    license = lib.licenses.unfree; # marked as unfree since the source code contains a copy of the unfree xflux binary
+    maintainers = [ lib.maintainers.sheenobu ];
+    platforms = lib.platforms.linux;
   };
 }

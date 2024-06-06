@@ -1,39 +1,40 @@
-{ stdenv, fetchurl, makeWrapper, jre, jdk, gcc, xorg
-, chromedriver, chromeSupport ? true }:
-
-with stdenv.lib;
+{ lib, stdenv, fetchurl, makeWrapper, jre
+, htmlunit-driver, chromedriver, chromeSupport ? true }:
 
 let
-  arch = if stdenv.system == "x86_64-linux" then "amd64"
-         else if stdenv.system == "i686-linux" then "i386"
-         else "";
+  minorVersion = "3.141";
+  patchVersion = "59";
 
 in stdenv.mkDerivation rec {
-  name = "selenium-server-standalone-${version}";
-  version = "2.53.0";
+  pname = "selenium-server-standalone";
+  version = "${minorVersion}.${patchVersion}";
 
   src = fetchurl {
-    url = "http://selenium-release.storage.googleapis.com/2.53/selenium-server-standalone-${version}.jar";
-    sha256 = "0dp0n5chl1frjy9pcyjvpcdgv1f4dkslh2bpydpxwc5isfzqrf37";
+    url = "http://selenium-release.storage.googleapis.com/${minorVersion}/selenium-server-standalone-${version}.jar";
+    sha256 = "1jzkx0ahsb27zzzfvjqv660x9fz2pbcddgmhdzdmasxns5vipxxc";
   };
 
-  unpackPhase = "true";
+  dontUnpack = true;
 
-  buildInputs = [ jre makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ jre ];
 
   installPhase = ''
-    mkdir -p $out/share/lib/${name}
-    cp $src $out/share/lib/${name}/${name}.jar
+    mkdir -p $out/share/lib/${pname}-${version}
+    cp $src $out/share/lib/${pname}-${version}/${pname}-${version}.jar
     makeWrapper ${jre}/bin/java $out/bin/selenium-server \
-      --add-flags "-jar $out/share/lib/${name}/${name}.jar" \
-      --add-flags ${optionalString chromeSupport "-Dwebdriver.chrome.driver=${chromedriver}/bin/chromedriver"}
+      --add-flags "-cp $out/share/lib/${pname}-${version}/${pname}-${version}.jar:${htmlunit-driver}/share/lib/${htmlunit-driver.name}/${htmlunit-driver.name}.jar" \
+      ${lib.optionalString chromeSupport "--add-flags -Dwebdriver.chrome.driver=${chromedriver}/bin/chromedriver"} \
+      --add-flags "org.openqa.grid.selenium.GridLauncherV3"
   '';
 
-  meta = {
-    homepage = https://code.google.com/p/selenium;
+  meta = with lib; {
+    homepage = "http://www.seleniumhq.org/";
     description = "Selenium Server for remote WebDriver";
-    maintainers = with maintainers; [ coconnor offline ];
-    platforms = platforms.all;
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.asl20;
+    maintainers = with maintainers; [ coconnor offline ];
+    mainProgram = "selenium-server";
+    platforms = platforms.all;
   };
 }

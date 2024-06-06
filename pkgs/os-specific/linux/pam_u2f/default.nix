@@ -1,29 +1,36 @@
-{ stdenv, fetchurl, pkgconfig, libu2f-host, libu2f-server, pam }:
+{ lib, stdenv, fetchurl, pkg-config, libfido2, pam, openssl }:
 
 stdenv.mkDerivation rec {
-  name    = "pam_u2f-${version}";
-  version = "1.0.4";
+  pname = "pam_u2f";
+  version = "1.3.0";
 
   src     = fetchurl {
-    url = "https://developers.yubico.com/pam-u2f/Releases/${name}.tar.gz";
-    sha256 = "189j0wgx6fs146vfp88djqpl1flpfb3962l1a2marlp6d12jwm3i";
+    url = "https://developers.yubico.com/pam-u2f/Releases/${pname}-${version}.tar.gz";
+    sha256 = "sha256-cjYMaHVIXrTfQJ2o+PUrF4k/BeTZmFKcI4gUSA4RUiA=";
   };
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libu2f-host libu2f-server pam ];
-
-  # Fix the broken include in 1.0.1
-  CFLAGS = "-I${libu2f-host}/include/u2f-host";
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libfido2 pam openssl ];
 
   preConfigure = ''
     configureFlagsArray+=("--with-pam-dir=$out/lib/security")
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://developers.yubico.com/pam-u2f/;
+  # a no-op makefile to prevent building the fuzz targets
+  postConfigure = ''
+    cat > fuzz/Makefile <<EOF
+    all:
+    install:
+    EOF
+  '';
+
+  meta = with lib; {
+    homepage = "https://developers.yubico.com/pam-u2f/";
     description = "A PAM module for allowing authentication with a U2F device";
+    changelog = "https://github.com/Yubico/pam-u2f/raw/pam_u2f-${version}/NEWS";
     license = licenses.bsd2;
     platforms = platforms.unix;
     maintainers = with maintainers; [ philandstuff ];
+    mainProgram = "pamu2fcfg";
   };
 }

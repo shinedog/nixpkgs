@@ -1,23 +1,57 @@
-{ fetchurl, stdenv }:
+{ stdenv
+, lib
+, fetchgit
+, buildPackages
+, docbook_xml_dtd_44
+, docbook_xsl
+, withLibcap ? stdenv.isLinux, libcap
+, pkg-config
+, meson
+, ninja
+, xmlto
+, python3
+
+, gitUpdater
+}:
 
 stdenv.mkDerivation rec {
-  name = "pax-utils-${version}";
-  version = "1.1.7";
+  pname = "pax-utils";
+  version = "1.3.7";
 
-  src = fetchurl {
-    url = "https://dev.gentoo.org/~vapier/dist/${name}.tar.xz";
-    sha256 = "045dxgl4kkmq6205iw6fqyx3565gd607p3xpad5l9scdi3qdp6xv";
+  src = fetchgit {
+    url = "https://anongit.gentoo.org/git/proj/pax-utils.git";
+    rev = "v${version}";
+    hash = "sha256-WyNng+UtfRz1+Eu4gwXLxUvBAg+m3mdrc8GdEPYRKVE=";
   };
 
-  makeFlags = [
-    "PREFIX=$(out)"
+  strictDeps = true;
+
+  mesonFlags = [
+    (lib.mesonEnable "use_libcap" withLibcap)
   ];
 
-  meta = with stdenv.lib; {
-    description = "A suite of tools for PaX/grsecurity";
-    homepage    = "https://dev.gentoo.org/~vapier/dist/";
-    license     = licenses.gpl2;
-    platforms   = platforms.linux;
+  depsBuildBuild = [ buildPackages.stdenv.cc ];
+  nativeBuildInputs = [ docbook_xml_dtd_44 docbook_xsl meson ninja pkg-config xmlto ];
+  buildInputs = lib.optionals withLibcap [ libcap ];
+  # Needed for lddtree
+  propagatedBuildInputs = [ (python3.withPackages (p: with p; [ pyelftools ])) ];
+
+  passthru.updateScript = gitUpdater {
+    url = "https://anongit.gentoo.org/git/proj/pax-utils.git";
+    rev-prefix = "v";
+  };
+
+  meta = with lib; {
+    description = "ELF utils that can check files for security relevant properties";
+    longDescription = ''
+      A suite of ELF tools to aid auditing systems. Contains
+      various ELF related utils for ELF32, ELF64 binaries useful
+      for displaying PaX and security info on a large groups of
+      binary files.
+    '';
+    homepage = "https://wiki.gentoo.org/wiki/Hardened/PaX_Utilities";
+    license = licenses.gpl2Only;
+    platforms = platforms.unix;
     maintainers = with maintainers; [ thoughtpolice joachifm ];
   };
 }

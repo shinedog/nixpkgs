@@ -1,39 +1,69 @@
-{ fetchurl, stdenv, lib }:
+{ fetchurl, stdenv, lib
+, enableStatic ? stdenv.hostPlatform.isStatic
+, enableShared ? !stdenv.hostPlatform.isStatic
+, enableDarwinABICompat ? false
+}:
 
-assert !stdenv.isLinux || stdenv ? cross; # TODO: improve on cross
+# assert !stdenv.hostPlatform.isLinux || stdenv.hostPlatform != stdenv.buildPlatform; # TODO: improve on cross
 
 stdenv.mkDerivation rec {
-  name = "libiconv-1.14";
+  pname = "libiconv";
+  version = "1.17";
 
   src = fetchurl {
-    url = "mirror://gnu/libiconv/${name}.tar.gz";
-    sha256 = "04q6lgl3kglmmhw59igq1n7v3rp1rpkypl366cy1k1yn2znlvckj";
+    url = "mirror://gnu/libiconv/${pname}-${version}.tar.gz";
+    sha256 = "sha256-j3QhO1YjjIWlClMp934GGYdx5w3Zpzl3n0wC9l2XExM=";
   };
 
-  patches = lib.optionals stdenv.isCygwin [
-    ./libiconv-1.14-reloc.patch
-    ./libiconv-1.14-wchar.patch
+  enableParallelBuilding = true;
+
+  setupHooks = [
+    ../../../build-support/setup-hooks/role.bash
+    ./setup-hook.sh
   ];
 
   postPatch =
-    lib.optionalString ((stdenv ? cross && stdenv.cross.libc == "msvcrt") || stdenv.cc.nativeLibc)
+    lib.optionalString ((stdenv.hostPlatform != stdenv.buildPlatform && stdenv.hostPlatform.isMinGW) || stdenv.cc.nativeLibc)
       ''
         sed '/^_GL_WARN_ON_USE (gets/d' -i srclib/stdio.in.h
-      '';
+      ''
+    + lib.optionalString (!enableShared) ''
+      sed -i -e '/preload/d' Makefile.in
+    ''
+    # The system libiconv is based on libiconv 1.11 with some ABI differences. The following changes
+    # build a compatible libiconv on Darwin, allowing it to be sustituted in place of the system one
+    # using `install_name_tool`. This removes the need to for a separate, Darwin-specific libiconv
+    # derivation and allows Darwin to benefit from upstream updates and fixes.
+    + lib.optionalString enableDarwinABICompat ''
+      for iconv_h_in in iconv.h.in iconv.h.build.in; do
+        substituteInPlace "include/$iconv_h_in" \
+          --replace-fail "#define iconv libiconv" "" \
+          --replace-fail "#define iconv_close libiconv_close" "" \
+          --replace-fail "#define iconv_open libiconv_open" "" \
+          --replace-fail "#define iconv_open_into libiconv_open_into" "" \
+          --replace-fail "#define iconvctl libiconvctl" "" \
+          --replace-fail "#define iconvlist libiconvlist" ""
+      done
+    '';
 
-  configureFlags =
-  # On Cygwin, Libtool produces a `.dll.a', which is not a "real" DLL
-  # (Windows' linker would need to be used somehow to produce an actual
-  # DLL.)  Thus, build the static library too, and this is what Gettext
-  # will actually use.
-    lib.optional stdenv.isCygwin "--enable-static"
-    ++ lib.optional stdenv.isFreeBSD "--with-pic";
+  # This is hacky, but `libiconv.dylib` needs to reexport `libcharset.dylib` to match the behavior
+  # of the system libiconv on Darwin. Trying to do this by modifying the `Makefile` results in an
+  # error linking `iconv` because `libcharset.dylib` is not at its final path yet. Avoid the error
+  # by building without the reexport then clean and rebuild `libiconv.dylib` with the reexport.
+  #
+  # For an explanation why `libcharset.dylib` is reexported, see:
+  # https://github.com/apple-oss-distributions/libiconv/blob/a167071feb7a83a01b27ec8d238590c14eb6faff/xcodeconfig/libiconv.xcconfig
+  postBuild = lib.optionalString enableDarwinABICompat ''
+    make clean -C lib
+    NIX_CFLAGS_COMPILE+=" -Wl,-reexport-lcharset -L. " make -C lib -j$NIX_BUILD_CORES SHELL=$SHELL
+  '';
 
-  crossAttrs = {
-    # Disable stripping to avoid "libiconv.a: Archive has no index" (MinGW).
-    dontStrip = true;
-    dontCrossStrip = true;
-  };
+  configureFlags = [
+    (lib.enableFeature enableStatic "static")
+    (lib.enableFeature enableShared "shared")
+  ] ++ lib.optional stdenv.isFreeBSD "--with-pic";
+
+  passthru = { inherit setupHooks; };
 
   meta = {
     description = "An iconv(3) implementation";
@@ -48,10 +78,11 @@ stdenv.mkDerivation rec {
       applications.
     '';
 
-    homepage = http://www.gnu.org/software/libiconv/;
+    homepage = "https://www.gnu.org/software/libiconv/";
     license = lib.licenses.lgpl2Plus;
 
     maintainers = [ ];
+    mainProgram = "iconv";
 
     # This library is not needed on GNU platforms.
     hydraPlatforms = with lib.platforms; cygwin ++ darwin ++ freebsd;

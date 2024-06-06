@@ -1,25 +1,41 @@
-{stdenv, fetchurl, unzip}:
+{ lib, stdenv, fetchurl, unzip, makeWrapper, openjdk }:
 
 stdenv.mkDerivation rec {
-  name = "pmd-${version}";
-  version = "5.2.3";
-
-  buildInputs = [ unzip ];
+  pname = "pmd";
+  version = "6.55.0";
 
   src = fetchurl {
-    url = "mirror://sourceforge/pmd/pmd-bin-${version}.zip";
-    sha256 = "03frkyiii7304qrcypdqcxqxjf5n3p59zjib0r802mbbx1nzcisn";
+    url = "https://github.com/pmd/pmd/releases/download/pmd_releases/${version}/pmd-bin-${version}.zip";
+    hash = "sha256-Iaz5bUPLQNWRyszMHCCmb8eW6t32nqYYEllER7rHoR0=";
   };
+
+  nativeBuildInputs = [ unzip makeWrapper ];
+
+  dontConfigure = true;
+  dontBuild = true;
 
   installPhase = ''
-    mkdir -p $out
-    cp -R * $out
+    runHook preInstall
+
+    install -Dm755 bin/run.sh $out/libexec/pmd
+    install -Dm644 lib/*.jar -t $out/lib/pmd
+
+    wrapProgram $out/libexec/pmd \
+        --prefix PATH : ${openjdk.jre}/bin \
+        --set LIB_DIR $out/lib/pmd
+
+    for app in pmd cpd cpdgui designer bgastviewer designerold ast-dump; do
+        makeWrapper $out/libexec/pmd $out/bin/$app --argv0 $app --add-flags $app
+    done
+
+    runHook postInstall
   '';
 
-  meta = {
-    description = "Scans Java source code and looks for potential problems";
-    homepage = http://pmd.sourceforge.net/;
-    platforms = stdenv.lib.platforms.unix;
+  meta = with lib; {
+    description = "An extensible cross-language static code analyzer";
+    homepage = "https://pmd.github.io/";
+    changelog = "https://pmd.github.io/pmd-${version}/pmd_release_notes.html";
+    platforms = platforms.unix;
+    license = with licenses; [ bsdOriginal asl20 ];
   };
 }
-

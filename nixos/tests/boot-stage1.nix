@@ -1,7 +1,7 @@
-import ./make-test.nix ({ pkgs, ... }: {
+import ./make-test-python.nix ({ pkgs, ... }: {
   name = "boot-stage1";
 
-  machine = { config, pkgs, lib, ... }: {
+  nodes.machine = { config, pkgs, lib, ... }: {
     boot.extraModulePackages = let
       compileKernelModule = name: source: pkgs.runCommandCC name rec {
         inherit source;
@@ -9,6 +9,7 @@ import ./make-test.nix ({ pkgs, ... }: {
         kver = config.boot.kernelPackages.kernel.modDirVersion;
         ksrc = "${kdev}/lib/modules/${kver}/build";
         hardeningDisable = [ "pic" ];
+        nativeBuildInputs = kdev.moduleBuildDependencies;
       } ''
         echo "obj-m += $name.o" > Makefile
         echo "$source" > "$name.c"
@@ -21,11 +22,18 @@ import ./make-test.nix ({ pkgs, ... }: {
       # the boot process kills any kthread by accident, like what happened in
       # issue #15226.
       kcanary = compileKernelModule "kcanary" ''
+        #include <linux/version.h>
         #include <linux/init.h>
         #include <linux/module.h>
         #include <linux/kernel.h>
         #include <linux/kthread.h>
         #include <linux/sched.h>
+        #include <linux/signal.h>
+        #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
+        #include <linux/sched/signal.h>
+        #endif
+
+        MODULE_LICENSE("GPL");
 
         struct task_struct *canaryTask;
 
@@ -99,8 +107,8 @@ import ./make-test.nix ({ pkgs, ... }: {
         '';
       };
 
-      copyCanaries = with lib; concatMapStrings (canary: ''
-        ${optionalString (canary ? child) ''
+      copyCanaries = lib.concatMapStrings (canary: ''
+        ${lib.optionalString (canary ? child) ''
           copy_bin_and_libs "${canary.child}/bin/${canary.child.name}"
         ''}
         copy_bin_and_libs "${canary}/bin/${canary.name}"
@@ -124,7 +132,7 @@ import ./make-test.nix ({ pkgs, ... }: {
         '';
       })
 
-      # This canary process mimicks a storage daemon, which we do NOT want to be
+      # This canary process mimics a storage daemon, which we do NOT want to be
       # killed before going into stage 2. For more on root storage daemons, see:
       # https://www.freedesktop.org/wiki/Software/systemd/RootStorageDaemons/
       (mkCmdlineCanary {
@@ -144,13 +152,13 @@ import ./make-test.nix ({ pkgs, ... }: {
   };
 
   testScript = ''
-    $machine->waitForUnit("multi-user.target");
-    $machine->succeed('test -s /run/canary2.pid');
-    $machine->fail('pgrep -a canary1');
-    $machine->fail('kill -0 $(< /run/canary2.pid)');
-    $machine->succeed('pgrep -a -f \'^@canary3$\''');
-    $machine->succeed('pgrep -a -f \'^kcanary$\''');
+    machine.wait_for_unit("multi-user.target")
+    machine.succeed("test -s /run/canary2.pid")
+    machine.fail("pgrep -a canary1")
+    machine.fail("kill -0 $(< /run/canary2.pid)")
+    machine.succeed('pgrep -a -f "^@canary3$"')
+    machine.succeed('pgrep -a -f "^kcanary$"')
   '';
 
-  meta.maintainers = with pkgs.stdenv.lib.maintainers; [ aszlig ];
+  meta.maintainers = with pkgs.lib.maintainers; [ aszlig ];
 })

@@ -28,14 +28,7 @@ in {
         type = types.lines;
       };
 
-      package = mkOption {
-        description = "The ngircd package.";
-
-        type = types.package;
-
-        default = pkgs.ngircd;
-        defaultText = "pkgs.ngircd";
-      };
+      package = mkPackageOption pkgs "ngircd" { };
     };
   };
 
@@ -51,9 +44,12 @@ in {
       serviceConfig.User = "ngircd";
     };
 
-    users.extraUsers.ngircd = {
-      uid = config.ids.uids.ngircd;
+    users.users.ngircd = {
+      isSystemUser = true;
+      group = "ngircd";
       description = "ngircd user.";
     };
+    users.groups.ngircd = {};
+
   };
 }

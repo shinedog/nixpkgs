@@ -1,23 +1,52 @@
-{ stdenv, autoconf, automake, intltool, libtool, fetchFromGitHub, readline }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, gobject-introspection
+, intltool
+, wrapGAppsHook3
+, procps
+, python3
+, readline
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.15.6";
-  name = "scanmem-${version}";
+  pname = "scanmem";
+  version = "0.17";
+
   src = fetchFromGitHub {
     owner  = "scanmem";
     repo   = "scanmem";
     rev    = "v${version}";
-    sha256 = "16cw76ji3mp0sj8q0sz5wndavk10n0si1sm6kr5zpiws4sw047ii";
+    sha256 = "17p8sh0rj8yqz36ria5bp48c8523zzw3y9g8sbm2jwq7sc27i7s9";
   };
-  buildInputs = [ autoconf automake intltool libtool readline ];
-  preConfigure = ''
-    ./autogen.sh
+
+  nativeBuildInputs = [ autoreconfHook gobject-introspection intltool wrapGAppsHook3 ];
+  buildInputs = [ readline python3 ];
+  configureFlags = ["--enable-gui"];
+
+  # we don't need to wrap the main executable, just the GUI
+  dontWrapGApps = true;
+
+  fixupPhase = ''
+    runHook preFixup
+
+    # replace the upstream launcher which does stupid things
+    # also add procps because it shells out to `ps` and expects it to be procps
+    makeWrapper ${python3}/bin/python3 $out/bin/gameconqueror \
+      "''${gappsWrapperArgs[@]}" \
+      --set PYTHONPATH "${python3.pkgs.makePythonPath [ python3.pkgs.pygobject3 ]}" \
+      --prefix PATH : "${procps}/bin" \
+      --add-flags "$out/share/gameconqueror/GameConqueror.py"
+
+    runHook postFixup
   '';
-  meta = {
+
+  meta = with lib; {
     homepage = "https://github.com/scanmem/scanmem";
     description = "Memory scanner for finding and poking addresses in executing processes";
-    maintainers = [ stdenv.lib.maintainers.chattered  ];
-    platforms = with stdenv.lib.platforms; linux ++ darwin;
-    license = stdenv.lib.licenses.gpl3;
+    maintainers = [ ];
+    platforms = platforms.linux;
+    license = licenses.gpl3;
   };
 }

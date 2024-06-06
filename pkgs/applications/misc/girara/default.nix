@@ -1,37 +1,87 @@
-{ stdenv, fetchurl, pkgconfig, gtk, gettext, withBuildColors ? true, ncurses ? null}:
+{ lib
+, stdenv
+, fetchFromGitLab
+, meson
+, ninja
+, pkg-config
+, check
+, dbus
+, xvfb-run
+, glib
+, gtk
+, gettext
+, libiconv
+, json-glib
+, libintl
+, zathura
+}:
 
-assert withBuildColors -> ncurses != null;
-
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "girara-${version}";
-  version = "0.2.6";
+  pname = "girara";
+  version = "0.4.3";
 
-  src = fetchurl {
-    url = "http://pwmt.org/projects/girara/download/${name}.tar.gz";
-    sha256 = "03wsxj27hvcbs3x96nah7j3paclifwlfag8kdph4kldl48srp9pb";
+  outputs = [ "out" "dev" ];
+
+  src = fetchFromGitLab {
+    domain = "git.pwmt.org";
+    owner = "pwmt";
+    repo = "girara";
+    rev = version;
+    hash = "sha256-/bJXdLXksTxUFC3w7zuBZY6Zh7tJxUJVbS87ENDQbDE=";
   };
 
-  preConfigure = ''
-    sed -i 's/ifdef TPUT_AVAILABLE/ifneq ($(TPUT_AVAILABLE), 0)/' colors.mk
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    check
+    dbus
+    glib # for glib-compile-resources
+  ];
+
+  buildInputs = [
+    libintl
+    libiconv
+    json-glib
+  ];
+
+  propagatedBuildInputs = [
+    glib
+    gtk
+  ];
+
+  nativeCheckInputs = [
+    xvfb-run
+  ];
+
+  doCheck = !stdenv.isDarwin;
+
+  mesonFlags = [
+    "-Ddocs=disabled" # docs do not seem to be installed
+    (lib.mesonEnable "tests" ((stdenv.buildPlatform.canExecute stdenv.hostPlatform) && (!stdenv.isDarwin)))
+  ];
+
+  checkPhase = ''
+    export NO_AT_BRIDGE=1
+    xvfb-run -s '-screen 0 800x600x24' dbus-run-session \
+      --config-file=${dbus}/share/dbus-1/session.conf \
+      meson test --print-errorlogs
   '';
 
-  buildInputs = [ pkgconfig gtk gettext ];
+  passthru.tests = {
+    inherit zathura;
+  };
 
-  makeFlags = [ "PREFIX=$(out)" ]
-    ++ optional withBuildColors "TPUT=${ncurses.out}/bin/tput"
-    ++ optional (!withBuildColors) "TPUT_AVAILABLE=0"
-    ;
-
-  meta = {
-    homepage = http://pwmt.org/projects/girara/;
+  meta = with lib; {
+    homepage = "https://git.pwmt.org/pwmt/girara";
     description = "User interface library";
     longDescription = ''
-      girara is a library that implements a GTK+ based VIM-like user interface
+      girara is a library that implements a GTK based VIM-like user interface
       that focuses on simplicity and minimalism.
     '';
     license = licenses.zlib;
-    platforms = platforms.linux;
-    maintainers = [ maintainers.garbas ];
+    platforms = platforms.linux ++ platforms.darwin;
+    maintainers = [ ];
   };
 }

@@ -1,25 +1,29 @@
-{ stdenv, fetchzip, ocaml, findlib, ocamlbuild, ounit }:
+{ lib, buildDunePackage, fetchFromGitHub, qcheck }:
 
-let version = "2.2"; in
+buildDunePackage rec {
+  pname = "qtest";
+  version = "2.11.2";
 
-stdenv.mkDerivation {
-  name = "ocaml-qtest-${version}";
-  src = fetchzip {
-    url = "https://github.com/vincent-hugot/iTeML/archive/v${version}.tar.gz";
-    sha256 = "1k68z8kby1f9s5j9xbn9bz8yhk59aalffz8gj5d1y5zhyalifrlz";
+  src = fetchFromGitHub {
+    owner = "vincent-hugot";
+    repo = pname;
+    rev = "v${version}";
+    sha256 = "sha256-VLY8+Nu6md0szW4RVxTFwlSQ9kyrgUqf7wQEA6GW8BE=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild ];
-  propagatedBuildInputs = [ ounit ];
+  preBuild = ''
+    substituteInPlace src/dune \
+      --replace "(libraries bytes)" "" \
+      --replace "libraries qcheck ounit2 bytes" "libraries qcheck ounit2"
+  '';
 
-  createFindlibDestdir = true;
-  installFlags = [ "BIN=$(out)/bin" ];
-  preInstall = "mkdir -p $out/bin";
+  propagatedBuildInputs = [ qcheck ];
 
   meta = {
-    description = "Inline (Unit) Tests for OCaml (formerly “qtest”)";
-    homepage = https://github.com/vincent-hugot/iTeML;
-    platforms = ocaml.meta.platforms or [];
-    maintainers = with stdenv.lib.maintainers; [ vbgl ];
+    description = "Inline (Unit) Tests for OCaml";
+    mainProgram = "qtest";
+    inherit (src.meta) homepage;
+    maintainers = with lib.maintainers; [ vbgl ];
+    license = lib.licenses.gpl3;
   };
 }

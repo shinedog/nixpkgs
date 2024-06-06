@@ -1,31 +1,27 @@
-{stdenv, fetchurl, libX11, libXrandr}:
+{ lib, stdenv, fetchzip, libX11, libXrandr, xorgproto }:
+
 stdenv.mkDerivation rec {
-  name = "sct";
-  buildInputs = [libX11 libXrandr];
-  src = fetchurl {
-    url = http://www.tedunangst.com/flak/files/sct.c;
-    sha256 = "01f3ndx3s6d2qh2xmbpmhd4962dyh8yp95l87xwrs4plqdz6knhd";
-    
-    # Discussion regarding the checksum and the source code can be found in issue #17163 
-    # The code seems unmaintained, yet an unknown (probably small change) in the code caused 
-    # failed builds as the checksum had changed.
-    # The checksum is updated for now, however, this is unpractical and potentially unsafe 
-    # so any future changes might warrant a fork of the (feature complete) project. 
-    # The code is under public domain.
-    
+  pname = "sct";
+  version = "0.5";
+
+  src = fetchzip {
+    url = "https://www.umaxx.net/dl/sct-0.5.tar.gz";
+    sha256 = "sha256-nyYcdnCq8KcSUpc0HPCGzJI6NNrrTJLAHqPawfwPR/Q=";
   };
-  phases = ["patchPhase" "buildPhase" "installPhase"];
-  patchPhase = ''
-    sed -re "/Xlibint/d" ${src} > sct.c 
+
+  buildInputs = [ libX11 libXrandr xorgproto ];
+
+  preInstall = ''
+    mkdir -p $out/bin $out/share/man/man1
   '';
-  buildPhase = "gcc -std=c99 sct.c -o sct -lX11 -lXrandr -lm";
-  installPhase = ''
-    mkdir -p "$out/bin"
-    cp sct "$out/bin"
-  '';
-  meta = {
-    description = ''A minimal utility to set display colour temperature'';
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = with stdenv.lib.platforms; linux ++ freebsd ++ openbsd;
+
+  makeFlags = [ "PREFIX=$(out)" ];
+
+  meta = with lib; {
+    homepage = "https://www.umaxx.net/";
+    description = "A minimal utility to set display colour temperature";
+    maintainers = with maintainers; [ raskin somasis ];
+    license = licenses.publicDomain;
+    platforms = with platforms; linux ++ freebsd ++ openbsd;
   };
 }

@@ -1,38 +1,29 @@
-{stdenv, fetchsvn, coq}:
+{ lib, mkCoqDerivation, coq, version ? null }:
 
-stdenv.mkDerivation {
+(mkCoqDerivation {
+  pname = "tlc";
+  owner = "charguer";
+  inherit version;
+  displayVersion = { tlc = false; };
+  defaultVersion = with lib.versions; lib.switch coq.coq-version [
+    { case = range "8.13" "8.16"; out = "20211215"; }
+    { case = range "8.12" "8.13"; out = "20210316"; }
+    { case = range "8.10" "8.12"; out = "20200328"; }
+    { case = range "8.6"  "8.12"; out = "20181116"; }
+  ] null;
+  release."20211215".sha256 = "sha256:0m4d4jhdcyq8p2gpz9j3nd6jqzmz2bjmbpc0q06b38b8i550mamp";
+  release."20210316".sha256 = "1hlavnx20lxpf2iydbbxqmim9p8wdwv4phzp9ypij93yivih0g4a";
+  release."20200328".sha256 = "16vzild9gni8zhgb3qhmka47f8zagdh03k6nssif7drpim8233lx";
+  release."20181116".sha256 = "032lrbkxqm9d3fhf6nv1kq2z0mqd3czv3ijlbsjwnfh12xck4vpl";
 
-  name = "coq-tlc-${coq.coq-version}";
-
-  src = fetchsvn {
-    url = svn://scm.gforge.inria.fr/svn/tlc/branches/v3.1;
-    rev = 240;
-    sha256 = "0mjnb6n9wzb13y2ix9cvd6irzd9d2gj8dcm2x71wgan0jcskxadm";
+  meta = with lib; {
+    homepage = "http://www.chargueraud.org/softs/tlc/";
+    description = "A non-constructive library for Coq";
+    license = licenses.free;
+    maintainers = [ maintainers.vbgl ];
   };
-
-  buildInputs = [ coq.ocaml coq.camlp5 ];
-  propagatedBuildInputs = [ coq ];
-
-  preConfigure = ''
-    patch Makefile <<EOF
-    105c105
-    < 	\$(COQC) \$<
-    ---
-    > 	\$(COQC) -R . Tlc \$<
-    EOF
-  '';
-
-  installPhase = ''
-    COQLIB=$out/lib/coq/${coq.coq-version}/
-    mkdir -p $COQLIB/user-contrib/Tlc
-    cp -p *.vo $COQLIB/user-contrib/Tlc
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = http://www.chargueraud.org/softs/tlc/;
-    description = "A general purpose Coq library that provides an alternative to Coq's standard library";
-    maintainers = with maintainers; [ jwiegley ];
-    platforms = coq.meta.platforms;
-  };
-
-}
+}).overrideAttrs (x:
+  lib.optionalAttrs (lib.versionOlder x.version "20210316") {
+    installFlags = [ "CONTRIB=$(out)/lib/coq/${coq.coq-version}/user-contrib" ];
+  }
+)

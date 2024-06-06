@@ -1,17 +1,29 @@
-{ stdenv, fetchFromGitHub, pythonPackages }:
+{ lib, fetchFromGitHub, python3Packages, openssh, rsync }:
 
-pythonPackages.buildPythonApplication rec {
-  name = "pssh-${version}";
-  version = "2.3.1";
+python3Packages.buildPythonApplication rec {
+  pname = "pssh";
+  version = "2.3.4";
 
   src = fetchFromGitHub {
     owner = "lilydjwg";
     repo = "pssh";
     rev = "v${version}";
-    sha256 = "0nawarxczfwajclnlsimhqkpzyqb1byvz9nsl54mi1bp80z5i4jq";
+    hash = "sha256-B1dIa6hNeq4iE8GKVhTp3Gzq7vp+v5Yyzj8uF8X71yg=";
   };
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    for f in bin/*; do
+      substituteInPlace $f \
+        --replace "'ssh'" "'${openssh}/bin/ssh'" \
+        --replace "'scp'" "'${openssh}/bin/scp'" \
+        --replace "'rsync'" "'${rsync}/bin/rsync'"
+    done
+  '';
+
+  # Tests do not run with python3: https://github.com/lilydjwg/pssh/issues/126
+  doCheck = false;
+
+  meta = with lib; {
     description = "Parallel SSH Tools";
     longDescription = ''
       PSSH provides parallel versions of OpenSSH and related tools,
@@ -19,7 +31,7 @@ pythonPackages.buildPythonApplication rec {
     '';
     inherit (src.meta) homepage;
     license = licenses.bsd3;
-    platforms = platforms.linux;
+    platforms = platforms.linux ++ platforms.darwin;
     maintainers = with maintainers; [ chris-martin ];
   };
 }

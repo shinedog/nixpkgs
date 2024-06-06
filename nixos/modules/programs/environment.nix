@@ -2,9 +2,7 @@
 
 # Most of the stuff here should probably be moved elsewhere sometime.
 
-{ config, lib, pkgs, ... }:
-
-with lib;
+{ config, lib, ... }:
 
 let
 
@@ -17,50 +15,43 @@ in
   config = {
 
     environment.variables =
-      { LOCATE_PATH = "/var/cache/locatedb";
-        NIXPKGS_CONFIG = "/etc/nix/nixpkgs-config.nix";
-        PAGER = mkDefault "less -R";
-        EDITOR = mkDefault "nano";
+      { NIXPKGS_CONFIG = "/etc/nix/nixpkgs-config.nix";
+        # note: many programs exec() this directly, so default options for less must not
+        # be specified here; do so in the default value of programs.less.envVariables instead
+        PAGER = lib.mkDefault "less";
+        EDITOR = lib.mkDefault "nano";
       };
 
-    environment.profiles =
-      [ "$HOME/.nix-profile"
-        "/nix/var/nix/profiles/default"
+    # since we set PAGER to this above, make sure it's installed
+    programs.less.enable = true;
+
+    environment.profiles = lib.mkAfter
+      [ "/nix/var/nix/profiles/default"
         "/run/current-system/sw"
       ];
 
+    environment.sessionVariables =
+      {
+        XDG_CONFIG_DIRS = [ "/etc/xdg" ]; # needs to be before profile-relative paths to allow changes through environment.etc
+      };
+
     # TODO: move most of these elsewhere
-    environment.profileRelativeEnvVars =
-      { PATH = [ "/bin" "/sbin" "/lib/kde4/libexec" ];
+    environment.profileRelativeSessionVariables =
+      { PATH = [ "/bin" ];
         INFOPATH = [ "/info" "/share/info" ];
-        PKG_CONFIG_PATH = [ "/lib/pkgconfig" ];
-        TERMINFO_DIRS = [ "/share/terminfo" ];
-        PERL5LIB = [ "/lib/perl5/site_perl" ];
-        KDEDIRS = [ "" ];
-        STRIGI_PLUGIN_PATH = [ "/lib/strigi/" ];
-        QT_PLUGIN_PATH = [ "/lib/qt4/plugins" "/lib/kde4/plugins" ];
         QTWEBKIT_PLUGIN_PATH = [ "/lib/mozilla/plugins/" ];
-        GTK_PATH = [ "/lib/gtk-2.0" "/lib/gtk-3.0" ];
+        GTK_PATH = [ "/lib/gtk-2.0" "/lib/gtk-3.0" "/lib/gtk-4.0" ];
         XDG_CONFIG_DIRS = [ "/etc/xdg" ];
         XDG_DATA_DIRS = [ "/share" ];
-        MOZ_PLUGIN_PATH = [ "/lib/mozilla/plugins" ];
-        LIBEXEC_PATH = [ "/lib/libexec" ];
+        LIBEXEC_PATH = [ "/libexec" ];
       };
+
+    environment.pathsToLink = [ "/lib/gtk-2.0" "/lib/gtk-3.0" "/lib/gtk-4.0" ];
 
     environment.extraInit =
       ''
-         # reset TERM with new TERMINFO available (if any)
-         export TERM=$TERM
-
-         unset ASPELL_CONF
-         for i in ${concatStringsSep " " (reverseList cfg.profiles)} ; do
-           if [ -d "$i/lib/aspell" ]; then
-             export ASPELL_CONF="dict-dir $i/lib/aspell"
-           fi
-         done
-
          export NIX_USER_PROFILE_DIR="/nix/var/nix/profiles/per-user/$USER"
-         export NIX_PROFILES="${concatStringsSep " " (reverseList cfg.profiles)}"
+         export NIX_PROFILES="${builtins.concatStringsSep " " (lib.reverseList cfg.profiles)}"
       '';
 
   };

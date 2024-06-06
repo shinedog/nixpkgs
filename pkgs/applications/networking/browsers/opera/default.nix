@@ -1,4 +1,4 @@
-{ alsaLib
+{ alsa-lib
 , atk
 , cairo
 , cups
@@ -9,11 +9,13 @@
 , fetchurl
 , fontconfig
 , freetype
-, gdk_pixbuf
+, gdk-pixbuf
 , glib
-, gnome2
-, gtk2
+, gtk3
+, gtk4
+, lib
 , libX11
+, libxcb
 , libXScrnSaver
 , libXcomposite
 , libXcursor
@@ -24,102 +26,121 @@
 , libXrandr
 , libXrender
 , libXtst
+, libdrm
 , libnotify
 , libpulseaudio
+, libuuid
+, libxshmfence
+, mesa
 , nspr
 , nss
 , pango
 , stdenv
 , systemd
+, at-spi2-atk
+, at-spi2-core
+, autoPatchelfHook
+, wrapGAppsHook3
+, qt6
+, proprietaryCodecs ? false
+, vivaldi-ffmpeg-codecs
 }:
 
 let
+  mirror = "https://get.geo.opera.com/pub/opera/desktop";
+in
+stdenv.mkDerivation rec {
+  pname = "opera";
+  version = "110.0.5130.23";
 
-  mirror = https://get.geo.opera.com/pub/opera/desktop;
-  version = "41.0.2353.56";
+  src = fetchurl {
+    url = "${mirror}/${version}/linux/${pname}-stable_${version}_amd64.deb";
+    hash = "sha256-Y1YmTUvXHOXBB5Mei8lX0DCoEkOmgVCPtT1GnTqNTtA=";
+  };
 
-  rpath = stdenv.lib.makeLibraryPath [
+  unpackPhase = "dpkg-deb -x $src .";
 
-    # These provide shared libraries loaded when starting. If one is missing,
-    # an error is shown in stderr.
-    alsaLib.out
-    atk.out
-    cairo.out
-    cups.out
-    curl.out
-    dbus.lib
-    expat.out
+  nativeBuildInputs = [
+    dpkg
+    autoPatchelfHook
+    wrapGAppsHook3
+    qt6.wrapQtAppsHook
+  ];
+
+  buildInputs = [
+    alsa-lib
+    at-spi2-atk
+    at-spi2-core
+    atk
+    cairo
+    cups
+    curl
+    dbus
+    expat
     fontconfig.lib
-    freetype.out
-    gdk_pixbuf.out
-    glib.out
-    gnome2.GConf.out
-    gtk2.out
-    libX11.out
-    libXScrnSaver.out
-    libXcomposite.out
-    libXcursor.out
-    libXdamage.out
-    libXext.out
-    libXfixes.out
-    libXi.out
-    libXrandr.out
-    libXrender.out
-    libXtst.out
-    libnotify.out
-    nspr.out
-    nss.out
-    pango.out
+    freetype
+    gdk-pixbuf
+    glib
+    gtk3
+    libX11
+    libXScrnSaver
+    libXcomposite
+    libXcursor
+    libXdamage
+    libXext
+    libXfixes
+    libXi
+    libXrandr
+    libXrender
+    libXtst
+    libdrm
+    libnotify
+    libuuid
+    libxcb
+    libxshmfence
+    mesa
+    nspr
+    nss
+    pango
     stdenv.cc.cc.lib
+    qt6.qtbase
+  ];
+
+  runtimeDependencies = [
+    # Works fine without this except there is no sound.
+    libpulseaudio.out
 
     # This is a little tricky. Without it the app starts then crashes. Then it
     # brings up the crash report, which also crashes. `strace -f` hints at a
     # missing libudev.so.0.
-    systemd.lib
+    (lib.getLib systemd)
 
-    # Works fine without this except there is no sound.
-    libpulseaudio.out
+    # Error at startup:
+    # "Illegal instruction (core dumped)"
+    gtk3
+    gtk4
+  ] ++ lib.optionals proprietaryCodecs [
+    vivaldi-ffmpeg-codecs
   ];
 
-in stdenv.mkDerivation {
-
-  name = "opera-${version}";
-
-  src =
-    if stdenv.system == "i686-linux" then
-      fetchurl {
-        url = "${mirror}/${version}/linux/opera-stable_${version}_i386.deb";
-        sha256 = "0qjkhadlpn5c20wm66hm7rn12kdk4bh2plfgpfkzp85jmsjdxri5";
-      }
-    else if stdenv.system == "x86_64-linux" then
-      fetchurl {
-        url = "${mirror}/${version}/linux/opera-stable_${version}_amd64.deb";
-        sha256 = "1f3slbydxkk15banjbm7d8602l3vxy834ijsdqpyj0ckc5mw0g9y";
-      }
-    else throw "Opera is not supported on ${stdenv.system} (only i686-linux and x86_64 linux are supported)";
-
-  unpackCmd = "${dpkg}/bin/dpkg-deb -x $curSrc .";
+  dontWrapQtApps = true;
 
   installPhase = ''
-    mkdir --parent $out
-    mv * $out/
-    mv $out/lib/*/opera/*.so $out/lib/
+    mkdir -p $out/bin
+    cp -r usr $out
+    cp -r usr/share $out/share
+
+    # we already using QT6, autopatchelf wants to patch this as well
+    rm $out/usr/lib/x86_64-linux-gnu/opera/libqt5_shim.so
+    ln -s $out/usr/bin/opera $out/bin/opera
   '';
 
-  postFixup = ''
-    find $out -executable -type f \
-    | while read f
-      do
-        patchelf \
-          --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-          --set-rpath "$out/lib:${rpath}" \
-          "$f"
-      done
-  '';
-
-  meta = {
-    homepage = http://www.opera.com;
-    description = "Web browser";
-    license = stdenv.lib.licenses.unfree;
+  meta = with lib; {
+    homepage = "https://www.opera.com";
+    description = "Faster, safer and smarter web browser";
+    platforms = [ "x86_64-linux" ];
+    license = licenses.unfree;
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    maintainers = with maintainers; [ kindrowboat ];
   };
 }

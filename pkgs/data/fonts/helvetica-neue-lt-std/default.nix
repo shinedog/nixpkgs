@@ -1,27 +1,25 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
-  name = "helvetica-neue-lt-std-${version}";
-  version = "2013.06.07"; # date of most recent file in distribution
+stdenvNoCC.mkDerivation {
+  name = "helvetica-neue-lt-std";
+  version = "2014.08.16"; # date of most recent file in distribution
 
-  src = fetchurl {
-    url = "http://www.ephifonts.com/downloads/helvetica-neue-lt-std.zip";
-    sha256 = "0nrjdj2a11dr6d3aihvjxzrkdi0wq6f2bvaiimi5iwmpyz80n0h6";
+  src = fetchzip {
+    url = "https://web.archive.org/web/20190823153624/http://ephifonts.com/downloads/helvetica-neue-lt-std.zip";
+    stripRoot = false;
+    hash = "sha256-ytoTTrnwN1lMw/gTxS4DRAq+tV5WzB2xHP4vVxLZ1ZI=";
   };
 
-  nativeBuildInputs = [ unzip ];
-
-  phases = [ "unpackPhase" "installPhase" ];
-
-  sourceRoot = "Helvetica Neue LT Std";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    cp -v *.otf $out/share/fonts/opentype
+    runHook preInstall
+
+    install -Dm644 'Helvetica Neue LT Std'/*.otf -t $out/share/fonts/opentype
+
+    runHook postInstall
   '';
 
-  meta = {
-    homepage = http://www.ephifonts.com/free-helvetica-font-helvetica-neue-lt-std.html;
+  meta = with lib; {
+    homepage = "https://web.archive.org/web/20190926040940/http://www.ephifonts.com/free-helvetica-font-helvetica-neue-lt-std.html";
     description = "Helvetica Neue LT Std font";
     longDescription = ''
       Helvetica Neue Lt Std is one of the most highly rated and complete
@@ -34,8 +32,8 @@ stdenv.mkDerivation rec {
       font. The numbers are well spaced and defined with high accuracy. The
       punctuation marks are heavily detailed as well.
     '';
-    license = stdenv.lib.licenses.unfree;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
-    platforms = stdenv.lib.platforms.all;
+    license = licenses.unfree;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ romildo ];
   };
 }

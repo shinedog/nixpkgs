@@ -1,24 +1,27 @@
-{ stdenv, fetchurl, qt4, qmake4Hook }:
+{ lib, stdenv, fetchurl, qmake, qtbase, libGLU, AGL }:
 
 stdenv.mkDerivation rec {
-  name = "libqglviewer-2.6.3";
-  version = "2.6.3";
+  pname = "libqglviewer";
+  version = "2.9.1";
 
   src = fetchurl {
     url = "http://www.libqglviewer.com/src/libQGLViewer-${version}.tar.gz";
-    sha256 = "00jdkyk4wg1356c3ar6nk3hyp494ya3yvshq9m57kfmqpn3inqdy";
+    sha256 = "sha256-J4+DKgstPvvg1pUhGd+8YFh5C3oPGHaQmDfLZzzkP/M=";
   };
 
-  buildInputs = [ qt4 qmake4Hook ];
+  nativeBuildInputs = [ qmake ];
+  buildInputs = [ qtbase libGLU ]
+    ++ lib.optional stdenv.isDarwin AGL;
 
-  postPatch =
-    ''
-      cd QGLViewer
-    '';
+  dontWrapQtApps = true;
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    cd QGLViewer
+  '';
+
+  meta = with lib; {
     description = "C++ library based on Qt that eases the creation of OpenGL 3D viewers";
-    homepage = http://libqglviewer.com/;
+    homepage = "http://libqglviewer.com";
     license = licenses.gpl2;
     platforms = platforms.all;
   };

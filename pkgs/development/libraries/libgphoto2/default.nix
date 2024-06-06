@@ -1,44 +1,83 @@
-{ stdenv, fetchpatch, fetchFromGitHub, pkgconfig, libusb1, libtool, libexif, libjpeg, gettext, autoreconfHook }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, buildPackages
+, autoreconfHook
+, pkg-config
+, gettext
+, libusb1
+, libtool
+, libexif
+, libgphoto2
+, libjpeg
+, curl
+, libxml2
+, gd
+}:
 
 stdenv.mkDerivation rec {
-  name = "libgphoto2-${meta.version}";
+  pname = "libgphoto2";
+  version = "2.5.31";
 
   src = fetchFromGitHub {
     owner = "gphoto";
     repo = "libgphoto2";
-    rev = "${meta.tag}";
-    sha256 = "17k3jxib2jcr2wk83p34h3lvvjbs2gqhqfcngm8zmlrwb385yalh";
+    rev = "libgphoto2-${builtins.replaceStrings [ "." ] [ "_" ] version}-release";
+    sha256 = "sha256-UmyDKEaPP9VJqi8f+y6JZcTlQomhMTN+/C//ODYx6/w=";
   };
 
-  patches = [(fetchpatch {
-    name = "libjpeg_turbo_1.5.0_fix.patch";
-    url = "https://anonscm.debian.org/cgit/pkg-phototools/libgphoto2.git/plain"
-      + "/debian/patches/libjpeg_turbo_1.5.0_fix.patch?id=8ce79a2a02d";
-    sha256 = "1zclgg20nv4krj8gigq3ylirxqiv1v8p59cfji041m156hy80gy2";
-  })];
+  depsBuildBuild = [ pkg-config ];
 
-  nativeBuildInputs = [ pkgconfig gettext autoreconfHook ];
-  buildInputs = [ libtool libjpeg libusb1  ];
+  nativeBuildInputs = [
+    autoreconfHook
+    gettext
+    libtool
+    pkg-config
+  ];
+
+  buildInputs = [
+    libjpeg
+    libtool # for libltdl
+    libusb1
+    curl
+    libxml2
+    gd
+  ];
 
   # These are mentioned in the Requires line of libgphoto's pkg-config file.
   propagatedBuildInputs = [ libexif ];
 
   hardeningDisable = [ "format" ];
 
+  postInstall =
+    let
+      executablePrefix =
+        if stdenv.buildPlatform == stdenv.hostPlatform then
+          "$out"
+        else
+          buildPackages.libgphoto2;
+    in
+    ''
+      mkdir -p $out/lib/udev/{rules.d,hwdb.d}
+      ${executablePrefix}/lib/libgphoto2/print-camera-list \
+          udev-rules version 201 group camera \
+          >$out/lib/udev/rules.d/40-libgphoto2.rules
+      ${executablePrefix}/lib/libgphoto2/print-camera-list \
+          hwdb version 201 group camera \
+          >$out/lib/udev/hwdb.d/20-gphoto.hwdb
+    '';
+
   meta = {
-    homepage = http://www.gphoto.org/proj/libgphoto2/;
+    homepage = "http://www.gphoto.org/proj/libgphoto2/";
     description = "A library for accessing digital cameras";
     longDescription = ''
       This is the library backend for gphoto2. It contains the code for PTP,
       MTP, and other vendor specific protocols for controlling and transferring data
       from digital cameras.
     '';
-    version = "2.5.10";
-    tag = "libgphoto2-2_5_10-release";
     # XXX: the homepage claims LGPL, but several src files are lgpl21Plus
-    license = stdenv.lib.licenses.lgpl21Plus;
-    platforms = with stdenv.lib.platforms; unix;
-    maintainers = with stdenv.lib.maintainers; [ jcumming ];
+    license = lib.licenses.lgpl21Plus;
+    platforms = with lib.platforms; unix;
+    maintainers = with lib.maintainers; [ jcumming ];
   };
 }
-

@@ -1,14 +1,14 @@
-import ./make-test.nix ({ pkgs, ... }:
+import ./make-test-python.nix ({ pkgs, ... }:
 
 {
   name = "samba";
 
-  meta.maintainers = [ pkgs.lib.maintainers.eelco ];
+  meta.maintainers = [ ];
 
   nodes =
     { client =
-        { config, pkgs, ... }:
-        { fileSystems = pkgs.lib.mkVMOverride
+        { pkgs, ... }:
+        { virtualisation.fileSystems =
             { "/public" = {
                 fsType = "cifs";
                 device = "//server/public";
@@ -18,8 +18,9 @@ import ./make-test.nix ({ pkgs, ... }:
         };
 
       server =
-        { config, pkgs, ... }:
+        { ... }:
         { services.samba.enable = true;
+          services.samba.openFirewall = true;
           services.samba.shares.public =
             { path = "/public";
               "read only" = true;
@@ -27,8 +28,6 @@ import ./make-test.nix ({ pkgs, ... }:
               "guest ok" = "yes";
               comment = "Public samba share.";
             };
-          networking.firewall.allowedTCPPorts = [ 139 445 ];
-          networking.firewall.allowedUDPPorts = [ 137 138 ];
         };
     };
 
@@ -36,13 +35,12 @@ import ./make-test.nix ({ pkgs, ... }:
 
   testScript =
     ''
-      $server->start;
-      $server->waitForUnit("samba-smbd");
-      $server->waitForUnit("samba-nmbd");
-      $server->succeed("mkdir -p /public; echo bar > /public/foo");
+      server.start()
+      server.wait_for_unit("samba.target")
+      server.succeed("mkdir -p /public; echo bar > /public/foo")
 
-      $client->start;
-      $client->waitForUnit("network.target");
-      $client->succeed("[[ \$(cat /public/foo) = bar ]]");
+      client.start()
+      client.wait_for_unit("remote-fs.target")
+      client.succeed("[[ $(cat /public/foo) = bar ]]")
     '';
 })

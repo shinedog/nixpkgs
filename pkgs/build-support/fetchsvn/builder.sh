@@ -1,10 +1,7 @@
+if [ -e "$NIX_ATTRS_SH_FILE" ]; then . "$NIX_ATTRS_SH_FILE"; elif [ -f .attrs.sh ]; then . .attrs.sh; fi
 source $stdenv/setup
 
-header "exporting $url (r$rev) into $out"
-
-if test "$sshSupport"; then
-    export SVN_SSH="$openssh/bin/ssh"
-fi
+echo "exporting $url (r$rev) into $out"
 
 if test -n "$http_proxy"; then
     # Configure proxy
@@ -18,11 +15,10 @@ if test -n "$http_proxy"; then
     export HOME="$PWD"
 fi;
 
-# Pipe the "p" character into Subversion to force it to accept the
-# server's certificate.  This is perfectly safe: we don't care
-# whether the server is being spoofed --- only the cryptographic
-# hash of the output matters. Pass in extra p's to handle redirects.
-printf 'p\np\np\n' | svn export --trust-server-cert --non-interactive ${ignoreExternals:+--ignore-externals} \
-    -r "$rev" "$url" "$out"
+if test -z "$LC_ALL"; then
+    export LC_ALL="en_US.UTF-8"
+fi;
 
-stopNest
+svn export --trust-server-cert --non-interactive \
+    ${ignoreExternals:+--ignore-externals} ${ignoreKeywords:+--ignore-keywords} \
+    -r "$rev" "$url" "$out"

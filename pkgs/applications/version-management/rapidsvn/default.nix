@@ -1,22 +1,58 @@
-{stdenv, fetchurl, wxGTK, subversion, apr, aprutil, python}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, wxGTK32
+, subversion
+, apr
+, aprutil
+, python3
+, darwin
+}:
 
-stdenv.mkDerivation {
-  name = "rapidsvn-0.12.0-1";
+stdenv.mkDerivation rec {
+  pname = "rapidsvn";
+  version = "unstable-2021-08-02";
 
-  src = fetchurl {
-    url = http://www.rapidsvn.org/download/release/0.12/rapidsvn-0.12.0-1.tar.gz;
-    sha256 = "1i3afjmx99ljw1bj54q47fs0g1q9dmxxvr4ciq7ncp5s52shszgg";
+  src = fetchFromGitHub {
+    owner = "RapidSVN";
+    repo = "RapidSVN";
+    rev = "3a564e071c3c792f5d733a9433b9765031f8eed0";
+    hash = "sha256-6bQTHAOZAP+06kZDHjDx9VnGm4vrZUDyLHZdTpiyP08=";
   };
 
-  buildInputs = [ wxGTK subversion apr aprutil python ];
+  postPatch = ''
+    substituteInPlace configure.ac \
+      --replace "[3.0.*]" "[3.*]"
+  '';
 
-  configureFlags = [ "--with-svn-include=${subversion.dev}/include"
-    "--with-svn-lib=${subversion.out}/lib" ];
+  nativeBuildInputs = [
+    autoreconfHook
+  ];
+
+  buildInputs = [
+    wxGTK32
+    subversion
+    apr
+    aprutil
+    python3
+  ] ++ lib.optionals stdenv.isDarwin [
+    darwin.apple_sdk.frameworks.Cocoa
+  ];
+
+  configureFlags = [
+    "--with-svn-include=${subversion.dev}/include"
+    "--with-svn-lib=${subversion.out}/lib"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = "-std=c++14";
 
   meta = {
     description = "Multi-platform GUI front-end for the Subversion revision system";
-    homepage = http://rapidsvn.tigris.org/;
-    license = stdenv.lib.licenses.gpl3Plus;
-    maintainers = [ stdenv.lib.maintainers.viric ];
+    homepage = "http://rapidsvn.tigris.org/";
+    license = lib.licenses.gpl3Plus;
+    maintainers = [ lib.maintainers.viric ];
+    platforms = lib.platforms.unix;
+    mainProgram = "rapidsvn";
   };
 }

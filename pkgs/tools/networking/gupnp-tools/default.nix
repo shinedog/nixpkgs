@@ -1,25 +1,62 @@
-{fetchurl, stdenv, gupnp, gssdp, pkgconfig, gtk3, libuuid, intltool, gupnp_av, gnome3, gnome2, makeWrapper}:
+{ stdenv
+, lib
+, fetchurl
+, meson
+, ninja
+, gupnp_1_6
+, libsoup_3
+, gssdp_1_6
+, pkg-config
+, gtk3
+, gettext
+, gupnp-av
+, gtksourceview4
+, gnome
+, wrapGAppsHook3
+}:
 
 stdenv.mkDerivation rec {
-  name = "gupnp-tools-${version}";
-  majorVersion = "0.8";
-  version = "${majorVersion}.8";
+  pname = "gupnp-tools";
+  version = "0.12.1";
+
   src = fetchurl {
-    url = "mirror://gnome/sources/gupnp-tools/${majorVersion}/gupnp-tools-${version}.tar.xz";
-    sha256 = "160dgh9pmlb85qfavwqz46lqawpshs8514bx2b57f9rbiny8kbij";
+    url = "mirror://gnome/sources/${pname}/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "U8+TEj85fo+PC46eQ2TIanUCpTNPTAvi4FSoJEeL1bo=";
   };
 
-  buildInputs = [gupnp libuuid gssdp pkgconfig gtk3 intltool gupnp_av
-                 gnome2.gnome_icon_theme makeWrapper];
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    wrapGAppsHook3
+  ];
 
-  postInstall = ''
-    for program in gupnp-av-cp gupnp-universal-cp; do
-      wrapProgram "$out/bin/$program" \
-        --prefix XDG_DATA_DIRS : "${gtk3.out}/share:${gnome3.gnome_themes_standard}/share:${gnome2.gnome_icon_theme}/share:$out/share"
-    done
-  '';
+  buildInputs = [
+    gupnp_1_6
+    libsoup_3
+    gssdp_1_6
+    gtk3
+    gupnp-av
+    gtksourceview4
+  ];
 
-  meta = {
-    platforms = stdenv.lib.platforms.linux;
+  # new libxml2 version
+  # TODO: can be dropped on next update
+  NIX_CFLAGS_COMPILE = [ "-Wno-error=deprecated-declarations" ];
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = pname;
+      versionPolicy = "odd-unstable";
+    };
+  };
+
+  meta = with lib; {
+    description = "Set of utilities and demos to work with UPnP";
+    homepage = "https://gitlab.gnome.org/GNOME/gupnp-tools";
+    license = licenses.gpl2Plus;
+    maintainers = teams.gnome.members;
+    platforms = platforms.unix;
   };
 }

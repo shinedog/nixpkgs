@@ -1,37 +1,41 @@
-{ stdenv, lib, fetchurl, autoconf, automake, libtool, bison
-, libasr, libevent, zlib, openssl, db, pam
-
-# opensmtpd requires root for no reason to encrypt passwords, this patch fixes it
-# see also https://github.com/OpenSMTPD/OpenSMTPD/issues/678
-, unpriviledged_smtpctl_encrypt ? true
-
-# This enables you to override the '+' character which typically separates the user from the tag in user+tag@domain.tld
-, tag_char ? null
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, autoconf-archive
+, pkgconf
+, libtool
+, bison
+, libasr
+, libevent
+, zlib
+, libressl
+, db
+, pam
+, libxcrypt
+, nixosTests
 }:
 
 stdenv.mkDerivation rec {
-  name = "opensmtpd-${version}";
-  version = "6.0.2p1";
+  pname = "opensmtpd";
+  version = "7.5.0p0";
 
-  nativeBuildInputs = [ autoconf automake libtool bison ];
-  buildInputs = [ libasr libevent zlib openssl db pam ];
+  nativeBuildInputs = [ autoreconfHook autoconf-archive pkgconf libtool bison ];
+  buildInputs = [ libevent zlib libressl db pam libxcrypt ];
 
   src = fetchurl {
-    url = "https://www.opensmtpd.org/archives/${name}.tar.gz";
-    sha256 = "1b4h64w45hpmfq5721smhg4s0shs64gbcjqjpx3fbiw4hz8bdy9a";
+    url = "https://www.opensmtpd.org/archives/${pname}-${version}.tar.gz";
+    hash = "sha256-hPXBOTwMG+zHLO6pceCr1wdbLKfk4fiQm4Pt/Y3gw5w=";
   };
 
-  patches = [ ./proc_path.diff ];
+  patches = [
+    ./proc_path.diff # TODO: upstream to OpenSMTPD, see https://github.com/NixOS/nixpkgs/issues/54045
+  ];
 
-  postPatch = with builtins; with lib;
-    optionalString (isString tag_char) ''
-      sed -i -e "s,TAG_CHAR.*'+',TAG_CHAR '${tag_char}'," smtpd/smtpd-defines.h
-    '' +
-    optionalString unpriviledged_smtpctl_encrypt ''
-      substituteInPlace smtpd/smtpctl.c --replace \
-        'if (geteuid())' \
-        'if (geteuid() != 0 && !(argc > 1 && !strcmp(argv[1], "encrypt")))'
-    '';
+  postPatch = ''
+    substituteInPlace mk/smtpctl/Makefile.am --replace "chgrp" "true"
+    substituteInPlace mk/smtpctl/Makefile.am --replace "chmod 2555" "chmod 0555"
+  '';
 
   configureFlags = [
     "--sysconfdir=/etc"
@@ -40,6 +44,7 @@ stdenv.mkDerivation rec {
     "--with-auth-pam"
     "--without-auth-bsdauth"
     "--with-path-socket=/run"
+    "--with-path-pidfile=/run"
     "--with-user-smtpd=smtpd"
     "--with-user-queue=smtpq"
     "--with-group-queue=smtpq"
@@ -53,14 +58,18 @@ stdenv.mkDerivation rec {
     "localstatedir=\${TMPDIR}"
   ];
 
-  meta = with stdenv.lib; {
-    homepage = https://www.opensmtpd.org/;
+  meta = with lib; {
+    homepage = "https://www.opensmtpd.org/";
     description = ''
       A free implementation of the server-side SMTP protocol as defined by
       RFC 5321, with some additional standard extensions
     '';
     license = licenses.isc;
     platforms = platforms.linux;
-    maintainers = with maintainers; [ rickynils obadz ];
+    maintainers = with maintainers; [ obadz ekleog vifino ];
+  };
+  passthru.tests = {
+    basic-functionality-and-dovecot-interaction = nixosTests.opensmtpd;
+    rspamd-integration = nixosTests.opensmtpd-rspamd;
   };
 }

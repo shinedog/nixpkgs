@@ -1,44 +1,52 @@
-{ stdenv, fetchurl, fetchzip, pkgconfig, SDL, libpng, zlib, xz, freetype, fontconfig
+{ lib, stdenv, fetchzip, cmake, pkg-config
+, SDL2, libpng, zlib, xz, freetype, fontconfig
+, nlohmann_json, curl, icu, harfbuzz, expat, glib, pcre2
 , withOpenGFX ? true, withOpenSFX ? true, withOpenMSX ? true
-, withFluidSynth ? true, audioDriver ? "alsa", fluidsynth, soundfont-fluid, procps
-, writeScriptBin, makeWrapper
-}:
+, withFluidSynth ? true, audioDriver ? "alsa"
+, fluidsynth, soundfont-fluid, libsndfile
+, flac, libogg, libvorbis, libopus, libmpg123, pulseaudio, alsa-lib, libjack2
+, procps, writeScriptBin, makeWrapper, runtimeShell }:
 
 let
   opengfx = fetchzip {
-    url = "http://binaries.openttd.org/extra/opengfx/0.5.2/opengfx-0.5.2-all.zip";
-    sha256 = "1sjzwl8wfdj0izlx2qdq15bqiy1vzq7gq7drydfwwryk173ig5sa";
+    url = "https://cdn.openttd.org/opengfx-releases/7.1/opengfx-7.1-all.zip";
+    sha256 = "sha256-daJ/Qwg/okpmLQkXcCjruIiP8GEwyyp02YWcGQepxzs=";
   };
 
   opensfx = fetchzip {
-    url = "http://binaries.openttd.org/extra/opensfx/0.2.3/opensfx-0.2.3-all.zip";
-    sha256 = "1bb167kszdd6dqbcdjrxxwab6b7y7jilhzi3qijdhprpm5gf1lp3";
+    url = "https://cdn.openttd.org/opensfx-releases/1.0.3/opensfx-1.0.3-all.zip";
+    sha256 = "sha256-QmfXizrRTu/fUcVOY7tCndv4t4BVW+fb0yUi8LgSYzM=";
   };
 
   openmsx = fetchzip {
-    url = "http://binaries.openttd.org/extra/openmsx/0.3.1/openmsx-0.3.1-all.zip";
-    sha256 = "0qnmfzz0v8vxrrvxnm7szphrlrlvhkwn3y92b4iy0b4b6yam0yd4";
+    url = "https://cdn.openttd.org/openmsx-releases/0.4.2/openmsx-0.4.2-all.zip";
+    sha256 = "sha256-Cgrg2m+uTODFg39mKgX+hE8atV7v5bVyZd716vSZB8M=";
   };
 
   playmidi = writeScriptBin "playmidi" ''
-    #!/bin/sh
+    #!${runtimeShell}
     trap "${procps}/bin/pkill fluidsynth" EXIT
     ${fluidsynth}/bin/fluidsynth -a ${audioDriver} -i ${soundfont-fluid}/share/soundfonts/FluidR3_GM2-2.sf2 $*
   '';
 
 in
 stdenv.mkDerivation rec {
-  name = "openttd-${version}";
-  version = "1.6.1";
+  pname = "openttd";
+  version = "14.1";
 
-  src = fetchurl {
-    url = "http://binaries.openttd.org/releases/${version}/${name}-source.tar.xz";
-    sha256 = "1ak32fj5xkk2fvmm3g8i7wzmk4bh2ijsp8fzvvw5wj6365p9j24v";
+  src = fetchzip {
+    url = "https://cdn.openttd.org/openttd-releases/${version}/${pname}-${version}-source.tar.xz";
+    hash = "sha256-YT4IE/rJ9pnpeMWKbOra6AbSUwW19RwOKlXkxwoMeKY=";
   };
 
-  nativeBuildInputs = [ pkgconfig makeWrapper ];
-  buildInputs = [ SDL libpng xz zlib freetype fontconfig ]
-    ++ stdenv.lib.optionals withFluidSynth [ fluidsynth soundfont-fluid ];
+  nativeBuildInputs = [ cmake pkg-config makeWrapper ];
+  buildInputs = [
+    SDL2 libpng xz zlib freetype fontconfig
+    nlohmann_json curl icu harfbuzz expat glib pcre2
+  ] ++ lib.optionals withFluidSynth [
+    fluidsynth soundfont-fluid libsndfile
+    flac libogg libvorbis libopus libmpg123 pulseaudio alsa-lib libjack2
+  ];
 
   prefixKey = "--prefix-dir=";
 
@@ -46,36 +54,33 @@ stdenv.mkDerivation rec {
     "--without-liblzo2"
   ];
 
-  makeFlags = "INSTALL_PERSONAL_DIR=";
-
   postInstall = ''
-    mv $out/games/ $out/bin
-
-    ${stdenv.lib.optionalString withOpenGFX ''
-      cp ${opengfx}/* $out/share/games/openttd/baseset
+    ${lib.optionalString withOpenGFX ''
+      cp ${opengfx}/*.tar $out/share/games/openttd/baseset
     ''}
 
     mkdir -p $out/share/games/openttd/data
 
-    ${stdenv.lib.optionalString withOpenSFX ''
-      cp ${opensfx}/*.{obs,cat} $out/share/games/openttd/data
+    ${lib.optionalString withOpenSFX ''
+      cp ${opensfx}/*.tar $out/share/games/openttd/data
     ''}
 
     mkdir $out/share/games/openttd/baseset/openmsx
 
-    ${stdenv.lib.optionalString withOpenMSX ''
-      cp ${openmsx}/*.{obm,mid} $out/share/games/openttd/baseset/openmsx
+    ${lib.optionalString withOpenMSX ''
+      cp ${openmsx}/*.tar $out/share/games/openttd/baseset/openmsx
     ''}
 
-    ${stdenv.lib.optionalString withFluidSynth ''
+    ${lib.optionalString withFluidSynth ''
       wrapProgram $out/bin/openttd \
         --add-flags -m \
         --add-flags extmidi:cmd=${playmidi}/bin/playmidi
     ''}
   '';
 
-  meta = {
+  meta = with lib; {
     description = ''Open source clone of the Microprose game "Transport Tycoon Deluxe"'';
+    mainProgram = "openttd";
     longDescription = ''
       OpenTTD is a transportation economics simulator. In single player mode,
       players control a transportation business, and use rail, road, sea, and air
@@ -86,9 +91,10 @@ stdenv.mkDerivation rec {
         - play cooperatively controlling the same business
         - observe as spectators
     '';
-    homepage = http://www.openttd.org/;
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = with stdenv.lib.maintainers; [ jcumming the-kenny fpletz ];
+    homepage = "https://www.openttd.org/";
+    changelog = "https://cdn.openttd.org/openttd-releases/${version}/changelog.txt";
+    license = licenses.gpl2;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ jcumming fpletz ];
   };
 }

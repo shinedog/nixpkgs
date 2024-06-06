@@ -1,27 +1,53 @@
-{ stdenv, lib, buildGoPackage, fetchFromGitHub }:
+{ stdenv, lib, fetchFromGitHub, buildGoModule, installShellFiles, nixosTests
+, makeWrapper
+, gawk
+, glibc
+}:
 
-buildGoPackage rec {
-  name = "vault-${version}";
-  version = "0.6.1";
-
-  goPackagePath = "github.com/hashicorp/vault";
+buildGoModule rec {
+  pname = "vault";
+  version = "1.16.2";
 
   src = fetchFromGitHub {
     owner = "hashicorp";
     repo = "vault";
     rev = "v${version}";
-    sha256 = "06xf2dpn0q398qb6wbh9j1wjl5smqq9nrrn2039g48haqm8853jx";
+    hash = "sha256-OFYUM6NFNwpx356y+G1yAOOgpinK8qOkLBtUMFPFXK8=";
   };
 
-  buildFlagsArray = ''
-    -ldflags=
-      -X github.com/hashicorp/vault/version.GitCommit=${version}
+  vendorHash = "sha256-pWteRqBGKHcqjN3wSxWuoy0YK7w2Zaz2BsiveG7UkVE=";
+
+  proxyVendor = true;
+
+  subPackages = [ "." ];
+
+  nativeBuildInputs = [ installShellFiles makeWrapper ];
+
+  tags = [ "vault" ];
+
+  ldflags = [
+    "-s" "-w"
+    "-X github.com/hashicorp/vault/sdk/version.GitCommit=${src.rev}"
+    "-X github.com/hashicorp/vault/sdk/version.Version=${version}"
+    "-X github.com/hashicorp/vault/sdk/version.VersionPrerelease="
+  ];
+
+  postInstall = ''
+    echo "complete -C $out/bin/vault vault" > vault.bash
+    installShellCompletion vault.bash
+  '' + lib.optionalString stdenv.isLinux ''
+    wrapProgram $out/bin/vault \
+      --prefix PATH ${lib.makeBinPath [ gawk glibc ]}
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://www.vaultproject.io;
+  passthru.tests = { inherit (nixosTests) vault vault-postgresql vault-dev vault-agent; };
+
+  meta = with lib; {
+    homepage = "https://www.vaultproject.io/";
     description = "A tool for managing secrets";
-    license = licenses.mpl20;
-    maintainers = [ maintainers.rushmorem ];
+    changelog = "https://github.com/hashicorp/vault/blob/v${version}/CHANGELOG.md";
+    license = licenses.bsl11;
+    mainProgram = "vault";
+    maintainers = with maintainers; [ rushmorem lnl7 offline pradeepchhetri Chili-Man techknowlogick ];
   };
 }

@@ -1,39 +1,56 @@
-{stdenv, fetchurl, writeScript, pkgconfig, cmake, qt4, seafile-shared, ccnet, makeWrapper}:
+{ lib
+, stdenv
+, fetchFromGitHub
+, pkg-config
+, cmake
+, qtbase
+, qttools
+, libuuid
+, seafile-shared
+, jansson
+, libsearpc
+, withShibboleth ? true
+, qtwebengine
+, wrapQtAppsHook
+}:
 
-stdenv.mkDerivation rec
-{
-  version = "5.0.7";
-  name = "seafile-client-${version}";
+stdenv.mkDerivation rec {
+  pname = "seafile-client";
+  version = "9.0.5";
 
-  src = fetchurl
-  {
-    url = "https://github.com/haiwen/seafile-client/archive/v${version}.tar.gz";
-    sha256 = "ae6975bc1adf45d09cf9f6332ceac7cf285f8191f6cf50c6291ed45f8cf4ffa5";
+  src = fetchFromGitHub {
+    owner = "haiwen";
+    repo = "seafile-client";
+    rev = "v${version}";
+    sha256 = "sha256-fAPEtULab3Ug4gRCS+Eigp48JkORi7tvic2vp5jaw44=";
   };
 
-  buildInputs = [ pkgconfig cmake qt4 seafile-shared makeWrapper ];
+  nativeBuildInputs = [
+    libuuid
+    pkg-config
+    cmake
+    wrapQtAppsHook
+    qttools
+  ];
 
-  builder = writeScript "${name}-builder.sh" ''
-    source $stdenv/setup
+  buildInputs = [
+    seafile-shared
+    jansson
+    libsearpc
+  ] ++ lib.optional withShibboleth qtwebengine;
 
-    tar xvfz $src
-    cd seafile-client-*
+  cmakeFlags = lib.optional withShibboleth "-DBUILD_SHIBBOLETH_SUPPORT=ON";
 
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_SKIP_BUILD_RPATH=ON -DCMAKE_INSTALL_PREFIX="$out" .
-    make -j1
+  qtWrapperArgs = [
+    "--suffix PATH : ${lib.makeBinPath [ seafile-shared ]}"
+  ];
 
-    make install
-
-    wrapProgram $out/bin/seafile-applet \
-      --suffix PATH : ${stdenv.lib.makeBinPath [ ccnet seafile-shared ]}
-    '';
-
-  meta =
-  {
-    homepage = "https://github.com/haiwen/seafile-clients";
+  meta = with lib; {
+    homepage = "https://github.com/haiwen/seafile-client";
     description = "Desktop client for Seafile, the Next-generation Open Source Cloud Storage";
-    license = stdenv.lib.licenses.asl20;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.calrama ];
+    license = licenses.asl20;
+    platforms = platforms.linux;
+    maintainers = with maintainers; [ schmittlauch greizgh ];
+    mainProgram = "seafile-applet";
   };
 }

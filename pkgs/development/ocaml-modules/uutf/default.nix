@@ -1,43 +1,34 @@
-{ stdenv, buildOcaml, fetchurl, ocaml, findlib, ocamlbuild, opam, cmdliner}:
+{ lib, stdenv, fetchurl, ocaml, findlib, ocamlbuild, cmdliner , topkg, uchar }:
 let
   pname = "uutf";
-  webpage = "http://erratique.ch/software/${pname}";
 in
 
-buildOcaml rec {
-  name = pname;
-  version = "0.9.4";
+lib.throwIfNot (lib.versionAtLeast ocaml.version "4.03")
+  "${pname} is not available with OCaml ${ocaml.version}"
 
-  minimumSupportedOcamlVersion = "4.00.0";
+stdenv.mkDerivation rec {
+  name = "ocaml${ocaml.version}-${pname}-${version}";
+  version = "1.0.3";
 
   src = fetchurl {
-    url = "${webpage}/releases/${pname}-${version}.tbz";
-    sha256 = "1f71fyawxal42x6g82539bv0ava2smlar6rmxxz1cyq3l0i6fw0k";
+    url = "https://erratique.ch/software/${pname}/releases/${pname}-${version}.tbz";
+    sha256 = "sha256-h3KlYT0ecCmM4U3zMkGjaF8h5O9r20zwP+mF+x7KBWg=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild opam cmdliner ];
+  nativeBuildInputs = [ ocaml ocamlbuild findlib topkg ];
+  buildInputs = [ topkg cmdliner ];
+  propagatedBuildInputs = [ uchar ];
 
-  createFindlibDestdir = true;
+  strictDeps = true;
 
-  unpackCmd = "tar xjf $src";
+  inherit (topkg) buildPhase installPhase;
 
-  buildPhase = ''
-    ocaml pkg/build.ml \
-      native=true \
-      native-dynlink=true \
-      cmdliner=true
-  '';
-
-  installPhase = ''
-    opam-installer --prefix=$out --script ${pname}.install | sh
-    ln -s $out/lib/uutf $out/lib/ocaml/${ocaml.version}/site-lib/
-  '';
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Non-blocking streaming Unicode codec for OCaml";
-    homepage = "${webpage}";
-    platforms = ocaml.meta.platforms or [];
+    homepage = "https://erratique.ch/software/uutf";
     license = licenses.bsd3;
     maintainers = [ maintainers.vbgl ];
+    mainProgram = "utftrip";
+    inherit (ocaml.meta) platforms;
   };
 }

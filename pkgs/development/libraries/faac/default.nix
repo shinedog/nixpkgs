@@ -1,32 +1,31 @@
-{ stdenv, fetchurl
-, mp4v2Support ? true, mp4v2 ? null
+{ lib, stdenv, fetchurl, autoreconfHook
+, mp4v2Support ? true, mp4v2
 , drmSupport ? false # Digital Radio Mondiale
 }:
 
-assert mp4v2Support -> (mp4v2 != null);
-
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "faac-${version}";
-  version = "1.28";
+  pname = "faac";
+  version = "1.30";
 
   src = fetchurl {
-    url = "mirror://sourceforge/faac/${name}.tar.gz";
-    sha256 = "1pqr7nf6p2r283n0yby2czd3iy159gz8rfinkis7vcfgyjci2565";
+    url = "mirror://sourceforge/faac/${pname}-${builtins.replaceStrings ["."] ["_"] version}.tar.gz";
+    sha256 = "1lmj0dib3mjp84jhxc5ddvydkzzhb0gfrdh3ikcidjlcb378ghxd";
   };
 
-  configureFlags = [ ]
-    ++ optional mp4v2Support "--with-mp4v2"
-    ++ optional drmSupport "--enable-drm";
+  configureFlags = lib.optional mp4v2Support "--with-external-mp4v2"
+    ++ lib.optional drmSupport "--enable-drm";
 
   hardeningDisable = [ "format" ];
 
-  buildInputs = [ ]
-    ++ optional mp4v2Support mp4v2;
+  nativeBuildInputs = [ autoreconfHook ];
 
-  meta = {
+  buildInputs = lib.optional mp4v2Support mp4v2;
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Open source MPEG-4 and MPEG-2 AAC encoder";
-    homepage    = http://www.audiocoding.com/faac.html;
+    homepage = "https://github.com/knik0/faac";
     license     = licenses.unfreeRedistributable;
     maintainers = with maintainers; [ codyopel ];
     platforms   = platforms.all;

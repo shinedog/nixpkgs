@@ -15,26 +15,12 @@ in {
 
     services.opentsdb = {
 
-      enable = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Whether to run OpenTSDB.
-        '';
-      };
+      enable = mkEnableOption "OpenTSDB";
 
-      package = mkOption {
-        type = types.package;
-        default = pkgs.opentsdb;
-        defaultText = "pkgs.opentsdb";
-        example = literalExample "pkgs.opentsdb";
-        description = ''
-          OpenTSDB package to use.
-        '';
-      };
+      package = mkPackageOption pkgs "opentsdb" { };
 
       user = mkOption {
-        type = types.string;
+        type = types.str;
         default = "opentsdb";
         description = ''
           User account under which OpenTSDB runs.
@@ -42,7 +28,7 @@ in {
       };
 
       group = mkOption {
-        type = types.string;
+        type = types.str;
         default = "opentsdb";
         description = ''
           Group account under which OpenTSDB runs.
@@ -50,7 +36,7 @@ in {
       };
 
       port = mkOption {
-        type = types.int;
+        type = types.port;
         default = 4242;
         description = ''
           Which port OpenTSDB listens on.
@@ -97,13 +83,13 @@ in {
       };
     };
 
-    users.extraUsers.opentsdb = {
+    users.users.opentsdb = {
       description = "OpenTSDB Server user";
       group = "opentsdb";
       uid = config.ids.uids.opentsdb;
     };
 
-    users.extraGroups.opentsdb.gid = config.ids.gids.opentsdb;
+    users.groups.opentsdb.gid = config.ids.gids.opentsdb;
 
   };
 }

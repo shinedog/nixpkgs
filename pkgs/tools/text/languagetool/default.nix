@@ -1,31 +1,41 @@
-{ stdenv, lib, fetchurl, unzip, jdk }:
+{ lib, stdenv, fetchzip, jre, makeWrapper, nixosTests }:
 
 stdenv.mkDerivation rec {
   pname = "LanguageTool";
-  version = "3.5";
-  name = pname + "-" + version;
-  src = fetchurl {
-    url = "https://www.languagetool.org/download/${name}.zip";
-    sha256 = "1axw8fqg2wlkmv45s71q5pg44sg1s06szpkjhyscy704i7d2jc34";
+  version = "6.4";
+
+  src = fetchzip {
+    url = "https://www.languagetool.org/download/${pname}-${version}.zip";
+    sha256 = "sha256-MIP7+K3kmzrqXWcR23Rn+gMYR0zrGnnCYGhv81P2Pc4=";
   };
-  buildInputs = [ unzip jdk ];
-  installPhase =
-  ''
-    mkdir -p $out/{bin,share}
-    mv * $out/share/.
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ jre ];
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/share
+    mv -- * $out/share/
+
     for lt in languagetool{,-commandline,-server};do
-    cat > $out/bin/$lt <<EXE
-    #!${stdenv.shell}
-    ${jdk}/bin/java -cp $out/share/ -jar $out/share/$lt.jar $@
-    EXE
-    chmod +x $out/bin/$lt
+      makeWrapper ${jre}/bin/java $out/bin/$lt \
+        --add-flags "-cp $out/share/ -jar $out/share/$lt.jar"
     done
+
+    makeWrapper ${jre}/bin/java $out/bin/languagetool-http-server \
+      --add-flags "-cp $out/share/languagetool-server.jar org.languagetool.server.HTTPServer"
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  passthru.tests.languagetool = nixosTests.languagetool;
+
+  meta = with lib; {
     homepage = "https://languagetool.org";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.lgpl21Plus;
     maintainers = with maintainers; [ edwtjo ];
-    descrption = "A proofreading program for English, French German, Polish, and more";
+    platforms = jre.meta.platforms;
+    description = "A proofreading program for English, French German, Polish, and more";
   };
 }

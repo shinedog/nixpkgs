@@ -1,32 +1,41 @@
-{ stdenv, fetchurl, zlib, utillinux }:
+{ lib, stdenv, fetchFromGitHub, zlib, util-linux }:
 
-let name = "pigz";
-    version = "2.3.3";
-in
-stdenv.mkDerivation {
-  name = name + "-" + version;
+stdenv.mkDerivation rec {
+  pname = "pigz";
+  version = "2.8";
 
-  src = fetchurl {
-    url = "http://www.zlib.net/${name}/${name}-${version}.tar.gz";
-    sha256 = "172hdf26k4zmm7z8md7nl0dph2a7mhf3x7slb9bhfyff6as6g2sf";
+  src = fetchFromGitHub {
+      owner = "madler";
+      repo = pname;
+      rev = "refs/tags/v${version}";
+      sha256 = "sha256-PzdxyO4mCg2jE/oBk1MH+NUdWM95wIIIbncBg71BkmQ=";
   };
 
-  buildInputs = [zlib] ++ stdenv.lib.optional stdenv.isLinux utillinux;
+  enableParallelBuilding = true;
+
+  buildInputs = [ zlib ] ++ lib.optional stdenv.isLinux util-linux;
+
+  makeFlags = [ "CC=${stdenv.cc}/bin/${stdenv.cc.targetPrefix}cc" ];
 
   doCheck = stdenv.isLinux;
   checkTarget = "tests";
-  installPhase =
-  ''
-      install -Dm755 pigz "$out/bin/pigz"
-      ln -s pigz "$out/bin/unpigz"
-      install -Dm755 pigz.1 "$out/share/man/man1/pigz.1"
-      ln -s pigz.1 "$out/share/man/man1/unpigz.1"
-      install -Dm755 pigz.pdf "$out/share/doc/pigz/pigz.pdf"
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm755 pigz "$out/bin/pigz"
+    ln -s pigz "$out/bin/unpigz"
+    install -Dm755 pigz.1 "$out/share/man/man1/pigz.1"
+    ln -s pigz.1 "$out/share/man/man1/unpigz.1"
+    install -Dm755 pigz.pdf "$out/share/doc/pigz/pigz.pdf"
+
+    runHook postInstall
   '';
 
-  meta = {
-    homepage = "http://www.zlib.net/pigz/";
+  meta = with lib; {
+    homepage = "https://www.zlib.net/pigz/";
     description = "A parallel implementation of gzip for multi-core machines";
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ ];
+    license = licenses.zlib;
+    platforms = platforms.unix;
   };
 }

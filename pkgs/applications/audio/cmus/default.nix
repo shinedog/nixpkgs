@@ -1,12 +1,14 @@
-{ stdenv, fetchFromGitHub, ncurses, pkgconfig
+{ config, lib, stdenv, fetchFromGitHub, ncurses, pkg-config
+, libiconv, CoreAudio, AudioUnit, VideoToolbox
 
-, alsaSupport ? stdenv.isLinux, alsaLib ? null
+, alsaSupport ? stdenv.isLinux, alsa-lib ? null
 # simple fallback for everyone else
 , aoSupport ? !stdenv.isLinux, libao ? null
 , jackSupport ? false, libjack ? null
 , samplerateSupport ? jackSupport, libsamplerate ? null
-, ossSupport ? false, alsaOss ? null
-, pulseaudioSupport ? false, libpulseaudio ? null
+, ossSupport ? false, alsa-oss ? null
+, pulseaudioSupport ? config.pulseaudio or false, libpulseaudio ? null
+, mprisSupport ? stdenv.isLinux, systemd ? null
 
 # TODO: add these
 #, artsSupport
@@ -16,9 +18,9 @@
 #, waveoutSupport
 
 , cddbSupport ? true, libcddb ? null
-, cdioSupport ? true, libcdio ? null
+, cdioSupport ? true, libcdio ? null, libcdio-paranoia ? null
 , cueSupport ? true, libcue ? null
-, discidSupport ? true, libdiscid ? null
+, discidSupport ? false, libdiscid ? null
 , ffmpegSupport ? true, ffmpeg ? null
 , flacSupport ? true, flac ? null
 , madSupport ? true, libmad ? null
@@ -28,17 +30,14 @@
 , tremorSupport ? false, tremor ? null
 , vorbisSupport ? true, libvorbis ? null
 , wavpackSupport ? true, wavpack ? null
+, opusSupport ? true, opusfile ? null
 
-# can't make these work, something is broken
-#, aacSupport ? true, faac ? null
-#, mp4Support ? true, mp4v2 ? null
-#, opusSupport ? true, opusfile ? null
+, aacSupport ? false, faad2 ? null # already handled by ffmpeg
+, mp4Support ? false, mp4v2 ? null # ffmpeg does support mp4 better
 
 # not in nixpkgs
 #, vtxSupport ? true, libayemu ? null
 }:
-
-with stdenv.lib;
 
 assert samplerateSupport -> jackSupport;
 
@@ -54,12 +53,13 @@ let
 
   opts = [
     # Audio output
-    (mkFlag alsaSupport       "CONFIG_ALSA=y"       alsaLib)
+    (mkFlag alsaSupport       "CONFIG_ALSA=y"       alsa-lib)
     (mkFlag aoSupport         "CONFIG_AO=y"         libao)
     (mkFlag jackSupport       "CONFIG_JACK=y"       libjack)
     (mkFlag samplerateSupport "CONFIG_SAMPLERATE=y" libsamplerate)
-    (mkFlag ossSupport        "CONFIG_OSS=y"        alsaOss)
+    (mkFlag ossSupport        "CONFIG_OSS=y"        alsa-oss)
     (mkFlag pulseaudioSupport "CONFIG_PULSE=y"      libpulseaudio)
+    (mkFlag mprisSupport      "CONFIG_MPRIS=y"      systemd)
 
     #(mkFlag artsSupport      "CONFIG_ARTS=y")
     #(mkFlag roarSupport      "CONFIG_ROAR=y")
@@ -69,7 +69,7 @@ let
 
     # Input file formats
     (mkFlag cddbSupport    "CONFIG_CDDB=y"    libcddb)
-    (mkFlag cdioSupport    "CONFIG_CDIO=y"    libcdio)
+    (mkFlag cdioSupport    "CONFIG_CDIO=y"    [ libcdio libcdio-paranoia ])
     (mkFlag cueSupport     "CONFIG_CUE=y"     libcue)
     (mkFlag discidSupport  "CONFIG_DISCID=y"  libdiscid)
     (mkFlag ffmpegSupport  "CONFIG_FFMPEG=y"  ffmpeg)
@@ -81,41 +81,45 @@ let
     (mkFlag tremorSupport  "CONFIG_TREMOR=y"  tremor)
     (mkFlag vorbisSupport  "CONFIG_VORBIS=y"  libvorbis)
     (mkFlag wavpackSupport "CONFIG_WAVPACK=y" wavpack)
+    (mkFlag opusSupport   "CONFIG_OPUS=y"    opusfile)
 
-    #(mkFlag opusSupport   "CONFIG_OPUS=y"    opusfile)
-    #(mkFlag mp4Support    "CONFIG_MP4=y"     mp4v2)
-    #(mkFlag aacSupport    "CONFIG_AAC=y"     faac)
+    (mkFlag mp4Support    "CONFIG_MP4=y"     mp4v2)
+    (mkFlag aacSupport    "CONFIG_AAC=y"     faad2)
 
     #(mkFlag vtxSupport    "CONFIG_VTX=y"     libayemu)
   ];
-
 in
 
 stdenv.mkDerivation rec {
-  name = "cmus-${version}";
-  version = "2.7.1";
+  pname = "cmus";
+  version = "2.10.0-unstable-2023-11-05";
 
   src = fetchFromGitHub {
     owner  = "cmus";
     repo   = "cmus";
-    rev    = "v${version}";
-    sha256 = "0xd96py21bl869qlv1353zw7xsgq6v5s8szr0ldr63zj5fgc2ps5";
+    rev    = "23afab39902d3d97c47697196b07581305337529";
+    sha256 = "sha256-pxDIYbeJMoaAuErCghWJpDSh1WbYbhgJ7+ca5WLCrOs=";
   };
 
-  patches = [ ./option-debugging.patch ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ ncurses ]
+    ++ lib.optionals stdenv.isDarwin [ libiconv CoreAudio AudioUnit VideoToolbox ]
+    ++ lib.flatten (lib.concatMap (a: a.deps) opts);
 
-  configurePhase = "./configure " + concatStringsSep " " ([
-    "prefix=$out"
+  prefixKey = "prefix=";
+
+  configureFlags = [
     "CONFIG_WAV=y"
-  ] ++ concatMap (a: a.flags) opts);
+    "HOSTCC=${stdenv.cc.targetPrefix}cc"
+  ] ++ lib.concatMap (a: a.flags) opts;
 
-  buildInputs = [ ncurses pkgconfig ] ++ concatMap (a: a.deps) opts;
+  makeFlags = [ "LD=$(CC)" ];
 
-  meta = {
+  meta = with lib; {
     description = "Small, fast and powerful console music player for Linux and *BSD";
-    homepage = https://cmus.github.io/;
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = [ stdenv.lib.maintainers.oxij ];
-    platforms = stdenv.lib.platforms.linux;
+    homepage = "https://cmus.github.io/";
+    license = licenses.gpl2;
+    maintainers = [ maintainers.oxij ];
+    platforms = platforms.linux ++ platforms.darwin;
   };
 }

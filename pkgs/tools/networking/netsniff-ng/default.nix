@@ -1,22 +1,56 @@
-{ stdenv, fetchFromGitHub, bison, flex, geoip, geolite-legacy, libcli, libnet
-, libnetfilter_conntrack, libnl, libpcap, libsodium, liburcu, ncurses, perl
-, pkgconfig, zlib }:
+{ stdenv
+, lib
+, fetchFromGitHub
+, makeWrapper
+, bison
+, flex
+, geoip
+, geolite-legacy
+, libcli
+, libnet
+, libnetfilter_conntrack
+, libnl
+, libpcap
+, libsodium
+, liburcu
+, ncurses
+, pkg-config
+, gnumake42
+, zlib
+}:
 
 stdenv.mkDerivation rec {
-  name = "netsniff-ng-${version}";
-  version = "0.6.2";
+  pname = "netsniff-ng";
+  version = "0.6.8";
 
-  # Upstream recommends and supports git
-  src = fetchFromGitHub rec {
-    repo = "netsniff-ng";
-    owner = repo;
+  src = fetchFromGitHub {
+    repo = pname;
+    owner = pname;
     rev = "v${version}";
-    sha256 = "1lz4hwgwdq3znlqjmvl7cw3g3ilbayn608h0hwqdf7v2jq6n67kg";
+    sha256 = "10ih8amaqspy0zwg7hqvypa1v7ixpjl0n608cyfgyfzffp73lbqf";
   };
 
-  buildInputs = [ bison flex geoip geolite-legacy libcli libnet libnl
-    libnetfilter_conntrack libpcap libsodium liburcu ncurses perl
-    pkgconfig zlib ];
+  nativeBuildInputs = [
+    bison
+    flex
+    makeWrapper
+    pkg-config
+    gnumake42 # fails with make 4.4
+  ];
+
+  buildInputs = [
+    geoip
+    geolite-legacy
+    libcli
+    libnet
+    libnl
+    libnetfilter_conntrack
+    libpcap
+    libsodium
+    liburcu
+    ncurses
+    zlib
+  ];
 
   # ./configure is not autoGNU but some home-brewn magic
   configurePhase = ''
@@ -31,16 +65,20 @@ stdenv.mkDerivation rec {
   makeFlags = [ "PREFIX=$(out)" "ETCDIR=$(out)/etc" ];
 
   postInstall = ''
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIP.dat		$out/etc/netsniff-ng/country4.dat
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPv6.dat		$out/etc/netsniff-ng/country6.dat
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPCity.dat		$out/etc/netsniff-ng/city4.dat
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPCityv6.dat	$out/etc/netsniff-ng/city6.dat
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPASNum.dat		$out/etc/netsniff-ng/asname4.dat
-    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPASNumv6.dat	$out/etc/netsniff-ng/asname6.dat
+    # trafgen and bpfc can call out to cpp to process config files.
+    wrapProgram "$out/sbin/trafgen" --prefix PATH ":" "${stdenv.cc}/bin"
+    wrapProgram "$out/sbin/bpfc" --prefix PATH ":" "${stdenv.cc}/bin"
+
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIP.dat $out/etc/netsniff-ng/country4.dat
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPv6.dat $out/etc/netsniff-ng/country6.dat
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPCity.dat $out/etc/netsniff-ng/city4.dat
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPCityv6.dat $out/etc/netsniff-ng/city6.dat
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPASNum.dat $out/etc/netsniff-ng/asname4.dat
+    ln -sv ${geolite-legacy}/share/GeoIP/GeoIPASNumv6.dat $out/etc/netsniff-ng/asname6.dat
     rm -v $out/etc/netsniff-ng/geoip.conf # updating databases after installation is impossible
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Swiss army knife for daily Linux network plumbing";
     longDescription = ''
       netsniff-ng is a free Linux networking toolkit. Its gain of performance
@@ -49,9 +87,8 @@ stdenv.mkDerivation rec {
       to user space and vice versa. The toolkit can be used for network
       development and analysis, debugging, auditing or network reconnaissance.
     '';
-    homepage = http://netsniff-ng.org/;
-    license = licenses.gpl2;
+    homepage = "http://netsniff-ng.org/";
+    license = with licenses; [ gpl2Only ];
     platforms = platforms.linux;
-    maintainers = with maintainers; [ nckx ];
   };
 }

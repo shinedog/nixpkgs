@@ -1,34 +1,27 @@
-{ stdenv, fetchsvn, alsaLib, asio, autoconf, automake, bison
-, libjack2, libgig, libsndfile, libtool, lv2, pkgconfig }:
+{ lib, stdenv, fetchurl, autoconf, automake, bison, libtool, pkg-config, which
+, alsa-lib, asio, libjack2, libgig, libsndfile, lv2 }:
 
 stdenv.mkDerivation rec {
-  name = "linuxsampler-svn-${version}";
-  version = "2340";
+  pname = "linuxsampler";
+  version = "2.3.1";
 
-  src = fetchsvn {
-    url = "https://svn.linuxsampler.org/svn/linuxsampler/trunk";
-    rev = "${version}";
-    sha256 = "0zsrvs9dwwhjx733m45vfi11yjkqv33z8qxn2i9qriq5zs1f0kd7";
+  src = fetchurl {
+    url = "https://download.linuxsampler.org/packages/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-T7quk5N5JBiPqIziQd0vaCr8tLDbwS6otz6egY01OTE=";
   };
 
-  patches = ./linuxsampler_lv2_sfz_fix.diff;
-
-  # It fails to compile without this option. I'm not sure what the bug
-  # is, but everything works OK for me (goibhniu).
-  configureFlags = [ "--disable-nptl-bug-check" ];
-
   preConfigure = ''
-    sed -e 's/which/type -P/g' -i scripts/generate_parser.sh
-    make -f Makefile.cvs
+    make -f Makefile.svn
   '';
 
-  buildInputs = [ 
-   alsaLib asio autoconf automake bison libjack2 libgig libsndfile
-   libtool lv2 pkgconfig
-  ];
+  nativeBuildInputs = [ autoconf automake bison libtool pkg-config which ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.linuxsampler.org;
+  buildInputs = [ alsa-lib asio libjack2 libgig libsndfile lv2 ];
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "http://www.linuxsampler.org";
     description = "Sampler backend";
     longDescription = ''
       Includes sampler engine, audio and MIDI drivers, network layer
@@ -40,7 +33,7 @@ stdenv.mkDerivation rec {
       prior written permission by the LinuxSampler authors. If you
       have questions on the subject, that are not yet covered by the
       FAQ, please contact us.
-    ''; 
+    '';
     license = licenses.unfree;
     maintainers = [ maintainers.goibhniu ];
     platforms = platforms.linux;

@@ -1,24 +1,42 @@
-{ stdenv, fetchurl, fetchpatch, pkgconfig, libplist }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoreconfHook
+, pkg-config
+, libplist
+, libimobiledevice-glue
+}:
 
 stdenv.mkDerivation rec {
-  name = "libusbmuxd-1.0.10";
-  src = fetchurl {
-    url = "http://www.libimobiledevice.org/downloads/${name}.tar.bz2";
-    sha256 = "1wn9zq2224786mdr12c5hxad643d29wg4z6b7jn888jx4s8i78hs";
+  pname = "libusbmuxd";
+  version = "2.0.2+date=2023-04-30";
+
+  src = fetchFromGitHub {
+    owner = "libimobiledevice";
+    repo = pname;
+    rev = "f47c36f5bd2a653a3bd7fb1cf1d2c50b0e6193fb";
+    hash = "sha256-ojFnFD0lcdJLP27oFukwzkG5THx1QE+tRBsaMj4ZCc4=";
   };
 
-  patches = [
-    (fetchpatch { # CVE-2016-5104
-      url = "https://github.com/libimobiledevice/libusbmuxd/commit/4397b3376dc4e4cb1c991d0aed61ce6482614196.patch";
-      sha256 = "0cl3vys7bkwbdzf64d0rz3zlqpfc30w4l7j49ljv01agh42ywhgk";
-    })
+  nativeBuildInputs = [
+    autoreconfHook
+    pkg-config
   ];
 
-  nativeBuildInputs = [ pkgconfig ];
-  buildInputs = [ libplist ];
+  buildInputs = [
+    libplist
+    libimobiledevice-glue
+  ];
 
-  meta = {
-    homepage = "http://www.libimobiledevice.org";
-    platforms = stdenv.lib.platforms.unix;
+  preAutoreconf = ''
+    export RELEASE_VERSION=${version}
+  '';
+
+  meta = with lib; {
+    description = "A client library to multiplex connections from and to iOS devices";
+    homepage = "https://github.com/libimobiledevice/libusbmuxd";
+    license = licenses.lgpl21Plus;
+    platforms = platforms.unix;
+    maintainers = [ ];
   };
 }

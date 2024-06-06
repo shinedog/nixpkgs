@@ -1,60 +1,109 @@
-{ stdenv, fetchurl, pkgconfig, intltool, itstool, wrapGAppsHook
-, python3Packages, gst, gtk3, hicolor_icon_theme
-, gobjectIntrospection, librsvg, gnome3, libnotify
-# for gst-transcoder:
-, which, meson, ninja
+{ lib
+, fetchurl
+, pkg-config
+, gettext
+, itstool
+, python3
+, wrapGAppsHook3
+, gst_all_1
+, gtk3
+, gobject-introspection
+, libpeas
+, librsvg
+, gnome
+, libnotify
+, gsound
+, meson
+, ninja
+, gsettings-desktop-schemas
+, hicolor-icon-theme
 }:
 
-let
-  version = "0.96";
+python3.pkgs.buildPythonApplication rec {
+  pname = "pitivi";
+  version = "2023.03";
 
-  # gst-transcoder will eventually be merged with gstreamer (according to
-  # gst-transcoder 1.8.0 release notes). For now the only user is pitivi so we
-  # don't bother exposing the package to all of nixpkgs.
-  gst-transcoder = stdenv.mkDerivation rec {
-    name = "gst-transcoder-1.8.0";
-    src = fetchurl {
-      name = "${name}.tar.gz";
-      url = "https://github.com/pitivi/gst-transcoder/archive/1.8.0.tar.gz";
-      sha256 = "0iggr6idmp7cmfsf6pkhfl3jq1bkga37jl5prbcl1zapkzi26fg6";
-    };
-    buildInputs = [ which meson ninja pkgconfig gobjectIntrospection ]
-      ++ (with gst; [ gstreamer gst-plugins-base ]);
-  };
-
-in stdenv.mkDerivation rec {
-  name = "pitivi-${version}";
+  format = "other";
 
   src = fetchurl {
-    url = "mirror://gnome/sources/pitivi/${version}/${name}.tar.xz";
-    sha256 = "115d37mvi32yds8gqj2yidkk6pap7szavhjf2hw0388ynydlc2zs";
+    url = "mirror://gnome/sources/pitivi/${lib.versions.major version}/${pname}-${version}.tar.xz";
+    sha256 = "PX1OFEeavqMPvF613BKgxwErxqW2huw6mQxo8YpBS/M=";
   };
 
-  nativeBuildInputs = [ pkgconfig intltool itstool wrapGAppsHook ];
+  patches = [
+    # By default, the build picks up environment variables like PYTHONPATH
+    # and saves them to the generated binary. This would make the build-time
+    # dependencies part of the closure so we remove it.
+    ./prevent-closure-contamination.patch
+  ];
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    gettext
+    itstool
+    python3
+    wrapGAppsHook3
+    gobject-introspection
+  ];
 
   buildInputs = [
-    gobjectIntrospection gtk3 librsvg gnome3.gnome_desktop
-    gnome3.defaultIconTheme
-    gnome3.gsettings_desktop_schemas libnotify
-    gst-transcoder
-  ] ++ (with gst; [
-    gstreamer gst-editing-services
-    gst-plugins-base gst-plugins-good
-    gst-plugins-bad gst-plugins-ugly gst-libav gst-validate
-  ]) ++ (with python3Packages; [
-    python pygobject3 gst-python pyxdg numpy pycairo matplotlib
-    dbus-python
+    gtk3
+    libpeas
+    librsvg
+    gsound
+    gsettings-desktop-schemas
+    libnotify
+  ] ++ (with gst_all_1; [
+    gstreamer
+    gst-editing-services
+    gst-plugins-base
+    (gst-plugins-good.override { gtkSupport = true; })
+    gst-plugins-bad
+    gst-plugins-ugly
+    gst-libav
+    gst-devtools
   ]);
 
-  meta = with stdenv.lib; {
+  pythonPath = with python3.pkgs; [
+    pygobject3
+    gst-python
+    numpy
+    pycairo
+    matplotlib
+    librosa
+  ];
+
+  preFixup = ''
+    gappsWrapperArgs+=(
+      # The icon theme is hardcoded.
+      --prefix XDG_DATA_DIRS : "${hicolor-icon-theme}/share"
+    )
+  '';
+
+  postPatch = ''
+    patchShebangs ./getenvvar.py
+  '';
+
+  passthru = {
+    updateScript = gnome.updateScript {
+      packageName = "pitivi";
+      versionPolicy = "none"; # we are using dev version, since the stable one is too old
+    };
+  };
+
+  meta = with lib; {
     description = "Non-Linear video editor utilizing the power of GStreamer";
-    homepage    = "http://pitivi.org/";
+    homepage = "http://pitivi.org/";
     longDescription = ''
       Pitivi is a video editor built upon the GStreamer Editing Services.
       It aims to be an intuitive and flexible application
       that can appeal to newbies and professionals alike.
     '';
-    license     = licenses.lgpl21Plus;
-    platforms   = platforms.linux;
+    license = licenses.lgpl21Plus;
+    maintainers = with maintainers; [ ];
+    platforms = platforms.linux;
+    mainProgram = "pitivi";
   };
 }

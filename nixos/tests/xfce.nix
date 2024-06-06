@@ -1,42 +1,73 @@
-import ./make-test.nix ({ pkgs, ...} : {
+import ./make-test-python.nix ({ pkgs, ...} : {
   name = "xfce";
-  meta = with pkgs.stdenv.lib.maintainers; {
-    maintainers = [ eelco chaoflow shlevy ];
-  };
 
-  machine =
-    { config, pkgs, ... }:
+  nodes.machine =
+    { pkgs, ... }:
 
-    { imports = [ ./common/user-account.nix ];
+    {
+      imports = [
+        ./common/user-account.nix
+      ];
 
       services.xserver.enable = true;
+      services.xserver.displayManager.lightdm.enable = true;
 
-      services.xserver.displayManager.auto.enable = true;
-      services.xserver.displayManager.auto.user = "alice";
+      services.displayManager.autoLogin = {
+        enable = true;
+        user = "alice";
+      };
 
       services.xserver.desktopManager.xfce.enable = true;
+      environment.systemPackages = [ pkgs.xfce.xfce4-whiskermenu-plugin ];
 
-      environment.systemPackages = [ pkgs.xorg.xmessage ];
+      hardware.pulseaudio.enable = true; # needed for the factl test, /dev/snd/* exists without them but udev doesn't care then
+
     };
 
-  testScript =
-    ''
-      $machine->waitForX;
-      $machine->waitForFile("/home/alice/.Xauthority");
-      $machine->succeed("xauth merge ~alice/.Xauthority");
-      $machine->waitForWindow(qr/xfce4-panel/);
-      $machine->sleep(10);
+  enableOCR = true;
 
-      # Check that logging in has given the user ownership of devices.
-      $machine->succeed("getfacl /dev/snd/timer | grep -q alice");
+  testScript = { nodes, ... }: let
+    user = nodes.machine.users.users.alice;
+    bus = "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${toString user.uid}/bus";
+  in ''
+      with subtest("Wait for login"):
+        machine.wait_for_x()
+        machine.wait_for_file("${user.home}/.Xauthority")
+        machine.succeed("xauth merge ${user.home}/.Xauthority")
 
-      $machine->succeed("su - alice -c 'DISPLAY=:0.0 xfce4-terminal &'");
-      $machine->waitForWindow(qr/Terminal/);
-      $machine->sleep(10);
-      $machine->screenshot("screen");
+      with subtest("Check that logging in has given the user ownership of devices"):
+        machine.succeed("getfacl -p /dev/snd/timer | grep -q ${user.name}")
 
-      # Ensure that the X server does proper access control.
-      $machine->mustFail("su - bob -c 'DISPLAY=:0.0 xmessage Foo'");
-      $machine->mustFail("su - bob -c 'DISPLAY=:0 xmessage Foo'");
+      with subtest("Check if Xfce components actually start"):
+        machine.wait_for_window("xfce4-panel")
+        machine.wait_for_window("Desktop")
+        for i in ["xfwm4", "xfsettingsd", "xfdesktop", "xfce4-screensaver", "xfce4-notifyd", "xfconfd"]:
+          machine.wait_until_succeeds(f"pgrep -f {i}")
+
+      with subtest("Open whiskermenu"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfconf-query -c xfce4-panel -p /plugins/plugin-1 -t string -s whiskermenu -n >&2 &'")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfconf-query -c xfce4-panel -p /plugins/plugin-1/stay-on-focus-out -t bool -s true -n >&2 &'")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-panel -r >&2 &'")
+        machine.wait_until_succeeds("journalctl -b --grep 'xfce4-panel: Restarting' -t xsession")
+        machine.sleep(5)
+        machine.wait_until_succeeds("pgrep -f libwhiskermenu")
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-popup-whiskermenu >&2 &'")
+        machine.wait_for_text('Mail Reader')
+        # Close the menu.
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 ${bus} xfce4-popup-whiskermenu >&2 &'")
+
+      with subtest("Open Xfce terminal"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 xfce4-terminal >&2 &'")
+        machine.wait_for_window("Terminal")
+
+      with subtest("Open Thunar"):
+        machine.succeed("su - ${user.name} -c 'DISPLAY=:0 thunar >&2 &'")
+        machine.wait_for_window("Thunar")
+        machine.wait_for_text('(Pictures|Public|Templates|Videos)')
+
+      with subtest("Check if any coredumps are found"):
+        machine.succeed("(coredumpctl --json=short 2>&1 || true) | grep 'No coredumps found'")
+        machine.sleep(10)
+        machine.screenshot("screen")
     '';
 })

@@ -1,28 +1,89 @@
-{ stdenv, fetchurl
-, openssl, qt4, mesa, zlib, pkgconfig, libav
+{
+  lib,
+  mkDerivation,
+  fetchurl,
+  autoPatchelfHook,
+  pkg-config,
+  curl,
+  ffmpeg,
+  openssl,
+  qtbase,
+  zlib,
+
+  withJava ? true,
+  jre_headless,
 }:
 
-stdenv.mkDerivation rec {
-  name = "makemkv-${ver}";
-  ver = "1.9.10";
-  builder = ./builder.sh;
-
+let
+  version = "1.17.7";
+  # Using two URLs as the first one will break as soon as a new version is released
   src_bin = fetchurl {
-    url = "http://www.makemkv.com/download/makemkv-bin-${ver}.tar.gz";
-    sha256 = "1i5nqk5gyin6rgvc0fy96pdzq0wsmfvsm6w9mfsibj0yrfqnhi6r";
+    urls = [
+      "http://www.makemkv.com/download/makemkv-bin-${version}.tar.gz"
+      "http://www.makemkv.com/download/old/makemkv-bin-${version}.tar.gz"
+    ];
+    hash = "sha256-jFvIMbyVKx+HPMhFDGTjktsLJHm2JtGA8P/JZWaJUdA=";
   };
-
   src_oss = fetchurl {
-    url = "http://www.makemkv.com/download/makemkv-oss-${ver}.tar.gz";
-    sha256 = "1ypc2hisx71kpmjwxnlq6zh4q6r2i1p32gapb0ampjflcjyvx5dk";
+    urls = [
+      "http://www.makemkv.com/download/makemkv-oss-${version}.tar.gz"
+      "http://www.makemkv.com/download/old/makemkv-oss-${version}.tar.gz"
+    ];
+    hash = "sha256-di5VLUb57HWnxi3LfZfA/Z5qFRINDvb1oIDO4pHToO8=";
   };
+in
+mkDerivation {
+  pname = "makemkv";
+  inherit version;
 
-  buildInputs = [openssl qt4 mesa zlib pkgconfig libav];
+  srcs = [
+    src_bin
+    src_oss
+  ];
 
-  libPath = stdenv.lib.makeLibraryPath [stdenv.cc.cc openssl mesa qt4 zlib ]
-          + ":" + stdenv.cc.cc + "/lib64";
+  sourceRoot = "makemkv-oss-${version}";
 
-  meta = with stdenv.lib; {
+  patches = [ ./r13y.patch ];
+
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [
+    autoPatchelfHook
+    pkg-config
+  ];
+
+  buildInputs = [
+    ffmpeg
+    openssl
+    qtbase
+    zlib
+  ];
+
+  runtimeDependencies = [ (lib.getLib curl) ];
+
+  qtWrapperArgs =
+    let
+      binPath = lib.makeBinPath [ jre_headless ];
+    in
+    lib.optionals withJava [ "--prefix PATH : ${binPath}" ];
+
+  installPhase = ''
+    runHook preInstall
+
+    install -Dm555 -t $out/bin                              out/makemkv out/mmccextr out/mmgplsrv ../makemkv-bin-${version}/bin/amd64/makemkvcon
+    install -D     -t $out/lib                              out/lib{driveio,makemkv,mmbd}.so.*
+    install -D     -t $out/share/MakeMKV                    ../makemkv-bin-${version}/src/share/*
+    install -Dm444 -t $out/share/applications               ../makemkv-oss-${version}/makemkvgui/share/makemkv.desktop
+    install -Dm444 -t $out/share/icons/hicolor/16x16/apps   ../makemkv-oss-${version}/makemkvgui/share/icons/16x16/*
+    install -Dm444 -t $out/share/icons/hicolor/32x32/apps   ../makemkv-oss-${version}/makemkvgui/share/icons/32x32/*
+    install -Dm444 -t $out/share/icons/hicolor/64x64/apps   ../makemkv-oss-${version}/makemkvgui/share/icons/64x64/*
+    install -Dm444 -t $out/share/icons/hicolor/128x128/apps ../makemkv-oss-${version}/makemkvgui/share/icons/128x128/*
+    install -Dm444 -t $out/share/icons/hicolor/256x256/apps ../makemkv-oss-${version}/makemkvgui/share/icons/256x256/*
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
     description = "Convert blu-ray and dvd to mkv";
     longDescription = ''
       makemkv is a one-click QT application that transcodes an encrypted
@@ -33,8 +94,13 @@ stdenv.mkDerivation rec {
       can always download the latest version from makemkv.com that will reset the
       expiration date.
     '';
-    license = licenses.unfree;
-    homepage = http://makemkv.com;
-    maintainers = [ maintainers.titanous ];
+    sourceProvenance = with sourceTypes; [ binaryNativeCode ];
+    license = [
+      licenses.unfree
+      licenses.lgpl21
+    ];
+    homepage = "http://makemkv.com";
+    platforms = [ "x86_64-linux" ];
+    maintainers = with maintainers; [ jchw ];
   };
 }

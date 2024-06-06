@@ -1,26 +1,27 @@
-{ stdenv, fetchgit, autoreconfHook, texinfo, ncurses, readline, zlib, lzo, openssl }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, texinfo, ncurses, readline, zlib, lzo, openssl }:
 
 stdenv.mkDerivation rec {
-  name = "tinc-${version}";
-  version = "1.1pre14";
+  pname = "tinc";
+  version = "1.1pre18";
 
-  src = fetchgit {
-    rev = "refs/tags/release-${version}";
-    url = "git://tinc-vpn.org/tinc";
-    sha256 = "05an2vj0a3wjv5w672wgzyixbydin5jpja5zv6x81bc72dms0ymc";
+  src = fetchFromGitHub {
+    owner = "gsliepen";
+    repo = "tinc";
+    rev = "release-${version}";
+    hash = "sha256-1anjTUlVLx57FlUqGwBd590lfkZ2MmrM1qRcMl4P7Sg=";
   };
 
-  outputs = [ "out" "doc" ];
+  outputs = [ "out" "man" "info" ];
 
   nativeBuildInputs = [ autoreconfHook texinfo ];
   buildInputs = [ ncurses readline zlib lzo openssl ];
 
+  # needed so the build doesn't need to run git to find out the version.
   prePatch = ''
     substituteInPlace configure.ac --replace UNKNOWN ${version}
-  '';
-
-  postInstall = ''
-    rm $out/bin/tinc-gui
+    echo "${version}" > configure-version
+    echo "https://tinc-vpn.org/git/browse?p=tinc;a=log;h=refs/tags/release-${version}" > ChangeLog
+    sed -i '/AC_INIT/s/m4_esyscmd_s.*/${version})/' configure.ac
   '';
 
   configureFlags = [
@@ -28,7 +29,7 @@ stdenv.mkDerivation rec {
     "--localstatedir=/var"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "VPN daemon with full mesh routing";
     longDescription = ''
       tinc is a Virtual Private Network (VPN) daemon that uses tunnelling and
@@ -39,6 +40,6 @@ stdenv.mkDerivation rec {
     homepage="http://www.tinc-vpn.org/";
     license = licenses.gpl2Plus;
     platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington fpletz ];
+    maintainers = with maintainers; [ lassulus mic92 ];
   };
 }

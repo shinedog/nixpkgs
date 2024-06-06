@@ -1,19 +1,11 @@
-{ callPackage, self, stdenv, gettext, gvfs, libunique, bison2
-, libstartup_notification, overrides ? {} }:
+{ config, stdenv, pkgs, lib }:
 
-let overridden = set // overrides; set = with overridden; {
-  # Backward compatibility.
-  gtkdoc = self.gtk_doc;
-  startup_notification = libstartup_notification;
-  startupnotification = libstartup_notification;
-  gnomedocutils = self.gnome_doc_utils;
-  gnomeicontheme = self.gnome_icon_theme;
-  gnomepanel = self.gnome_panel;
+lib.makeScope pkgs.newScope (self: with self; {
 
 #### PLATFORM
 
   libIDL = callPackage ./platform/libIDL {
-    gettext = if stdenv.isDarwin then gettext else null;
+    gettext = if stdenv.isDarwin then pkgs.gettext else null;
   };
 
   ORBit2 = callPackage ./platform/ORBit2 { };
@@ -22,34 +14,16 @@ let overridden = set // overrides; set = with overridden; {
 
   libglade = callPackage ./platform/libglade { };
 
-  libgnomeprint = callPackage ./platform/libgnomeprint {
-    bison = bison2;
-  };
-
-  libgnomeprintui = callPackage ./platform/libgnomeprintui { };
-
-  libgnomecups = callPackage ./platform/libgnomecups { };
-
-  libgtkhtml = callPackage ./platform/libgtkhtml { };
-
   GConf = callPackage ./platform/GConf { };
-
-  gconfmm = callPackage ./platform/gconfmm { };
 
   libgnomecanvas = callPackage ./platform/libgnomecanvas { };
 
-  libgnomecanvasmm = callPackage ./platform/libgnomecanvasmm { };
-
   # for git-head builds
-  gnome_common = callPackage platform/gnome-common { };
+  gnome-common = callPackage platform/gnome-common { };
 
   gnome_mime_data = callPackage ./platform/gnome-mime-data { };
 
-  gnome_python = callPackage ./bindings/gnome-python { };
-
   gnome_vfs = callPackage ./platform/gnome-vfs { };
-
-  gnome_vfs_monikers = callPackage ./platform/gnome-vfs-monikers { };
 
   libgnome = callPackage ./platform/libgnome { };
 
@@ -59,59 +33,45 @@ let overridden = set // overrides; set = with overridden; {
 
   libbonoboui = callPackage ./platform/libbonoboui { };
 
-  python_rsvg = callPackage ./bindings/python-rsvg { };
-
-  at_spi = callPackage ./platform/at-spi { };
-
-  gtkhtml = callPackage ./platform/gtkhtml { };
-
-  # Required for nautilus
-  inherit (libunique);
-
   gtkglext = callPackage ./platform/gtkglext { };
-
-  gtkglextmm = callPackage ./platform/gtkglextmm { };
 
 #### DESKTOP
 
-  gnome_keyring = callPackage ./desktop/gnome-keyring { };
+  gtksourceview = callPackage ./desktop/gtksourceview {
+    autoreconfHook = pkgs.autoreconfHook269;
+  };
 
-  libgweather = callPackage ./desktop/libgweather { };
+} // lib.optionalAttrs config.allowAliases {
+  inherit (pkgs)
+    # GTK Libs
+    glib glibmm atk atkmm cairo pango pangomm gtkmm2 libcanberra-gtk2
 
-  gvfs = gvfs.override { gnome = self; };
+    # Included for backwards compatibility
+    libsoup libwnck2 gtk-doc gnome-doc-utils
 
-  libgnomekbd = callPackage ./desktop/libgnomekbd { };
+    gvfs # added 2019-09-03
+  ;
 
-  # Removed from recent GNOME releases, but still required
-  scrollkeeper = callPackage ./desktop/scrollkeeper { };
+  gtk = pkgs.gtk2;
+  gtkmm = pkgs.gtkmm2;
 
-  # scrollkeeper replacement
-  rarian = callPackage ./desktop/rarian { };
-
-  zenity = callPackage ./desktop/zenity { };
-
-  metacity = callPackage ./desktop/metacity { };
-
-  gnome_menus = callPackage ./desktop/gnome-menus { };
-
-  gnome_desktop = callPackage ./desktop/gnome-desktop { };
-
-  gnome_panel = callPackage ./desktop/gnome-panel { };
-
-  gnome_session = callPackage ./desktop/gnome-session { };
-
-  gnome_settings_daemon = callPackage ./desktop/gnome-settings-daemon { };
-
-  gnome_control_center = callPackage ./desktop/gnome-control-center { };
-
-  gtksourceview = callPackage ./desktop/gtksourceview { };
-
-  gnome_icon_theme = callPackage ./desktop/gnome-icon-theme { };
-
-  vte = callPackage ./desktop/vte { };
-
-#### BINDINGS
-
-  libglademm = callPackage ./bindings/libglademm { };
-
-}; in overridden
+  gtkdoc = pkgs.gtk-doc;
+  startup_notification = pkgs.libstartup_notification;
+  startupnotification = pkgs.libstartup_notification;
+  gnomedocutils = pkgs.gnome-doc-utils;
+  gnome-icon-theme = pkgs.gnome-icon-theme;
+  gnome_icon_theme = self.gnome-icon-theme;
+  gnomeicontheme = self.gnome-icon-theme;
+  gnome_common = gnome-common;
+  gnome_python = throw "gnome2.gnome_python has been removed"; # 2023-01-14
+  gnome_python_desktop = throw "gnome2.gnome_python_desktop has been removed"; # 2023-01-14
+  gtkhtml = throw "gnome2.gtkhtml has been removed"; # 2023-01-15
+  gtkhtml4 = throw "gnome2.gtkhtml4 has been removed"; # 2023-01-15
+  libglademm = throw "gnome2.libglademm has been removed"; # 2022-01-15
+  libgnomecanvasmm = "gnome2.libgnomecanvasmm has been removed"; # 2022-01-15
+  libgnomecups = throw "gnome2.libgnomecups has been removed"; # 2023-01-15
+  libgnomeprint = throw "gnome2.libgnomeprint has been removed"; # 2023-01-15
+  libgnomeprintui = throw "gnome2.libgnomeprintui has been removed"; # 2023-01-15
+  libgtkhtml = throw "gnome2.libgtkhtml has been removed"; # 2023-01-15
+  python_rsvg = throw "gnome2.python_rsvg has been removed"; # 2023-01-14
+})

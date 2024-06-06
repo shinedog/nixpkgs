@@ -1,9 +1,12 @@
-{ kdeFramework, lib
-, ecm
+{
+  mkDerivation,
+  extra-cmake-modules,
+  qtbase
 }:
 
-kdeFramework {
-  name = "kitemmodels";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
+mkDerivation {
+  pname = "kitemmodels";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  propagatedBuildInputs = [ qtbase ];
+  outputs = [ "out" "dev" ];
 }

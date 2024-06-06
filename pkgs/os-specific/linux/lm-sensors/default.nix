@@ -1,26 +1,67 @@
-{ stdenv, fetchurl, bison, flex, which, perl }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, bash
+, bison
+, flex
+, which
+, perl
+, sensord ? false
+, rrdtool ? null
+}:
+
+assert sensord -> rrdtool != null;
 
 stdenv.mkDerivation rec {
-  name = "lm-sensors-${version}";
-  version = "3.4.0"; # don't forget to tweak fedoraproject mirror URL hash
-  
-  src = fetchurl {
-    urls = [
-      "http://dl.lm-sensors.org/lm-sensors/releases/lm_sensors-${version}.tar.bz2"
-      "http://pkgs.fedoraproject.org/repo/pkgs/lm_sensors/lm_sensors-${version}.tar.bz2/c03675ae9d43d60322110c679416901a/lm_sensors-${version}.tar.bz2"
-    ];
-    sha256 = "07q6811l4pp0f7pxr8bk3s97ippb84mx5qdg7v92s9hs10b90mz0";
+  pname = "lm-sensors";
+  version = "3.6.0";
+  dashedVersion = lib.replaceStrings [ "." ] [ "-" ] version;
+
+  src = fetchFromGitHub {
+    owner = "lm-sensors";
+    repo = "lm-sensors";
+    rev = "V${dashedVersion}";
+    hash = "sha256-9lfHCcODlS7sZMjQhK0yQcCBEoGyZOChx/oM0CU37sY=";
   };
 
-  buildInputs = [ bison flex which perl ];
-
-  preBuild = ''
-    makeFlagsArray=(PREFIX=$out ETCDIR=$out/etc)
+  # Upstream build system have knob to enable and disable building of static
+  # library, shared library is built unconditionally.
+  postPatch = lib.optionalString stdenv.hostPlatform.isStatic ''
+    sed -i 'lib/Module.mk' -e '/LIBTARGETS :=/,+1d; /-m 755/ d'
+    substituteInPlace prog/sensors/Module.mk --replace 'lib/$(LIBSHBASENAME)' ""
   '';
 
-  meta = {
-    homepage = http://www.lm-sensors.org/;
+  nativeBuildInputs = [ bison flex which ];
+  # bash is required for correctly replacing the shebangs in all tools for cross-compilation.
+  buildInputs = [ bash perl ]
+    ++ lib.optional sensord rrdtool;
+
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+    "CC=${stdenv.cc.targetPrefix}cc"
+    "AR=${stdenv.cc.targetPrefix}ar"
+  ] ++ lib.optional sensord "PROG_EXTRA=sensord";
+
+  installFlags = [
+    "ETCDIR=${placeholder "out"}/etc"
+  ];
+
+  # Making regexp to patch-out installing of .so symlinks from Makefile is
+  # complicated, it is easier to remove them post-install.
+  postInstall = ''
+    mkdir -p $out/share/doc/${pname}
+    cp -r configs doc/* $out/share/doc/${pname}
+  '' + lib.optionalString stdenv.hostPlatform.isStatic ''
+    rm $out/lib/*.so*
+  '';
+
+  meta = with lib; {
+    homepage = "https://hwmon.wiki.kernel.org/lm_sensors";
+    changelog = "https://raw.githubusercontent.com/lm-sensors/lm-sensors/V${dashedVersion}/CHANGES";
     description = "Tools for reading hardware sensors";
-    platforms = stdenv.lib.platforms.linux;
+    license = with licenses; [ lgpl21Plus gpl2Plus ];
+    maintainers = with maintainers; [ pmy ];
+    platforms = platforms.linux;
+    mainProgram = "sensors";
   };
 }

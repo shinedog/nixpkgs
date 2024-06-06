@@ -1,34 +1,45 @@
-{stdenv, fetchurl #, libX11, libXinerama, enableXft, libXft, zlib
-, swc, wld, wayland, libxkbcommon, pixman, fontconfig
+{ lib, stdenv, fetchFromGitHub, meson, ninja, cairo, pango, pkg-config, wayland-protocols
+, glib, wayland, libxkbcommon, makeWrapper, wayland-scanner
+, fetchpatch
 }:
 
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "dmenu-wayland-${version}";
-  version = "git-2014-11-02";
-  rev = "6e08b77428cc3c406ed2e90d4cae6c41df76341e";
+  pname = "dmenu-wayland";
+  version = "unstable-2023-05-18";
 
-  src = fetchurl {
-    url = "https://github.com/michaelforney/dmenu/archive/${rev}.tar.gz";
-    sha256 = "d0f73e442baf44a93a3b9d41a72e9cfa14f54af6049c90549f516722e3f88019";
+  src = fetchFromGitHub {
+    owner = "nyyManni";
+    repo = "dmenu-wayland";
+    rev = "a380201dff5bfac2dace553d7eaedb6cea6855f9";
+    hash = "sha256-dqFvU2mRYEw7n8Fmbudwi5XMLQ7mQXFkug9D9j4FIrU=";
   };
 
-  buildInputs = [ swc wld wayland libxkbcommon pixman fontconfig ];
+  outputs = [ "out" "man" ];
 
-  postPatch = ''
-    sed -ri -e 's!\<(dmenu|dmenu_path)\>!'"$out/bin"'/&!g' dmenu_run
-  '';
+  depsBuildBuild = [ pkg-config ];
+  nativeBuildInputs = [ meson ninja pkg-config makeWrapper wayland-scanner ];
+  buildInputs = [ cairo pango wayland-protocols glib wayland libxkbcommon ];
 
-  preConfigure = [
-    ''sed -i "s@PREFIX = /usr/local@PREFIX = $out@g; s@/usr/share/swc@$(echo "$nativeBuildInputs" | grep -o '[^ ]*-swc-[^ ]*')/share/swc@g" config.mk''
+  patches = [
+    # can be removed when https://github.com/nyyManni/dmenu-wayland/pull/23 is included
+    (fetchpatch {
+      name = "support-cross-compilation.patch";
+      url = "https://github.com/nyyManni/dmenu-wayland/commit/3434410de5dcb007539495395f7dc5421923dd3a.patch";
+      sha256 = "sha256-im16kU8RWrCY0btYOYjDp8XtfGEivemIPlhwPX0C77o=";
+    })
   ];
 
-  meta = {
-      description = "A generic, highly customizable, and efficient menu for the X Window System";
-      homepage = http://tools.suckless.org/dmenu;
-      license = stdenv.lib.licenses.mit;
-      maintainers = with stdenv.lib.maintainers; [ ];
-      platforms = with stdenv.lib.platforms; all;
+  postInstall = ''
+    wrapProgram $out/bin/dmenu-wl_run \
+      --prefix PATH : $out/bin
+  '';
+
+  meta = with lib; {
+    license = licenses.mit;
+    platforms = platforms.linux;
+    description = "An efficient dynamic menu for wayland (wlroots)";
+    homepage = "https://github.com/nyyManni/dmenu-wayland";
+    maintainers = with maintainers; [ rewine ];
+    mainProgram = "dmenu-wl";
   };
 }

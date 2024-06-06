@@ -1,32 +1,47 @@
-{ stdenv, fetchurl, which, qt4, xlibsWrapper, libpulseaudio, fftwSinglePrec
-, lame, zlib, mesa, alsaLib, freetype, perl, pkgconfig
-, libX11, libXv, libXrandr, libXvMC, libXinerama, libXxf86vm, libXmu
-, yasm, libuuid, taglib, libtool, autoconf, automake, file
+{ lib, mkDerivation, fetchFromGitHub, which, qtbase, qtwebkit, qtscript
+, libpulseaudio, fftwSinglePrec , lame, zlib, libGLU, libGL, alsa-lib, freetype
+, perl, pkg-config , libsamplerate, libbluray, lzo, libX11, libXv, libXrandr, libXvMC, libXinerama, libXxf86vm
+, libXmu , yasm, libuuid, taglib, libtool, autoconf, automake, file, exiv2, linuxHeaders
+, soundtouch, libzip, libhdhomerun
+, withWebKit ? false
 }:
 
-stdenv.mkDerivation rec {
-  name = "mythtv-${version}";
-  version = "0.27.4";
+mkDerivation rec {
+  pname = "mythtv";
+  version = "34.0";
 
-  src = fetchurl {
-    url = "https://github.com/MythTV/mythtv/archive/v${version}.tar.gz";
-    sha256 = "0nrn4fbkkzh43n7jgbv21i92sb4z4yacwj9yj6m3hjbffzy4ywqz";
+  src = fetchFromGitHub {
+    owner = "MythTV";
+    repo = "mythtv";
+    rev = "v${version}";
+    hash = "sha256-6/TEoyYIRq6pufYzGOmO5DB05JuDo9lqRAYT5N5M/L4=";
   };
 
-  sourceRoot = "${name}/mythtv";
+  patches = [
+    # Disable sourcing /etc/os-release
+    ./dont-source-os-release.patch
+  ];
+
+  setSourceRoot = "sourceRoot=$(echo */mythtv)";
 
   buildInputs = [
-    freetype qt4 lame zlib xlibsWrapper mesa perl alsaLib libpulseaudio fftwSinglePrec
-    libX11 libXv libXrandr libXvMC libXmu libXinerama libXxf86vm libXmu
-    libuuid taglib
-  ];
-  nativeBuildInputs = [ pkgconfig which yasm libtool autoconf automake file ];
+    freetype qtbase qtscript lame zlib libGLU libGL
+    perl libsamplerate libbluray lzo alsa-lib libpulseaudio fftwSinglePrec libX11 libXv libXrandr libXvMC
+    libXmu libXinerama libXxf86vm libXmu libuuid taglib exiv2 soundtouch libzip
+    libhdhomerun
+  ] ++ lib.optional withWebKit qtwebkit;
+  nativeBuildInputs = [ pkg-config which yasm libtool autoconf automake file ];
 
-  meta = with stdenv.lib; {
+  configureFlags =
+    [ "--dvb-path=${linuxHeaders}/include" ];
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     homepage = "https://www.mythtv.org/";
     description = "Open Source DVR";
-    license = licenses.gpl2;
-    meta.platforms = platforms.linux;
-    maintainers = [ maintainers.titanous ];
+    license = licenses.gpl2Plus;
+    platforms = platforms.linux;
+    maintainers = [ ];
   };
 }

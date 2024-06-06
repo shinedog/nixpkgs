@@ -1,50 +1,66 @@
-{ stdenv
-, fetchurl
-, buildPythonPackage
-, python
-, llvm
-, pythonOlder
-, isPyPy
-, enum34
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  buildPythonPackage,
+  isPyPy,
+  pythonAtLeast,
+
+  # build-system
+  llvm,
+  setuptools,
+
+  # tests
+  python,
 }:
 
 buildPythonPackage rec {
   pname = "llvmlite";
-  name = "${pname}-${version}";
-  version = "0.14.0";
+  version = "0.42.0";
+  pyproject = true;
 
-  disabled = isPyPy;
+  disabled = isPyPy || pythonAtLeast "3.13";
 
-  src = fetchurl {
-    url = "mirror://pypi/${builtins.substring 0 1 pname}/${pname}/${name}.tar.gz";
-    sha256 = "1ybgsmvamj0i51dvrn268ziczpm63y2h4sgagf6fkgkpydrr01g8";
+  src = fetchFromGitHub {
+    owner = "numba";
+    repo = "llvmlite";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-vN2npyAyN6C340l69YSRtRJrAe4EHSqh4SCgWfeSQaQ=";
   };
 
-  propagatedBuildInputs = [ llvm ] ++ stdenv.lib.optional (pythonOlder "3.4") enum34;
+  nativeBuildInputs = [
+    llvm
+    setuptools
+  ];
 
   # Disable static linking
   # https://github.com/numba/llvmlite/issues/93
-  patchPhase = ''
+  postPatch = ''
     substituteInPlace ffi/Makefile.linux --replace "-static-libstdc++" ""
 
     substituteInPlace llvmlite/tests/test_binding.py --replace "test_linux" "nope"
   '';
+
   # Set directory containing llvm-config binary
   preConfigure = ''
-    export LLVM_CONFIG=${llvm}/bin/llvm-config
-  '';
-  checkPhase = ''
-    ${python.executable} runtests.py
+    export LLVM_CONFIG=${llvm.dev}/bin/llvm-config
   '';
 
-  __impureHostDeps = stdenv.lib.optionals stdenv.isDarwin [ "/usr/lib/libm.dylib" ];
+  checkPhase = ''
+    runHook preCheck
+    ${python.executable} runtests.py
+    runHook postCheck
+  '';
+
+  __impureHostDeps = lib.optionals stdenv.isDarwin [ "/usr/lib/libm.dylib" ];
 
   passthru.llvm = llvm;
 
-  meta = {
+  meta = with lib; {
+    changelog = "https://github.com/numba/llvmlite/blob/v${version}/CHANGE_LOG";
     description = "A lightweight LLVM python binding for writing JIT compilers";
+    downloadPage = "https://github.com/numba/llvmlite";
     homepage = "http://llvmlite.pydata.org/";
-    license = stdenv.lib.licenses.bsd2;
-    maintainers = with stdenv.lib.maintainers; [ fridh ];
+    license = licenses.bsd2;
   };
 }

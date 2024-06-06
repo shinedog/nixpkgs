@@ -1,20 +1,24 @@
-{stdenv, fetchgit, cmake} :
+{ lib, stdenv, fetchFromGitHub, cmake }:
 
-stdenv.mkDerivation {
-  name = "ddate-0.2.2";
-  src = fetchgit {
-    url = "https://github.com/bo0ts/ddate";
-    rev = "refs/tags/v0.2.2";
+stdenv.mkDerivation rec {
+  pname = "ddate";
+  version = "0.2.2";
+
+  src = fetchFromGitHub {
+    owner = "bo0ts";
+    repo = pname;
+    rev = "refs/tags/v${version}";
     sha256 = "1qchxnxvghbma6gp1g78wnjxsri0b72ha9axyk31cplssl7yn73f";
   };
 
-  buildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ];
 
-  meta = {
-    homepage = https://github.com/bo0ts/ddate;
+  meta = with lib; {
+    homepage = "https://github.com/bo0ts/ddate";
     description = "Discordian version of the date program";
-    license = stdenv.lib.licenses.publicDomain;
-    maintainers = with stdenv.lib.maintainers; [kovirobi];
-    platforms = with stdenv.lib.platforms; linux;
+    license = licenses.publicDomain;
+    maintainers = with maintainers; [ kovirobi ];
+    platforms = platforms.all;
+    mainProgram = "ddate";
   };
 }

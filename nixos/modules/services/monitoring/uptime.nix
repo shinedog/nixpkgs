@@ -1,10 +1,12 @@
-{ config, pkgs, lib, ... }:
+{ config, options, pkgs, lib, ... }:
 let
-  inherit (lib) mkOption mkEnableOption mkIf mkMerge types optionalAttrs optional;
+  inherit (lib) literalExpression mkOption mkEnableOption mkIf mkMerge types optional;
 
   cfg = config.services.uptime;
+  opt = options.services.uptime;
 
-  configDir = pkgs.runCommand "config" {} (if cfg.configFile != null then ''
+  configDir = pkgs.runCommand "config" { preferLocalBuild = true; }
+  (if cfg.configFile != null then ''
     mkdir $out
     ext=`echo ${cfg.configFile} | grep -o \\..*`
     ln -sv ${cfg.configFile} $out/default$ext
@@ -51,12 +53,15 @@ in {
 
     enableWebService = mkEnableOption "the uptime monitoring program web service";
 
-    enableSeparateMonitoringService = mkEnableOption "the uptime monitoring service" // { default = cfg.enableWebService; };
+    enableSeparateMonitoringService = mkEnableOption "the uptime monitoring service" // {
+      default = cfg.enableWebService;
+      defaultText = literalExpression "config.${opt.enableWebService}";
+    };
 
     nodeEnv = mkOption {
       description = "The node environment to run in (development, production, etc.)";
 
-      type = types.string;
+      type = types.str;
 
       default = "production";
     };

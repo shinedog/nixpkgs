@@ -1,30 +1,28 @@
-{ stdenv, fetchurl, p7zip }:
+{ lib, stdenvNoCC, fetchurl }:
 
-stdenv.mkDerivation rec {
-  name = "marathi-cursive-${version}";
-  version = "1.2";
+stdenvNoCC.mkDerivation rec {
+  pname = "marathi-cursive";
+  version = "2.1";
 
   src = fetchurl {
-    url = "https://github.com/MihailJP/MarathiCursive/releases/download/${version}/MarathiCursive-${version}.7z";
-    sha256 = "0zhqkkfkz5mhfz8xv305s16h80p9v1iva829fznxd2c44ngyplmc";
+    url = "https://github.com/MihailJP/MarathiCursive/releases/download/v${version}/MarathiCursive-${version}.tar.xz";
+    hash = "sha256-C/z8ALV9bht0SaYqACO5ulSVCk1d6wBwvpVC4ZLgtek=";
   };
 
-  buildInputs = [ p7zip ];
-
-  unpackCmd = "7z x $curSrc";
-
   installPhase = ''
-    mkdir -p $out/share/fonts/marathi-cursive
-    cp -v *.otf *.ttf $out/share/fonts/marathi-cursive
-    mkdir -p $out/share/doc/${name}
-    cp -v README *.txt $out/share/doc/${name}
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/marathi-cursive *.otf *.ttf
+    install -m444 -Dt $out/share/doc/${pname}-${version} README *.txt
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/MihailJP/marathi-cursive;
+  meta = with lib; {
+    homepage = "https://github.com/MihailJP/MarathiCursive";
     description = "Modi script font with Graphite and OpenType support";
     maintainers = with maintainers; [ mathnerd314 ];
-    license = licenses.mit; # It's the M+ license, M+ is MIT(-ish)
+    license = licenses.mplus;
     platforms = platforms.all;
   };
 }

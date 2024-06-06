@@ -1,29 +1,33 @@
-{stdenv, fetchurl, zlib, gmp, ecm }:
+{ lib, stdenv, fetchsvn, zlib, gmp, ecm }:
 
-stdenv.mkDerivation {
-  name = "msieve-1.48";
+stdenv.mkDerivation rec {
+  pname = "msieve";
+  version = "r1050";
 
-  src = fetchurl {
-      url = mirror://sourceforge/msieve/msieve/Msieve%20v1.48/msieve148.tar.gz;
-      sha256 = "05cm23mpfsbwssqda243sbi8m31j783qx89x9gl7sy8a4dnv7h63";
-    };
+  src = fetchsvn {
+    url = "svn://svn.code.sf.net/p/msieve/code/trunk";
+    rev = "1050";
+    hash = "sha256-cn6OhE4zhrpB7BFrRdOnucjATbfo5mLkK7O0Usx1quE=";
+  };
 
   buildInputs = [ zlib gmp ecm ];
 
   ECM = if ecm == null then "0" else "1";
 
-  buildFlags = if stdenv.system == "x86_64-linux" then "x86_64"
-               else if stdenv.system == "i686-linux" then "x86"
-               else "generic";
+  # Doesn't hurt Linux but lets clang-based platforms like Darwin work fine too
+  makeFlags = [ "CC=${stdenv.cc.targetPrefix}cc" "all" ];
 
-  installPhase = ''mkdir -p $out/bin/
-                   cp msieve $out/bin/'';
+  installPhase = ''
+    mkdir -p $out/bin/
+    cp msieve $out/bin/
+  '';
 
   meta = {
     description = "A C library implementing a suite of algorithms to factor large integers";
-    license = stdenv.lib.licenses.publicDomain;
-    homepage = http://msieve.sourceforge.net/;
-    maintainers = [ stdenv.lib.maintainers.roconnor ];
-    platforms = [ "x86_64-linux" ];
+    mainProgram = "msieve";
+    license = lib.licenses.publicDomain;
+    homepage = "http://msieve.sourceforge.net/";
+    maintainers = [ lib.maintainers.roconnor ];
+    platforms = [ "x86_64-linux" ] ++ lib.platforms.darwin;
   };
 }

@@ -1,69 +1,122 @@
-{ stdenv, fetchgit, which, libX11, libXt, fontconfig, freetype
-, xproto ? null
-, xextproto ? null
-, libXext ? null
-  # For building web manuals
-, perl ? null
-, samChordingSupport ? true #from 9front
+{ lib, stdenv, fetchFromGitHub
+, fontconfig, freetype, libX11, libXext, libXt, xorgproto
+, perl # For building web manuals
+, which, ed
+, Carbon, Cocoa, IOKit, Metal, QuartzCore, DarwinTools # For building on Darwin
 }:
 
 stdenv.mkDerivation rec {
-  name = "plan9port-2016-04-18";
+  pname = "plan9port";
+  version = "2023-03-31";
 
-  src = fetchgit {
-    # Latest, same as on github, google code is old
-    url = "https://plan9port.googlesource.com/plan9";
-    rev = "35d43924484b88b9816e40d2f6bff4547f3eec47";
-    sha256 = "1dvg580rkav09fra2gnrzh271b4fw6bgqfv4ib7ds5k3j55ahcdc";
+  src = fetchFromGitHub {
+    owner = "9fans";
+    repo = pname;
+    rev = "cc4571fec67407652b03d6603ada6580de2194dc";
+    hash = "sha256-PZWjf0DJCNs5mjxtXgK4/BcstaOqG2WBKRo+Bh/9U7w=";
   };
-
-  patches = [
-    ./fontsrv.patch
-  ] ++ stdenv.lib.optionals samChordingSupport [ ./sam_chord_9front.patch ];
 
   postPatch = ''
-    #hardcoded path
-    substituteInPlace src/cmd/acme/acme.c \
-      --replace /lib/font/bit $out/plan9/font
-    #deprecated flags
-    find . -type f \
-      -exec sed -i -e 's/_SVID_SOURCE/_DEFAULT_SOURCE/g' {} \; \
-      -exec sed -i -e 's/_BSD_SOURCE/_DEFAULT_SOURCE/g' {} \;
-  '' + stdenv.lib.optionalString (!stdenv.isDarwin) ''
-    #add missing ctrl+c\z\x\v keybind for non-Darwin
-    substituteInPlace src/cmd/acme/text.c \
-      --replace "case Kcmd+'c':" "case 0x03: case Kcmd+'c':" \
-      --replace "case Kcmd+'z':" "case 0x1a: case Kcmd+'z':" \
-      --replace "case Kcmd+'x':" "case 0x18: case Kcmd+'x':" \
-      --replace "case Kcmd+'v':" "case 0x16: case Kcmd+'v':"
+    substituteInPlace bin/9c \
+      --replace 'which uniq' '${which}/bin/which uniq'
+
+    ed -sE INSTALL <<EOF
+    # get /bin:/usr/bin out of PATH
+    /^PATH=[^ ]*/s,,PATH=\$PATH:\$PLAN9/bin,
+    # no xcbuild nonsense
+    /^if.* = Darwin/+;/^fi/-c
+    ${"\t"}export NPROC=$NIX_BUILD_CORES
+    .
+    # remove absolute include paths from fontsrv test
+    /cc -o a.out -c -I.*freetype2/;/x11.c/j
+    s/(-Iinclude).*-I[^ ]*/\1/
+    wq
+    EOF
   '';
 
-  builder = ./builder.sh;
+  nativeBuildInputs = [ ed ];
+  buildInputs = [ perl which ] ++ (if !stdenv.isDarwin then [
+    fontconfig freetype # fontsrv uses these
+    libX11 libXext libXt xorgproto
+  ] else [
+    Carbon Cocoa IOKit Metal QuartzCore
+    DarwinTools
+  ]);
 
-  NIX_LDFLAGS="-lgcc_s";
-  buildInputs = stdenv.lib.optionals (!stdenv.isDarwin) [
-    which
-    perl
-    libX11
-    fontconfig
-    xproto
-    libXt
-    xextproto
-    libXext
-    freetype #fontsrv wants ft2build.h. provides system fonts for acme and sam.
-  ];
+  configurePhase = ''
+    runHook preConfigure
+    cat >LOCAL.config <<EOF
+    CC9='$(command -v $CC)'
+    CFLAGS='$NIX_CFLAGS_COMPILE'
+    LDFLAGS='$(for f in $NIX_LDFLAGS; do echo "-Wl,$f"; done | xargs echo)'
+    ${lib.optionalString (!stdenv.isDarwin) "X11='${libXt.dev}/include'"}
+    EOF
 
-  enableParallelBuilding = true;
+    # make '9' available in the path so there's some way to find out $PLAN9
+    cat >LOCAL.INSTALL <<EOF
+    #!$out/plan9/bin/rc
+    mkdir $out/bin
+    ln -s $out/plan9/bin/9 $out/bin/
+    EOF
+    chmod +x LOCAL.INSTALL
 
-  meta = with stdenv.lib; {
-    homepage = "http://swtch.com/plan9port/";
+    # now, not in fixupPhase, so ./INSTALL works
+    patchShebangs .
+    runHook postConfigure
+  '';
+
+  buildPhase = ''
+    runHook preBuild
+    PLAN9_TARGET=$out/plan9 ./INSTALL -b
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+    mkdir $out
+    cp -r . $out/plan9
+    cd $out/plan9
+
+    ./INSTALL -c
+    runHook postInstall
+  '';
+
+  dontPatchShebangs = true;
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/9 rc -c 'echo rc is working.'
+
+    # 9l can find and use its libs
+    cd $TMP
+    cat >test.c <<EOF
+    #include <u.h>
+    #include <libc.h>
+    #include <thread.h>
+    void
+    threadmain(int argc, char **argv)
+    {
+        threadexitsall(nil);
+    }
+    EOF
+    $out/bin/9 9c -o test.o test.c
+    $out/bin/9 9l -o test test.o
+    ./test
+  '';
+
+  meta = with lib; {
+    homepage = "https://9fans.github.io/plan9port/";
     description = "Plan 9 from User Space";
-    license = licenses.lpl-102;
-    maintainers = with maintainers; [ ftrvxmtrx kovirobi ];
+    longDescription = ''
+      Plan 9 from User Space (aka plan9port) is a port of many Plan 9 programs
+      from their native Plan 9 environment to Unix-like operating systems.
+    '';
+    license = licenses.mit;
+    maintainers = with maintainers; [
+      AndersonTorres bbarker ehmry ftrvxmtrx kovirobi ylh
+    ];
+    mainProgram = "9";
     platforms = platforms.unix;
   };
-
-  libXt_dev = libXt.dev;
-  fontconfig_dev = fontconfig.dev;
-  freetype_dev = freetype.dev;
 }
+# TODO: investigate the mouse chording support patch

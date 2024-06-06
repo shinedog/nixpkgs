@@ -1,34 +1,46 @@
-{ stdenv, lib, fetchurl, python, wrapPython }:
+{
+  stdenv,
+  lib,
+  buildPythonPackage,
+  fetchFromGitHub,
+  python,
+  wheel,
+}:
 
-stdenv.mkDerivation rec {
+buildPythonPackage rec {
   pname = "setuptools";
-  shortName = "${pname}-${version}";
-  name = "${python.libPrefix}-${shortName}";
+  version = "69.5.1";
+  format = "pyproject";
 
-  version = "30.2.0";
-
-  src = fetchurl {
-    url = "mirror://pypi/${builtins.substring 0 1 pname}/${pname}/${shortName}.tar.gz";
-    sha256 = "f865709919903e3399343c0b3c42f95e9aeddc41e38cfb334fb2bb5dfa384857";
+  src = fetchFromGitHub {
+    owner = "pypa";
+    repo = "setuptools";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-X0ntFlDIhUjxtWzz0LxybQSuxhRpHlMeBYtOGwqDl4A=";
   };
 
-  buildInputs = [ python wrapPython ];
-  doCheck = false;  # requires pytest
-  installPhase = ''
-      dst=$out/${python.sitePackages}
-      mkdir -p $dst
-      export PYTHONPATH="$dst:$PYTHONPATH"
-      ${python.interpreter} setup.py install --prefix=$out
-      wrapPythonPrograms
+  patches = [
+    ./tag-date.patch
+    ./setuptools-distutils-C++.patch
+  ];
+
+  nativeBuildInputs = [ wheel ];
+
+  preBuild = lib.optionalString (!stdenv.hostPlatform.isWindows) ''
+    export SETUPTOOLS_INSTALL_WINDOWS_SPECIFIC_FILES=0
   '';
 
-  pythonPath = [];
+  # Requires pytest, causing infinite recursion.
+  doCheck = false;
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Utilities to facilitate the installation of Python packages";
-    homepage = http://pypi.python.org/pypi/setuptools;
-    license = with lib.licenses; [ psfl zpt20 ];
-    platforms = platforms.all;
-    priority = 10;
+    homepage = "https://github.com/pypa/setuptools";
+    changelog = "https://setuptools.pypa.io/en/stable/history.html#v${
+      replaceStrings [ "." ] [ "-" ] version
+    }";
+    license = with licenses; [ mit ];
+    platforms = python.meta.platforms;
+    maintainers = teams.python.members;
   };
 }

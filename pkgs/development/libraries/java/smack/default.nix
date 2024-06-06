@@ -1,15 +1,30 @@
-{stdenv, fetchurl}:
+{ lib, stdenv, fetchurl }:
 
-stdenv.mkDerivation {
-  name = "smack-3.4.1";
-  builder = ./builder.sh;
-  
+stdenv.mkDerivation rec {
+  pname = "smack";
+  version = "4.1.9";
+
   src = fetchurl {
-    url = http://www.igniterealtime.org/downloadServlet?filename=smack/smack_3_4_1.tar.gz;
-    sha256 = "13jm93b0dsfxr62brq1hagi9fqk7ip3pi80svq10zh5kcpk77jf4";
+    url = "http://www.igniterealtime.org/downloadServlet?filename=smack/smack_${lib.replaceStrings ["."] ["_"] version}.tar.gz";
+    sha256 = "009x0qcxd4dkvwcjz2nla470pwbabwvg37wc21pslpw42ldi0bzp";
   };
 
+  sourceRoot = ".";
+
+  installPhase = ''
+    runHook preInstall
+
+    mkdir -p $out/share/java
+    cp libs/smack-*.jar $out/share/java
+
+    runHook postInstall
+  '';
+
   meta = {
-    platforms = stdenv.lib.platforms.unix;
+    description = "A XMPP (Jabber) client library for instant messaging and presence";
+    homepage = "http://www.igniterealtime.org/projects/smack/";
+    sourceProvenance = with lib.sourceTypes; [ binaryBytecode ];
+    platforms = lib.platforms.unix;
+    license = lib.licenses.asl20;
   };
 }

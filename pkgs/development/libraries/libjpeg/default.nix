@@ -1,23 +1,29 @@
-{ stdenv, fetchurl, static ? false }:
+{ lib, stdenv, fetchurl
+, testers
+, static ? false
+}:
 
-with stdenv.lib;
-
-stdenv.mkDerivation {
-  name = "libjpeg-8d";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "libjpeg";
+  version = "9f";
 
   src = fetchurl {
-    url = http://www.ijg.org/files/jpegsrc.v8d.tar.gz;
-    sha256 = "1cz0dy05mgxqdgjf52p54yxpyy95rgl30cnazdrfmw7hfca9n0h0";
+    url = "http://www.ijg.org/files/jpegsrc.v${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-BHBcEQyyRpyqeftx+6PXv4NJFHBulkGkWJSFwfgyVls=";
   };
 
-  configureFlags = optional static "--enable-static --disable-shared";
+  configureFlags = lib.optional static "--enable-static --disable-shared";
 
   outputs = [ "bin" "dev" "out" "man" ];
 
-  meta = {
-    homepage = http://www.ijg.org/;
+  passthru.tests.pkg-config = testers.testMetaPkgConfig finalAttrs.finalPackage;
+
+  meta = with lib; {
+    homepage = "https://www.ijg.org/";
     description = "A library that implements the JPEG image file format";
-    license = stdenv.lib.licenses.free;
-    platforms = stdenv.lib.platforms.unix;
+    maintainers = with maintainers; [ ];
+    license = licenses.free;
+    pkgConfigModules = [ "libjpeg" ];
+    platforms = platforms.unix;
   };
-}
+})

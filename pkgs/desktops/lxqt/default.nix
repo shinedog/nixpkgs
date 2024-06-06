@@ -1,68 +1,140 @@
-{ pkgs, newScope, fetchFromGitHub }:
+{ pkgs, makeScope, kdePackages }:
 
 let
-  callPackage = newScope self;
-
-  self = rec {
+  packages = self: with self; {
 
     # For compiling information, see:
-    # - https://github.com/lxde/lxqt/wiki/Building-from-source
-  
-    standardPatch = ''
-      for file in $(find . -name CMakeLists.txt); do
-        substituteInPlace $file \
-          --replace "DESTINATION \''${LXQT_ETC_XDG_DIR}" "DESTINATION etc/xdg" \
-          --replace "DESTINATION \"\''${LXQT_ETC_XDG_DIR}" "DESTINATION \"etc/xdg" \
-          --replace "DESTINATION \"\''${LXQT_SHARE_DIR}" "DESTINATION \"share/lxqt" \
-          --replace "DESTINATION \"\''${LXQT_GRAPHICS_DIR}" "DESTINATION \"share/lxqt/graphics" \
-          --replace "DESTINATION \"\''${QT_PLUGINS_DIR}" "DESTINATION \"lib/qt5/plugins" \
-          --replace "\''${LXQT_TRANSLATIONS_DIR}" share/lxqt/translations
-        echo ============================
-        echo $file
-        grep --color=always DESTINATION $file || true
-        grep --color=always share/lxqt/translations $file || true
-        grep --color=always platform $file || true
-      done
-      echo --------------------------------------------------------
-    '';
+    # - https://github.com/lxqt/lxqt/wiki/Building-from-source
 
     ### BASE
-    libqtxdg = callPackage ./base/libqtxdg { };
-    libsysstat = callPackage ./base/libsysstat { };
-    liblxqt = callPackage ./base/liblxqt { };
+    libqtxdg = callPackage ./libqtxdg {};
+    lxqt-build-tools = callPackage ./lxqt-build-tools {};
+    libsysstat = callPackage ./libsysstat {};
+    liblxqt = callPackage ./liblxqt {};
+    qtxdg-tools = callPackage ./qtxdg-tools {};
+    libdbusmenu-lxqt = callPackage ./libdbusmenu-lxqt {};
 
     ### CORE 1
-    libfm-qt = callPackage ./core/libfm-qt { };
-    lxqt-about = callPackage ./core/lxqt-about { };
-    lxqt-admin = callPackage ./core/lxqt-admin { };
-    lxqt-common = callPackage ./core/lxqt-common { };
-    lxqt-config = callPackage ./core/lxqt-config { };
-    lxqt-globalkeys = callPackage ./core/lxqt-globalkeys { };
-    lxqt-l10n = callPackage ./core/lxqt-l10n { };
-    lxqt-notificationd = callPackage ./core/lxqt-notificationd { };
-    lxqt-openssh-askpass = callPackage ./core/lxqt-openssh-askpass { };
-    lxqt-policykit = callPackage ./core/lxqt-policykit { };
-    lxqt-powermanagement = callPackage ./core/lxqt-powermanagement { };
-    lxqt-qtplugin = callPackage ./core/lxqt-qtplugin { };
-    lxqt-session = callPackage ./core/lxqt-session { };
-    lxqt-sudo = callPackage ./core/lxqt-sudo { };
-    pavucontrol-qt = callPackage ./core/pavucontrol-qt { };
-    qtermwidget = callPackage ./core/qtermwidget { };
+    libfm-qt = callPackage ./libfm-qt {};
+    lxqt-about = callPackage ./lxqt-about {};
+    lxqt-admin = callPackage ./lxqt-admin {};
+    lxqt-config = callPackage ./lxqt-config {};
+    lxqt-globalkeys = callPackage ./lxqt-globalkeys {};
+    lxqt-menu-data = callPackage ./lxqt-menu-data {};
+    lxqt-notificationd = callPackage ./lxqt-notificationd {};
+    lxqt-openssh-askpass = callPackage ./lxqt-openssh-askpass {};
+    lxqt-policykit = callPackage ./lxqt-policykit {};
+    lxqt-powermanagement = callPackage ./lxqt-powermanagement {};
+    lxqt-qtplugin = callPackage ./lxqt-qtplugin {};
+    lxqt-session = callPackage ./lxqt-session {};
+    lxqt-sudo = callPackage ./lxqt-sudo {};
+    lxqt-themes = callPackage ./lxqt-themes {};
+    pavucontrol-qt = callPackage ./pavucontrol-qt {};
+    qtermwidget = callPackage ./qtermwidget {};
 
     ### CORE 2
-    lxqt-panel = callPackage ./core/lxqt-panel { };
-    lxqt-runner = callPackage ./core/lxqt-runner { };
-    pcmanfm-qt = callPackage ./core/pcmanfm-qt { };
+    lxqt-panel = callPackage ./lxqt-panel {};
+    lxqt-runner = callPackage ./lxqt-runner {};
+    pcmanfm-qt = callPackage ./pcmanfm-qt {};
 
     ### OPTIONAL
-    qterminal = callPackage ./optional/qterminal { };
-    compton-conf = callPackage ./optional/compton-conf { };
-    obconf-qt = callPackage ./optional/obconf-qt { };
-    lximage-qt = callPackage ./optional/lximage-qt { };
-    qps = callPackage ./optional/qps { };
-    screengrab = callPackage ./optional/screengrab { };
-    qlipper = callPackage ./optional/qlipper { };
+    qterminal = callPackage ./qterminal {};
+    compton-conf = callPackage ./compton-conf {
+      lxqt-build-tools = lxqt-build-tools_0_13;
+      inherit (pkgs.libsForQt5) qtbase qttools qtx11extras;
+    };
+    obconf-qt = callPackage ./obconf-qt {};
+    lximage-qt = callPackage ./lximage-qt {};
+    qps = callPackage ./qps {};
+    screengrab = callPackage ./screengrab {};
+    qlipper = callPackage ./qlipper {
+      inherit (pkgs.libsForQt5) qtbase qttools;
+    };
+    lxqt-archiver = callPackage ./lxqt-archiver {};
+    xdg-desktop-portal-lxqt = callPackage ./xdg-desktop-portal-lxqt {};
+
+    ### COMPATIBILITY
+    lxqt-build-tools_0_13 = callPackage ./lxqt-build-tools {
+      version = "0.13.0";
+      inherit (pkgs.libsForQt5) qtbase;
+    };
+    libqtxdg_3_12 = callPackage ./libqtxdg {
+      version = "3.12.0";
+      lxqt-build-tools = lxqt-build-tools_0_13;
+      inherit (pkgs.libsForQt5) qtbase qtsvg;
+    };
+    libfm-qt_1_4 = callPackage ./libfm-qt {
+      version = "1.4.0";
+      lxqt-build-tools = lxqt-build-tools_0_13;
+      inherit (pkgs.libsForQt5) qttools qtx11extras;
+    };
+    lxqt-qtplugin_1_4 = callPackage ./lxqt-qtplugin {
+      version = "1.4.1";
+      lxqt-build-tools = lxqt-build-tools_0_13;
+      libqtxdg = libqtxdg_3_12;
+      libfm-qt = libfm-qt_1_4;
+      inherit (pkgs.libsForQt5) qtbase qtsvg qttools libdbusmenu;
+    };
+
+    preRequisitePackages = [
+      kdePackages.kwindowsystem # provides some QT plugins needed by lxqt-panel
+      kdePackages.libkscreen # provides plugins for screen management software
+      pkgs.libfm
+      pkgs.libfm-extra
+      pkgs.menu-cache
+      pkgs.openbox # default window manager
+      kdePackages.qtsvg # provides QT plugins for svg icons
+    ];
+
+    corePackages = [
+      ### BASE
+      libqtxdg
+      libsysstat
+      liblxqt
+      qtxdg-tools
+      libdbusmenu-lxqt
+
+      ### CORE 1
+      libfm-qt
+      lxqt-about
+      lxqt-admin
+      lxqt-config
+      lxqt-globalkeys
+      lxqt-menu-data
+      lxqt-notificationd
+      lxqt-openssh-askpass
+      lxqt-policykit
+      lxqt-powermanagement
+      lxqt-qtplugin
+      lxqt-session
+      lxqt-sudo
+      lxqt-themes
+      pavucontrol-qt
+
+      ### CORE 2
+      lxqt-panel
+      lxqt-runner
+      pcmanfm-qt
+    ];
+
+    optionalPackages = [
+      ### LXQt project
+      qterminal
+      obconf-qt
+      lximage-qt
+      lxqt-archiver
+
+      ### QtDesktop project
+      qps
+      screengrab
+
+      ### Default icon theme
+      kdePackages.breeze-icons
+
+      ### Screen saver
+      pkgs.xscreensaver
+    ];
 
   };
-
-in self
+in
+makeScope kdePackages.newScope packages

@@ -1,8 +1,12 @@
-{ kdeFramework, lib, ecm, qtx11extras }:
+{
+  mkDerivation,
+  extra-cmake-modules,
+  qtbase, qttools, qtx11extras
+}:
 
-kdeFramework {
-  name = "kdbusaddons";
-  meta = { maintainers = [ lib.maintainers.ttuegel ]; };
-  nativeBuildInputs = [ ecm ];
-  propagatedBuildInputs = [ qtx11extras ];
+mkDerivation {
+  pname = "kdbusaddons";
+  nativeBuildInputs = [ extra-cmake-modules ];
+  buildInputs = [ qttools qtx11extras ];
+  propagatedBuildInputs = [ qtbase ];
 }

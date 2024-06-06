@@ -1,13 +1,14 @@
 { lib, stdenv, fetchFromGitHub, perl }:
 
 stdenv.mkDerivation {
-  name = "perf-tools-20160418";
+  pname = "perf-tools";
+  version = "unstable-2017-12-19";
 
   src = fetchFromGitHub {
     owner = "brendangregg";
     repo = "perf-tools";
-    rev = "5a511f5f775cfbc0569e6039435361cecd22dd86";
-    sha256 = "1ab735idi0h62yvhzd7822jj3555vygixv4xjrfrdvi8d2hhz6qn";
+    rev = "98d42a2a1493d2d1c651a5c396e015d4f082eb20";
+    sha256 = "09qnss9pd4kr6qadvp62m2g8sfrj86fksi1rr8m8w4314pzfb93c";
   };
 
   buildInputs = [ perl ];
@@ -34,10 +35,11 @@ stdenv.mkDerivation {
       mv $d/man $out/share/
     '';
 
-  meta = {
-    platforms = lib.platforms.linux;
-    homepage = https://github.com/brendangregg/perf-tools;
+  meta = with lib; {
+    platforms = platforms.linux;
+    homepage = "https://github.com/brendangregg/perf-tools";
     description = "Performance analysis tools based on Linux perf_events (aka perf) and ftrace";
-    maintainers = [ lib.maintainers.eelco ];
+    maintainers = [ maintainers.eelco ];
+    license = licenses.gpl2Plus;
   };
 }

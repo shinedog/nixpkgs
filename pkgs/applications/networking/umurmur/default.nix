@@ -1,27 +1,36 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, openssl, protobufc, libconfig }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, openssl, protobufc, libconfig }:
 
 stdenv.mkDerivation rec {
-  name = "umurmur-${version}";
-  version = "0.2.16";
-  
+  pname = "umurmur";
+  version = "0.2.20";
+
   src = fetchFromGitHub {
-    owner = "fatbob313";
+    owner = "umurmur";
     repo = "umurmur";
     rev = version;
-    sha256 = "0njvdqvjda13v1a2yyjn47mb0l0cdfb2bfvb5s13wpgwy2xxk0px";
+    sha256 = "sha256-jp5+NbGmT90ksffvpLYIX2q5cPeVidDCYMPvLHCiP68=";
   };
-  
-  buildInputs = [ autoreconfHook openssl protobufc libconfig ];
+
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ openssl protobufc libconfig ];
+
+  # https://github.com/umurmur/umurmur/issues/176
+  postPatch = ''
+    sed -i '/CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);/d' src/ssli_openssl.c
+  '';
 
   configureFlags = [
     "--with-ssl=openssl"
     "--enable-shmapi"
   ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Minimalistic Murmur (Mumble server)";
     license = licenses.bsd3;
-    homepage = http://code.google.com/p/umurmur/;
+    homepage = "https://github.com/umurmur/umurmur";
     platforms = platforms.all;
+    # never built on aarch64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin && stdenv.isAarch64;
+    mainProgram = "umurmurd";
   };
 }

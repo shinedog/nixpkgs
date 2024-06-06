@@ -1,36 +1,119 @@
-{ stdenv, fetchurl, nettools, glibcLocales, pythonPackages }:
+{
+  lib,
+  stdenv,
+  buildPythonPackage,
+  fetchPypi,
 
-pythonPackages.buildPythonApplication rec {
-  name = "magic-wormhole-${version}";
-  version = "0.8.1";
+  # build-system
+  setuptools,
 
-  src = fetchurl {
-    url = "mirror://pypi/m/magic-wormhole/${name}.tar.gz";
-    sha256 = "1yh5nbhh9z1am2pqnb5qqyq1zjl1m7z6jnkmvry2q14qwspw9had";
+  # dependencies
+  spake2,
+  pynacl,
+  six,
+  attrs,
+  twisted,
+  autobahn,
+  automat,
+  tqdm,
+  click,
+  humanize,
+  iterable-io,
+  txtorcon,
+  zipstream-ng,
+
+  # optional-dependencies
+  noiseprotocol,
+
+  # tests
+  nettools,
+  unixtools,
+  mock,
+  magic-wormhole-transit-relay,
+  magic-wormhole-mailbox-server,
+  pytestCheckHook,
+}:
+
+buildPythonPackage rec {
+  pname = "magic-wormhole";
+  version = "0.14.0";
+  pyproject = true;
+
+  src = fetchPypi {
+    inherit pname version;
+    hash = "sha256-AG0jn4i/98N7wu/2CgBOJj+vklj3J5GS0Gugyc7WsIA=";
   };
 
-  buildInputs = [ nettools glibcLocales ];
-  propagatedBuildInputs = with pythonPackages; [ autobahn cffi click hkdf pynacl spake2 tqdm ];
+  nativeBuildInputs = [ setuptools ];
 
-  patchPhase = ''
+  propagatedBuildInputs = [
+    spake2
+    pynacl
+    six
+    attrs
+    twisted
+    autobahn
+    automat
+    tqdm
+    click
+    humanize
+    iterable-io
+    txtorcon
+    zipstream-ng
+  ] ++ autobahn.optional-dependencies.twisted ++ twisted.optional-dependencies.tls;
+
+  passthru.optional-dependencies = {
+    dilation = [ noiseprotocol ];
+  };
+
+  nativeCheckInputs = [
+    mock
+    magic-wormhole-transit-relay
+    magic-wormhole-mailbox-server
+    pytestCheckHook
+  ] ++ passthru.optional-dependencies.dilation ++ lib.optionals stdenv.isDarwin [ unixtools.locale ];
+
+  disabledTests = lib.optionals stdenv.isDarwin [
+    # These tests doesn't work within Darwin's sandbox
+    "test_version"
+    "test_text"
+    "test_receiver"
+    "test_sender"
+    "test_sender_allocation"
+    "test_text_wrong_password"
+    "test_override"
+    "test_allocate_port"
+    "test_allocate_port_no_reuseaddr"
+    "test_ignore_localhost_hint"
+    "test_ignore_localhost_hint_orig"
+    "test_keep_only_localhost_hint"
+    "test_get_direct_hints"
+    "test_listener"
+    "test_success_direct"
+    "test_direct"
+    "test_relay"
+  ];
+
+  disabledTestPaths = lib.optionals stdenv.isDarwin [
+    # These tests doesn't work within Darwin's sandbox
+    "src/wormhole/test/test_xfer_util.py"
+    "src/wormhole/test/test_wormhole.py"
+  ];
+
+  postPatch = lib.optionalString stdenv.isLinux ''
     sed -i -e "s|'ifconfig'|'${nettools}/bin/ifconfig'|" src/wormhole/ipaddrs.py
-    sed -i -e "s|if (os.path.dirname(os.path.abspath(wormhole))|if not os.path.abspath(wormhole).startswith('/nix/store') and (os.path.dirname(os.path.abspath(wormhole))|" src/wormhole/test/test_scripts.py
-    # XXX: disable one test due to warning:
-    # setlocale: LC_ALL: cannot change locale (en_US.UTF-8)
-    sed -i -e "s|def test_text_subprocess|def skip_test_text_subprocess|" src/wormhole/test/test_scripts.py
   '';
 
-  checkPhase = ''
-    export PATH="$PATH:$out/bin"
-    export LANG="en_US.UTF-8"
-    export LC_ALL="en_US.UTF-8"
-    ${pythonPackages.python.interpreter} -m wormhole.test.run_trial wormhole
+  postInstall = ''
+    install -Dm644 docs/wormhole.1 $out/share/man/man1/wormhole.1
   '';
 
-  meta = with stdenv.lib; {
+  meta = {
+    changelog = "https://github.com/magic-wormhole/magic-wormhole/blob/${version}/NEWS.md";
     description = "Securely transfer data between computers";
-    homepage = "https://github.com/warner/magic-wormhole";
-    license = licenses.mit;
-    maintainers = with maintainers; [ asymmetric ];
+    homepage = "https://github.com/magic-wormhole/magic-wormhole";
+    license = lib.licenses.mit;
+    maintainers = [ lib.maintainers.mjoerg ];
+    mainProgram = "wormhole";
   };
 }

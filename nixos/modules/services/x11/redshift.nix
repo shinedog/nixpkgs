@@ -5,33 +5,33 @@ with lib;
 let
 
   cfg = config.services.redshift;
+  lcfg = config.location;
 
 in {
+
+  imports = [
+    (mkChangedOptionModule [ "services" "redshift" "latitude" ] [ "location" "latitude" ]
+      (config:
+        let value = getAttrFromPath [ "services" "redshift" "latitude" ] config;
+        in if value == null then
+          throw "services.redshift.latitude is set to null, you can remove this"
+          else builtins.fromJSON value))
+    (mkChangedOptionModule [ "services" "redshift" "longitude" ] [ "location" "longitude" ]
+      (config:
+        let value = getAttrFromPath [ "services" "redshift" "longitude" ] config;
+        in if value == null then
+          throw "services.redshift.longitude is set to null, you can remove this"
+          else builtins.fromJSON value))
+    (mkRenamedOptionModule [ "services" "redshift" "provider" ] [ "location" "provider" ])
+  ];
 
   options.services.redshift = {
     enable = mkOption {
       type = types.bool;
       default = false;
-      example = true;
       description = ''
         Enable Redshift to change your screen's colour temperature depending on
         the time of day.
-      '';
-    };
-
-    latitude = mkOption {
-      type = types.str;
-      description = ''
-        Your current latitude, between
-        <literal>-90.0</literal> and <literal>90.0</literal>.
-      '';
-    };
-
-    longitude = mkOption {
-      type = types.str;
-      description = ''
-        Your current longitude, between
-        between <literal>-180.0</literal> and <literal>180.0</literal>.
       '';
     };
 
@@ -41,7 +41,7 @@ in {
         default = 5500;
         description = ''
           Colour temperature to use during the day, between
-          <literal>1000</literal> and <literal>25000</literal> K.
+          `1000` and `25000` K.
         '';
       };
       night = mkOption {
@@ -49,7 +49,7 @@ in {
         default = 3700;
         description = ''
           Colour temperature to use at night, between
-          <literal>1000</literal> and <literal>25000</literal> K.
+          `1000` and `25000` K.
         '';
       };
     };
@@ -60,7 +60,7 @@ in {
         default = "1";
         description = ''
           Screen brightness to apply during the day,
-          between <literal>0.1</literal> and <literal>1.0</literal>.
+          between `0.1` and `1.0`.
         '';
       };
       night = mkOption {
@@ -68,17 +68,19 @@ in {
         default = "1";
         description = ''
           Screen brightness to apply during the night,
-          between <literal>0.1</literal> and <literal>1.0</literal>.
+          between `0.1` and `1.0`.
         '';
       };
     };
 
-    package = mkOption {
-      type = types.package;
-      default = pkgs.redshift;
-      defaultText = "pkgs.redshift";
+    package = mkPackageOption pkgs "redshift" { };
+
+    executable = mkOption {
+      type = types.str;
+      default = "/bin/redshift";
+      example = "/bin/redshift-gtk";
       description = ''
-        redshift derivation to use.
+        Redshift executable to use within the package.
       '';
     };
 
@@ -88,31 +90,40 @@ in {
       example = [ "-v" "-m randr" ];
       description = ''
         Additional command-line arguments to pass to
-        <command>redshift</command>.
+        {command}`redshift`.
       '';
     };
   };
 
   config = mkIf cfg.enable {
-    systemd.user.services.redshift = {
+    # needed so that .desktop files are installed, which geoclue cares about
+    environment.systemPackages = [ cfg.package ];
+
+    services.geoclue2.appConfig.redshift = {
+      isAllowed = true;
+      isSystem = true;
+    };
+
+    systemd.user.services.redshift =
+    let
+      providerString = if lcfg.provider == "manual"
+        then "${toString lcfg.latitude}:${toString lcfg.longitude}"
+        else lcfg.provider;
+    in
+    {
       description = "Redshift colour temperature adjuster";
-      wantedBy = [ "default.target" ];
+      wantedBy = [ "graphical-session.target" ];
+      partOf = [ "graphical-session.target" ];
       serviceConfig = {
         ExecStart = ''
-          ${cfg.package}/bin/redshift \
-            -l ${cfg.latitude}:${cfg.longitude} \
+          ${cfg.package}${cfg.executable} \
+            -l ${providerString} \
             -t ${toString cfg.temperature.day}:${toString cfg.temperature.night} \
             -b ${toString cfg.brightness.day}:${toString cfg.brightness.night} \
             ${lib.strings.concatStringsSep " " cfg.extraOptions}
         '';
         RestartSec = 3;
         Restart = "always";
-      };
-      environment = {
-        DISPLAY = ":${toString (
-          let display = config.services.xserver.display;
-          in if display != null then display else 0
-        )}";
       };
     };
   };

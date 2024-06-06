@@ -1,32 +1,143 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cmake, gtk2, wxGTK30, libpulseaudio, curl,
-  gettext, glib, portaudio }:
+{ stdenv
+, lib
+, AppKit
+, DarwinTools
+, alsa-utils
+, at-spi2-core
+, cmake
+, curl
+, dbus
+, elfutils
+, fetchFromGitHub
+, flac
+, gtk3
+, glew
+, gtest
+, jasper
+, lame
+, libGLU
+, libarchive
+, libdatrie
+, libepoxy
+, libexif
+, libogg
+, libopus
+, libselinux
+, libsepol
+, libsndfile
+, libthai
+, libunarr
+, libusb1
+, libvorbis
+, libxkbcommon
+, lsb-release
+, lz4
+, libmpg123
+, makeWrapper
+, pcre
+, pcre2
+, pkg-config
+, portaudio
+, rapidjson
+, sqlite
+, tinyxml
+, udev
+, util-linux
+, wxGTK32
+, xorg
+}:
 
-stdenv.mkDerivation rec {
-  name = "opencpn-${version}";
-  version = "4.2.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "opencpn";
+  version = "5.8.4";
 
   src = fetchFromGitHub {
     owner = "OpenCPN";
     repo = "OpenCPN";
-    rev = "v${version}";
-    sha256 = "1m6fp9lf9ki9444h0dq6bj0vr7d0pcxkbjv3j2v76p0ksk2l8kw3";
+    rev = "Release_${finalAttrs.version}";
+    hash = "sha256-axRI3sssj2Q6IBfIeyvOa494b0EgKFP+lFL/QrGIybQ=";
   };
 
-  buildInputs = [ pkgconfig cmake gtk2 wxGTK30 libpulseaudio curl gettext
-                  glib portaudio ];
+  postPatch = lib.optionalString stdenv.isDarwin ''
+    sed -i '/fixup_bundle/d; /NO_DEFAULT_PATH/d' CMakeLists.txt
+  '';
 
-  cmakeFlags = [
-    "-DGTK2_GDKCONFIG_INCLUDE_DIR=${gtk2.out}/lib/gtk-2.0/include"
-    "-DGTK2_GLIBCONFIG_INCLUDE_DIR=${glib.out}/lib/glib-2.0/include"
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    gtest
+  ] ++ lib.optionals stdenv.isLinux [
+    lsb-release
+  ] ++ lib.optionals stdenv.isDarwin [
+    DarwinTools
+    makeWrapper
   ];
 
-  enableParallelBuilding = true;
+  buildInputs = [
+    at-spi2-core
+    curl
+    dbus
+    flac
+  ] ++ lib.optionals (stdenv.isDarwin && stdenv.isx86_64) [
+    AppKit
+  ] ++ [
+    gtk3
+    glew
+    jasper
+    libGLU
+    libarchive
+    libdatrie
+    libepoxy
+    libexif
+    libogg
+    libopus
+    libsndfile
+    libthai
+    libunarr
+    libusb1
+    libvorbis
+    libxkbcommon
+    lz4
+    libmpg123
+    pcre
+    pcre2
+    portaudio
+    rapidjson
+    sqlite
+    tinyxml
+    wxGTK32
+  ] ++ lib.optionals stdenv.isLinux [
+    alsa-utils
+    libselinux
+    libsepol
+    util-linux
+    xorg.libXdmcp
+    xorg.libXtst
+  ] ++ lib.optionals (lib.meta.availableOn stdenv.hostPlatform elfutils) [
+    elfutils
+  ] ++ lib.optionals stdenv.isDarwin [
+    lame
+  ];
 
-  meta = {
+  cmakeFlags = [ "-DOCPN_BUNDLE_DOCS=true" ];
+
+  env.NIX_CFLAGS_COMPILE = toString (lib.optionals (!stdenv.hostPlatform.isx86) [
+    "-DSQUISH_USE_SSE=0"
+  ]);
+
+  postInstall = lib.optionals stdenv.isDarwin ''
+    mkdir -p $out/Applications
+    mv $out/bin/OpenCPN.app $out/Applications
+    makeWrapper $out/Applications/OpenCPN.app/Contents/MacOS/OpenCPN $out/bin/opencpn
+  '';
+
+  doCheck = true;
+
+  meta = with lib; {
     description = "A concise ChartPlotter/Navigator";
-    maintainers = [ stdenv.lib.maintainers.kragniz ];
-    platforms = stdenv.lib.platforms.all;
-    license = stdenv.lib.licenses.gpl2;
-    homepage = "http://opencpn.org/";
+    maintainers = with maintainers; [ kragniz lovesegfault ];
+    platforms = platforms.unix;
+    license = licenses.gpl2Plus;
+    homepage = "https://opencpn.org/";
   };
-}
+})

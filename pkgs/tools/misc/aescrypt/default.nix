@@ -1,15 +1,18 @@
-{ stdenv, fetchurl, libiconv }:
+{ lib, stdenv, fetchurl, libiconv }:
 
 stdenv.mkDerivation rec {
-  version = "3.0.9";
-  name = "aescrypt-${version}";
+  version = "3.16";
+  pname = "aescrypt";
 
   src = fetchurl {
-    url = "http://www.aescrypt.com/download/v3/linux/${name}.tgz";
-    sha256 = "3f3590f9b7e50039611ba9c0cf1cae1b188a44bd39cfc41553db7ec5709c0882";
+    url = "https://www.aescrypt.com/download/v3/linux/${pname}-${version}.tgz";
+    sha256 = "sha256-4uGS0LReq5dI7+Wel7ZWzFXx+utZWi93q4TUSw7AhNI=";
   };
 
+  NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-liconv";
+
   preBuild = ''
+    substituteInPlace src/Makefile --replace "CC=gcc" "CC?=gcc"
     cd src
   '';
 
@@ -21,14 +24,12 @@ stdenv.mkDerivation rec {
 
   buildInputs = [ libiconv ];
 
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-liconv";
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Encrypt files with Advanced Encryption Standard (AES)";
-    homepage    = http://www.aescrypt.com/;
-    license     = licenses.gpl2;
+    homepage    = "https://www.aescrypt.com/";
+    license     = licenses.gpl2Only;
     maintainers = with maintainers; [ lovek323 qknight ];
-    platforms   = stdenv.lib.platforms.all;
-    hydraPlatforms = stdenv.lib.platforms.linux;
+    platforms   = lib.platforms.all;
+    hydraPlatforms = with platforms; unix;
   };
 }

@@ -1,51 +1,101 @@
-{ stdenv, fetchurl, qt4, bzip2, lib3ds, levmar, muparser, unzip, vcg }:
+{ mkDerivation
+, lib
+, fetchFromGitHub
+, libGLU
+, qtbase
+, qtscript
+, qtxmlpatterns
+, lib3ds
+, bzip2
+, muparser
+, eigen
+, glew
+, gmp
+, levmar
+, qhull
+, cmake
+, cgal
+, boost
+, mpfr
+, xercesc
+, tbb
+, embree
+, vcg
+, libigl
+, corto
+, openctm
+, structuresynth
+}:
 
-stdenv.mkDerivation rec {
-  name = "meshlab-1.3.3";
+mkDerivation rec {
+  pname = "meshlab";
+  version = "2023.12";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/meshlab/meshlab/MeshLab%20v1.3.3/MeshLabSrc_AllInc_v133.tgz";
-    sha256 = "03wqaibfbfag2w1zi1a5z6h546r9d7pg2sjl5pwg24w7yp8rr0n9";
+  src = fetchFromGitHub {
+    owner = "cnr-isti-vclab";
+    repo = "meshlab";
+    rev = "MeshLab-${version}";
+    sha256 = "sha256-AdUAWS741RQclYaSE3Tz1/I0YSinNAnfSaqef+Tib8Y=";
   };
 
-  # I don't know why I need this; without this, the rpath set at the beginning of the
-  # buildPhase gets removed from the 'meshlab' binary
-  dontPatchELF = true;
+  buildInputs = [
+    libGLU
+    qtbase
+    qtscript
+    qtxmlpatterns
+    lib3ds
+    bzip2
+    muparser
+    eigen
+    glew
+    gmp
+    levmar
+    qhull
+    cgal
+    boost
+    mpfr
+    xercesc
+    tbb
+    embree
+    vcg
+    libigl
+    corto
+    openctm
+    structuresynth
+  ];
 
-  patches = [ ./include-unistd.diff ];
+  nativeBuildInputs = [ cmake ];
 
-  hardeningDisable = [ "format" ];
-
-  buildPhase = ''
-    mkdir -p "$out/include"
-    export NIX_LDFLAGS="-rpath $out/opt/meshlab $NIX_LDFLAGS"
-    cd meshlab/src
-    pushd external
-    qmake -recursive external.pro
-    make
-    popd
-    qmake -recursive meshlab_full.pro
-    make
+  preConfigure = ''
+    substituteAll ${./meshlab.desktop} resources/linux/meshlab.desktop
+    substituteInPlace src/external/libigl.cmake \
+      --replace-fail '$'{MESHLAB_EXTERNAL_DOWNLOAD_DIR}/libigl-2.4.0 ${libigl}
+    substituteInPlace src/external/nexus.cmake \
+      --replace-fail '$'{NEXUS_DIR}/src/corto ${corto.src}
+    substituteInPlace src/external/levmar.cmake \
+      --replace-fail '$'{LEVMAR_LINK} ${levmar.src} \
+      --replace-warn "MD5 ''${LEVMAR_MD5}" ""
+    substituteInPlace src/external/ssynth.cmake \
+      --replace-fail '$'{SSYNTH_LINK} ${structuresynth.src} \
+      --replace-warn "MD5 ''${SSYNTH_MD5}" ""
+    substituteInPlace src/common_gui/CMakeLists.txt \
+      --replace-warn "MESHLAB_LIB_INSTALL_DIR" "CMAKE_INSTALL_LIBDIR"
   '';
 
-  installPhase = ''
-    mkdir -p $out/opt/meshlab $out/bin $out/lib
-    pushd distrib
-    cp -R * $out/opt/meshlab
-    popd
-    ln -s $out/opt/meshlab/meshlab $out/bin/meshlab
+  cmakeFlags = [
+    "-DVCGDIR=${vcg.src}"
+  ];
+
+  postFixup = ''
+    patchelf --add-needed $out/lib/meshlab/libmeshlab-common.so $out/bin/.meshlab-wrapped
   '';
-
-  sourceRoot = ".";
-
-  buildInputs = [ qt4 unzip vcg ];
 
   meta = {
-    description = "System for the processing and editing of unstructured 3D triangular meshes";
-    homepage = http://meshlab.sourceforge.net/;
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = with stdenv.lib.maintainers; [viric];
-    platforms = with stdenv.lib.platforms; linux;
-    broken = stdenv.isLinux && stdenv.isi686;
+    description = "A system for processing and editing 3D triangular meshes";
+    mainProgram = "meshlab";
+    homepage = "https://www.meshlab.net/";
+    license = lib.licenses.gpl3Only;
+    maintainers = with lib.maintainers; [ viric ];
+    platforms = with lib.platforms; linux;
   };
 }

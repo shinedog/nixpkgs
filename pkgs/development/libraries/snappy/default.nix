@@ -1,29 +1,63 @@
-{ stdenv, fetchFromGitHub, pkgconfig, autoreconfHook }:
+{ lib, stdenv, fetchFromGitHub, cmake
+, fetchpatch
+, static ? stdenv.hostPlatform.isStatic
+}:
 
 stdenv.mkDerivation rec {
-  name = "snappy-${version}";
-  version = "1.1.3";
-  
+  pname = "snappy";
+  version = "1.2.0";
+
   src = fetchFromGitHub {
     owner = "google";
     repo = "snappy";
     rev = version;
-    sha256 = "1w9pq8vag8c6m4ib0qbdbqzsnpwjvw01jbp15lgwg1rzwhvflm10";
+    hash = "sha256-mpEeUoJs+lGlqh1m6Mmr8UnbtQDn/8kfkeQdFwo2rQ0=";
   };
 
-  nativeBuildInputs = [ pkgconfig autoreconfHook ];
+  patches = [
+    # Re-enable RTTI, without which other applications can't subclass
+    # snappy::Source (this breaks Ceph, as one example)
+    # https://tracker.ceph.com/issues/53060
+    # https://build.opensuse.org/package/show/openSUSE:Factory/snappy
+    (fetchpatch {
+      url = "https://build.opensuse.org/public/source/openSUSE:Factory/snappy/reenable-rtti.patch?rev=a759aa6fba405cd40025e3f0ab89941d";
+      sha256 = "sha256-RMuM5yd6zP1eekN/+vfS54EyY4cFbGDVor1E1vj3134=";
+    })
+  ];
 
-  # -DNDEBUG for speed
-  configureFlags = [ "CXXFLAGS=-DNDEBUG" ];
+  outputs = [ "out" "dev" ];
 
-  # SIGILL on darwin
-  doCheck = !stdenv.isDarwin;
+  nativeBuildInputs = [ cmake ];
 
-  meta = with stdenv.lib; {
-    homepage = http://code.google.com/p/snappy/;
+  cmakeFlags = [
+    "-DBUILD_SHARED_LIBS=${if static then "OFF" else "ON"}"
+    "-DSNAPPY_BUILD_TESTS=OFF"
+    "-DSNAPPY_BUILD_BENCHMARKS=OFF"
+  ];
+
+  postInstall = ''
+    substituteInPlace "$out"/lib/cmake/Snappy/SnappyTargets.cmake \
+      --replace 'INTERFACE_INCLUDE_DIRECTORIES "''${_IMPORT_PREFIX}/include"' 'INTERFACE_INCLUDE_DIRECTORIES "'$dev'"'
+
+    mkdir -p $dev/lib/pkgconfig
+    cat <<EOF > $dev/lib/pkgconfig/snappy.pc
+      Name: snappy
+      Description: Fast compressor/decompressor library.
+      Version: ${version}
+      Libs: -L$out/lib -lsnappy
+      Cflags: -I$dev/include
+    EOF
+  '';
+
+  #checkTarget = "test";
+
+  # requires gbenchmark and gtest but it also installs them out $dev
+  doCheck = false;
+
+  meta = with lib; {
+    homepage = "https://google.github.io/snappy/";
     license = licenses.bsd3;
     description = "Compression/decompression library for very high speeds";
-    platforms = platforms.unix;
-    maintainers = with maintainers; [ wkennington ];
+    platforms = platforms.all;
   };
 }

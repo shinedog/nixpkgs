@@ -1,20 +1,42 @@
-{ config, lib, pkgs, ... }:
-
-with lib;
+{ config, options, lib, pkgs, ... }:
 
 let
+  inherit (lib)
+    all
+    concatMap
+    concatMapStrings
+    concatStrings
+    escapeShellArg
+    flip
+    foldr
+    forEach
+    hasPrefix
+    mapAttrsToList
+    literalExpression
+    makeBinPath
+    mkDefault
+    mkIf
+    mkMerge
+    mkOption
+    mkRemovedOptionModule
+    mkRenamedOptionModule
+    optional
+    optionals
+    optionalString
+    replaceStrings
+    types
+  ;
 
   cfg = config.boot.loader.grub;
 
   efi = config.boot.loader.efi;
 
-  realGrub = if cfg.version == 1 then pkgs.grub
-    else if cfg.zfsSupport then pkgs.grub2.override { zfsSupport = true; }
-    else if cfg.trustedBoot.enable
-         then if cfg.trustedBoot.isHPLaptop
-              then pkgs.trustedGrub-for-HP
-              else pkgs.trustedGrub
-         else pkgs.grub2;
+  grubPkgs =
+    # Package set of targeted architecture
+    if cfg.forcei686 then pkgs.pkgsi686Linux else pkgs;
+
+  realGrub = if cfg.zfsSupport then grubPkgs.grub2.override { zfsSupport = true; zfs = cfg.zfsPackage; }
+    else grubPkgs.grub2;
 
   grub =
     # Don't include GRUB if we're only generating a GRUB menu (e.g.,
@@ -24,49 +46,71 @@ let
     else realGrub;
 
   grubEfi =
-    # EFI version of Grub v2
-    if cfg.efiSupport && (cfg.version == 2)
+    if cfg.efiSupport
     then realGrub.override { efiSupport = cfg.efiSupport; }
     else null;
 
-  f = x: if x == null then "" else "" + x;
+  f = x: optionalString (x != null) ("" + x);
 
   grubConfig = args:
     let
       efiSysMountPoint = if args.efiSysMountPoint == null then args.path else args.efiSysMountPoint;
-      efiSysMountPoint' = replaceChars [ "/" ] [ "-" ] efiSysMountPoint;
+      efiSysMountPoint' = replaceStrings [ "/" ] [ "-" ] efiSysMountPoint;
     in
     pkgs.writeText "grub-config.xml" (builtins.toXML
     { splashImage = f cfg.splashImage;
-      grub = f grub;
+      splashMode = f cfg.splashMode;
+      backgroundColor = f cfg.backgroundColor;
+      entryOptions = f cfg.entryOptions;
+      subEntryOptions = f cfg.subEntryOptions;
+      # PC platforms (like x86_64-linux) have a non-EFI target (`grubTarget`), but other platforms
+      # (like aarch64-linux) have an undefined `grubTarget`. Avoid providing the path to a non-EFI
+      # GRUB on those platforms.
+      grub = f (if (grub.grubTarget or "") != "" then grub else "");
       grubTarget = f (grub.grubTarget or "");
-      shell = "${pkgs.stdenv.shell}";
-      fullName = (builtins.parseDrvName realGrub.name).name;
-      fullVersion = (builtins.parseDrvName realGrub.name).version;
+      shell = "${pkgs.runtimeShell}";
+      fullName = lib.getName realGrub;
+      fullVersion = lib.getVersion realGrub;
       grubEfi = f grubEfi;
-      grubTargetEfi = if cfg.efiSupport && (cfg.version == 2) then f (grubEfi.grubTarget or "") else "";
+      grubTargetEfi = optionalString cfg.efiSupport (f (grubEfi.grubTarget or ""));
       bootPath = args.path;
       storePath = config.boot.loader.grub.storePath;
-      bootloaderId = if args.efiBootloaderId == null then "NixOS${efiSysMountPoint'}" else args.efiBootloaderId;
+      bootloaderId = if args.efiBootloaderId == null then "${config.system.nixos.distroName}${efiSysMountPoint'}" else args.efiBootloaderId;
       timeout = if config.boot.loader.timeout == null then -1 else config.boot.loader.timeout;
+      theme = f cfg.theme;
       inherit efiSysMountPoint;
       inherit (args) devices;
       inherit (efi) canTouchEfiVariables;
       inherit (cfg)
-        version extraConfig extraPerEntryConfig extraEntries forceInstall 
+        extraConfig extraPerEntryConfig extraEntries forceInstall useOSProber
+        extraGrubInstallArgs
         extraEntriesBeforeNixOS extraPrepareConfig configurationLimit copyKernels
-        default fsIdentifier efiSupport efiInstallAsRemovable gfxmodeEfi gfxmodeBios;
-      path = (makeBinPath ([
-        pkgs.coreutils pkgs.gnused pkgs.gnugrep pkgs.findutils pkgs.diffutils pkgs.btrfs-progs
-        pkgs.utillinux ] ++ (if cfg.efiSupport && (cfg.version == 2) then [pkgs.efibootmgr ] else [])
-      )) + ":" + (makeSearchPathOutput "bin" "sbin" [
-        pkgs.mdadm pkgs.utillinux
-      ]);
+        default fsIdentifier efiSupport efiInstallAsRemovable gfxmodeEfi gfxmodeBios gfxpayloadEfi gfxpayloadBios
+        users
+        timeoutStyle
+      ;
+      path = with pkgs; makeBinPath (
+        [ coreutils gnused gnugrep findutils diffutils btrfs-progs util-linux mdadm ]
+        ++ optional cfg.efiSupport efibootmgr
+        ++ optionals cfg.useOSProber [ busybox os-prober ]);
+      font = lib.optionalString (cfg.font != null) (
+             if lib.last (lib.splitString "." cfg.font) == "pf2"
+             then cfg.font
+             else "${convertedFont}");
     });
 
-  bootDeviceCounters = fold (device: attr: attr // { "${device}" = (attr."${device}" or 0) + 1; }) {}
+  bootDeviceCounters = foldr (device: attr: attr // { ${device} = (attr.${device} or 0) + 1; }) {}
     (concatMap (args: args.devices) cfg.mirroredBoots);
 
+  convertedFont = (pkgs.runCommand "grub-font-converted.pf2" {}
+           (builtins.concatStringsSep " "
+             ([ "${realGrub}/bin/grub-mkfont"
+               cfg.font
+               "--output" "$out"
+             ] ++ (optional (cfg.fontSize!=null) "--size ${toString cfg.fontSize}")))
+         );
+
+  defaultSplash = pkgs.nixos-artwork.wallpapers.simple-dark-gray-bootloader.gnomeFilePath;
 in
 
 {
@@ -79,6 +123,7 @@ in
 
       enable = mkOption {
         default = !config.boot.isContainer;
+        defaultText = literalExpression "!config.boot.isContainer";
         type = types.bool;
         description = ''
           Whether to enable the GNU GRUB boot loader.
@@ -86,45 +131,100 @@ in
       };
 
       version = mkOption {
-        default = 2;
-        example = 1;
+        visible = false;
         type = types.int;
-        description = ''
-          The version of GRUB to use: <literal>1</literal> for GRUB
-          Legacy (versions 0.9x), or <literal>2</literal> (the
-          default) for GRUB 2.
-        '';
       };
 
       device = mkOption {
         default = "";
-        example = "/dev/hda";
+        example = "/dev/disk/by-id/wwn-0x500001234567890a";
         type = types.str;
         description = ''
           The device on which the GRUB boot loader will be installed.
-          The special value <literal>nodev</literal> means that a GRUB
+          The special value `nodev` means that a GRUB
           boot menu will be generated, but GRUB itself will not
           actually be installed.  To install GRUB on multiple devices,
-          use <literal>boot.loader.grub.devices</literal>.
+          use `boot.loader.grub.devices`.
         '';
       };
 
       devices = mkOption {
         default = [];
-        example = [ "/dev/hda" ];
+        example = [ "/dev/disk/by-id/wwn-0x500001234567890a" ];
         type = types.listOf types.str;
         description = ''
           The devices on which the boot loader, GRUB, will be
-          installed. Can be used instead of <literal>device</literal> to
+          installed. Can be used instead of `device` to
           install GRUB onto multiple devices.
         '';
+      };
+
+      users = mkOption {
+        default = {};
+        example = {
+          root = { hashedPasswordFile = "/path/to/file"; };
+        };
+        description = ''
+          User accounts for GRUB. When specified, the GRUB command line and
+          all boot options except the default are password-protected.
+          All passwords and hashes provided will be stored in /boot/grub/grub.cfg,
+          and will be visible to any local user who can read this file. Additionally,
+          any passwords and hashes provided directly in a Nix configuration
+          (as opposed to external files) will be copied into the Nix store, and
+          will be visible to all local users.
+        '';
+        type = types.attrsOf (types.submodule {
+          options = {
+            hashedPasswordFile = mkOption {
+              example = "/path/to/file";
+              default = null;
+              type = with types; uniq (nullOr str);
+              description = ''
+                Specifies the path to a file containing the password hash
+                for the account, generated with grub-mkpasswd-pbkdf2.
+                This hash will be stored in /boot/grub/grub.cfg, and will
+                be visible to any local user who can read this file.
+              '';
+            };
+            hashedPassword = mkOption {
+              example = "grub.pbkdf2.sha512.10000.674DFFDEF76E13EA...2CC972B102CF4355";
+              default = null;
+              type = with types; uniq (nullOr str);
+              description = ''
+                Specifies the password hash for the account,
+                generated with grub-mkpasswd-pbkdf2.
+                This hash will be copied to the Nix store, and will be visible to all local users.
+              '';
+            };
+            passwordFile = mkOption {
+              example = "/path/to/file";
+              default = null;
+              type = with types; uniq (nullOr str);
+              description = ''
+                Specifies the path to a file containing the
+                clear text password for the account.
+                This password will be stored in /boot/grub/grub.cfg, and will
+                be visible to any local user who can read this file.
+              '';
+            };
+            password = mkOption {
+              example = "Pa$$w0rd!";
+              default = null;
+              type = with types; uniq (nullOr str);
+              description = ''
+                Specifies the clear text password for the account.
+                This password will be copied to the Nix store, and will be visible to all local users.
+              '';
+            };
+          };
+        });
       };
 
       mirroredBoots = mkOption {
         default = [ ];
         example = [
-          { path = "/boot1"; devices = [ "/dev/sda" ]; }
-          { path = "/boot2"; devices = [ "/dev/sdb" ]; }
+          { path = "/boot1"; devices = [ "/dev/disk/by-id/wwn-0x500001234567890a" ]; }
+          { path = "/boot2"; devices = [ "/dev/disk/by-id/wwn-0x500009876543210a" ]; }
         ];
         description = ''
           Mirror the boot configuration to multiple partitions and install grub
@@ -160,13 +260,13 @@ in
               description = ''
                 The id of the bootloader to store in efi nvram.
                 The default is to name it NixOS and append the path or efiSysMountPoint.
-                This is only used if <literal>boot.loader.efi.canTouchEfiVariables</literal> is true.
+                This is only used if `boot.loader.efi.canTouchEfiVariables` is true.
               '';
             };
 
             devices = mkOption {
               default = [ ];
-              example = [ "/dev/sda" "/dev/sdb" ];
+              example = [ "/dev/disk/by-id/wwn-0x500001234567890a" "/dev/disk/by-id/wwn-0x500009876543210a" ];
               type = types.listOf types.str;
               description = ''
                 The path to the devices which will have the GRUB MBR written.
@@ -207,11 +307,62 @@ in
 
       extraConfig = mkOption {
         default = "";
-        example = "serial; terminal_output.serial";
+        example = ''
+          serial --unit=0 --speed=115200 --word=8 --parity=no --stop=1
+          terminal_input --append serial
+          terminal_output --append serial
+        '';
         type = types.lines;
         description = ''
           Additional GRUB commands inserted in the configuration file
           just before the menu entries.
+        '';
+      };
+
+      extraGrubInstallArgs = mkOption {
+        default = [ ];
+        example = [ "--modules=nativedisk ahci pata part_gpt part_msdos diskfilter mdraid1x lvm ext2" ];
+        type = types.listOf types.str;
+        description = ''
+          Additional arguments passed to `grub-install`.
+
+          A use case for this is to build specific GRUB2 modules
+          directly into the GRUB2 kernel image, so that they are available
+          and activated even in the `grub rescue` shell.
+
+          They are also necessary when the BIOS/UEFI is bugged and cannot
+          correctly read large disks (e.g. above 2 TB), so GRUB2's own
+          `nativedisk` and related modules can be used
+          to use its own disk drivers. The example shows one such case.
+          This is also useful for booting from USB.
+          See the
+          [
+          GRUB source code
+          ](https://git.savannah.gnu.org/cgit/grub.git/tree/grub-core/commands/nativedisk.c?h=grub-2.04#n326)
+          for which disk modules are available.
+
+          The list elements are passed directly as `argv`
+          arguments to the `grub-install` program, in order.
+        '';
+      };
+
+      extraInstallCommands = mkOption {
+        default = "";
+        example = ''
+          # the example below generates detached signatures that GRUB can verify
+          # https://www.gnu.org/software/grub/manual/grub/grub.html#Using-digital-signatures
+          ''${pkgs.findutils}/bin/find /boot -not -path "/boot/efi/*" -type f -name '*.sig' -delete
+          old_gpg_home=$GNUPGHOME
+          export GNUPGHOME="$(mktemp -d)"
+          ''${pkgs.gnupg}/bin/gpg --import ''${priv_key} > /dev/null 2>&1
+          ''${pkgs.findutils}/bin/find /boot -not -path "/boot/efi/*" -type f -exec ''${pkgs.gnupg}/bin/gpg --detach-sign "{}" \; > /dev/null 2>&1
+          rm -rf $GNUPGHOME
+          export GNUPGHOME=$old_gpg_home
+        '';
+        type = types.lines;
+        description = ''
+          Additional shell commands inserted in the bootloader installer
+          script after generating menu entries.
         '';
       };
 
@@ -229,13 +380,15 @@ in
         default = "";
         type = types.lines;
         example = ''
-          # GRUB 1 example (not GRUB 2 compatible)
-          title Windows
-            chainloader (hd0,1)+1
-
           # GRUB 2 example
           menuentry "Windows 7" {
             chainloader (hd0,4)+1
+          }
+
+          # GRUB 2 with UEFI example, chainloading another distro
+          menuentry "Fedora" {
+            set root=(hd1,1)
+            chainloader /efi/fedora/grubx64.efi
           }
         '';
         description = ''
@@ -254,25 +407,120 @@ in
       extraFiles = mkOption {
         type = types.attrsOf types.path;
         default = {};
-        example = literalExample ''
+        example = literalExpression ''
           { "memtest.bin" = "''${pkgs.memtest86plus}/memtest.bin"; }
         '';
         description = ''
-          A set of files to be copied to <filename>/boot</filename>.
+          A set of files to be copied to {file}`/boot`.
           Each attribute name denotes the destination file name in
-          <filename>/boot</filename>, while the corresponding
+          {file}`/boot`, while the corresponding
           attribute value specifies the source file.
+        '';
+      };
+
+      useOSProber = mkOption {
+        default = false;
+        type = types.bool;
+        description = ''
+          If set to true, append entries for other OSs detected by os-prober.
         '';
       };
 
       splashImage = mkOption {
         type = types.nullOr types.path;
-        example = literalExample "./my-background.png";
+        example = literalExpression "./my-background.png";
         description = ''
-          Background image used for GRUB.  It must be a 640x480,
-          14-colour image in XPM format, optionally compressed with
-          <command>gzip</command> or <command>bzip2</command>.  Set to
-          <literal>null</literal> to run GRUB in text mode.
+          Background image used for GRUB.
+          Set to `null` to run GRUB in text mode.
+
+          ::: {.note}
+          File must be one of .png, .tga, .jpg, or .jpeg. JPEG images must
+          not be progressive.
+          The image will be scaled if necessary to fit the screen.
+          :::
+        '';
+      };
+
+      backgroundColor = mkOption {
+        type = types.nullOr types.str;
+        example = "#7EBAE4";
+        default = null;
+        description = ''
+          Background color to be used for GRUB to fill the areas the image isn't filling.
+        '';
+      };
+
+      timeoutStyle = mkOption {
+        default = "menu";
+        type = types.enum [ "menu" "countdown" "hidden" ];
+        description = ''
+           - `menu` shows the menu.
+           - `countdown` uses a text-mode countdown.
+           - `hidden` hides GRUB entirely.
+
+          When using a theme, the default value (`menu`) is appropriate for the graphical countdown.
+
+          When attempting to do flicker-free boot, `hidden` should be used.
+
+          See the [GRUB documentation section about `timeout_style`](https://www.gnu.org/software/grub/manual/grub/html_node/timeout.html).
+
+          ::: {.note}
+          If this option is set to ‘countdown’ or ‘hidden’ [...] and ESC or F4 are pressed, or SHIFT is held down during that time, it will display the menu and wait for input.
+          :::
+
+          From: [Simple configuration handling page, under GRUB_TIMEOUT_STYLE](https://www.gnu.org/software/grub/manual/grub/html_node/Simple-configuration.html).
+        '';
+      };
+
+      entryOptions = mkOption {
+        default = "--class nixos --unrestricted";
+        type = types.nullOr types.str;
+        description = ''
+          Options applied to the primary NixOS menu entry.
+        '';
+      };
+
+      subEntryOptions = mkOption {
+        default = "--class nixos";
+        type = types.nullOr types.str;
+        description = ''
+          Options applied to the secondary NixOS submenu entry.
+        '';
+      };
+
+      theme = mkOption {
+        type = types.nullOr types.path;
+        example = literalExpression ''"''${pkgs.libsForQt5.breeze-grub}/grub/themes/breeze"'';
+        default = null;
+        description = ''
+          Path to the grub theme to be used.
+        '';
+      };
+
+      splashMode = mkOption {
+        type = types.enum [ "normal" "stretch" ];
+        default = "stretch";
+        description = ''
+          Whether to stretch the image or show the image in the top-left corner unstretched.
+        '';
+      };
+
+      font = mkOption {
+        type = types.nullOr types.path;
+        default = "${realGrub}/share/grub/unicode.pf2";
+        defaultText = literalExpression ''"''${pkgs.grub2}/share/grub/unicode.pf2"'';
+        description = ''
+          Path to a TrueType, OpenType, or pf2 font to be used by Grub.
+        '';
+      };
+
+      fontSize = mkOption {
+        type = types.nullOr types.int;
+        example = 16;
+        default = null;
+        description = ''
+          Font size for the grub menu. Ignored unless `font`
+          is set to a ttf or otf font.
         '';
       };
 
@@ -291,6 +539,24 @@ in
         type = types.str;
         description = ''
           The gfxmode to pass to GRUB when loading a graphical boot interface under BIOS.
+        '';
+      };
+
+      gfxpayloadEfi = mkOption {
+        default = "keep";
+        example = "text";
+        type = types.str;
+        description = ''
+          The gfxpayload to pass to GRUB when loading a graphical boot interface under EFI.
+        '';
+      };
+
+      gfxpayloadBios = mkOption {
+        default = "text";
+        example = "keep";
+        type = types.str;
+        description = ''
+          The gfxpayload to pass to GRUB when loading a graphical boot interface under BIOS.
         '';
       };
 
@@ -315,10 +581,13 @@ in
       };
 
       default = mkOption {
-        default = 0;
-        type = types.int;
+        default = "0";
+        type = types.either types.int types.str;
+        apply = toString;
         description = ''
           Index of the default menu item to be booted.
+          Can also be set to "saved", which will make GRUB select
+          the menu item that was used at the last boot.
         '';
       };
 
@@ -330,8 +599,8 @@ in
           configuration file. A value of uuid / label signifies that grub
           will always resolve the uuid or label of the device before using
           it in the configuration. A value of provided means that GRUB will
-          use the device name as show in <command>df</command> or
-          <command>mount</command>. Note, zfs zpools / datasets are ignored
+          use the device name as show in {command}`df` or
+          {command}`mount`. Note, zfs zpools / datasets are ignored
           and will always be mounted using their labels.
         '';
       };
@@ -341,8 +610,16 @@ in
         type = types.bool;
         description = ''
           Whether GRUB should be built against libzfs.
-          ZFS support is only available for GRUB v2.
-          This option is ignored for GRUB v1.
+        '';
+      };
+
+      zfsPackage = mkOption {
+        type = types.package;
+        internal = true;
+        default = pkgs.zfs;
+        defaultText = literalExpression "pkgs.zfs";
+        description = ''
+          Which ZFS package to use if `config.boot.loader.grub.zfsSupport` is true.
         '';
       };
 
@@ -351,46 +628,41 @@ in
         type = types.bool;
         description = ''
           Whether GRUB should be built with EFI support.
-          EFI support is only available for GRUB v2.
-          This option is ignored for GRUB v1.
         '';
       };
 
       efiInstallAsRemovable = mkOption {
         default = false;
-        example = true;
         type = types.bool;
         description = ''
-          Whether to invoke <literal>grub-install</literal> with
-          <literal>--removable</literal>.</para>
+          Whether to invoke `grub-install` with
+          `--removable`.
 
-          <para>Unless you turn this on, GRUB will install itself somewhere in
-          <literal>boot.loader.efi.efiSysMountPoint</literal> (exactly where
+          Unless you turn this on, GRUB will install itself somewhere in
+          `boot.loader.efi.efiSysMountPoint` (exactly where
           depends on other config variables). If you've set
-          <literal>boot.loader.efi.canTouchEfiVariables</literal> *AND* you
+          `boot.loader.efi.canTouchEfiVariables` *AND* you
           are currently booted in UEFI mode, then GRUB will use
-          <literal>efibootmgr</literal> to modify the boot order in the
+          `efibootmgr` to modify the boot order in the
           EFI variables of your firmware to include this location. If you are
           *not* booted in UEFI mode at the time GRUB is being installed, the
           NVRAM will not be modified, and your system will not find GRUB at
           boot time. However, GRUB will still return success so you may miss
-          the warning that gets printed ("<literal>efibootmgr: EFI variables
-          are not supported on this system.</literal>").</para>
+          the warning that gets printed ("`efibootmgr: EFI variables
+          are not supported on this system.`").
 
-          <para>If you turn this feature on, GRUB will install itself in a
-          special location within <literal>efiSysMountPoint</literal> (namely
-          <literal>EFI/boot/boot$arch.efi</literal>) which the firmwares
-          are hardcoded to try first, regardless of NVRAM EFI variables.</para>
+          If you turn this feature on, GRUB will install itself in a
+          special location within `efiSysMountPoint` (namely
+          `EFI/boot/boot$arch.efi`) which the firmwares
+          are hardcoded to try first, regardless of NVRAM EFI variables.
 
-          <para>To summarize, turn this on if:
-          <itemizedlist>
-            <listitem><para>You are installing NixOS and want it to boot in UEFI mode,
-            but you are currently booted in legacy mode</para></listitem>
-            <listitem><para>You want to make a drive that will boot regardless of
-            the NVRAM state of the computer (like a USB "removable" drive)</para></listitem>
-            <listitem><para>You simply dislike the idea of depending on NVRAM
-            state to make your drive bootable</para></listitem>
-          </itemizedlist>
+          To summarize, turn this on if:
+          - You are installing NixOS and want it to boot in UEFI mode,
+            but you are currently booted in legacy mode
+          - You want to make a drive that will boot regardless of
+            the NVRAM state of the computer (like a USB "removable" drive)
+          - You simply dislike the idea of depending on NVRAM
+            state to make your drive bootable
         '';
       };
 
@@ -413,37 +685,13 @@ in
         '';
       };
 
-      trustedBoot = {
-
-        enable = mkOption {
-          default = false;
-          type = types.bool;
-          description = ''
-            Enable trusted boot. GRUB will measure all critical components during
-            the boot process to offer TCG (TPM) support.
-          '';
-        };
-
-        systemHasTPM = mkOption {
-          default = "";
-          example = "YES_TPM_is_activated";
-          type = types.string;
-          description = ''
-            Assertion that the target system has an activated TPM. It is a safety
-            check before allowing the activation of 'trustedBoot.enable'. TrustedBoot
-            WILL FAIL TO BOOT YOUR SYSTEM if no TPM is available.
-          '';
-        };
-
-        isHPLaptop = mkOption {
-          default = false;
-          type = types.bool;
-          description = ''
-            Use a special version of TrustedGRUB that is needed by some HP laptops
-            and works only for the HP laptops.
-          '';
-        };
-
+      forcei686 = mkOption {
+        default = false;
+        type = types.bool;
+        description = ''
+          Whether to force the use of a ia32 boot loader on x64 systems. Required
+          to install and run NixOS on 64bit x86 systems with 32bit (U)EFI.
+        '';
       };
 
     };
@@ -455,14 +703,12 @@ in
 
   config = mkMerge [
 
-    { boot.loader.grub.splashImage = mkDefault (
-        if cfg.version == 1 then pkgs.fetchurl {
-          url = http://www.gnome-look.org/CONTENT/content-files/36909-soft-tux.xpm.gz;
-          sha256 = "14kqdx2lfqvh40h6fjjzqgff1mwk74dmbjvmqphi6azzra7z8d59";
-        }
-        # GRUB 1.97 doesn't support gzipped XPMs.
-        else "${pkgs.nixos-artwork}/share/artwork/gnome/Gnome_Dark.png");
-    }
+    { boot.loader.grub.splashImage = mkDefault defaultSplash; }
+
+    (mkIf (cfg.splashImage == defaultSplash) {
+      boot.loader.grub.backgroundColor = mkDefault "#2F302F";
+      boot.loader.grub.splashMode = mkDefault "normal";
+    })
 
     (mkIf cfg.enable {
 
@@ -472,21 +718,33 @@ in
         { path = "/boot"; inherit (cfg) devices; inherit (efi) efiSysMountPoint; }
       ];
 
+      boot.loader.supportsInitrdSecrets = true;
+
+      system.systemBuilderArgs.configurationName = cfg.configurationName;
+      system.systemBuilderCommands = ''
+        echo -n "$configurationName" > $out/configuration-name
+      '';
+
       system.build.installBootLoader =
         let
           install-grub-pl = pkgs.substituteAll {
             src = ./install-grub.pl;
-            inherit (pkgs) utillinux;
+            utillinux = pkgs.util-linux;
             btrfsprogs = pkgs.btrfs-progs;
+            inherit (config.system.nixos) distroName;
           };
+          perl = pkgs.perl.withPackages (p: with p; [
+            FileSlurp FileCopyRecursive
+            XMLLibXML XMLSAX XMLSAXBase
+            ListCompare JSON
+          ]);
         in pkgs.writeScript "install-grub.sh" (''
-        #!${pkgs.stdenv.shell}
+        #!${pkgs.runtimeShell}
         set -e
-        export PERL5LIB=${makePerlPath (with pkgs.perlPackages; [ FileSlurp XMLLibXML XMLSAX ListCompare ])}
         ${optionalString cfg.enableCryptodisk "export GRUB_ENABLE_CRYPTODISK=y"}
       '' + flip concatMapStrings cfg.mirroredBoots (args: ''
-        ${pkgs.perl}/bin/perl ${install-grub-pl} ${grubConfig args} $@
-      ''));
+        ${perl}/bin/perl ${install-grub-pl} ${grubConfig args} $@
+      '') + cfg.extraInstallCommands);
 
       system.build.grub = grub;
 
@@ -498,38 +756,18 @@ in
 
       boot.loader.grub.extraPrepareConfig =
         concatStrings (mapAttrsToList (n: v: ''
-          ${pkgs.coreutils}/bin/cp -pf "${v}" "/boot/${n}"
+          ${pkgs.coreutils}/bin/install -Dp "${v}" "${efi.efiSysMountPoint}/"${escapeShellArg n}
         '') config.boot.loader.grub.extraFiles);
 
       assertions = [
-        {
-          assertion = !cfg.zfsSupport || cfg.version == 2;
-          message = "Only GRUB version 2 provides ZFS support";
-        }
         {
           assertion = cfg.mirroredBoots != [ ];
           message = "You must set the option ‘boot.loader.grub.devices’ or "
             + "'boot.loader.grub.mirroredBoots' to make the system bootable.";
         }
         {
-          assertion = cfg.efiSupport || all (c: c < 2) (mapAttrsToList (_: c: c) bootDeviceCounters);
+          assertion = cfg.efiSupport || all (c: c < 2) (mapAttrsToList (n: c: if n == "nodev" then 0 else c) bootDeviceCounters);
           message = "You cannot have duplicated devices in mirroredBoots";
-        }
-        {
-          assertion = !cfg.trustedBoot.enable || cfg.version == 2;
-          message = "Trusted GRUB is only available for GRUB 2";
-        }
-        {
-          assertion = !cfg.efiSupport || !cfg.trustedBoot.enable;
-          message = "Trusted GRUB does not have EFI support";
-        }
-        {
-          assertion = !cfg.zfsSupport || !cfg.trustedBoot.enable;
-          message = "Trusted GRUB does not have ZFS support";
-        }
-        {
-          assertion = !cfg.trustedBoot.enable || cfg.trustedBoot.systemHasTPM == "YES_TPM_is_activated";
-          message = "Trusted GRUB can break the system! Confirm that the system has an activated TPM by setting 'systemHasTPM'.";
         }
         {
           assertion = cfg.efiInstallAsRemovable -> cfg.efiSupport;
@@ -538,6 +776,10 @@ in
         {
           assertion = cfg.efiInstallAsRemovable -> !config.boot.loader.efi.canTouchEfiVariables;
           message = "If you wish to to use boot.loader.grub.efiInstallAsRemovable, then turn off boot.loader.efi.canTouchEfiVariables";
+        }
+        {
+          assertion = !(options.boot.loader.grub.version.isDefined && cfg.version == 1);
+          message = "Support for version 0.9x of GRUB was removed after being unsupported upstream for around a decade";
         }
       ] ++ flip concatMap cfg.mirroredBoots (args: [
         {
@@ -552,12 +794,17 @@ in
           assertion = if args.efiSysMountPoint == null then true else hasPrefix "/" args.efiSysMountPoint;
           message = "EFI paths must be absolute, not ${args.efiSysMountPoint}";
         }
-      ] ++ flip map args.devices (device: {
+      ] ++ forEach args.devices (device: {
         assertion = device == "nodev" || hasPrefix "/" device;
         message = "GRUB devices must be absolute paths, not ${device} in ${args.path}";
       }));
     })
 
+    (mkIf options.boot.loader.grub.version.isDefined {
+      warnings = [ ''
+        The boot.loader.grub.version option does not have any effect anymore, please remove it from your configuration.
+      '' ];
+    })
   ];
 
 
@@ -569,6 +816,28 @@ in
       (mkRenamedOptionModule [ "boot" "grubDevice" ] [ "boot" "loader" "grub" "device" ])
       (mkRenamedOptionModule [ "boot" "bootMount" ] [ "boot" "loader" "grub" "bootDevice" ])
       (mkRenamedOptionModule [ "boot" "grubSplashImage" ] [ "boot" "loader" "grub" "splashImage" ])
+      (mkRemovedOptionModule [ "boot" "loader" "grub" "trustedBoot" ] ''
+        Support for Trusted GRUB has been removed, because the project
+        has been retired upstream.
+      '')
+      (mkRemovedOptionModule [ "boot" "loader" "grub" "extraInitrd" ] ''
+        This option has been replaced with the bootloader agnostic
+        boot.initrd.secrets option. To migrate to the initrd secrets system,
+        extract the extraInitrd archive into your main filesystem:
+
+          # zcat /boot/extra_initramfs.gz | cpio -idvmD /etc/secrets/initrd
+          /path/to/secret1
+          /path/to/secret2
+
+        then replace boot.loader.grub.extraInitrd with boot.initrd.secrets:
+
+          boot.initrd.secrets = {
+            "/path/to/secret1" = "/etc/secrets/initrd/path/to/secret1";
+            "/path/to/secret2" = "/etc/secrets/initrd/path/to/secret2";
+          };
+
+        See the boot.initrd.secrets option documentation for more information.
+      '')
     ];
 
 }

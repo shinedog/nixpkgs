@@ -1,28 +1,45 @@
-{ stdenv, fetchurl, pkgconfig, glib, ncurses, mpd_clientlib, libintlOrEmpty }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, meson
+, ninja
+, pkg-config
+, glib
+, ncurses
+, libmpdclient
+, gettext
+, boost
+, pcreSupport ? false, pcre ? null
+}:
+
+assert pcreSupport -> pcre != null;
 
 stdenv.mkDerivation rec {
-  version = "0.24";
-  name = "ncmpc-${version}";
+  pname = "ncmpc";
+  version = "0.49";
 
-  src = fetchurl {
-    url = "http://www.musicpd.org/download/ncmpc/0/ncmpc-${version}.tar.xz";
-    sha256 = "1sf3nirs3mcx0r5i7acm9bsvzqzlh730m0yjg6jcyj8ln6r7cvqf";
+  src = fetchFromGitHub {
+    owner  = "MusicPlayerDaemon";
+    repo   = "ncmpc";
+    rev    = "v${version}";
+    sha256 = "sha256-rqIlQQ9RhFrhPwUd9dZmMZiqwFinNoV46VaJ3pbyUI8=";
   };
 
-  buildInputs = [ pkgconfig glib ncurses mpd_clientlib ]
-    ++ libintlOrEmpty;
+  buildInputs = [ glib ncurses libmpdclient boost ]
+    ++ lib.optional pcreSupport pcre;
+  nativeBuildInputs = [ meson ninja pkg-config gettext ];
 
-  NIX_LDFLAGS = stdenv.lib.optionalString stdenv.isDarwin "-lintl";
+  mesonFlags = [
+    "-Dlirc=disabled"
+    "-Ddocumentation=disabled"
+  ] ++ lib.optional (!pcreSupport) "-Dregex=disabled";
 
-  configureFlags = [
-    "--enable-colors"
-    "--enable-lyrics-screen"
-  ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Curses-based interface for MPD (music player daemon)";
-    homepage    = http://www.musicpd.org/clients/ncmpc/;
+    homepage    = "https://www.musicpd.org/clients/ncmpc/";
     license     = licenses.gpl2Plus;
     platforms   = platforms.all;
+    maintainers = with maintainers; [ fpletz ];
+    mainProgram = "ncmpc";
   };
 }

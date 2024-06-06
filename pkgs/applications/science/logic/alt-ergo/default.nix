@@ -1,23 +1,40 @@
-{ fetchurl, stdenv, ocamlPackages }:
+{ darwin, fetchurl, lib, ocamlPackages, stdenv }:
 
-stdenv.mkDerivation rec {
-  name = "alt-ergo-${version}";
-  version = "0.99.1";
+let
+  pname = "alt-ergo";
+  version = "2.5.4";
 
   src = fetchurl {
-    url    = "http://alt-ergo.ocamlpro.com/download_manager.php?target=${name}.tar.gz";
-    name   = "${name}.tar.gz";
-    sha256 = "0lnlf56ysisa45dxvbwzhl4fgyxyfz35psals2kv9x8gyq54zwpm";
+    url = "https://github.com/OCamlPro/alt-ergo/releases/download/v${version}/alt-ergo-${version}.tbz";
+    hash = "sha256-AsHok5i62vqJ5hK8XRiD8hM6JQaFv3dMxZAcVYEim6w=";
   };
+in
 
-  buildInputs = with ocamlPackages;
-    [ ocaml findlib ocamlgraph zarith lablgtk ];
+let alt-ergo-lib = ocamlPackages.buildDunePackage rec {
+  pname = "alt-ergo-lib";
+  inherit version src;
+  buildInputs = with ocamlPackages; [ ppx_blob ];
+  propagatedBuildInputs = with ocamlPackages; [ camlzip dolmen_loop dune-build-info fmt ocplib-simplex seq stdlib-shims zarith ];
+}; in
+
+let alt-ergo-parsers = ocamlPackages.buildDunePackage rec {
+  pname = "alt-ergo-parsers";
+  inherit version src;
+  nativeBuildInputs = [ ocamlPackages.menhir ];
+  propagatedBuildInputs = [ alt-ergo-lib ] ++ (with ocamlPackages; [ psmt2-frontend ]);
+}; in
+
+ocamlPackages.buildDunePackage {
+
+  inherit pname version src;
+
+  nativeBuildInputs = [ ocamlPackages.menhir ] ++ lib.optionals stdenv.isDarwin [ darwin.sigtool ];
+  buildInputs = [ alt-ergo-parsers ] ++ (with ocamlPackages; [ cmdliner dune-site ]);
 
   meta = {
     description = "High-performance theorem prover and SMT solver";
-    homepage    = "http://alt-ergo.ocamlpro.com/";
-    license     = stdenv.lib.licenses.cecill-c; # LGPL-2 compatible
-    platforms   = stdenv.lib.platforms.linux ++ stdenv.lib.platforms.darwin;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    homepage    = "https://alt-ergo.ocamlpro.com/";
+    license     = lib.licenses.ocamlpro_nc;
+    maintainers = [ lib.maintainers.thoughtpolice ];
   };
 }

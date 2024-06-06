@@ -1,46 +1,60 @@
-{ stdenv, fetchurl, alsaLib, pkgconfig }:
+{ lib
+, stdenv
+, fetchurl
+, alsa-lib
+, libjack2
+, pkg-config
+, which
+, AudioUnit
+, AudioToolbox
+, CoreAudio
+, CoreServices
+, Carbon }:
 
 stdenv.mkDerivation rec {
-  name = "portaudio-19-20140130";
-  
+  pname = "portaudio";
+  version = "190700_20210406";
+
   src = fetchurl {
-    url = http://www.portaudio.com/archives/pa_stable_v19_20140130.tgz;
-    sha256 = "0mwddk4qzybaf85wqfhxqlf0c5im9il8z03rd4n127k8y2jj9q4g";
+    url = "https://files.portaudio.com/archives/pa_stable_v${version}.tgz";
+    sha256 = "1vrdrd42jsnffh6rq8ap2c6fr4g9fcld89z649fs06bwqx1bzvs7";
   };
 
-  buildInputs = [ pkgconfig ]
-    ++ stdenv.lib.optional (!stdenv.isDarwin) alsaLib;
+  strictDeps = true;
+  nativeBuildInputs = [ pkg-config which ];
+  buildInputs = [ libjack2 ] ++ lib.optionals (!stdenv.isDarwin) [ alsa-lib ];
 
-  configureFlags = stdenv.lib.optionals stdenv.isDarwin
-    [ "--build=x86_64" "--without-oss" "--enable-static" "--enable-shared" ];
+  configureFlags = [ "--disable-mac-universal" "--enable-cxx" ];
 
-  preBuild = stdenv.lib.optionalString stdenv.isDarwin ''
-    sed -i '50 i\
-      #include <CoreAudio/AudioHardware.h>\
-      #include <CoreAudio/AudioHardwareBase.h>\
-      #include <CoreAudio/AudioHardwareDeprecated.h>' \
-      include/pa_mac_core.h
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isClang "-Wno-error=nullability-inferred-on-nested-type -Wno-error=nullability-completeness-on-arrays -Wno-error=implicit-const-int-float-conversion";
 
-    # disable two tests that don't compile
-    sed -i -e 105d Makefile
-    sed -i -e 107d Makefile
+  propagatedBuildInputs = lib.optionals stdenv.isDarwin [ AudioUnit AudioToolbox CoreAudio CoreServices Carbon ];
+
+  # Disable parallel build as it fails as:
+  #   make: *** No rule to make target '../../../lib/libportaudio.la',
+  #     needed by 'libportaudiocpp.la'.  Stop.
+  # Next release should address it with
+  #     https://github.com/PortAudio/portaudio/commit/28d2781d9216115543aa3f0a0ffb7b4ee0fac551.patch
+  enableParallelBuilding = false;
+
+  postPatch = ''
+    # workaround for the configure script which expects an absolute path
+    export AR=$(which $AR)
   '';
 
   # not sure why, but all the headers seem to be installed by the make install
-  installPhase = if stdenv.isDarwin then ''
-    mkdir -p "$out"
-    cp -r include "$out"
-    cp -r lib "$out"
-  '' else ''
+  installPhase = ''
     make install
-
+  '' + lib.optionalString (!stdenv.isDarwin) ''
     # fixup .pc file to find alsa library
-    sed -i "s|-lasound|-L${alsaLib.out}/lib -lasound|" "$out/lib/pkgconfig/"*.pc
+    sed -i "s|-lasound|-L${alsa-lib.out}/lib -lasound|" "$out/lib/pkgconfig/"*.pc
+  '' + lib.optionalString stdenv.isDarwin ''
+    cp include/pa_mac_core.h $out/include/pa_mac_core.h
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Portable cross-platform Audio API";
-    homepage    = http://www.portaudio.com/;
+    homepage    = "https://www.portaudio.com/";
     # Not exactly a bsd license, but alike
     license     = licenses.mit;
     maintainers = with maintainers; [ lovek323 ];

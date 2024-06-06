@@ -1,29 +1,35 @@
-{ stdenv, fetchurl, liblockfile }:
+{ lib, stdenv, fetchurl, liblockfile }:
 
 stdenv.mkDerivation rec {
-  _name   = "lockfile-progs";
-  version = "0.1.17";
-  name    = "${_name}-${version}";
+  pname   = "lockfile-progs";
+  version = "0.1.19";
 
   src = fetchurl {
-    url = "mirror://debian/pool/main/l/${_name}/${_name}_${version}.tar.gz";
-    sha256 = "04f5cvhrld15w58wkg6k2azywszsc5xp9cbmfx4jylwrak90byq3";
+    url = "mirror://debian/pool/main/l/${pname}/${pname}_${version}.tar.gz";
+    sha256 = "sha256-LFcEsByPR0+CkheA5Fkqknsr9qbXYWNUpsXXzVZkhX4=";
   };
 
   buildInputs = [ liblockfile ];
 
+  env.NIX_CFLAGS_COMPILE = lib.optionalString stdenv.cc.isGNU (toString [
+    # Needed with GCC 12
+    "-Wno-error=format-overflow"
+  ]);
+
   installPhase = ''
+    runHook preInstall
     mkdir -p $out/bin $out/man/man1
-    install -s bin/* $out/bin
+    install bin/* $out/bin
     install man/*.1 $out/man/man1
+    runHook postInstall
   '';
 
   meta = {
     description = "Programs for locking and unlocking files and mailboxes";
-    homepage = http://packages.debian.org/sid/lockfile-progs;
-    license = stdenv.lib.licenses.gpl2;
+    homepage = "http://packages.debian.org/sid/lockfile-progs";
+    license = lib.licenses.gpl2Only;
 
-    maintainers = [ stdenv.lib.maintainers.bluescreen303 ];
-    platforms = stdenv.lib.platforms.all;
+    maintainers = [ lib.maintainers.bluescreen303 ];
+    platforms = lib.platforms.all;
   };
 }

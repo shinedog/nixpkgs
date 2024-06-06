@@ -1,4 +1,4 @@
-{ config, lib, ... }:
+{ lib, ... }:
 
 with lib;
 
@@ -17,7 +17,7 @@ let
     #   }
     merge = loc: defs:
       zipAttrs
-        (flatten (imap (n: def: imap (m: def':
+        (flatten (imap1 (n: def: imap1 (m: def':
           maintainer.merge (loc ++ ["[${toString n}-${toString m}]"])
             [{ inherit (def) file; value = def'; }]) def.value) defs));
   };
@@ -37,7 +37,7 @@ in
         type = listOfMaintainers;
         internal = true;
         default = [];
-        example = [ lib.maintainers.all ];
+        example = literalExpression ''[ lib.maintainers.all ]'';
         description = ''
           List of maintainers of each module.  This option should be defined at
           most once per module.
@@ -47,10 +47,25 @@ in
       doc = mkOption {
         type = docFile;
         internal = true;
-        example = "./meta.xml";
+        example = "./meta.chapter.md";
         description = ''
-          Documentation prologe for the set of options of each module.  This
+          Documentation prologue for the set of options of each module.  This
           option should be defined at most once per module.
+        '';
+      };
+
+      buildDocsInSandbox = mkOption {
+        type = types.bool // {
+          merge = loc: defs: defs;
+        };
+        internal = true;
+        default = true;
+        description = ''
+          Whether to include this module in the split options doc build.
+          Disable if the module references `config`, `pkgs` or other module
+          arguments that cannot be evaluated as constants.
+
+          This option should be defined at most once per module.
         '';
       };
 

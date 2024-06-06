@@ -1,49 +1,37 @@
-{ fetchurl
-, coreutils
-, libX11
-, libXrandr
-, libXcursor
-, libXft
-, libXt
-, libxcb
-, xcbutil
-, xcb-util-cursor
-, xcbutilkeysyms
-, xcbutilwm
-, stdenv
-}:
+{ lib, stdenv, fetchFromGitHub, pkg-config, xorg }:
 
-stdenv.mkDerivation rec {
-  name = "spectrwm-${version}";
-  version = "2.7.2";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "spectrwm";
+  version = "3.5.1";
 
-  src = fetchurl {
-    url = "https://github.com/conformal/spectrwm/archive/SPECTRWM_2_7_2.tar.gz";
-    sha256 = "1yssqnhxlfl1b60gziqp8c5pzs1lr8p6anrnp9ga1zfdql3b7993";
+  src = fetchFromGitHub {
+    owner = "conformal";
+    repo = "spectrwm";
+    rev = "SPECTRWM_${lib.replaceStrings ["."] ["_"] finalAttrs.version}";
+    hash = "sha256-Nlzo35OsNqFbR6nl3nnGXDWmwc8JlP4tyDuIGtKTnIY=";
   };
 
-
-  buildInputs = [
-    libX11
-    libxcb
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = with xorg; [
     libXrandr
     libXcursor
     libXft
     libXt
     xcbutil
-    xcb-util-cursor
     xcbutilkeysyms
     xcbutilwm
   ];
 
-  sourceRoot = "spectrwm-SPECTRWM_2_7_2/linux";
-  makeFlags="PREFIX=$(out)";
-  installPhase = "PREFIX=$out make install";
+  prePatch = let
+    subdir = if stdenv.isDarwin then "osx" else "linux";
+  in "cd ${subdir}";
 
-  meta = with stdenv.lib; {
+  makeFlags = [ "PREFIX=${placeholder "out"}" ];
+
+  meta = with lib; {
     description = "A tiling window manager";
     homepage    = "https://github.com/conformal/spectrwm";
-    maintainers = with maintainers; [ jb55 ];
+    maintainers = with maintainers; [ rake5k ];
     license     = licenses.isc;
     platforms   = platforms.all;
 
@@ -57,4 +45,4 @@ stdenv.mkDerivation rec {
     '';
   };
 
-}
+})

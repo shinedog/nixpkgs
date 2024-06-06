@@ -1,43 +1,52 @@
-{ stdenv, lib, fetchurl, file, openssl, mlton
-, mysql, postgresql, sqlite
+{ lib, stdenv, fetchurl, file, openssl, mlton
+, libmysqlclient, postgresql, sqlite, gcc, icu
 }:
 
 stdenv.mkDerivation rec {
-  name = "urweb-${version}";
-  version = "20160621";
+  pname = "urweb";
+  version = "20200209";
 
   src = fetchurl {
-    url = "http://www.impredicative.com/ur/${name}.tgz";
-    sha256 = "08km96hli5yp754nsxxjzih2la0m89j5wc2cq12rkas43nqqgr65";
+    url = "https://github.com/urweb/urweb/releases/download/${version}/${pname}-${version}.tar.gz";
+    sha256 = "0qh6wcxfk5kf735i5gqwnkdirnnmqhnnpkfz96gz144dgz2i0c5c";
   };
 
-  buildInputs = [ openssl mlton mysql.client postgresql sqlite ];
+  buildInputs = [ openssl mlton libmysqlclient postgresql sqlite icu ];
 
   prePatch = ''
     sed -e 's@/usr/bin/file@${file}/bin/file@g' -i configure
   '';
 
-  configureFlags = "--with-openssl=${openssl.dev}";
+  configureFlags = [ "--with-openssl=${openssl.dev}" ];
 
   preConfigure = ''
     export PGHEADER="${postgresql}/include/libpq-fe.h";
-    export MSHEADER="${lib.getDev mysql.client}/include/mysql/mysql.h";
+    export MSHEADER="${libmysqlclient}/include/mysql/mysql.h";
     export SQHEADER="${sqlite.dev}/include/sqlite3.h";
+    export ICU_INCLUDES="-I${icu.dev}/include";
 
+    export CC="${gcc}/bin/gcc";
     export CCARGS="-I$out/include \
-                   -L${lib.getLib mysql.client}/lib/mysql \
+                   -L${lib.getLib openssl}/lib \
+                   -L${libmysqlclient}/lib \
                    -L${postgresql.lib}/lib \
                    -L${sqlite.out}/lib";
   '';
+
+  env.NIX_CFLAGS_COMPILE = toString [
+    # Needed with GCC 12
+    "-Wno-error=use-after-free"
+  ];
 
   # Be sure to keep the statically linked libraries
   dontDisableStatic = true;
 
   meta = {
     description = "Advanced purely-functional web programming language";
+    mainProgram = "urweb";
     homepage    = "http://www.impredicative.com/ur/";
-    license     = stdenv.lib.licenses.bsd3;
-    platforms   = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.thoughtpolice ];
+    license     = lib.licenses.bsd3;
+    platforms   = lib.platforms.linux ++ lib.platforms.darwin;
+    maintainers = [ lib.maintainers.thoughtpolice lib.maintainers.sheganinans ];
   };
 }

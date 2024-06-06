@@ -1,37 +1,60 @@
-{ stdenv, fetchurl, ocaml, findlib, ocamlbuild, camlp4, ocaml_react
-, lambdaTerm, ocaml_lwt, makeWrapper, camomile, zed, cppo, ppx_tools
+{ lib, stdenv, fetchurl, ocaml, findlib
+, lambda-term, cppo, makeWrapper, buildDunePackage
+, xdg, zed, logs, lwt, react, lwt_react
 }:
 
-stdenv.mkDerivation rec {
-  version = "1.19.2";
-  name = "utop-${version}";
+buildDunePackage rec {
+  pname = "utop";
+
+  version = "2.14.0";
+  propagatedBuildInputs = [ findlib lambda-term xdg zed logs ];
+
+  minimalOCamlVersion = "4.11";
 
   src = fetchurl {
-    url = "https://github.com/diml/utop/archive/${version}.tar.gz";
-    sha256 = "0hxybkqmrh0sz1yyyrgzdmxp46gda4vk22pv07s0qpfg2dpv56jh";
+    url = "https://github.com/ocaml-community/utop/releases/download/${version}/utop-${version}.tbz";
+    sha256 = "sha256-D9WpvFtFhSSnFGOh/gzRb5t74TZzrjAxGLchbg0nO6k=";
   };
 
-  buildInputs = [ ocaml findlib ocamlbuild makeWrapper cppo camlp4 ppx_tools ];
-
-  propagatedBuildInputs = [ lambdaTerm ocaml_lwt ];
-
-  createFindlibDestdir = true;
-
-  configureFlags = [ "--enable-camlp4" ]
-  ++ stdenv.lib.optional (ppx_tools != null) "--enable-interact";
-
-  buildPhase = ''
-    make
-    make doc
-    '';
+  nativeBuildInputs = [ makeWrapper cppo ];
 
   postFixup =
-  let ocamlVersion = (builtins.parseDrvName (ocaml.name)).version;
-  in
-   ''
+   let
+     path = "etc/utop/env";
+
+     # derivation of just runtime deps so env vars created by
+     # setup-hooks can be saved for use at runtime
+     runtime = stdenv.mkDerivation {
+       pname = "utop-runtime-env";
+       inherit version;
+
+       buildInputs = [ findlib ] ++ propagatedBuildInputs;
+
+       dontUnpack = true;
+
+       installPhase = ''
+         mkdir -p "$out"/${path}
+         for e in OCAMLPATH CAML_LD_LIBRARY_PATH; do
+           [[ -v "$e" ]] || continue
+           printf %s "''${!e}" > "$out"/${path}/$e
+         done
+       '';
+     };
+
+     get = key: ''$(cat "${runtime}/${path}/${key}")'';
+   in ''
    for prog in "$out"/bin/*
    do
-    wrapProgram $prog --set CAML_LD_LIBRARY_PATH "${ocaml_lwt}"/lib/ocaml/${ocamlVersion}/site-lib/lwt/:"${lambdaTerm}"/lib/ocaml/${ocamlVersion}/site-lib/lambda-term/:'$CAML_LD_LIBRARY_PATH' --set OCAMLPATH "${ocaml_lwt}"/lib/ocaml/${ocamlVersion}/site-lib:${ocaml_react}/lib/ocaml/${ocamlVersion}/site-lib:${camomile}/lib/ocaml/${ocamlVersion}/site-lib:${zed}/lib/ocaml/${ocamlVersion}/site-lib:${lambdaTerm}/lib/ocaml/${ocamlVersion}/site-lib:"$out"/lib/ocaml/${ocamlVersion}/site-lib:'$OCAMLPATH'
+
+    # Note: wrapProgram by default calls 'exec -a $0 ...', but this
+    # breaks utop on Linux with OCaml 4.04, and is disabled with
+    # '--argv0 ""' flag. See https://github.com/NixOS/nixpkgs/issues/24496
+    wrapProgram "$prog" \
+      --argv0 "" \
+      --prefix CAML_LD_LIBRARY_PATH ":" "${get "CAML_LD_LIBRARY_PATH"}" \
+      --prefix OCAMLPATH ":" "${get "OCAMLPATH"}" \
+      --prefix OCAMLPATH ":" $(unset OCAMLPATH; addOCamlPath "$out"; printf %s "$OCAMLPATH") \
+      --add-flags "-I ${findlib}/lib/ocaml/${lib.getVersion ocaml}/site-lib"
    done
    '';
 
@@ -42,11 +65,12 @@ stdenv.mkDerivation rec {
 
     It integrates with the tuareg mode in Emacs.
     '';
-    homepage = https://github.com/diml/utop;
-    license = stdenv.lib.licenses.bsd3;
+    homepage = "https://github.com/ocaml-community/utop";
+    changelog = "https://github.com/ocaml-community/utop/blob/${version}/CHANGES.md";
+    license = lib.licenses.bsd3;
     platforms = ocaml.meta.platforms or [];
     maintainers = [
-      stdenv.lib.maintainers.gal_bolle
+      lib.maintainers.gal_bolle
     ];
   };
 }

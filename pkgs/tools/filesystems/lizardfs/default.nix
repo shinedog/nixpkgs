@@ -1,8 +1,10 @@
-{ stdenv
+{ lib
+, stdenv
 , fetchFromGitHub
 , cmake
 , makeWrapper
-, python
+, python3
+, db
 , fuse
 , asciidoc
 , libxml2
@@ -10,41 +12,39 @@
 , docbook_xml_dtd_412
 , docbook_xsl
 , boost
-, pkgconfig
+, pkg-config
 , judy
 , pam
+, spdlog
+, systemdMinimal
 , zlib # optional
 }:
 
 stdenv.mkDerivation rec {
-  name = "lizardfs-${version}";
-  version = "3.10.2";
+  pname = "lizardfs";
+  version = "3.13.0-rc3";
 
   src = fetchFromGitHub {
-    owner = "lizardfs";
-    repo = "lizardfs";
-    rev = "v${version}";
-    sha256 = "0xw6skprxw0wcbqh4yx8f8a4q00x0sfz42llqgd047bcbga1k5zg";
+    owner = pname;
+    repo = pname;
+    rev = version;
+    sha256 = "sha256-rgaFhJvmA1RVDL4+vQLMC0GrdlgUlvJeZ5/JJ67C20Q=";
   };
 
-  buildInputs = 
-    [ cmake fuse asciidoc libxml2 libxslt docbook_xml_dtd_412 docbook_xsl
-      zlib boost pkgconfig judy pam makeWrapper
-    ];
+  nativeBuildInputs = [ cmake pkg-config makeWrapper ];
 
-  postInstall = ''
-    wrapProgram $out/sbin/lizardfs-cgiserver \
-        --prefix PATH ":" "${python}/bin"
+  buildInputs = [
+    db fuse asciidoc libxml2 libxslt docbook_xml_dtd_412 docbook_xsl
+    zlib boost judy pam spdlog python3 systemdMinimal
+  ];
 
-    # mfssnapshot and mfscgiserv are deprecated
-    rm $out/bin/mfssnapshot $out/sbin/mfscgiserv
-  '';
-
-  meta = with stdenv.lib; {
-    homepage = https://lizardfs.com;
+  meta = with lib; {
+    homepage = "https://lizardfs.com";
     description = "A highly reliable, scalable and efficient distributed file system";
     platforms = platforms.linux;
     license = licenses.gpl3;
-    maintainers = [ maintainers.rushmorem ];
+    maintainers = with maintainers; [ rushmorem shamilton ];
+    # 'fprintf' was not declared in this scope
+    broken = true;
   };
 }

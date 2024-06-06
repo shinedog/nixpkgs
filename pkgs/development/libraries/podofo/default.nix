@@ -1,39 +1,42 @@
-{ stdenv, fetchurl, cmake, zlib, freetype, libjpeg, libtiff, fontconfig
-, openssl, libpng, lua5 }:
+{ lib, stdenv, fetchurl, cmake, zlib, freetype, libjpeg, libtiff, fontconfig
+, openssl, libpng, lua5, pkg-config, libidn, expat
+}:
 
 stdenv.mkDerivation rec {
-  name = "podofo-0.9.3";
+  version = "0.9.8";
+  pname = "podofo";
 
   src = fetchurl {
-    url = "mirror://sourceforge/podofo/${name}.tar.gz";
-    sha256 = "1n12lbq9x15vqn7dc0hsccp56l5jdff1xrhvlfqlbklxx0qiw9pc";
+    url = "mirror://sourceforge/podofo/${pname}-${version}.tar.gz";
+    sha256 = "sha256-XeYH4V8ZK4rZBzgwB1nYjeoPXM3OO/AASKDJMrxkUVQ=";
   };
 
-  propagatedBuildInputs = [ zlib freetype libjpeg libtiff fontconfig openssl libpng ];
-  nativeBuildInputs = [ cmake ];
-  buildInputs = [ lua5 stdenv.cc.libc ];
+  outputs = [ "out" "dev" "lib" ];
 
-  crossAttrs = {
-    propagatedBuildInputs = [ zlib.crossDrv freetype.crossDrv libjpeg.crossDrv
-      libtiff.crossDrv fontconfig.crossDrv openssl.crossDrv libpng.crossDrv
-      lua5.crossDrv stdenv.ccCross.libc ];
-  };
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  # fix finding freetype-2.5
-  preConfigure = ''
-    substituteInPlace ./CMakeLists.txt \
-      --replace FREETYPE_INCLUDE_DIR FREETYPE_INCLUDE_DIRS \
-      --replace 'FIND_PACKAGE(FREETYPE' 'FIND_PACKAGE(Freetype'
+  buildInputs = [ zlib freetype libjpeg libtiff fontconfig openssl libpng
+                  libidn expat lua5 ];
 
-    rm ./cmake/modules/Find{FREETYPE,ZLIB,PkgConfig}.cmake
+  cmakeFlags = [
+    "-DPODOFO_BUILD_SHARED=ON"
+    "-DPODOFO_BUILD_STATIC=OFF"
+    "-DCMAKE_BUILD_WITH_INSTALL_NAME_DIR=ON"
+  ];
+
+  postPatch = ''
+    # Use GNU directories to fix multiple outputs
+    failNoMatches='t yes; b no; :yes h; :no p; $ {x; /./{x;q}; q1}'
+    sed -ni src/podofo/CMakeLists.txt \
+        -e 's/LIBDIRNAME/CMAKE_INSTALL_LIBDIR/' -e "$failNoMatches"
+    sed -ni src/podofo/libpodofo.pc.in \
+        -e 's/^libdir=.*/libdir=@CMAKE_INSTALL_LIBDIR@/' -e "$failNoMatches"
   '';
 
-  cmakeFlags = "-DPODOFO_BUILD_SHARED=ON -DPODOFO_BUILD_STATIC=OFF";
-
-  meta = {
-    homepage = http://podofo.sourceforge.net;
+  meta = with lib; {
+    homepage = "https://podofo.sourceforge.net";
     description = "A library to work with the PDF file format";
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.urkud ];
+    platforms = platforms.all;
+    license = with licenses; [ gpl2Plus lgpl2Plus ];
   };
 }

@@ -1,21 +1,34 @@
+if [ -e "$NIX_ATTRS_SH_FILE" ]; then . "$NIX_ATTRS_SH_FILE"; elif [ -f .attrs.sh ]; then . .attrs.sh; fi
 source $stdenv/setup
 
 source $mirrorsFile
 
+curlVersion=$(curl -V | head -1 | cut -d' ' -f2)
 
 # Curl flags to handle redirects, not use EPSV, handle cookies for
 # servers to need them during redirects, and work on SSL without a
 # certificate (this isn't a security problem because we check the
 # cryptographic hash of the output anyway).
-curl="curl \
- --location --max-redirs 20 \
- --retry 3 \
- --disable-epsv \
- --cookie-jar cookies \
- --insecure \
- $curlOpts \
- $NIX_CURL_FLAGS"
+curl=(
+    curl
+    --location
+    --max-redirs 20
+    --retry 3
+    --disable-epsv
+    --cookie-jar cookies
+    --user-agent "curl/$curlVersion Nixpkgs/$nixpkgsVersion"
+)
 
+if ! [ -f "$SSL_CERT_FILE" ]; then
+    curl+=(--insecure)
+fi
+
+eval "curl+=($curlOptsList)"
+
+curl+=(
+    $curlOpts
+    $NIX_CURL_FLAGS
+)
 
 downloadedFile="$out"
 if [ -n "$downloadToTemp" ]; then downloadedFile="$TMPDIR/file"; fi
@@ -24,7 +37,7 @@ if [ -n "$downloadToTemp" ]; then downloadedFile="$TMPDIR/file"; fi
 tryDownload() {
     local url="$1"
     echo
-    header "trying $url"
+    echo "trying $url"
     local curlexit=18;
 
     success=
@@ -32,26 +45,29 @@ tryDownload() {
     # if we get error code 18, resume partial download
     while [ $curlexit -eq 18 ]; do
        # keep this inside an if statement, since on failure it doesn't abort the script
-       if $curl -C - --fail "$url" --output "$downloadedFile"; then
+       if "${curl[@]}" -C - --fail "$url" --output "$downloadedFile"; then
           success=1
           break
        else
           curlexit=$?;
        fi
     done
-    stopNest
 }
 
 
 finish() {
+    local skipPostFetch="$1"
+
     set +o noglob
 
     if [[ $executable == "1" ]]; then
       chmod +x $downloadedFile
     fi
 
-    runHook postFetch
-    stopNest
+    if [ -z "$skipPostFetch" ]; then
+        runHook postFetch
+    fi
+
     exit 0
 }
 
@@ -63,11 +79,17 @@ tryHashedMirrors() {
 
     for mirror in $hashedMirrors; do
         url="$mirror/$outputHashAlgo/$outputHash"
-        if $curl --retry 0 --connect-timeout "${NIX_CONNECT_TIMEOUT:-15}" \
+        if "${curl[@]}" --retry 0 --connect-timeout "${NIX_CONNECT_TIMEOUT:-15}" \
             --fail --silent --show-error --head "$url" \
             --write-out "%{http_code}" --output /dev/null > code 2> log; then
             tryDownload "$url"
-            if test -n "$success"; then finish; fi
+
+            # We skip postFetch here, because hashed-mirrors are
+            # already content addressed. So if $outputHash is in the
+            # hashed-mirror, changes from ‘postFetch’ would already be
+            # made. So, running postFetch will end up applying the
+            # change /again/, which we don’t want.
+            if test -n "$success"; then finish skipPostFetch; fi
         else
             # Be quiet about 404 errors, which we interpret as the file
             # not being present on this particular mirror.
@@ -116,7 +138,6 @@ if test -n "$showURLs"; then
     exit 0
 fi
 
-
 if test -n "$preferHashedMirrors"; then
     tryHashedMirrors
 fi
@@ -126,6 +147,16 @@ set -o noglob
 
 success=
 for url in $urls; do
+    if [ -z "$postFetch" ]; then
+       case "$url" in
+           https://github.com/*/archive/*)
+               echo "warning: archives from GitHub revisions should use fetchFromGitHub"
+               ;;
+           https://gitlab.com/*/-/archive/*)
+               echo "warning: archives from GitLab revisions should use fetchFromGitLab"
+               ;;
+       esac
+    fi
     tryDownload "$url"
     if test -n "$success"; then finish; fi
 done

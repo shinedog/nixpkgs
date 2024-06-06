@@ -1,41 +1,104 @@
-{ stdenv, fetchurl, automake, autoconf, pkgconfig, glib, openssl, expat
-, ncurses, libotr, curl, libstrophe, readline, libuuid
-
-, autoAwaySupport ? false, libXScrnSaver ? null, libX11 ? null
-, notifySupport ? false,   libnotify ? null, gdk_pixbuf ? null
+{ lib
+, stdenv
+, fetchFromGitHub
+, autoconf-archive
+, autoreconfHook
+, cmocka
+, curl
+, expat
+, expect
+, glib
+, glibcLocales
+, libstrophe
+, libmicrohttpd
+, libotr
+, libuuid
+, ncurses
+, openssl
+, pkg-config
+, readline
+, sqlite
+, autoAwaySupport ? true,       libXScrnSaver, libX11
+, notifySupport ? true,         libnotify, gdk-pixbuf
+, omemoSupport ? true,          libsignal-protocol-c, libgcrypt, qrencode
+, pgpSupport ? true,            gpgme
+, pythonPluginSupport ? true,   python3
+, traySupport ? true,           gtk3
 }:
 
-assert autoAwaySupport -> libXScrnSaver != null && libX11 != null;
-assert notifySupport   -> libnotify != null && gdk_pixbuf != null;
-
-with stdenv.lib;
-
 stdenv.mkDerivation rec {
-  name = "profanity-${version}";
-  version = "0.4.7";
+  pname = "profanity";
+  version = "0.14.0";
 
-  src = fetchurl {
-    url = "http://www.profanity.im/profanity-${version}.tar.gz";
-    sha256 = "1p8ixvxacvf63r6lnf6iwlyz4pgiyp6widna1h2l2jg8kw14wb5h";
+  src = fetchFromGitHub {
+    owner = "profanity-im";
+    repo = "profanity";
+    rev = version;
+    hash = "sha256-u/mp+vtMj602LfrulA+nhLNH8K6sqKIOuPJzhZusVmE=";
   };
 
+  patches = [
+    ./patches/packages-osx.patch
+  ];
+
+  enableParallelBuilding = true;
+
+  nativeBuildInputs = [
+    autoconf-archive
+    autoreconfHook
+    glibcLocales
+    pkg-config
+  ];
+
   buildInputs = [
-    automake autoconf pkgconfig readline libuuid
-    glib openssl expat ncurses libotr curl libstrophe
-  ] ++ optionals autoAwaySupport [ libXScrnSaver libX11 ]
-    ++ optionals notifySupport   [ libnotify gdk_pixbuf ];
+    cmocka
+    curl
+    expat
+    expect
+    glib
+    libstrophe
+    libmicrohttpd
+    libotr
+    libuuid
+    ncurses
+    openssl
+    readline
+    sqlite
+  ] ++ lib.optionals autoAwaySupport     [ libXScrnSaver libX11 ]
+    ++ lib.optionals notifySupport       [ libnotify gdk-pixbuf ]
+    ++ lib.optionals omemoSupport        [ libsignal-protocol-c libgcrypt qrencode ]
+    ++ lib.optionals pgpSupport          [ gpgme ]
+    ++ lib.optionals pythonPluginSupport [ python3 ]
+    ++ lib.optionals traySupport         [ gtk3 ];
 
-  preConfigure = "sh bootstrap.sh";
+  # Enable feature flags, so that build fail if libs are missing
+  configureFlags = [
+    "--enable-c-plugins"
+    "--enable-otr"
+  ] ++ lib.optionals notifySupport       [ "--enable-notifications" ]
+    ++ lib.optionals traySupport         [ "--enable-icons-and-clipboard" ]
+    ++ lib.optionals pgpSupport          [ "--enable-pgp" ]
+    ++ lib.optionals pythonPluginSupport [ "--enable-python-plugins" ]
+    ++ lib.optionals omemoSupport        [ "--enable-omemo" ];
 
-  meta = {
+  preAutoreconf = ''
+    mkdir m4
+  '';
+
+  doCheck = true;
+
+  LC_ALL = "en_US.utf8";
+
+  meta =  with lib; {
+    homepage = "http://www.profanity.im/";
     description = "A console based XMPP client";
+    mainProgram = "profanity";
     longDescription = ''
       Profanity is a console based XMPP client written in C using ncurses and
       libstrophe, inspired by Irssi.
     '';
-    homepage = http://profanity.im/;
     license = licenses.gpl3Plus;
-    platforms = platforms.linux;
     maintainers = [ maintainers.devhell ];
+    platforms = platforms.unix;
   };
 }

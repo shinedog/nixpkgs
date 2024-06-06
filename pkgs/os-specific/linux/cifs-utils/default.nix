@@ -1,23 +1,29 @@
-{ stdenv, fetchurl, kerberos, keyutils, pam }:
+{ stdenv, lib, fetchurl, autoreconfHook, docutils, pkg-config
+, libkrb5, keyutils, pam, talloc, python3 }:
 
 stdenv.mkDerivation rec {
-  name = "cifs-utils-${version}";
-  version = "6.5";
+  pname = "cifs-utils";
+  version = "7.0";
 
   src = fetchurl {
-    url = "mirror://samba/pub/linux-cifs/cifs-utils/${name}.tar.bz2";
-    sha256 = "1xs9rwqfpx8qj5mcmagw6y1hzwc71zhzb5r8hv06sz16p1w6axz2";
+    url = "mirror://samba/pub/linux-cifs/cifs-utils/${pname}-${version}.tar.bz2";
+    sha256 = "sha256-De+quFvT6kb/xFq0H7DQrVTQWuLPqn5QPehtTxK8gWE=";
   };
 
-  buildInputs = [ kerberos keyutils pam ];
+  nativeBuildInputs = [ autoreconfHook docutils pkg-config ];
 
-  makeFlags = "root_sbindir=$(out)/sbin";
+  buildInputs = [ libkrb5 keyutils pam talloc python3 ];
 
-  meta = with stdenv.lib; {
-    homepage = http://www.samba.org/linux-cifs/cifs-utils/;
+  configureFlags = [ "ROOTSBINDIR=$(out)/sbin" ] ++ lib.optionals (stdenv.hostPlatform != stdenv.buildPlatform) [
+    # AC_FUNC_MALLOC is broken on cross builds.
+    "ac_cv_func_malloc_0_nonnull=yes"
+    "ac_cv_func_realloc_0_nonnull=yes"
+  ];
+
+  meta = with lib; {
+    homepage = "https://wiki.samba.org/index.php/LinuxCIFS_utils";
     description = "Tools for managing Linux CIFS client filesystems";
     platforms = platforms.linux;
     license = licenses.lgpl3;
-    maintainers = with maintainers; [ nckx ];
   };
 }

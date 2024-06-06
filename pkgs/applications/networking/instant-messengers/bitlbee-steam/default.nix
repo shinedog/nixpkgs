@@ -1,28 +1,29 @@
-{ fetchurl, fetchFromGitHub, stdenv, bitlbee, autoconf, automake, libtool, pkgconfig, glib, libgcrypt }:
+{ lib, fetchFromGitHub, stdenv, bitlbee, autoconf, automake, libtool, pkg-config, libgcrypt }:
 
-with stdenv.lib;
 stdenv.mkDerivation rec {
-  name = "bitlbee-steam-2015-09-10";
+  version = "1.4.2";
+  pname = "bitlbee-steam";
 
   src = fetchFromGitHub {
-    rev = "011375b2d3c67c15d51ca203de0ecaab3b4b7587";
-    owner = "jgeboski";
+    rev = "v${version}";
+    owner = "bitlbee";
     repo = "bitlbee-steam";
-    sha256 = "1m91x3208z9zxppz998i6060alcalfly9ix9jxismj45xyp6mdx7";
+    sha256 = "121r92mgwv445wwxzh35n19fs5k81ihr0j19k256ia5502b1xxaq";
   };
 
-  buildInputs = [ bitlbee autoconf automake libtool pkgconfig glib libgcrypt ];
+  nativeBuildInputs = [ pkg-config autoconf automake ];
+  buildInputs = [ bitlbee libtool libgcrypt ];
 
   preConfigure = ''
     export BITLBEE_PLUGINDIR=$out/lib/bitlbee
     ./autogen.sh
   '';
 
-  meta = {
+  meta = with lib; {
     description = "Steam protocol plugin for BitlBee";
 
-    homepage = https://github.com/jgeboski/bitlbee-steam;
+    homepage = "https://github.com/jgeboski/bitlbee-steam";
     license = licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    platforms = lib.platforms.linux;
   };
 }

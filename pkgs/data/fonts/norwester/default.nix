@@ -1,25 +1,25 @@
-{ stdenv, fetchurl, unzip }:
+{ lib, stdenvNoCC, fetchzip }:
 
-stdenv.mkDerivation rec {
+stdenvNoCC.mkDerivation rec {
   pname = "norwester";
   version = "1.2";
-  name = "${pname}-${version}";
 
-  src = fetchurl {
+  src = fetchzip {
     url = "http://jamiewilson.io/norwester/assets/norwester.zip";
-    sha256 = "0syg8ss7mpli4cbxvh3ld7qrlbhb2dfv3wchm765iw6ndc05g92d";
+    stripRoot = false;
+    hash = "sha256-Ak/nobrQE/XYGWs/IhlZlTp74ff+s4adUR6Sht5Yf8g=";
   };
 
-  phases = [ "installPhase" ];
-
-  buildInputs = [ unzip ];
-
   installPhase = ''
+    runHook preInstall
+
     mkdir -p $out/share/fonts/opentype
-    unzip -D -j $src ${pname}-v${version}/${pname}.otf -d $out/share/fonts/opentype/
+    cp ${pname}-v${version}/${pname}.otf $out/share/fonts/opentype/
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "http://jamiewilson.io/norwester";
     description = "A condensed geometric sans serif by Jamie Wilson";
     maintainers = with maintainers; [ leenaars ];

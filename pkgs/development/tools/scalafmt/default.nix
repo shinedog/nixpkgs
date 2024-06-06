@@ -1,36 +1,47 @@
-{ stdenv, fetchurl, unzip, jre }:
+{ lib, stdenv, jre, coursier, makeWrapper, setJavaClassPath }:
 
-stdenv.mkDerivation rec {
-  version = "0.4.10";
+let
   baseName = "scalafmt";
-  name = "${baseName}-${version}";
-
-  src = fetchurl {
-    url = "https://github.com/olafurpg/scalafmt/releases/download/v${version}/${baseName}.tar.gz";
-    sha256 = "0igz95zy69pasvj4vya71akhwlc0233m7kwrn66rali1wxs2kcsz";
+  version = "3.7.9";
+  deps = stdenv.mkDerivation {
+    name = "${baseName}-deps-${version}";
+    buildCommand = ''
+      export COURSIER_CACHE=$(pwd)
+      ${coursier}/bin/cs fetch org.scalameta:scalafmt-cli_2.13:${version} > deps
+      mkdir -p $out/share/java
+      cp $(< deps) $out/share/java/
+    '';
+    outputHashMode = "recursive";
+    outputHash = "sha256-r4vv62H0AryjZb+34fVHvqvndipOYyf6XpQC9u8Dxso=";
   };
+in
+stdenv.mkDerivation {
+  pname = baseName;
+  inherit version;
 
-  unpackPhase = "tar xvzf $src";
+  nativeBuildInputs = [ makeWrapper setJavaClassPath ];
+  buildInputs = [ deps ];
+
+  dontUnpack = true;
 
   installPhase = ''
-    mkdir -p "$out/bin"
-    mkdir -p "$out/lib"
+    runHook preInstall
 
-    cp cli/target/scala-2.11/scalafmt.jar "$out/lib/${name}.jar"
+    makeWrapper ${jre}/bin/java $out/bin/${baseName} \
+      --add-flags "-cp $CLASSPATH org.scalafmt.cli.Cli"
 
-    cat > "$out/bin/${baseName}" << EOF
-    #!${stdenv.shell}
-    exec ${jre}/bin/java -jar "$out/lib/${name}.jar" "\$@"
-    EOF
-
-    chmod a+x "$out/bin/${baseName}"
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  installCheckPhase = ''
+    $out/bin/${baseName} --version | grep -q "${version}"
+  '';
+
+  meta = with lib; {
     description = "Opinionated code formatter for Scala";
-    homepage = http://scalafmt.org;
+    homepage = "http://scalameta.org/scalafmt";
     license = licenses.asl20;
-    platforms = platforms.linux;
     maintainers = [ maintainers.markus1189 ];
+    mainProgram = "scalafmt";
   };
 }

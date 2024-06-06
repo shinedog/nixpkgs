@@ -1,25 +1,42 @@
-{ lib, stdenv, fetchFromGitHub, pkgconfig, intltool, wrapGAppsHook
-, python3Packages, gnome3, gtk3, gobjectIntrospection}:
+{ lib, fetchFromGitHub, wrapGAppsHook3, gettext
+, python3Packages, gnome, gtk3, glib, gdk-pixbuf, gsettings-desktop-schemas, gobject-introspection }:
 
 let
-  inherit (python3Packages) buildPythonApplication python isPy3k dbus-python pygobject3 mpd2;
+  inherit (python3Packages) buildPythonApplication isPy3k dbus-python pygobject3 mpd2 setuptools;
 in buildPythonApplication rec {
-  name = "sonata-${version}";
-  version = "1.7b1";
+  pname = "sonata";
+  version = "1.7.0";
 
   src = fetchFromGitHub {
     owner = "multani";
     repo = "sonata";
     rev = "v${version}";
-    sha256 = "1npbxlrg6k154qybfd250nq2p96kxdsdkj9wwnp93gljnii3g8wh";
+    sha256 = "0rl8w7s2asff626clzfvyz987l2k4ml5dg417mqp9v8a962q0v2x";
   };
 
   disabled = !isPy3k;
 
+  nativeBuildInputs = [
+    gettext
+    gobject-introspection
+    wrapGAppsHook3
+  ];
+
   buildInputs = [
-    pkgconfig intltool wrapGAppsHook
-    gnome3.gnome_themes_standard gnome3.defaultIconTheme
-    gnome3.gsettings_desktop_schemas
+    glib
+    gnome.adwaita-icon-theme
+    gsettings-desktop-schemas
+    gtk3
+    gdk-pixbuf
+  ];
+
+  # The optional tagpy dependency (for editing metadata) is not yet
+  # included because it's difficult to build.
+  pythonPath = [
+    dbus-python
+    mpd2
+    pygobject3
+    setuptools
   ];
 
   postPatch = ''
@@ -27,22 +44,13 @@ in buildPythonApplication rec {
     sed -i '/localmpd/d' sonata/consts.py
   '';
 
-  propagatedUserEnvPkgs = [ gnome3.gnome_themes_standard ];
-
-  propagatedBuildInputs = [
-    gobjectIntrospection gtk3 pygobject3
-  ];
-
-  # The optional tagpy dependency (for editing metadata) is not yet
-  # included because it's difficult to build.
-  pythonPath = [ dbus-python pygobject3 mpd2 ];
-
   meta = {
     description = "An elegant client for the Music Player Daemon";
+    mainProgram = "sonata";
     longDescription = ''
       Sonata is an elegant client for the Music Player Daemon.
 
-      Written in Python and using the GTK+ 3 widget set, its features
+      Written in Python and using the GTK 3 widget set, its features
       include:
 
        - Expanded and collapsed views
@@ -62,9 +70,8 @@ in buildPythonApplication rec {
        - Commandline control
        - Available in 24 languages
     '';
-    homepage = "http://www.nongnu.org/sonata/";
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.rvl ];
+    homepage = "https://www.nongnu.org/sonata/";
+    license = lib.licenses.gpl3;
+    platforms = lib.platforms.linux;
   };
 }

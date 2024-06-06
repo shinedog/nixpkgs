@@ -1,36 +1,59 @@
-{ stdenv, fetchurl
-, IOKit ? null }:
+{ lib
+, stdenv
+, fetchurl
+, autoreconfHook
+, enableMail ? false
+, gnused
+, hostname
+, mailutils
+, IOKit
+, ApplicationServices
+}:
 
 let
-  version = "6.4";
-  drivedbBranch = "RELEASE_${builtins.replaceStrings ["."] ["_"] version}_DRIVEDB";
-  dbrev = "4167";
+  dbrev = "5388";
+  drivedbBranch = "RELEASE_7_3_DRIVEDB";
   driverdb = fetchurl {
-    url = "http://sourceforge.net/p/smartmontools/code/${dbrev}/tree/branches/${drivedbBranch}/smartmontools/drivedb.h?format=raw";
-    sha256 = "14rv1cxbpmnq12hjwr3icjiahx5i0ak7j69310c09rah0241l5j1";
+    url = "https://sourceforge.net/p/smartmontools/code/${dbrev}/tree/branches/${drivedbBranch}/smartmontools/drivedb.h?format=raw";
+    sha256 = "sha256-0dtLev4JjeHsS259+qOgg19rz4yjkeX4D3ooUgS4RTI=";
     name = "smartmontools-drivedb.h";
   };
+  scriptPath = lib.makeBinPath ([ gnused hostname ] ++ lib.optionals enableMail [ mailutils ]);
+
 in
 stdenv.mkDerivation rec {
-  name = "smartmontools-${version}";
+  pname = "smartmontools";
+  version = "7.4";
 
   src = fetchurl {
-    url = "mirror://sourceforge/smartmontools/${name}.tar.gz";
-    sha256 = "11bsxcghh7adzdklcslamlynydxb708vfz892d5w7agdq405ddza";
+    url = "mirror://sourceforge/smartmontools/${pname}-${version}.tar.gz";
+    hash = "sha256-6aYfZB/5bKlTGe37F5SM0pfQzTNCc2ssScmdRxb7mT0=";
   };
 
-  buildInputs = [] ++ stdenv.lib.optional stdenv.isDarwin IOKit;
-
-  patchPhase = ''
-    cp ${driverdb} drivedb.h
-    sed -i -e 's@which which >/dev/null || exit 1@alias which="type -p"@' update-smart-drivedb.in
+  patches = [
+    # fixes darwin build
+    ./smartmontools.patch
+  ];
+  postPatch = ''
+    cp -v ${driverdb} drivedb.h
   '';
 
-  meta = with stdenv.lib; {
+  configureFlags = [
+    "--with-scriptpath=${scriptPath}"
+    # does not work on NixOS
+    "--without-update-smart-drivedb"
+  ];
+
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = lib.optionals stdenv.isDarwin [ IOKit ApplicationServices ];
+  enableParallelBuilding = true;
+
+  meta = with lib; {
     description = "Tools for monitoring the health of hard drives";
-    homepage = http://smartmontools.sourceforge.net/;
+    homepage = "https://www.smartmontools.org/";
     license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ Frostman ];
     platforms = with platforms; linux ++ darwin;
-    maintainers = [ maintainers.peti ];
+    mainProgram = "smartctl";
   };
 }

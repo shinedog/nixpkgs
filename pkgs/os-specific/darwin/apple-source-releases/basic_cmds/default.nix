@@ -1,7 +1,7 @@
-{ stdenv, appleDerivation, fetchurl, xcbuild }:
+{ lib, appleDerivation, xcbuildHook }:
 
-appleDerivation rec {
-  buildInputs = [ xcbuild ];
+appleDerivation {
+  nativeBuildInputs = [ xcbuildHook ];
 
   # These PBXcp calls should be patched in xcbuild to allow them to
   # automatically be prefixed.
@@ -13,8 +13,11 @@ appleDerivation rec {
 
   # temporary install phase until xcodebuild has "install" support
   installPhase = ''
-    mkdir -p $out/bin/
-    install basic_cmds-*/Build/Products/Release/* $out/bin/
+    for f in Products/Release/*; do
+      if [ -f $f ]; then
+        install -D $f $out/bin/$(basename $f)
+      fi
+    done
 
     for n in 1; do
       mkdir -p $out/share/man/man$n
@@ -23,7 +26,7 @@ appleDerivation rec {
   '';
 
   meta = {
-    platforms = stdenv.lib.platforms.darwin;
-    maintainers = with stdenv.lib.maintainers; [ matthewbauer ];
+    platforms = lib.platforms.darwin;
+    maintainers = with lib.maintainers; [ matthewbauer ];
   };
 }

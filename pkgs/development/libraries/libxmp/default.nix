@@ -1,22 +1,23 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchurl }:
 
 stdenv.mkDerivation rec {
-  name = "libxmp-4.3.12";
+  pname = "libxmp";
+  version = "4.6.0";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Extended module player library";
-    homepage    = "http://xmp.sourceforge.net/";
+    homepage    = "https://xmp.sourceforge.net/";
     longDescription = ''
       Libxmp is a library that renders module files to PCM data. It supports
       over 90 mainstream and obscure module formats including Protracker (MOD),
       Scream Tracker 3 (S3M), Fast Tracker II (XM), and Impulse Tracker (IT).
     '';
     license     = licenses.lgpl21Plus;
-    platforms   = platforms.linux;
+    platforms   = platforms.all;
   };
 
   src = fetchurl {
-    url = "mirror://sourceforge/xmp/libxmp/${name}.tar.gz";
-    sha256 = "1536dfxgxl6dyvkdby8lxzi9f7y2qlwl8ylrkybips3ampcqgkhm";
+    url = "mirror://sourceforge/xmp/libxmp/${pname}-${version}.tar.gz";
+    sha256 = "sha256-LTxF/lI7UJB+ieYPmjt/TMmquD7J27p3Q+r/vNyzXqY=";
   };
 }

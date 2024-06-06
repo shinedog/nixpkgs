@@ -1,41 +1,36 @@
-{ stdenv, fetchurl }:
+{ lib, stdenv, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "memtest86+-5.01";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "memtest86+";
+  version = "7.00";
 
-  src = fetchurl {
-    url = "http://www.memtest.org/download/5.01/${name}.tar.gz";
-    sha256 = "0fch1l55753y6jkk0hj8f6vw4h1kinkn9ysp22dq5g9zjnvjf88l";
+  src = fetchFromGitHub {
+    owner = "memtest86plus";
+    repo = "memtest86plus";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-DVYiE9yi20IR2AZs8bya1h9vK4si7nKdg9Nqef4WTrw=";
   };
 
-  # Patch incompatiblity with GCC. Source: http://koji.fedoraproject.org/koji/buildinfo?buildID=586907
-  patches = [ ./compile-fix.patch ./crash-fix.patch ./no-optimization.patch ];
+  # Binaries are booted directly by BIOS/UEFI or bootloader
+  # and should not be patched/stripped
+  dontPatchELF = true;
+  dontStrip = true;
+
+  passthru.efi = "${finalAttrs.finalPackage}/memtest.efi";
 
   preBuild = ''
-    # Really dirty hack to get Memtest to build without needing a Glibc
-    # with 32-bit libraries and headers.
-    if test "$system" = x86_64-linux; then
-        mkdir gnu
-        touch gnu/stubs-32.h
-    fi
+    cd ${if stdenv.isi686 then "build32" else "build64"}
   '';
 
-  NIX_CFLAGS_COMPILE = "-I. -std=gnu90";
-
-  hardeningDisable = [ "stackprotector" "pic" ];
-
-  buildFlags = "memtest.bin";
-
   installPhase = ''
-    mkdir -p $out
-    chmod -x memtest.bin
-    cp memtest.bin $out/
+    install -Dm0444 -t $out/ memtest.bin memtest.efi
   '';
 
   meta = {
-    homepage = http://www.memtest.org/;
+    homepage = "https://www.memtest.org/";
     description = "A tool to detect memory errors";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Only;
+    platforms = [ "x86_64-linux" "i686-linux" ];
+    maintainers = [ lib.maintainers.LunNova ];
   };
-}
+})

@@ -1,24 +1,29 @@
-{ fetchurl, stdenv, pkgconfig, ghostscript, cairo }:
+{ fetchurl, lib, stdenv, pkg-config, ghostscript, cairo }:
 
 stdenv.mkDerivation rec {
-  name = "libspectre-0.2.7";
+  pname = "libspectre";
+  version = "0.2.12";
 
   src = fetchurl {
-    url = "http://libspectre.freedesktop.org/releases/${name}.tar.gz";
-    sha256 = "1v63lqc6bhhxwkpa43qmz8phqs8ci4dhzizyy16d3vkb20m846z8";
+    url = "https://libspectre.freedesktop.org/releases/${pname}-${version}.tar.gz";
+    hash = "sha256-VadRfNNXK9JWXfDPRQlEoE1Sc7J567NpqJU5GVfw+WA=";
   };
 
-  patches = [ ./libspectre-0.2.7-gs918.patch ];
+  nativeBuildInputs = [ pkg-config ];
 
   buildInputs = [
     # Need `libgs.so'.
-    pkgconfig ghostscript cairo /*for tests*/
+    ghostscript
   ];
 
   doCheck = true;
 
+  checkInputs = [
+    cairo
+  ];
+
   meta = {
-    homepage = http://libspectre.freedesktop.org/;
+    homepage = "http://libspectre.freedesktop.org/";
     description = "PostScript rendering library";
 
     longDescription = ''
@@ -27,7 +32,7 @@ stdenv.mkDerivation rec {
       handling and rendering Postscript documents.
     '';
 
-    license = stdenv.lib.licenses.gpl2Plus;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
   };
 }

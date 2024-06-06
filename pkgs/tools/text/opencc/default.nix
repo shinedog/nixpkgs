@@ -1,19 +1,33 @@
-{ stdenv, fetchurl, cmake, python }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  cmake,
+  python3,
+  opencc,
+}:
 
-stdenv.mkDerivation {
-  name = "opencc-1.0.4";
-  src = fetchurl {
-    url = "https://github.com/BYVoid/OpenCC/archive/ver.1.0.4.tar.gz";
-    sha256 = "0553b7461ebd379d118d45d7f40f8a6e272750115bdbc49267595a05ee3481ac";
+stdenv.mkDerivation rec {
+  pname = "opencc";
+  version = "1.1.7";
+
+  src = fetchFromGitHub {
+    owner = "BYVoid";
+    repo = "OpenCC";
+    rev = "ver.${version}";
+    sha256 = "sha256-N7nazA0xoQ2ewOGDiJg1vBBYMdF1/qiCfNjG5CFFbuk=";
   };
 
-  buildInputs = [ cmake python ];
+  nativeBuildInputs =
+    [
+      cmake
+      python3
+    ]
+    ++ lib.optionals (!stdenv.buildPlatform.canExecute stdenv.hostPlatform) [
+      opencc # opencc_dict
+    ];
 
-  cmakeFlags = [
-    "-DBUILD_SHARED_LIBS=OFF"
-  ];
-
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = "https://github.com/BYVoid/OpenCC";
     license = licenses.asl20;
     description = "A project for conversion between Traditional and Simplified Chinese";
@@ -23,7 +37,7 @@ stdenv.mkDerivation {
       phrase-level conversion, variant conversion and regional idioms among Mainland China,
       Taiwan and Hong kong.
     '';
-    maintainers = [ maintainers.mingchuan ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ sifmelcara ];
+    platforms = with platforms; linux ++ darwin;
   };
 }

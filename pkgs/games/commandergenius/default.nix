@@ -1,30 +1,48 @@
-{ lib, stdenv, fetchFromGitHub, SDL2, SDL2_image, pkgconfig
-, libvorbis, mesa_noglu, boost, cmake }:
-
+{ lib
+, stdenv
+, fetchFromGitLab
+, SDL2
+, SDL2_image
+, pkg-config
+, libvorbis
+, libGL
+, boost
+, cmake
+, zlib
+, curl
+, SDL2_mixer
+, SDL2_ttf
+, python3
+}:
 
 stdenv.mkDerivation rec {
-  name = "commandergenius-${version}";
-  version = "1822release";
+  pname = "commandergenius";
+  version = "3.5.0";
 
-  src = fetchFromGitHub {
-    owner = "gerstrong";
+  src = fetchFromGitLab {
+    owner = "Dringgstein";
     repo = "Commander-Genius";
     rev = "v${version}";
-    sha256 = "07vxg8p1dnnkajzs5nifxpwn4mdd1hxsw05jl25gvaimpl9p2qc8";
+    hash = "sha256-w5DP7vkvWOs8qcHqoQaEWHnaBwUoi1I4gnE+Z3haHxE=";
   };
 
-  buildInputs = [ SDL2 SDL2_image mesa_noglu boost libvorbis ];
+  buildInputs = [ SDL2 SDL2_image SDL2_mixer SDL2_ttf libGL boost libvorbis zlib curl python3 ];
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  preConfigure = ''
+    export cmakeFlags="$cmakeFlags -DCMAKE_INSTALL_PREFIX=$out -DSHAREDIR=$out/share"
+    export makeFlags="$makeFlags DESTDIR=$(out)"
+  '';
+
+  nativeBuildInputs = [ cmake pkg-config ];
 
   postPatch = ''
     NIX_CFLAGS_COMPILE="$NIX_CFLAGS_COMPILE $(sdl2-config --cflags)"
     sed -i 's,APPDIR games,APPDIR bin,' src/install.cmake
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Modern Interpreter for the Commander Keen Games";
-    longdescription = ''
+    longDescription = ''
       Commander Genius is an open-source clone of
       Commander Keen which allows you to play
       the games, and some of the mods

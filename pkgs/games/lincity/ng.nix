@@ -1,39 +1,85 @@
-{stdenv, fetchurl
-, zlib, jam, pkgconfig, gettext, libxml2, libxslt, xproto, libX11, mesa, SDL
-, SDL_mixer, SDL_image, SDL_ttf, SDL_gfx, physfs
+{ stdenv
+, SDL2
+, SDL2_gfx
+, SDL2_image
+, SDL2_mixer
+, SDL2_ttf
+, autoreconfHook
+, fetchFromGitHub
+, jam
+, lib
+, libGL
+, libGLU
+, libX11
+, libxml2
+, libxslt
+, physfs
+, pkg-config
+, xorgproto
+, zlib
 }:
-let s = # Generated upstream information
-  rec {
-    baseName="lincity";
-    version="2.0";
-    name="lincity-2.0";
-    hash="01k6n304qj0z5zmqr49gqirp0jmx2b0cpisgkxk1ga67vyjhdcm6";
-    url="http://pkgs.fedoraproject.org/repo/pkgs/lincity-ng/lincity-ng-2.0.tar.bz2"
-      + "/1bd0f58e0f2b131d70044f4230600ed1/lincity-ng-2.0.tar.bz2";
-      # berlios shut down; I found no better mirror
-    sha256="01k6n304qj0z5zmqr49gqirp0jmx2b0cpisgkxk1ga67vyjhdcm6";
-  };
-  buildInputs = [zlib jam pkgconfig gettext libxml2 libxslt xproto libX11 mesa 
-    SDL SDL_mixer SDL_image SDL_ttf SDL_gfx physfs];
-in
-stdenv.mkDerivation rec {
-  inherit (s) name version;
-  src = fetchurl {
-    inherit (s) url sha256;
+
+stdenv.mkDerivation {
+  pname = "lincity-ng";
+  version = "2.9beta.20211125";
+
+  src = fetchFromGitHub {
+    owner = "lincity-ng";
+    repo = "lincity-ng";
+    rev = "b9062bec252632ca5d26b98d71453b8762c63173";
+    sha256 = "0l07cn8rmpmlqdppjc2ikh5c7xmwib27504zpmn3n9pryp394r46";
   };
 
   hardeningDisable = [ "format" ];
 
-  inherit buildInputs;
+  nativeBuildInputs = [
+    autoreconfHook
+    jam
+    pkg-config
+  ];
 
-  buildPhase = "jam";
-  installPhase="jam install";
+  buildInputs = [
+    SDL2
+    SDL2_gfx
+    SDL2_image
+    SDL2_mixer
+    SDL2_ttf
+    libGL
+    libGLU
+    libX11
+    libxml2
+    libxslt
+    physfs
+    xorgproto
+    zlib
+  ];
 
-  meta = {
-    documentation = ''City building game'';
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    inherit (s) version;
+  autoreconfPhase = ''
+    ./autogen.sh
+  '';
+
+  buildPhase = ''
+    runHook preBuild
+
+    AR='ar r' jam -j $NIX_BUILD_CORES
+
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+
+    touch CREDITS
+    AR='ar r' jam install
+
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    description = "City building game";
+    mainProgram = "lincity-ng";
+    license = licenses.gpl2;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.linux;
   };
 }

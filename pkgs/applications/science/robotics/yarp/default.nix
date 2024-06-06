@@ -1,19 +1,18 @@
-{ stdenv, fetchFromGitHub, pkgconfig, cmake, ace
+{ lib, stdenv, fetchFromGitHub, cmake, ace
 }:
 
 stdenv.mkDerivation rec {
-  name = "yarp-${version}";
-  version = "2.3.68";
+  pname = "yarp";
+  version = "2.3.70.2";
   src = fetchFromGitHub {
     owner = "robotology";
     repo = "yarp";
     rev = "v${version}";
-    sha256 = "1ksz2kv4v14fqgz3fsvvmdk2sikhnxr11jhhf7c2547x6jbzhda6";
+    sha256 = "0mphh899niy30xbjjwi9xpsliq8mladfldbbbjfngdrqfhiray1a";
   };
 
-  buildInputs = [ cmake ace ];
-
-  enableParallelBuilding = true;
+  nativeBuildInputs = [ cmake ];
+  buildInputs = [ ace ];
 
   cmakeFlags = [
     "-DYARP_COMPILE_UNMAINTAINED:BOOL=ON"
@@ -28,10 +27,10 @@ stdenv.mkDerivation rec {
 
   meta = {
     description = "Yet Another Robot Platform";
-    homepage = http://yarp.it;
-    license = stdenv.lib.licenses.lgpl21;
-    platforms = stdenv.lib.platforms.linux;
-    maintainers = [ stdenv.lib.maintainers.nico202 ];
+    homepage = "http://yarp.it";
+    license = lib.licenses.lgpl21;
+    platforms = lib.platforms.linux;
+    maintainers = [ lib.maintainers.nico202 ];
   };
 }
 

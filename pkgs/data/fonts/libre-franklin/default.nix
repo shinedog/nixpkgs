@@ -1,25 +1,28 @@
-{ stdenv, fetchFromGitHub }:
+{ lib, stdenvNoCC, fetchFromGitHub }:
 
-stdenv.mkDerivation rec {
-  name = "libre-franklin-1.014";
+stdenvNoCC.mkDerivation rec {
+  pname = "libre-franklin";
+  version = "1.014";
 
   src = fetchFromGitHub {
     owner = "impallari";
     repo = "Libre-Franklin";
     rev = "006293f34c47bd752fdcf91807510bc3f91a0bd3";
-    sha256 = "0df41cqhw5dz3g641n4nd2jlqjf5m4fkv067afk3759m4hg4l78r";
+    hash = "sha256-GR1KHiQ1lTOmU8eAPR2pxUlMpWiW2EDMG78VDjELxDU=";
   };
 
   installPhase = ''
-    mkdir -p $out/share/fonts/opentype
-    mkdir -p $out/share/doc/${name}
-    cp -v "fonts/OTF/"*.otf $out/share/fonts/opentype/
-    cp -v README.md FONTLOG.txt $out/share/doc/${name}
+    runHook preInstall
+
+    install -m444 -Dt $out/share/fonts/opentype */OTF/*.otf
+    install -m444 -Dt $out/share/doc/${pname}-${version} README.md FONTLOG.txt
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A reinterpretation and expansion based on the 1912 Morris Fuller Benton’s classic.";
-    homepage = https://github.com/impallari/Libre-Franklin;
+    homepage = "https://github.com/impallari/Libre-Franklin";
     license = licenses.ofl;
     maintainers = with maintainers; [ cmfwyp ];
     platforms = platforms.all;

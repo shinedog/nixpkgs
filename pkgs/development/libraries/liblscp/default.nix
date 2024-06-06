@@ -1,21 +1,22 @@
-{ stdenv, fetchsvn, autoconf, automake, libtool, pkgconfig }:
+{ lib, stdenv, fetchurl, autoconf, automake, libtool, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "liblscp-svn-${version}";
-  version = "2319";
+  pname = "liblscp";
+  version = "0.9.4";
 
-  src = fetchsvn {
-    url = "https://svn.linuxsampler.org/svn/liblscp/trunk";
-    rev = "${version}";
-    sha256 = "0jgdy9gi9n8x2pqrbll9158vhx8293lnxv8vzl0szcincslgk7hi";
+  src = fetchurl {
+    url = "https://download.linuxsampler.org/packages/${pname}-${version}.tar.gz";
+    sha256 = "sha256-8+3qHgIv32wfNHHggXID1W8M7pTqji4bHNGob3DTkho=";
   };
 
-  buildInputs = [ autoconf automake libtool pkgconfig ];
+  nativeBuildInputs = [ autoconf automake libtool pkg-config ];
 
-  preConfigure = "make -f Makefile.svn";
+  preConfigure = "make -f Makefile.git";
 
-  meta = with stdenv.lib; {
-    homepage = http://www.linuxsampler.org;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "http://www.linuxsampler.org";
     description = "LinuxSampler Control Protocol (LSCP) wrapper library";
     license = licenses.gpl2;
     maintainers = [ maintainers.goibhniu ];

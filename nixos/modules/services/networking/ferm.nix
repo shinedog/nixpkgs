@@ -19,7 +19,6 @@ in {
     services.ferm = {
       enable = mkOption {
         default = false;
-        example = true;
         type = types.bool;
         description = ''
           Whether to enable Ferm Firewall.
@@ -31,15 +30,10 @@ in {
       config = mkOption {
         description = "Verbatim ferm.conf configuration.";
         default = "";
-        defaultText = "empty firewall, allows any traffic";
+        defaultText = literalMD "empty firewall, allows any traffic";
         type = types.lines;
       };
-      package = mkOption {
-        description = "The ferm package.";
-        type = types.package;
-        default = pkgs.ferm;
-        defaultText = "pkgs.ferm";
-      };
+      package = mkPackageOption pkgs "ferm" { };
     };
   };
 
@@ -51,6 +45,7 @@ in {
       before = [ "network-pre.target" ];
       wants = [ "network-pre.target" ];
       wantedBy = [ "multi-user.target" ];
+      reloadIfChanged = true;
       serviceConfig = {
         Type="oneshot";
         RemainAfterExit = "yes";

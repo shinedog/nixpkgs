@@ -1,120 +1,151 @@
-{ stdenv, fetchFromGitHub, boost, cairo, fontsConf, gettext, glibmm, gtk3, gtkmm3
-, libjack2, libsigcxx, libtool, libxmlxx, makeWrapper, mlt-qt5, pango, pkgconfig
-, imagemagick, intltool, autoreconfHook, which, defaultIconTheme
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, pkg-config
+, autoreconfHook
+, wrapGAppsHook3
+
+, boost
+, cairo
+, gettext
+, glibmm
+, gtk3
+, gtkmm3
+, libjack2
+, libsigcxx
+, libxmlxx
+, mlt
+, pango
+, imagemagick
+, intltool
+, gnome
+, harfbuzz
+, freetype
+, fribidi
+, openexr
+, fftw
 }:
 
 let
-  version = "1.0.2";
-
-  ETL = stdenv.mkDerivation rec {
-    name = "ETL-0.04.19";
-
-    src = fetchFromGitHub {
-       repo   = "synfig";
-       owner  = "synfig";
-       rev    = version;
-       sha256 = "09ldkvzczqvb1yvlibd62y56dkyprxlr0w3rk38rcs7jnrhj2cqc";
-    };
-
-    postUnpack = "sourceRoot=\${sourceRoot}/ETL/";
-
-    buildInputs = [ autoreconfHook ];
+  version = "1.5.1";
+  src = fetchFromGitHub {
+    owner = "synfig";
+    repo = "synfig";
+    rev = "v${version}";
+    hash = "sha256-9vBYESaSgW/1FWH2uFBvPiYvxLlX0LLNnd4S7ACJcwI=";
   };
 
-  synfig = stdenv.mkDerivation rec {
-    name = "synfig-${version}";
+  ETL = stdenv.mkDerivation {
+    pname = "ETL";
+    inherit version src;
 
-    src = fetchFromGitHub {
-       repo   = "synfig";
-       owner  = "synfig";
-       rev    = version;
-       sha256 = "09ldkvzczqvb1yvlibd62y56dkyprxlr0w3rk38rcs7jnrhj2cqc";
-    };
+    sourceRoot = "${src.name}/ETL";
 
-    postUnpack = "sourceRoot=\${sourceRoot}/synfig-core/";
+    nativeBuildInputs = [
+      pkg-config
+      autoreconfHook
+    ];
+    buildInputs = [
+      glibmm
+    ];
+  };
+
+  synfig = stdenv.mkDerivation {
+    pname = "synfig";
+    inherit version src;
+
+    patches = [
+      # Pull upstream fix for autoconf-2.72 support:
+      #   https://github.com/synfig/synfig/pull/2930
+      (fetchpatch {
+        name = "autoconf-2.72.patch";
+        url = "https://github.com/synfig/synfig/commit/80a3386c701049f597cf3642bb924d2ff832ae05.patch";
+        stripLen = 1;
+        hash = "sha256-7gX8tJCR81gw8ZDyNYa8UaeZFNOx4o1Lnq0cAcaKb2I=";
+      })
+    ];
+
+    sourceRoot = "${src.name}/synfig-core";
 
     configureFlags = [
       "--with-boost=${boost.dev}"
       "--with-boost-libdir=${boost.out}/lib"
     ];
 
+    nativeBuildInputs = [
+      pkg-config
+      autoreconfHook
+      gettext
+      intltool
+    ];
     buildInputs = [
-      ETL boost cairo gettext glibmm mlt-qt5 libsigcxx libxmlxx pango
-      pkgconfig autoreconfHook
+      ETL
+      boost
+      cairo
+      glibmm
+      mlt
+      libsigcxx
+      libxmlxx
+      pango
+      imagemagick
+      harfbuzz
+      freetype
+      fribidi
+      openexr
+      fftw
     ];
   };
 in
-stdenv.mkDerivation rec {
-  name = "synfigstudio-${version}";
+stdenv.mkDerivation {
+  pname = "synfigstudio";
+  inherit version src;
 
-  src = fetchFromGitHub {
-     repo   = "synfig";
-     owner  = "synfig";
-     rev    = version;
-     sha256 = "09ldkvzczqvb1yvlibd62y56dkyprxlr0w3rk38rcs7jnrhj2cqc";
-  };
-
-  postUnpack = "sourceRoot=\${sourceRoot}/synfig-studio/";
+  sourceRoot = "${src.name}/synfig-studio";
 
   postPatch = ''
-    for i in \
-      brushlib/brushlib.hpp \
-      gui/canvasview.cpp \
-      gui/compview.cpp \
-      gui/docks/dock_canvasspecific.cpp \
-      gui/docks/dock_children.cpp \
-      gui/docks/dock_curves.cpp \
-      gui/docks/dock_history.cpp \
-      gui/docks/dock_keyframes.cpp \
-      gui/docks/dock_layergroups.cpp \
-      gui/docks/dock_layers.cpp \
-      gui/docks/dock_metadata.cpp \
-      gui/docks/dock_params.cpp \
-      gui/docks/dock_timetrack.cpp \
-      gui/docks/dock_toolbox.cpp \
-      gui/docks/dockable.cpp \
-      gui/docks/dockdialog.cpp \
-      gui/docks/dockmanager.h \
-      gui/duck.h \
-      gui/duckmatic.cpp \
-      gui/duckmatic.h \
-      gui/instance.cpp \
-      gui/instance.h \
-      gui/states/state_stroke.h \
-      gui/states/state_zoom.cpp \
-      gui/widgets/widget_curves.cpp \
-      gui/workarea.cpp \
-      gui/workarearenderer/workarearenderer.h \
-      synfigapp/action_system.h \
-      synfigapp/canvasinterface.h \
-      synfigapp/instance.h \
-      synfigapp/main.h \
-      synfigapp/uimanager.h
-    do
-      substituteInPlace src/"$i" --replace '#include <sigc++/object.h>' '#include <sigc++/sigc++.h>'
-      substituteInPlace src/"$i" --replace '#include <sigc++/hide.h>' '#include <sigc++/adaptors/hide.h>'
-      substituteInPlace src/"$i" --replace '#include <sigc++/retype.h>' '#include <sigc++/adaptors/retype.h>'
-    done
+    patchShebangs images/splash_screen_development.sh
   '';
 
-  preConfigure = "./bootstrap.sh";
+  preConfigure = ''
+    ./bootstrap.sh
+  '';
 
-  buildInputs = [
-    ETL boost cairo gettext glibmm gtk3 gtkmm3 imagemagick intltool
-    libjack2 libsigcxx libxmlxx makeWrapper mlt-qt5 pkgconfig
-    synfig autoreconfHook which defaultIconTheme
+  nativeBuildInputs = [
+    pkg-config
+    autoreconfHook
+    gettext
+    intltool
+    wrapGAppsHook3
   ];
-
-  postInstall = ''
-    wrapProgram "$out/bin/synfigstudio" \
-      --prefix XDG_DATA_DIRS : "$XDG_ICON_DIRS:$GSETTINGS_SCHEMAS_PATH"
-  '';
+  buildInputs = [
+    ETL
+    synfig
+    boost
+    cairo
+    glibmm
+    gtk3
+    gtkmm3
+    imagemagick
+    libjack2
+    libsigcxx
+    libxmlxx
+    mlt
+    gnome.adwaita-icon-theme
+    openexr
+    fftw
+  ];
 
   enableParallelBuilding = true;
 
-  meta = with stdenv.lib; {
+  passthru = {
+    # Expose libraries and cli tools
+    inherit ETL synfig;
+  };
+
+  meta = with lib; {
     description = "A 2D animation program";
-    homepage = http://www.synfig.org;
+    homepage = "http://www.synfig.org";
     license = licenses.gpl2Plus;
     maintainers = [ maintainers.goibhniu ];
     platforms = platforms.linux;

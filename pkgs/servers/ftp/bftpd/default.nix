@@ -1,24 +1,42 @@
-{stdenv, fetchurl}:
+{ lib, stdenv, fetchurl, libxcrypt }:
+
 stdenv.mkDerivation rec {
-  name = "${pname}-${version}";
   pname = "bftpd";
-  version = "4.4";
-  # or fetchFromGitHub(owner,repo,rev) or fetchgit(rev)
+  version = "6.2";
+
   src = fetchurl {
-    url = "mirror://sourceforge/project/${pname}/${pname}/${name}/${name}.tar.gz";
-    sha256 = "0hgpqwv7mj1yln8ps9bbcjhl5hvs02nxjfkk9nhkr6fysfyyn1dq";
+    url = "mirror://sourceforge/project/${pname}/${pname}/${pname}-${version}/${pname}-${version}.tar.gz";
+    sha256 = "sha256-lZGFsUV6LNjkBNUpV9UYedVt1yt1qTBJUorxGt4ApsI=";
   };
-  buildInputs = [];
+
+  # utmp.h is deprecated on aarch64-darwin
+  postPatch = lib.optionals (stdenv.isDarwin && stdenv.isAarch64) ''
+    for file in login.*; do
+      substituteInPlace $file --replace "#ifdef HAVE_UTMP_H" "#if 0"
+    done
+  '';
+
+  buildInputs = [ libxcrypt ];
+
   preConfigure = ''
     sed -re 's/-[og] 0//g' -i Makefile*
   '';
-  meta = {
-    inherit version;
-    description = ''A minimal ftp server'';
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [stdenv.lib.maintainers.raskin];
-    platforms = stdenv.lib.platforms.linux;
-    homepage = "http://bftpd.sf.net/";
+
+  postInstall = ''
+    mkdir -p $out/share/doc/${pname}
+    mv $out/etc/*.conf $out/share/doc/${pname}
+    rm -rf $out/{etc,var}
+  '';
+
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    description = "A minimal ftp server";
+    mainProgram = "bftpd";
     downloadPage = "http://bftpd.sf.net/download.html";
+    homepage = "http://bftpd.sf.net/";
+    license = licenses.gpl2Plus;
+    maintainers = with maintainers; [ raskin ];
+    platforms = platforms.all;
   };
 }

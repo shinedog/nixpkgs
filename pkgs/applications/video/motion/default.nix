@@ -1,20 +1,29 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, libjpeg, ffmpeg }:
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, pkg-config
+, ffmpeg, libjpeg, libmicrohttpd }:
 
 stdenv.mkDerivation rec {
-  name = "motion-${version}";
-  version = "4.0.1";
+  pname = "motion";
+  version = "4.6.0";
+
   src = fetchFromGitHub {
-    owner = "Motion-Project";
-    repo = "motion";
-    rev = "release-${version}";
-    sha256 = "172bn2ny5r9fcb4kn9bjq3znpgl8ai84w4b99vhk5jggp2haa3bb";
+    owner  = "Motion-Project";
+    repo   = "motion";
+    rev    = "release-${version}";
+    sha256 = "sha256-f23glk91HWSEW/Glq/DdEikTQeg1eELEg4XG9zTsU78=";
   };
-  nativeBuildInputs = [ autoreconfHook pkgconfig ];
-  buildInputs = [ libjpeg ffmpeg ];
-  meta = with stdenv.lib; {
-    homepage = http://www.lavrsen.dk/foswiki/bin/view/Motion/WebHome;
+
+  nativeBuildInputs = [ autoreconfHook pkg-config ];
+
+  buildInputs = [ ffmpeg libjpeg libmicrohttpd ];
+
+  meta = with lib; {
     description = "Monitors the video signal from cameras";
+    homepage = "https://motion-project.github.io/";
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.puffnfresh ];
+    maintainers = with maintainers; [ puffnfresh veprbl ];
+    platforms = platforms.unix;
+    # never built on aarch64-darwin since first introduction in nixpkgs
+    broken = stdenv.isDarwin && stdenv.isAarch64;
+    mainProgram = "motion";
   };
 }

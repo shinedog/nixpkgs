@@ -1,16 +1,16 @@
-{ stdenv, fetchurl, makeWrapper, jre, unzip }:
+{ lib, stdenv, fetchurl, makeWrapper, jre, unzip }:
 
 stdenv.mkDerivation rec {
-  version = "1.0.5-2";
-  name = "kotlin-${version}";
+  pname = "kotlin";
+  version = "2.0.0";
 
   src = fetchurl {
     url = "https://github.com/JetBrains/kotlin/releases/download/v${version}/kotlin-compiler-${version}.zip";
-    sha512 = "0z8phc51y8dfjnm95fs2dnmvhp7xm2am5xm71byh598flkpjmagnwah4j8z9fpg4qy94dwmqxf5zs3q8nfra89kmwskzpvp7bbibi0h";
+    sha256 = "sha256-71eHMJdhVP0sWWjXWvjCcDs96Ep43/6RP2cDJuFJ2js=";
   };
 
   propagatedBuildInputs = [ jre ] ;
-  buildInputs = [ makeWrapper unzip ] ;
+  nativeBuildInputs = [ makeWrapper unzip ];
 
   installPhase = ''
     mkdir -p $out
@@ -20,6 +20,11 @@ stdenv.mkDerivation rec {
     for p in $(ls $out/bin/) ; do
       wrapProgram $out/bin/$p --prefix PATH ":" ${jre}/bin ;
     done
+
+    if [ -f $out/LICENSE ]; then
+      install -D $out/LICENSE $out/share/kotlin/LICENSE
+      rm $out/LICENSE
+    fi
   '';
 
   meta = {
@@ -30,10 +35,9 @@ stdenv.mkDerivation rec {
       It is developed by a team at JetBrains although it is an OSS language
       and has external contributors.
     '';
-    homepage = http://kotlinlang.org/;
-    license = stdenv.lib.licenses.asl20;
-    maintainers = with stdenv.lib.maintainers;
-      [ nequissimus ];
-    platforms = stdenv.lib.platforms.all;
+    homepage = "https://kotlinlang.org/";
+    license = lib.licenses.asl20;
+    maintainers = with lib.maintainers; [ SubhrajyotiSen ];
+    platforms = lib.platforms.all;
   };
 }

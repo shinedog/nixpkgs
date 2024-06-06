@@ -1,39 +1,46 @@
-{ stdenv, buildOcaml, fetchFromGitHub, findlib, ocamlbuild, ocaml_oasis
-, ppx_tools, ppx_sexp_conv, result, x509, nocrypto, cstruct, ounit
-, lwt     ? null}:
+{ lib, fetchurl, buildDunePackage
+, cstruct, domain-name, fmt, logs, hkdf, mirage-crypto, mirage-crypto-ec, mirage-crypto-pk, mirage-crypto-rng, lwt, ptime, x509
+, ipaddr
+, alcotest, cstruct-unix, ounit2, randomconv
+}:
 
-with stdenv.lib;
+buildDunePackage rec {
+  pname = "tls";
+  version = "0.17.3";
 
-let withLwt = lwt != null; in
-
-buildOcaml rec {
-  version = "0.7.1";
-  name = "tls";
-
-  minimunSupportedOcamlVersion = "4.02";
-
-  src = fetchFromGitHub {
-    owner  = "mirleft";
-    repo   = "ocaml-tls";
-    rev    = "${version}";
-    sha256 = "19q2hzxiasz9pzczgb63kikg0mc9mw98dfvch5falf2rincycj24";
+  src = fetchurl {
+    url = "https://github.com/mirleft/ocaml-tls/releases/download/v${version}/tls-${version}.tbz";
+    hash = "sha256-R+XezdMO0cNnc2RYpjrgd0dBR7PdZ1wUWQuBqS1QMdQ=";
   };
 
-  buildInputs = [ ocamlbuild findlib ocaml_oasis ppx_sexp_conv ounit ];
-  propagatedBuildInputs = [ cstruct nocrypto result x509 ] ++
-                          optional withLwt lwt;
+  minimalOCamlVersion = "4.08";
 
-  configureFlags = [ "--disable-mirage" "--enable-tests" ] ++
-                   optional withLwt ["--enable-lwt"];
-
-  configurePhase = "./configure --prefix $out $configureFlags";
+  propagatedBuildInputs = [
+    cstruct
+    domain-name
+    fmt
+    logs
+    hkdf
+    mirage-crypto
+    mirage-crypto-ec
+    mirage-crypto-pk
+    mirage-crypto-rng
+    lwt
+    ptime
+    x509
+    ipaddr
+  ];
 
   doCheck = true;
-  checkTarget = "test";
-  createFindlibDestdir = true;
+  checkInputs = [
+    alcotest
+    cstruct-unix
+    ounit2
+    randomconv
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/mirleft/ocaml-tls;
+  meta = with lib; {
+    homepage = "https://github.com/mirleft/ocaml-tls";
     description = "TLS in pure OCaml";
     license = licenses.bsd2;
     maintainers = with maintainers; [ sternenseemann ];

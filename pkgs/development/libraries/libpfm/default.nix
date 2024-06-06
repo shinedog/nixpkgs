@@ -1,17 +1,43 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+, enableShared ? !stdenv.hostPlatform.isStatic
+, windows
+}:
 
-stdenv.mkDerivation rec {
-  version = "4.5.0";
-  name = "libpfm-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  version = "4.13.0";
+  pname = "libpfm";
 
   src = fetchurl {
-    url = "mirror://sourceforge/perfmon2/libpfm4/${name}.tar.gz";
-    sha1 = "857eb066724e2a5b723d6802d217c8eddff79082";
+    url = "mirror://sourceforge/perfmon2/libpfm4/libpfm-${finalAttrs.version}.tar.gz";
+    sha256 = "sha256-0YuXdkx1VSjBBR03bjNUXQ62DG6/hWgENoE/pbBMw9E=";
   };
 
-  installFlags = "DESTDIR=\${out} PREFIX= LDCONFIG=true";
+  # Don't install libpfm.so on windows as it doesn't exist
+  # This target is created only if `ifeq ($(SYS),Linux)` passes
+  patches = [ ./fix-windows.patch ];
 
-  meta = with stdenv.lib; {
+  # Upstream uses "WINDOWS" instead of "Windows" which is incorrect
+  # See: https://github.com/NixOS/nixpkgs/pull/252982#discussion_r1314346216
+  postPatch = ''
+    substituteInPlace config.mk examples/Makefile \
+      --replace '($(SYS),WINDOWS)' '($(SYS),Windows)'
+  '';
+
+  makeFlags = [
+    "PREFIX=${placeholder "out"}"
+    "LDCONFIG=true"
+    "ARCH=${stdenv.hostPlatform.uname.processor}"
+    "SYS=${stdenv.hostPlatform.uname.system}"
+  ];
+
+  env.NIX_CFLAGS_COMPILE = "-Wno-error";
+  env.CONFIG_PFMLIB_SHARED = if enableShared then "y" else "n";
+
+  buildInputs = lib.optional stdenv.hostPlatform.isWindows windows.libgnurx;
+
+  meta = with lib; {
     description = "Helper library to program the performance monitoring events";
     longDescription = ''
       This package provides a library, called libpfm4 which is used to
@@ -20,7 +46,7 @@ stdenv.mkDerivation rec {
       (PMU) of modern processors.
     '';
     license = licenses.gpl2;
-    maintainers = [ maintainers.pierron ];
-    platforms = platforms.all;
+    maintainers = with maintainers; [ pierron t4ccer ];
+    platforms = platforms.linux ++ platforms.windows;
   };
-}
+})

@@ -1,7 +1,38 @@
-{ stdenv, fetchurl, bison, flex, gettext, pkgconfig, libpng
-, libtheora, openal, physfs, mesa, fribidi, fontconfig
-, freetype, qt4, glew, libogg, libvorbis, zlib, libX11
-, libXrandr, zip, unzip, which, perl
+{ lib
+, stdenv
+, fetchurl
+, cmake
+, ninja
+, p7zip
+, pkg-config
+, asciidoctor
+, gettext
+
+, SDL2
+, libtheora
+, libvorbis
+, libopus
+, openal
+, openalSoft
+, physfs
+, miniupnpc
+, libsodium
+, curl
+, libpng
+, freetype
+, harfbuzz
+, sqlite
+, which
+, vulkan-headers
+, vulkan-loader
+, shaderc
+
+, testers
+, warzone2100
+, nixosTests
+
+, gitUpdater
+
 , withVideos ? false
 }:
 
@@ -13,32 +44,86 @@ let
   };
 in
 
-stdenv.mkDerivation rec {
-  version = "3.1.5";
-  name = "${pname}-${version}";
+stdenv.mkDerivation (finalAttrs: {
+  inherit pname;
+  version  = "4.4.2";
+
   src = fetchurl {
-    url = "mirror://sourceforge/${pname}/releases/${version}/${name}.tar.xz";
-    sha256 = "0hm49i2knvvg3wlnryv7h4m84s3qa7jfyym5yy6365sx8wzcrai1";
+    url = "mirror://sourceforge/project/warzone2100/releases/${finalAttrs.version}/warzone2100_src.tar.xz";
+    hash = "sha256-O5Yqxqp1vKYr8uvAZ1SdsI/kocOzg0KRCirCqqvLrN4=";
   };
-  buildInputs = [ bison flex gettext pkgconfig libpng libtheora openal
-                  physfs mesa fribidi fontconfig freetype qt4
-                  glew libogg libvorbis zlib libX11 libXrandr zip
-                  unzip perl
-                ];
-  patchPhase = ''
+
+  buildInputs = [
+    SDL2
+    libtheora
+    libvorbis
+    libopus
+    openal
+    openalSoft
+    physfs
+    miniupnpc
+    libsodium
+    curl
+    libpng
+    freetype
+    harfbuzz
+    sqlite
+  ] ++ lib.optionals (!stdenv.isDarwin) [
+    vulkan-headers
+    vulkan-loader
+  ];
+
+  nativeBuildInputs = [
+    pkg-config
+    cmake
+    ninja
+    p7zip
+    asciidoctor
+    gettext
+    shaderc
+  ];
+
+  postPatch = ''
     substituteInPlace lib/exceptionhandler/dumpinfo.cpp \
-                      --replace "which %s" "${which}/bin/which %s"
+                      --replace '"which "' '"${which}/bin/which "'
     substituteInPlace lib/exceptionhandler/exceptionhandler.cpp \
                       --replace "which %s" "${which}/bin/which %s"
   '';
-  configureFlags = "--with-backend=qt --with-distributor=NixOS";
 
-  NIX_CFLAGS_COMPILE = "-fpermissive"; # GL header minor incompatibility
+  cmakeFlags = [
+    "-DWZ_DISTRIBUTOR=NixOS"
+    # The cmake builder automatically sets CMAKE_INSTALL_BINDIR to an absolute
+    # path, but this results in an error:
+    #
+    # > An absolute CMAKE_INSTALL_BINDIR path cannot be used if the following
+    # > are not also absolute paths: WZ_DATADIR
+    #
+    # WZ_DATADIR is based on CMAKE_INSTALL_DATAROOTDIR, so we set that.
+    #
+    # Alternatively, we could have set CMAKE_INSTALL_BINDIR to "bin".
+    "-DCMAKE_INSTALL_DATAROOTDIR=${placeholder "out"}/share"
+  ] ++ lib.optional stdenv.isDarwin "-P../configure_mac.cmake";
 
-  postInstall = stdenv.lib.optionalString withVideos "cp ${sequences_src} $out/share/warzone2100/sequences.wz";
+  postInstall = lib.optionalString withVideos ''
+    cp ${sequences_src} $out/share/warzone2100/sequences.wz
+  '';
 
-  meta = with stdenv.lib; {
+  passthru.tests = {
+    version = testers.testVersion {
+      package = warzone2100;
+      # The command always exits with code 1
+      command = "(warzone2100 --version || [ $? -eq 1 ])";
+    };
+    nixosTest = nixosTests.warzone2100;
+  };
+
+  passthru.updateScript = gitUpdater {
+    url = "https://github.com/Warzone2100/warzone2100";
+  };
+
+  meta = with lib; {
     description = "A free RTS game, originally developed by Pumpkin Studios";
+    mainProgram = "warzone2100";
     longDescription = ''
         Warzone 2100 is an open source real-time strategy and real-time tactics
       hybrid computer game, originally developed by Pumpkin Studios and
@@ -50,9 +135,12 @@ stdenv.mkDerivation rec {
       technologies, combined with the unit design system, allows for a wide
       variety of possible units and tactics.
     '';
-    homepage = http://wz2100.net;
+    homepage = "https://wz2100.net";
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.astsmtl ];
-    platforms = platforms.linux;
+    maintainers = with maintainers; [ astsmtl fgaz ];
+    platforms = platforms.all;
+    # configure_mac.cmake tries to download stuff
+    # https://github.com/Warzone2100/warzone2100/blob/master/macosx/README.md
+    broken = stdenv.isDarwin;
   };
-}
+})

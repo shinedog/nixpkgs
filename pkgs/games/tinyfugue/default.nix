@@ -1,14 +1,21 @@
-{ stdenv, fetchurl, ncurses, zlib
+{ lib, stdenv, fetchurl, ncurses, zlib
 , openssl ? null
 , sslSupport ? true
 }:
 
-with stdenv.lib;
-
 assert sslSupport -> openssl != null;
 
+let
+  inherit (lib)
+    licenses
+    maintainers
+    optional
+    platforms
+    ;
+in
+
 stdenv.mkDerivation rec {
-  name = "tinyfugue-${version}";
+  pname = "tinyfugue";
   version = "50b8";
   verUrl = "5.0%20beta%208";
 
@@ -23,15 +30,22 @@ stdenv.mkDerivation rec {
     [ ncurses zlib ]
     ++ optional sslSupport openssl;
 
+  # Workaround build failure on -fno-common toolchains like upstream
+  # gcc-10. Otherwise build fails as:
+  #   ld: world.o:/build/tf-50b8/src/socket.h:24: multiple definition of
+  #     `world_decl'; command.o:/build/tf-50b8/src/socket.h:24: first defined here
+  env.NIX_CFLAGS_COMPILE = "-fcommon";
+
   meta = {
-    homepage = http://tinyfugue.sourceforge.net/;
+    homepage = "https://tinyfugue.sourceforge.net/";
     description = "A terminal UI, screen-oriented MUD client";
+    mainProgram = "tf";
     longDescription = ''
       TinyFugue, aka "tf", is a flexible, screen-oriented MUD client, for use
       with any type of text MUD.
     '';
     license = licenses.gpl2;
-    platforms = ncurses.meta.platforms;
+    platforms = platforms.linux;
     maintainers = [ maintainers.KibaFox ];
   };
 }

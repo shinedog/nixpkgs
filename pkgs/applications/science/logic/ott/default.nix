@@ -1,29 +1,35 @@
-# - coqide compilation can be disabled by setting lablgtk to null;
-
-{stdenv, fetchurl, pkgconfig, ocaml, camlp5}:
+{ lib, stdenv, fetchFromGitHub, pkg-config, ocamlPackages, opaline }:
 
 stdenv.mkDerivation rec {
-  name = "ott-${version}";
-  version = "0.25";
+  pname = "ott";
+  version = "0.33";
 
-  src = fetchurl {
-    url = "http://www.cl.cam.ac.uk/~pes20/ott/ott_distro_${version}.tar.gz";
-    sha256 = "0i8ad1yrz9nrrgpi8db4z0aii5s0sy35mmzdfw5nq183mvbx8qqd";
+  src = fetchFromGitHub {
+    owner = "ott-lang";
+    repo = "ott";
+    rev = version;
+    hash = "sha256-GzeEiok5kigcmfqf/K/UxvlKkl55zy0vOyiRZ2HyMiE=";
   };
 
-  buildInputs = [ pkgconfig ocaml camlp5 ];
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp src/ott.opt $out/bin
-    ln -s $out/bin/ott.opt $out/bin/ott
+  strictDeps = true;
 
-    mkdir -p $out/share/emacs/site-lisp
-    cp emacs/ottmode.el $out/share/emacs/site-lisp
-    '';
+  nativeBuildInputs = [ pkg-config opaline ] ++ (with ocamlPackages; [ findlib ocaml ]);
+  buildInputs = with ocamlPackages; [ ocamlgraph ];
+
+  installTargets = "ott.install";
+
+  postInstall = ''
+    opaline -prefix $out
+  ''
+  # There is `emacsPackages.ott-mode` for this now.
+  + ''
+    rm -r $out/share/emacs
+  '';
 
   meta = {
-    description = "Ott: tool for the working semanticist";
+    description = "A tool for the working semanticist";
+    mainProgram = "ott";
     longDescription = ''
       Ott is a tool for writing definitions of programming languages and
       calculi. It takes as input a definition of a language syntax and
@@ -35,9 +41,9 @@ stdenv.mkDerivation rec {
       terms of the defined language, parsing them and replacing them by
       target-system terms.
     '';
-    homepage = http://www.cl.cam.ac.uk/~pes20/ott;
-    license = stdenv.lib.licenses.bsd3;
-    maintainers = with stdenv.lib.maintainers; [ jwiegley ];
-    platforms = stdenv.lib.platforms.unix;
+    homepage = "http://www.cl.cam.ac.uk/~pes20/ott";
+    license = lib.licenses.bsd3;
+    maintainers = with lib.maintainers; [ jwiegley ];
+    platforms = lib.platforms.unix;
   };
 }

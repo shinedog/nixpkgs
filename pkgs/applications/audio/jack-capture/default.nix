@@ -1,15 +1,18 @@
-{ stdenv, fetchurl, libjack2, libsndfile, pkgconfig }:
+{ lib, stdenv, fetchFromGitHub, libjack2, libsndfile, pkg-config }:
 
 stdenv.mkDerivation rec {
-  name = "jack_capture-${version}";
-  version = "0.9.69";
+  pname = "jack_capture";
+  version = "0.9.73.2023-01-04";
 
-  src = fetchurl {
-    url = "http://archive.notam02.no/arkiv/src/${name}.tar.gz";
-    sha256 = "0sk7b92my1v1g7rhkpl1c608rb0rdb28m9zqfll95kflxajd16zv";
+  src = fetchFromGitHub {
+    owner = "kmatheussen";
+    repo = "jack_capture";
+    rev = "a539d444d388c4cfed7279e385830e7767d59c41";
+    sha256 = "sha256-2DavZS4esV17a3vkiPvfCfp0QF94ZcXqdIw84h9HDjA=";
   };
 
-  buildInputs = [ libjack2 libsndfile pkgconfig ];
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ libjack2 libsndfile ];
 
   buildPhase = "PREFIX=$out make jack_capture";
 
@@ -20,11 +23,12 @@ stdenv.mkDerivation rec {
 
   hardeningDisable = [ "format" ];
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A program for recording soundfiles with jack";
-    homepage = http://archive.notam02.no/arkiv/src;
+    mainProgram = "jack_capture";
+    homepage = "https://github.com/kmatheussen/jack_capture/";
     license = licenses.gpl2;
-    maintainers = [ maintainers.goibhniu ];
-    platforms = stdenv.lib.platforms.linux;
+    maintainers = with maintainers; [ goibhniu orivej ];
+    platforms = lib.platforms.linux;
   };
 }

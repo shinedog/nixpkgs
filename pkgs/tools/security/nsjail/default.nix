@@ -1,30 +1,43 @@
-{ stdenv, fetchgit }:
+{ lib, stdenv, fetchFromGitHub, autoconf, bison, flex, libtool, pkg-config, which
+, libnl, protobuf, protobufc, shadow, installShellFiles
+}:
 
 stdenv.mkDerivation rec {
-  name = "nsjail-git-2015-08-10";
+  pname = "nsjail";
+  version = "3.4";
 
-  src = fetchgit {
-    url = https://github.com/google/nsjail;
-    rev = "8b951e6c2827386786cde4a124cd1846d25b9404";
-    sha256 = "02bmwd48l6ngp0nc65flw395mpj66brx3808d5xd19qn5524lnni";
+  src = fetchFromGitHub {
+    owner           = "google";
+    repo            = "nsjail";
+    rev             = version;
+    fetchSubmodules = true;
+    hash            = "sha256-/K+qJV5Dq+my45Cpw6czdsWLtO9lnJwZTsOIRt4Iijk=";
   };
 
-  installPhase = ''
-    mkdir -p $out/bin
-    cp nsjail $out/bin
+  nativeBuildInputs = [ autoconf bison flex installShellFiles libtool pkg-config which ];
+  buildInputs = [ libnl protobuf protobufc ];
+  enableParallelBuilding = true;
+
+  env.NIX_CFLAGS_COMPILE = toString [ "-Wno-error" ];
+
+  preBuild = ''
+    makeFlagsArray+=(USER_DEFINES='-DNEWUIDMAP_PATH=${shadow}/bin/newuidmap -DNEWGIDMAP_PATH=${shadow}/bin/newgidmap')
   '';
 
-  meta = {
-    description = ''
-      A light-weight process isolation tool, making use of Linux namespaces
-      and seccomp-bpf syscall filters
-      '';
-    homepage = http://google.github.io/nsjail;
+  installPhase = ''
+    runHook preInstall
+    install -Dm755 nsjail "$out/bin/nsjail"
+    installManPage nsjail.1
+    runHook postInstall
+  '';
 
-    license = stdenv.lib.licenses.apsl20;
-
-    maintainers = [ stdenv.lib.maintainers.bosu ];
-
-    platforms = stdenv.lib.platforms.linux;
+  meta = with lib; {
+    description = "A light-weight process isolation tool, making use of Linux namespaces and seccomp-bpf syscall filters";
+    homepage    = "https://nsjail.dev/";
+    changelog   = "https://github.com/google/nsjail/releases/tag/${version}";
+    license     = licenses.asl20;
+    maintainers = with maintainers; [ arturcygan bosu c0bw3b ];
+    platforms   = platforms.linux;
+    mainProgram = "nsjail";
   };
 }

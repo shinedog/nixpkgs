@@ -1,21 +1,23 @@
-{ stdenv, fetchurl, pkgconfig, m4, libxcb, xcbutil, libX11 }:
+{ lib, stdenv, fetchurl, pkg-config, m4, libxcb, xcbutil, libX11 }:
 
 stdenv.mkDerivation rec {
-  version = "1.0";
-  name = "xcb-util-xrm-${version}";
+  version = "1.3";
+  pname = "xcb-util-xrm";
 
   src = fetchurl {
-    url = "https://github.com/Airblader/xcb-util-xrm/releases/download/v${version}/${name}.tar.bz2";
-    sha256 = "1h5vxwpd37dqfw9yj1l4zd9c5dj30r3g0szgysr6kd7xrqgaq04l";
+    url = "https://github.com/Airblader/xcb-util-xrm/releases/download/v${version}/${pname}-${version}.tar.bz2";
+    sha256 = "118cj1ybw86pgw0l5whn9vbg5n5b0ijcpx295mwahzi004vz671h";
   };
 
-  buildInputs = [ pkgconfig m4 libxcb xcbutil ]
-    ++ stdenv.lib.optional doCheck libX11;
-  doCheck = true;
+  strictDeps = true;
 
-  meta = with stdenv.lib; {
+  nativeBuildInputs = [ pkg-config m4 ];
+  doCheck = true;
+  buildInputs = [ libxcb xcbutil libX11 ];
+
+  meta = with lib; {
     description = "XCB utility functions for the X resource manager";
-    homepage = https://github.com/Airblader/xcb-util-xrm;
+    homepage = "https://github.com/Airblader/xcb-util-xrm";
     license = licenses.mit; # X11 variant
     platforms = with platforms; unix;
   };

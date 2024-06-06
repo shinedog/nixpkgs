@@ -1,24 +1,29 @@
-{stdenv, fetchurl, gettext, python, xz}:
+{ lib, stdenv, fetchurl, gettext, python3, testers }:
 
-stdenv.mkDerivation rec {
-  name = "iso-codes-3.56";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "iso-codes";
+  version = "4.16.0";
+
   src = fetchurl {
-    url = "http://pkg-isocodes.alioth.debian.org/downloads/${name}.tar.xz";
-    sha256 = "0vnfygd03jg21i7r238n450wy2hp354f3ank0v3k34zchbjydl2m";
+    url = with finalAttrs; "https://salsa.debian.org/iso-codes-team/iso-codes/-/archive/v${version}/${pname}-v${version}.tar.gz";
+    sha256 = "sha256-fJkPw5oFl1vtsBdeP/Cfw4MEiBX2i0Yqu/BVqAMuZsw=";
   };
-  patchPhase = ''
-    for i in `find . -name \*.py`
-    do
-        sed -i -e "s|#!/usr/bin/env python|#!${python}/bin/python|" $i
-    done
-  '';
-  buildInputs = [ gettext ];
-  nativeBuildInputs = [ xz ];
 
-  meta = {
-    homepage = http://pkg-isocodes.alioth.debian.org/;
-    description = "Various ISO codes packaged as XML files";
-    maintainers = [ stdenv.lib.maintainers.urkud ];
-    platforms = stdenv.lib.platforms.all;
+  nativeBuildInputs = [ gettext python3 ];
+
+  enableParallelBuilding = true;
+
+  passthru.tests = {
+    pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+    };
   };
-}
+
+  meta = with lib; {
+    homepage = "https://salsa.debian.org/iso-codes-team/iso-codes";
+    description = "Various ISO codes packaged as XML files";
+    license = licenses.lgpl21;
+    platforms = platforms.all;
+    pkgConfigModules = [ "iso-codes" ];
+  };
+})

@@ -1,23 +1,51 @@
-{ stdenv, fetchurl, libogg }:
+{ lib
+, stdenv
+, fetchurl
+, cmake
+, pkg-config
+, doxygen
+, graphviz
+, libogg
+}:
 
 stdenv.mkDerivation rec {
-  name = "flac-1.3.1";
+  pname = "flac";
+  version = "1.4.3";
 
   src = fetchurl {
-    url = "http://downloads.xiph.org/releases/flac/${name}.tar.xz";
-    sha256 = "4773c0099dba767d963fd92143263be338c48702172e8754b9bc5103efe1c56c";
+    url = "http://downloads.xiph.org/releases/flac/${pname}-${version}.tar.xz";
+    # Official checksum is published at https://github.com/xiph/flac/releases/tag/${version}
+    hash = "sha256-bFjmnNIjSPRBuGEJK4JeWR0Lgi4QbebrDuTQXScgW3A=";
   };
 
-  buildInputs = [ libogg ];
+  nativeBuildInputs = [
+    cmake
+    pkg-config
+    doxygen
+    graphviz
+  ];
 
-  #doCheck = true; # takes lots of time
+  buildInputs = [
+    libogg
+  ];
 
-  outputs = [ "bin" "dev" "out" "doc" ];
+  cmakeFlags = lib.optionals (!stdenv.hostPlatform.isStatic) [
+    "-DBUILD_SHARED_LIBS=ON"
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = http://xiph.org/flac/;
+  CFLAGS = [ "-O3" "-funroll-loops" ];
+  CXXFLAGS = [ "-O3" ];
+
+  # doCheck = true; # takes lots of time
+
+  outputs = [ "bin" "dev" "out" "man" "doc" ];
+
+  meta = with lib; {
+    homepage = "https://xiph.org/flac/";
     description = "Library and tools for encoding and decoding the FLAC lossless audio file format";
+    changelog = "https://xiph.org/flac/changelog.html";
     platforms = platforms.all;
-    maintainers = [ maintainers.mornfall ];
+    license = licenses.bsd3;
+    maintainers = with maintainers; [ ruuda ];
   };
 }

@@ -1,26 +1,73 @@
-{ stdenv, fetchurl, pkgconfig, glib, python, udev, libgudev }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, meson
+, ninja
+, pkg-config
+, glib
+, python3
+, help2man
+, bash-completion
+, bash
+, buildPackages
+, withIntrospection ? lib.meta.availableOn stdenv.hostPlatform gobject-introspection && stdenv.hostPlatform.emulatorAvailable buildPackages
+, withDocs ? stdenv.hostPlatform == stdenv.buildPlatform
+, gobject-introspection
+}:
 
 stdenv.mkDerivation rec {
-  name = "libmbim-1.14.0";
+  pname = "libmbim";
+  version = "1.30.0";
 
-  src = fetchurl {
-    url = "https://www.freedesktop.org/software/libmbim/${name}.tar.xz";
-    sha256 = "0nxb4x8l092xckk4dy84cn5qhviif8akzy0miypapjqqbalm53fa";
+  outputs = [ "out" "dev" ]
+    ++ lib.optionals withDocs [ "man" ];
+
+  src = fetchFromGitLab {
+    domain = "gitlab.freedesktop.org";
+    owner = "mobile-broadband";
+    repo = "libmbim";
+    rev = version;
+    hash = "sha256-sHTpu9WeMZroT+1I18ObEHWSzcyj/Relyz8UNe+WawI=";
   };
 
-  outputs = [ "out" "dev" "doc" ];
+  mesonFlags = [
+    "-Dudevdir=${placeholder "out"}/lib/udev"
+    (lib.mesonBool "introspection" withIntrospection)
+    (lib.mesonBool "man" withDocs)
+  ];
 
-  preConfigure = ''
-    patchShebangs .
+  strictDeps = true;
+
+  nativeBuildInputs = [
+    meson
+    ninja
+    pkg-config
+    python3
+  ] ++ lib.optionals withDocs [
+    help2man
+  ] ++ lib.optionals withIntrospection [
+    gobject-introspection
+  ];
+
+  buildInputs = [
+    glib
+    bash-completion
+    bash
+  ];
+
+  doCheck = true;
+
+  postPatch = ''
+    patchShebangs \
+      build-aux/mbim-codegen/mbim-codegen
   '';
 
-  buildInputs = [ pkgconfig glib udev libgudev python ];
-
-  meta = with stdenv.lib; {
-    homepage = http://www.freedesktop.org/software/libmbim/;
+  meta = with lib; {
+    homepage = "https://www.freedesktop.org/wiki/Software/libmbim/";
     description = "Library for talking to WWAN modems and devices which speak the Mobile Interface Broadband Model (MBIM) protocol";
+    changelog = "https://gitlab.freedesktop.org/mobile-broadband/libmbim/-/raw/${version}/NEWS";
+    maintainers = teams.freedesktop.members;
     platforms = platforms.linux;
-    license = licenses.gpl2;
-    maintainers = with maintainers; [ wkennington ];
+    license = licenses.gpl2Plus;
   };
 }

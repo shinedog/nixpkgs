@@ -1,32 +1,31 @@
-{ stdenv, curl, fetchFromGitHub }:
+{ lib, stdenv, curl, fetchFromGitHub }:
 
 stdenv.mkDerivation rec {
-  name = "stdman-${version}";
-  version = "d860212";
+  pname = "stdman";
+  version = "2022.07.30";
 
   src = fetchFromGitHub {
     owner = "jeaye";
     repo = "stdman";
-    rev = "d860212767ca60472e33aa3bad22a3eac834b1f8";
-    sha256 = "09c5gjhcz97ghfrv9zkgfb1wckvmqnhbzga0xidbm1ir7640di8l";
+    rev = version;
+    sha256 = "sha256-ABogxVQS6p3wUV8GuB2tp7vMxe63t51dNoclEnYpa/0=";
   };
 
   outputDevdoc = "out";
 
   preConfigure = "
-    patchShebangs ./configure
     patchShebangs ./do_install
   ";
 
   buildInputs = [ curl ];
 
-  meta = with stdenv.lib; {
-    description = "Formatted C++11/14 stdlib man pages (cppreference)";
+  meta = with lib; {
+    description = "Formatted C++17 stdlib man pages (cppreference)";
     longDescription = "stdman is a tool that parses archived HTML
       files from cppreference and generates groff-formatted manual
       pages for Unix-based systems. The goal is to provide excellent
       formatting for easy readability.";
-    homepage = https://github.com/jeaye/stdman;
+    homepage = "https://github.com/jeaye/stdman";
     license = licenses.mit;
     platforms = platforms.unix;
     maintainers = [ maintainers.twey ];

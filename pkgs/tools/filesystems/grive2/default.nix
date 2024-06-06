@@ -1,25 +1,47 @@
-{ stdenv, fetchFromGitHub, pkgconfig, fetchurl, yajl, cmake, libgcrypt, curl, expat, boost, binutils }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, pkg-config
+, yajl
+, cmake
+, libgcrypt
+, curl
+, expat
+, boost
+, libiberty
+}:
 
 stdenv.mkDerivation rec {
-  version = "0.5.0";
-  name = "grive2-${version}";
+  version = "0.5.3";
+  pname = "grive2";
 
   src = fetchFromGitHub {
     owner = "vitalif";
     repo = "grive2";
     rev =  "v${version}";
-    sha256 = "0gyic9228j25l5x8qj9xxxp2cgbw6y4skxqx0xrq6qilhv4lj23c";
+    sha256 = "sha256-P6gitA5cXfNbNDy4ohRLyXj/5dUXkCkOdE/9rJPzNCg=";
   };
 
-  nativeBuildInputs = [ cmake pkgconfig ];
+  patches = [
+    # Backport gcc-12 support:
+    #   https://github.com/vitalif/grive2/pull/363
+    (fetchpatch {
+      name = "gcc-12.patch";
+      url = "https://github.com/vitalif/grive2/commit/3cf1c058a3e61deb370dde36024a106a213ab2c6.patch";
+      hash = "sha256-v2Pb6Qvgml/fYzh/VCjOvEVnFYMkOHqROvLLe61DmKA=";
+    })
+  ];
 
-  buildInputs = [ libgcrypt yajl curl expat stdenv boost binutils ];
+  nativeBuildInputs = [ cmake pkg-config ];
 
-  meta = with stdenv.lib; {
+  buildInputs = [ libgcrypt yajl curl expat boost libiberty ];
+
+  meta = with lib; {
     description = "A console Google Drive client";
-    homepage = https://github.com/vitalif/grive2;
-    license = licenses.gpl2;
+    homepage = "https://github.com/vitalif/grive2";
+    license = licenses.gpl2Only;
     platforms = platforms.linux;
+    mainProgram = "grive";
   };
-
 }

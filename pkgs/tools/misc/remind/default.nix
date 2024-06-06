@@ -1,38 +1,43 @@
-{stdenv, fetchurl, tk, tcllib, makeWrapper
+{ lib
+, fetchurl
+, tk
+, tcllib
+, tcl
 , tkremind ? true
-} :
+}:
 
-assert tkremind -> tk != null;
-assert tkremind -> tcllib != null;
-assert tkremind -> makeWrapper != null;
+let
+  inherit (lib) optionals optionalString;
+  tclLibraries = optionals tkremind [ tcllib tk ];
+  tkremindPatch = optionalString tkremind ''
+    substituteInPlace scripts/tkremind --replace "exec wish" "exec ${tk}/bin/wish"
+  '';
+in
+tcl.mkTclDerivation rec {
+  pname = "remind";
+  version = "04.03.07";
 
-stdenv.mkDerivation rec {
-  name = "remind-3.1.15";
   src = fetchurl {
-    url = http://www.roaringpenguin.com/files/download/remind-03.01.15.tar.gz;
-    sha256 = "1hcfcxz5fjzl7606prlb7dgls5kr8z3wb51h48s6qm8ang0b9nla";
+    url = "https://dianne.skoll.ca/projects/remind/download/remind-${version}.tar.gz";
+    sha256 = "sha256-s/jEsNXUBigNHPTCi3e4V2pGUNhK2s5/n+sU1ow7UU0=";
   };
 
-  tclLibraries = if tkremind then [ tcllib tk ] else [];
-  tclLibPaths = stdenv.lib.concatStringsSep " "
-    (map (p: "${p}/lib/${p.libPrefix}") tclLibraries);
-
-  buildInputs = if tkremind then [ makeWrapper ] else [];
   propagatedBuildInputs = tclLibraries;
 
-  postPatch = if tkremind then ''
-    substituteInPlace scripts/tkremind --replace "exec wish" "exec ${tk}/bin/wish"
-  '' else "";
+  postPatch = ''
+    substituteInPlace ./configure \
+      --replace "sleep 1" "true"
+    substituteInPlace ./src/init.c \
+      --replace "rkrphgvba(0);" "" \
+      --replace "rkrphgvba(1);" ""
+    ${tkremindPatch}
+  '';
 
-  postInstall = if tkremind then ''
-    wrapProgram $out/bin/tkremind --set TCLLIBPATH "${tclLibPaths}"
-  '' else "";
-
-  meta = {
-    homepage = http://www.roaringpenguin.com/products/remind;
+  meta = with lib; {
+    homepage = "https://dianne.skoll.ca/projects/remind/";
     description = "Sophisticated calendar and alarm program for the console";
-    license = stdenv.lib.licenses.gpl2;
-    maintainers = with stdenv.lib.maintainers; [viric raskin kovirobi];
-    platforms = with stdenv.lib.platforms; linux;
+    license = licenses.gpl2Only;
+    maintainers = with maintainers; [ raskin kovirobi ];
+    platforms = platforms.unix;
   };
 }

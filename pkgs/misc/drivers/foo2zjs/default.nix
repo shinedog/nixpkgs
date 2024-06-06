@@ -1,16 +1,28 @@
-{ stdenv, fetchurl, foomatic-filters, bc, unzip, ghostscript, systemd, vim }:
+{ lib, stdenv, fetchurl, foomatic-filters, bc, ghostscript, systemd, vim, time }:
 
 stdenv.mkDerivation rec {
-  name = "foo2zjs-20110210";
+  pname = "foo2zjs";
+  version = "20210116";
 
   src = fetchurl {
-    url = "http://www.loegria.net/mirrors/foo2zjs/${name}.tar.gz";
-    sha256 = "0vss8gdbbgxr694xw48rys2qflbnb4sp4gdb1v6z4m9ab97hs5yk";
+    url = "http://www.loegria.net/mirrors/foo2zjs/foo2zjs-${version}.tar.gz";
+    sha256 = "14x3wizvncdy0xgvmcx541qanwb7bg76abygqy17bxycn1zh5r1x";
   };
 
-  buildInputs = [ foomatic-filters bc unzip ghostscript systemd vim ];
+  buildInputs = [ foomatic-filters bc ghostscript systemd vim ];
 
-  patches = [ ./no-hardcode-fw.diff ];
+  patches = [
+    ./no-hardcode-fw.diff
+    # Support HBPL1 printers. Updated patch based on
+    # https://www.dechifro.org/hbpl/
+    ./hbpl1.patch
+    # Fix "Unimplemented paper code" error for hbpl1 printers
+    # https://github.com/mikerr/foo2zjs/pull/2
+    ./papercode-format-fix.patch
+    # Fix AirPrint color printing for Dell 1250c
+    # See https://github.com/OpenPrinting/cups/issues/272
+    ./dell1250c-color-fix.patch
+  ];
 
   makeFlags = [
     "PREFIX=$(out)"
@@ -18,7 +30,7 @@ stdenv.mkDerivation rec {
     "PIXMAPS=$(out)/share/pixmaps"
     "UDEVBIN=$(out)/bin"
     "UDEVDIR=$(out)/etc/udev/rules.d"
-    "UDEVD=${systemd.udev.bin}/sbin/udevd"
+    "UDEVD=${systemd}/sbin/udevd"
     "LIBUDEVDIR=$(out)/lib/udev/rules.d"
     "USBDIR=$(out)/etc/hotplug/usb"
     "FOODB=$(out)/share/foomatic/db/source"
@@ -39,6 +51,9 @@ stdenv.mkDerivation rec {
     sed -e "/PRINTERID=/s@=.*@=$out/bin/usb_printerid@" -i hplj1000
   '';
 
+  nativeCheckInputs = [ time ];
+  doCheck = false; # fails to find its own binary. Also says "Tests will pass only if you are using ghostscript-8.71-16.fc14".
+
   preInstall = ''
     mkdir -pv $out/{etc/udev/rules.d,lib/udev/rules.d,etc/hotplug/usb}
     mkdir -pv $out/share/foomatic/db/source/{opt,printer,driver}
@@ -49,11 +64,11 @@ stdenv.mkDerivation rec {
     cp -v getweb arm2hpdl "$out/bin"
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "ZjStream printer drivers";
     maintainers = with maintainers;
     [
-      raskin urkud
+      raskin
     ];
     platforms = platforms.linux;
     license = licenses.gpl2Plus;

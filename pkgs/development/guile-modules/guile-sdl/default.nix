@@ -1,34 +1,60 @@
-{ stdenv, fetchurl, guile, buildEnv
-, SDL, SDL_image, SDL_ttf, SDL_mixer
+{ lib
+, stdenv
+, fetchurl
+, guile
+, lzip
+, pkg-config
+, SDL
+, SDL_image
+, SDL_mixer
+, SDL_ttf
+, buildEnv
 }:
 
 stdenv.mkDerivation rec {
-  name = "guile-sdl-0.5.1";
-
-  meta = with stdenv.lib; {
-    description = "Guile bindings for SDL";
-    homepage    = "http://gnu.org/s/guile-sdl";
-    license     = licenses.gpl3Plus;
-    platforms   = platforms.linux;
-  };
+  pname = "guile-sdl";
+  version = "0.6.1";
 
   src = fetchurl {
-    url = "mirror://gnu/guile-sdl/${name}.tar.xz";
-    sha256 = "126n4rd0ydh6i2s11ari5k85iivradlf12zq13b34shf9k1wn5am";
+    url = "mirror://gnu/${pname}/${pname}-${version}.tar.lz";
+    hash = "sha256-/9sTTvntkRXck3FoRalROjqUQC8hkePtLTnHNZotKOE=";
   };
 
-  nativeBuildInputs = [ guile ];
+  strictDeps = true;
 
-  buildInputs = [
-    SDL.dev SDL_image SDL_ttf SDL_mixer
+  nativeBuildInputs = [
+    guile
+    lzip
+    pkg-config
+    SDL
   ];
 
-  GUILE_AUTO_COMPILE = 0;
+  buildInputs = [
+    guile
+    (lib.getDev SDL)
+    SDL_image
+    SDL_mixer
+    SDL_ttf
+  ];
 
-  makeFlags = let
-    sdl = buildEnv {
-      name = "sdl-env";
-      paths = buildInputs;
-    };
-  in "SDLMINUSI=-I${sdl}/include/SDL";
+  makeFlags =
+    let
+      sdl-env = buildEnv {
+        name = "sdl-env";
+        paths = buildInputs;
+      };
+    in
+    [
+      "SDLMINUSI=-I${sdl-env}/include/SDL"
+    ];
+
+  meta = with lib; {
+    homepage = "https://www.gnu.org/software/guile-sdl/";
+    description = "Guile bindings for SDL";
+    license = licenses.gpl3Plus;
+    maintainers = with maintainers; [ vyp ];
+    platforms = guile.meta.platforms;
+    # configure: error: *** SDL version  not found!
+    broken = stdenv.isDarwin;
+  };
 }

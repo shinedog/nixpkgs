@@ -1,23 +1,41 @@
-{ fetchurl, stdenv, python2Packages, texinfo }:
+{ lib, stdenv, fetchFromGitLab, python3Packages, texinfo }:
 
-stdenv.mkDerivation rec {
-  name = "rubber-1.3";
+python3Packages.buildPythonApplication rec {
+  pname = "rubber";
+  version = "1.6.0";
 
-  src = fetchurl {
-    url = "https://launchpad.net/rubber/trunk/1.3/+download/rubber-1.3.tar.gz";
-    sha256 = "09715apfd6a0haz1mqsxgm8sj4rwzi38gcz2kz020zxk5rh0dksh";
+  src = fetchFromGitLab {
+    owner = "latex-rubber";
+    repo = "rubber";
+    rev = version;
+    hash = "sha256-7sv9N3PES5N41yYyXNWfaZ6IhLW6SqMiCHdamsSPQzg=";
   };
 
-  buildInputs = [ python2Packages.python texinfo ];
-  nativeBuildInputs = [ python2Packages.wrapPython ];
+  # I'm sure there is a better way to pass these parameters to the build script...
+  postPatch = ''
+    substituteInPlace setup.py \
+      --replace 'pdf = True' 'pdf = False' \
+      --replace '$base/info'  'share/info' \
+      --replace '$base/man'   'share/man' \
+      --replace '$base/share' 'share'
 
-  patchPhase = ''
-    substituteInPlace configure --replace which "type -P"
+    substituteInPlace tests/run.sh \
+      --replace /var/tmp /tmp
   '';
 
-  postInstall = "wrapPythonPrograms";
+  nativeBuildInputs = [ texinfo ];
 
-  meta = {
+  checkPhase = ''
+    runHook preCheck
+
+    pushd tests >/dev/null
+    ${stdenv.shell} run.sh
+    popd >/dev/null
+
+    runHook postCheck
+  '';
+
+  meta = with lib; {
     description = "Wrapper for LaTeX and friends";
     longDescription = ''
       Rubber is a program whose purpose is to handle all tasks related
@@ -28,9 +46,10 @@ stdenv.mkDerivation rec {
       produce PostScript documents is also included, as well as usage
       of pdfLaTeX to produce PDF documents.
     '';
-    license = stdenv.lib.licenses.gpl2Plus;
-    homepage = http://www.pps.jussieu.fr/~beffara/soft/rubber/;
-    maintainers = [ stdenv.lib.maintainers.ttuegel ];
-    platforms = stdenv.lib.platforms.unix;
+    license = licenses.gpl2Plus;
+    homepage = "https://gitlab.com/latex-rubber/rubber";
+    maintainers = with maintainers; [ ttuegel peterhoeg ];
+    platforms = platforms.unix;
+    mainProgram = "rubber";
   };
 }

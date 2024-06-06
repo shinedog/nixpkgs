@@ -1,26 +1,64 @@
-{ stdenv, fetchurl, wxGTK, autoconf, automake, libtool, python, gettext, bash }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, fetchpatch
+, autoconf
+, automake
+, gettext
+, libtool
+, python3
+, wxGTK
+, openmp
+, Cocoa
+}:
 
 stdenv.mkDerivation rec {
-  name = "wxHexEditor-${version}";
-  version = "v0.22";
+  pname = "wxHexEditor";
+  version = "0.24";
 
-  src = fetchurl {
-    url = "mirror://sourceforge/wxhexeditor/${name}-src.tar.bz2";
-    sha256 = "15ir038g4lyw1q5bsay974hvj0nkg2yd9kccwxz808cd45fp411w";
+  src = fetchFromGitHub {
+    repo = "wxHexEditor";
+    owner = "EUA";
+    rev = "v${version}";
+    sha256 = "08xnhaif8syv1fa0k6lc3jm7yg2k50b02lyds8w0jyzh4xi5crqj";
   };
 
-  buildInputs = [ wxGTK autoconf automake libtool python gettext ];
+  strictDeps = true;
 
-  patchPhase = ''
-    substituteInPlace Makefile --replace "/usr/local" "$out"
+  nativeBuildInputs = [
+    autoconf
+    automake
+    gettext
+    libtool
+    python3
+    wxGTK
+  ];
+
+  buildInputs = lib.optionals stdenv.cc.isClang [
+    openmp
+  ] ++ lib.optionals stdenv.isDarwin [
+    Cocoa
+  ];
+
+  preConfigure = "patchShebangs .";
+
+  prePatch = ''
+    substituteInPlace Makefile --replace "/usr" "$out"
     substituteInPlace Makefile --replace "mhash; ./configure" "mhash; ./configure --prefix=$out"
-    substituteInPlace udis86/autogen.sh --replace "/bin/bash" "${bash}/bin/bash"
+  '' + lib.optionalString stdenv.cc.isClang ''
+    substituteInPlace Makefile --replace "-lgomp" "-lomp"
   '';
 
-  buildPhase = ''
-    make OPTFLAGS="-fopenmp"
+  patches = [
+    # https://github.com/EUA/wxHexEditor/issues/90
+    (fetchpatch {
+      url = "https://github.com/EUA/wxHexEditor/commit/d0fa3ddc3e9dc9b05f90b650991ef134f74eed01.patch";
+      sha256 = "1wcb70hrnhq72frj89prcqylpqs74xrfz3kdfdkq84p5qfz9svyj";
+    })
+    ./missing-semicolon.patch
+  ];
 
-  '';
+  makeFlags = lib.optionals stdenv.cc.isGNU [ "OPTFLAGS=-fopenmp" ];
 
   meta = {
     description = "Hex Editor / Disk Editor for Huge Files or Devices";
@@ -35,7 +73,9 @@ stdenv.mkDerivation rec {
       wxHexEditor could edit HDD/SDD disk devices or partitions in raw up to exabyte sizes.
     '';
     homepage = "http://www.wxhexeditor.org/";
-    license = stdenv.lib.licenses.gpl2;
-    platforms = stdenv.lib.platforms.linux;
+    license = lib.licenses.gpl2Plus;
+    platforms = lib.platforms.unix;
+    maintainers = with lib.maintainers; [ wegank ];
+    mainProgram = "wxHexEditor";
   };
 }

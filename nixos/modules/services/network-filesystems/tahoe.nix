@@ -8,7 +8,7 @@ in
     options.services.tahoe = {
       introducers = mkOption {
         default = {};
-        type = with types; loaOf (submodule {
+        type = with types; attrsOf (submodule {
           options = {
             nickname = mkOption {
               type = types.str;
@@ -18,7 +18,7 @@ in
             };
             tub.port = mkOption {
               default = 3458;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the introducer will listen.
               '';
@@ -32,15 +32,7 @@ in
                 If specified, the port should be included.
               '';
             };
-            package = mkOption {
-              default = pkgs.tahoelafs;
-              defaultText = "pkgs.tahoelafs";
-              type = types.package;
-              example = literalExample "pkgs.tahoelafs";
-              description = ''
-                The package to use for the Tahoe LAFS daemon.
-              '';
-            };
+            package = mkPackageOption pkgs "tahoelafs" { };
           };
         });
         description = ''
@@ -49,7 +41,7 @@ in
       };
       nodes = mkOption {
         default = {};
-        type = with types; loaOf (submodule {
+        type = with types; attrsOf (submodule {
           options = {
             nickname = mkOption {
               type = types.str;
@@ -59,7 +51,7 @@ in
             };
             tub.port = mkOption {
               default = 3457;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the tub will listen.
 
@@ -81,7 +73,7 @@ in
             };
             web.port = mkOption {
               default = 3456;
-              type = types.int;
+              type = types.port;
               description = ''
                 The port on which the Web server will listen.
 
@@ -177,15 +169,7 @@ in
                 URL of the accounts server.
               '';
             };
-            package = mkOption {
-              default = pkgs.tahoelafs;
-              defaultText = "pkgs.tahoelafs";
-              type = types.package;
-              example = literalExample "pkgs.tahoelafs";
-              description = ''
-                The package to use for the Tahoe LAFS daemon.
-              '';
-            };
+            package = mkPackageOption pkgs "tahoelafs" { };
           };
         });
         description = ''
@@ -234,16 +218,19 @@ in
               Type = "simple";
               PIDFile = pidfile;
               # Believe it or not, Tahoe is very brittle about the order of
-              # arguments to $(tahoe start). The node directory must come first,
+              # arguments to $(tahoe run). The node directory must come first,
               # and arguments which alter Twisted's behavior come afterwards.
               ExecStart = ''
-                ${settings.package}/bin/tahoe start ${nodedir} -n -l- --pidfile=${pidfile}
+                ${settings.package}/bin/tahoe run ${lib.escapeShellArg nodedir} --pidfile=${lib.escapeShellArg pidfile}
               '';
             };
             preStart = ''
-              if [ \! -d ${nodedir} ]; then
+              if [ ! -d ${lib.escapeShellArg nodedir} ]; then
                 mkdir -p /var/db/tahoe-lafs
-                tahoe create-introducer ${nodedir}
+                # See https://github.com/NixOS/nixpkgs/issues/25273
+                tahoe create-introducer \
+                  --hostname="${config.networking.hostName}" \
+                  ${lib.escapeShellArg nodedir}
               fi
 
               # Tahoe has created a predefined tahoe.cfg which we must now
@@ -252,10 +239,10 @@ in
               # we must do this on every prestart. Fixes welcome.
               # rm ${nodedir}/tahoe.cfg
               # ln -s /etc/tahoe-lafs/introducer-${node}.cfg ${nodedir}/tahoe.cfg
-              cp /etc/tahoe-lafs/introducer-${node}.cfg ${nodedir}/tahoe.cfg
+              cp /etc/tahoe-lafs/introducer-"${node}".cfg ${lib.escapeShellArg nodedir}/tahoe.cfg
             '';
           });
-        users.extraUsers = flip mapAttrs' cfg.introducers (node: _:
+        users.users = flip mapAttrs' cfg.introducers (node: _:
           nameValuePair "tahoe.introducer-${node}" {
             description = "Tahoe node user for introducer ${node}";
             isSystemUser = true;
@@ -290,14 +277,14 @@ in
                 shares.total = ${toString settings.client.shares.total}
 
                 [storage]
-                enabled = ${if settings.storage.enable then "true" else "false"}
+                enabled = ${boolToString settings.storage.enable}
                 reserved_space = ${settings.storage.reservedSpace}
 
                 [helper]
-                enabled = ${if settings.helper.enable then "true" else "false"}
+                enabled = ${boolToString settings.helper.enable}
 
                 [sftpd]
-                enabled = ${if settings.sftpd.enable then "true" else "false"}
+                enabled = ${boolToString settings.sftpd.enable}
                 ${optionalString (settings.sftpd.port != null)
                   "port = ${toString settings.sftpd.port}"}
                 ${optionalString (settings.sftpd.hostPublicKeyFile != null)
@@ -334,16 +321,16 @@ in
               Type = "simple";
               PIDFile = pidfile;
               # Believe it or not, Tahoe is very brittle about the order of
-              # arguments to $(tahoe start). The node directory must come first,
+              # arguments to $(tahoe run). The node directory must come first,
               # and arguments which alter Twisted's behavior come afterwards.
               ExecStart = ''
-                ${settings.package}/bin/tahoe start ${nodedir} -n -l- --pidfile=${pidfile}
+                ${settings.package}/bin/tahoe run ${lib.escapeShellArg nodedir} --pidfile=${lib.escapeShellArg pidfile}
               '';
             };
             preStart = ''
-              if [ \! -d ${nodedir} ]; then
+              if [ ! -d ${lib.escapeShellArg nodedir} ]; then
                 mkdir -p /var/db/tahoe-lafs
-                tahoe create-node ${nodedir}
+                tahoe create-node --hostname=localhost ${lib.escapeShellArg nodedir}
               fi
 
               # Tahoe has created a predefined tahoe.cfg which we must now
@@ -351,11 +338,11 @@ in
               # XXX I thought that a symlink would work here, but it doesn't, so
               # we must do this on every prestart. Fixes welcome.
               # rm ${nodedir}/tahoe.cfg
-              # ln -s /etc/tahoe-lafs/${node}.cfg ${nodedir}/tahoe.cfg
-              cp /etc/tahoe-lafs/${node}.cfg ${nodedir}/tahoe.cfg
+              # ln -s /etc/tahoe-lafs/${lib.escapeShellArg node}.cfg ${nodedir}/tahoe.cfg
+              cp /etc/tahoe-lafs/${lib.escapeShellArg node}.cfg ${lib.escapeShellArg nodedir}/tahoe.cfg
             '';
           });
-        users.extraUsers = flip mapAttrs' cfg.nodes (node: _:
+        users.users = flip mapAttrs' cfg.nodes (node: _:
           nameValuePair "tahoe.${node}" {
             description = "Tahoe node user for node ${node}";
             isSystemUser = true;

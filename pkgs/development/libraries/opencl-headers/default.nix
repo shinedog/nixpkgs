@@ -1,24 +1,39 @@
-{ stdenv, fetchFromGitHub, cmake }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, hashcat
+, ocl-icd
+, tesseract
+, testers
+}:
 
-stdenv.mkDerivation rec {
-  name = "opencl-headers-2.1.0";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "opencl-headers";
+  version = "2023.12.14";
 
   src = fetchFromGitHub {
     owner = "KhronosGroup";
     repo = "OpenCL-Headers";
-    rev = "c1770dcc6cf1daadec1905e7393f3691c1dde200";
-    sha256 = "0m9fkblqja0686i2jjqiszvq3df95gp01a2674xknlmkd6525rck";
+    rev = "v${finalAttrs.version}";
+    sha256 = "sha256-wF9KQjzYKJf6ulXRy80o53bp6lTtm8q1NubKbcH+RY0=";
   };
 
-  installPhase = ''
-    mkdir -p $out/include/CL
-    cp * $out/include/CL
-  '';
+  nativeBuildInputs = [ cmake ];
 
-  meta = with stdenv.lib; {
-    description = "Khronos OpenCL headers";
-    homepage = https://www.khronos.org/registry/cl/;
-    license = licenses.mit;
-    platforms = platforms.unix;
+  passthru.tests = {
+    inherit ocl-icd tesseract hashcat;
+    pkg-config = testers.hasPkgConfigModules {
+      package = finalAttrs.finalPackage;
+      moduleNames = [ "OpenCL-Headers" ];
+    };
   };
-}
+
+  meta = with lib; {
+    description = "Khronos OpenCL headers version ${finalAttrs.version}";
+    homepage = "https://www.khronos.org/registry/cl/";
+    license = licenses.asl20;
+    platforms = platforms.unix ++ platforms.windows;
+    maintainers = [ ];
+  };
+})

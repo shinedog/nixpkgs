@@ -1,23 +1,31 @@
-{ stdenv, fetchurl, boost, emacs, gmp, makeWrapper
+{ lib, stdenv, fetchurl, makeWrapper
+, boost, gmp
 , tcl-8_5, tk-8_5
+, emacs
 }:
 
 let
-
   version = "2.0.0";
 
-in stdenv.mkDerivation {
-  name = "mozart-binary-${version}";
-
-  src = fetchurl {
-    url = "mirror://sourceforge/project/mozart-oz/v${version}-alpha.0/mozart2-${version}-alpha.0+build.4105.5c06ced-x86_64-linux.tar.gz";
-    sha256 = "0rsfrjimjxqbwprpzzlmydl3z3aiwg5qkb052jixdxjyad7gyh5z";
+  binaries = {
+    x86_64-linux = fetchurl {
+      url = "mirror://sourceforge/project/mozart-oz/v${version}-alpha.0/mozart2-${version}-alpha.0+build.4105.5c06ced-x86_64-linux.tar.gz";
+      sha256 = "0rsfrjimjxqbwprpzzlmydl3z3aiwg5qkb052jixdxjyad7gyh5z";
+    };
   };
+in
 
-  libPath = stdenv.lib.makeLibraryPath
+stdenv.mkDerivation {
+  pname = "mozart-binary";
+  inherit version;
+
+  preferLocalBuild = true;
+
+  src = binaries.${stdenv.hostPlatform.system} or (throw "unsupported system: ${stdenv.hostPlatform.system}");
+
+  libPath = lib.makeLibraryPath
     [ stdenv.cc.cc
       boost
-      emacs
       gmp
       tcl-8_5
       tk-8_5
@@ -25,11 +33,37 @@ in stdenv.mkDerivation {
 
   TK_LIBRARY = "${tk-8_5}/lib/tk8.5";
 
-  builder = ./builder.sh;
+  nativeBuildInputs = [ makeWrapper ];
 
-  buildInputs = [ makeWrapper ];
+  buildCommand = ''
+    mkdir $out
+    tar xvf $src -C $out --strip-components=1
 
-  meta = with stdenv.lib; {
+    for exe in $out/bin/{ozemulator,ozwish} ; do
+      patchelf --set-interpreter $(< $NIX_CC/nix-support/dynamic-linker) \
+               --set-rpath $libPath \
+               $exe
+    done
+
+    wrapProgram $out/bin/ozwish \
+      --set OZHOME $out \
+      --set TK_LIBRARY $TK_LIBRARY
+
+    wrapProgram $out/bin/ozemulator --set OZHOME $out
+
+    ${lib.optionalString (emacs != null) ''
+      wrapProgram $out/bin/oz --suffix PATH ":" ${lib.makeBinPath [ emacs ]}
+    ''}
+
+    sed -i $out/share/applications/oz.desktop \
+        -e "s,Exec=oz %u,Exec=$out/bin/oz %u,"
+
+    gzip -9n $out/share/mozart/elisp"/"*.elc
+
+    patchShebangs $out
+  '';
+
+  meta = with lib; {
     homepage = "http://www.mozart-oz.org/";
     description = "Multiplatform implementation of the Oz programming language";
     longDescription = ''
@@ -39,7 +73,9 @@ in stdenv.mkDerivation {
       interfaces. Mozart implements the Oz language and provides both
       expressive power and advanced functionality.
     '';
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.mit;
-    platforms = [ "x86_64-linux" ];
+    platforms = attrNames binaries;
+    hydraPlatforms = [];
   };
 }

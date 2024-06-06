@@ -1,21 +1,40 @@
-{ stdenv, fetchgit, cmake, pcre, doxygen }:
+{ lib
+, stdenv
+, fetchFromGitHub
+, cmake
+, pcre2
+, doxygen
+}:
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: {
+  pname = "editorconfig-core-c";
+  version = "0.12.7";
 
-  name = "editorconfig-core-c-${meta.version}";
+  outputs = [ "out" "dev" ];
 
-  src = fetchgit {
-    url = "https://github.com/editorconfig/editorconfig-core-c.git";
-    rev = "d1c2c881158dfb9faa4498a0b19593dcd105d6b8";
+  src = fetchFromGitHub {
+    owner = "editorconfig";
+    repo = "editorconfig-core-c";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-uKukgQPKIx+zJPf08MTYEtoBiWeVcQmZnjWl4Zk9xaY=";
     fetchSubmodules = true;
-    sha256 = "0awpb63ci85kal3pnlj2b54bay8igj1rbc13d8gqkvidlb51nnx4";
-    inherit name;
   };
 
-  buildInputs = [ cmake pcre doxygen ];
+  nativeBuildInputs = [
+    cmake
+    doxygen
+  ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://editorconfig.org/";
+  buildInputs = [
+    pcre2
+  ];
+
+  # Multiple doxygen can not generate man pages in the same base directory in
+  # parallel: https://github.com/doxygen/doxygen/issues/6293
+  enableParallelBuilding = false;
+
+  meta = with lib; {
+    homepage = "https://editorconfig.org/";
     description = "EditorConfig core library written in C";
     longDescription = ''
       EditorConfig makes it easy to maintain the correct coding style when
@@ -27,9 +46,8 @@ stdenv.mkDerivation rec {
     '';
     downloadPage = "https://github.com/editorconfig/editorconfig-core-c";
     license = with licenses; [ bsd2 bsd3 ];
-    version = "0.12.1";
-    maintainers = [ maintainers.dochang ];
+    maintainers = with maintainers; [ dochang ];
     platforms = platforms.unix;
+    mainProgram = "editorconfig";
   };
-
-}
+})

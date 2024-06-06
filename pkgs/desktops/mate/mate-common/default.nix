@@ -1,21 +1,27 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenvNoCC
+, fetchurl
+, mateUpdateScript
+}:
 
-stdenv.mkDerivation rec {
-  name = "mate-common-${version}";
-  version = "${major-ver}.${minor-ver}";
-  major-ver = "1.16";
-  minor-ver = "0";
+stdenvNoCC.mkDerivation rec {
+  pname = "mate-common";
+  version = "1.28.0";
 
   src = fetchurl {
-    url = "http://pub.mate-desktop.org/releases/${major-ver}/${name}.tar.xz";
-    sha256 = "02pj5ry3c7p5sd2mp9dsshy0ij0xgv00bxr4vvmnm027hv2silrl";
+    url = "https://pub.mate-desktop.org/releases/${lib.versions.majorMinor version}/${pname}-${version}.tar.xz";
+    sha256 = "QrfCzuJo9x1+HBrU9pvNoOzWVXipZyIYfGt2N40mugo=";
   };
 
-  meta = {
+  enableParallelBuilding = true;
+
+  passthru.updateScript = mateUpdateScript { inherit pname; };
+
+  meta = with lib; {
     description = "Common files for development of MATE packages";
-    homepage = "http://mate-desktop.org";
-    license = stdenv.lib.licenses.gpl3;
-    platforms = stdenv.lib.platforms.unix;
-    maintainers = [ stdenv.lib.maintainers.romildo ];
+    homepage = "https://mate-desktop.org";
+    license = licenses.gpl3Plus;
+    platforms = platforms.unix;
+    maintainers = teams.mate.members;
   };
 }

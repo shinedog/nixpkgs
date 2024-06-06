@@ -1,36 +1,57 @@
-{ stdenv, fetchFromGitHub, fetchurl, hexio, python, which, asn2quickder, bash }:
+{ lib
+, stdenv
+, fetchFromGitLab
+, python3
+, cmake
+, doxygen
+, graphviz
+, quickmem
+, arpa2common
+, arpa2cm
+, ensureNewerSourcesForZipFilesHook
+}:
 
 stdenv.mkDerivation rec {
   pname = "quickder";
-  name = "${pname}-${version}";
-  version = "1.0-RC1";
+  version = "1.7.1";
 
-  src = fetchFromGitHub {
-    sha256 = "05gw5dqkw3l8kwwm0044zpxhcp7sxicx9wxbfyr49c91403p870w";
-    rev = "version-${version}";
-    owner = "vanrein";
+  src = fetchFromGitLab {
+    owner = "arpa2";
     repo = "quick-der";
+    rev = "v${version}";
+    sha256 = "sha256-f+ph5PL+uWRkswpOLDwZFWjh938wxoJ6xocJZ2WZLEk=";
   };
 
-  buildInputs = [ which asn2quickder bash ];
+  nativeBuildInputs = [
+    cmake
+    doxygen
+    graphviz
+    ensureNewerSourcesForZipFilesHook
+  ];
 
-  patchPhase = ''
-    substituteInPlace Makefile \
-      --replace 'lib tool test rfc' 'lib test rfc'
-    substituteInPlace ./rfc/Makefile \
-      --replace 'ASN2QUICKDER_CMD = ' 'ASN2QUICKDER_CMD = ${asn2quickder}/bin/asn2quickder #'
-    '';
+  buildInputs = [
+    arpa2cm
+    arpa2common
+    (python3.withPackages (ps: with ps; [
+      asn1ate
+      colored
+      pyparsing
+      setuptools
+      six
+    ]))
+    quickmem
+  ];
 
-  installFlags = "ASN2QUICKDER_DIR=${asn2quickder}/bin ASN2QUICKDER_CMD=${asn2quickder}/bin/asn2quickder";
-  installPhase = ''
-    mkdir -p $out/lib $out/man
-    make DESTDIR=$out PREFIX=/ all
-    make DESTDIR=$out PREFIX=/ install
-    '';
 
-  meta = with stdenv.lib; {
+  postPatch = ''
+    substituteInPlace setup.py --replace 'pyparsing==' 'pyparsing>='
+  '';
+
+  doCheck = true;
+
+  meta = with lib; {
     description = "Quick (and Easy) DER, a Library for parsing ASN.1";
-    homepage = https://github.com/vanrein/quick-der;
+    homepage = "https://gitlab.com/arpa2/quick-der/";
     license = licenses.bsd2;
     platforms = platforms.linux;
     maintainers = with maintainers; [ leenaars ];

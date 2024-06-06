@@ -1,31 +1,38 @@
-{ stdenv, fetchurl, gzip, popt }:
+{ lib, stdenv, fetchFromGitHub, gzip, popt, autoreconfHook
+, aclSupport ? true, acl
+, nixosTests
+}:
 
 stdenv.mkDerivation rec {
-  name = "logrotate-3.9.1";
+  pname = "logrotate";
+  version = "3.22.0";
 
-  src = fetchurl {
-    url = "https://fedorahosted.org/releases/l/o/logrotate/${name}.tar.gz";
-    sha256 = "0i95qnacv5wf7kfkcpi38ys3i14fr01ifhm8b4ari04c53inj9q2";
+  src = fetchFromGitHub {
+    owner = "logrotate";
+    repo = "logrotate";
+    rev = version;
+    sha256 = "sha256-D7E2mpC7v2kbsb1EyhR6hLvGbnIvGB2MK1n1gptYyKI=";
   };
 
   # Logrotate wants to access the 'mail' program; to be done.
-  patchPhase = ''
-    sed -i -e 's,[a-z/]\+gzip,${gzip}/bin/gzip,' \
-           -e 's,[a-z/]\+gunzip,${gzip}/bin/gunzip,' config.h
-  '';
+  configureFlags = [
+    "--with-compress-command=${gzip}/bin/gzip"
+    "--with-uncompress-command=${gzip}/bin/gunzip"
+  ];
 
-  preBuild = ''
-    makeFlags="BASEDIR=$out"
-  '';
+  nativeBuildInputs = [ autoreconfHook ];
+  buildInputs = [ popt ] ++ lib.optionals aclSupport [ acl ];
 
-  buildInputs = [ popt ];
-
-  meta = {
-    homepage = https://fedorahosted.org/releases/l/o/logrotate/;
-    description = "Rotates and compresses system logs";
-    license = stdenv.lib.licenses.gpl2Plus;
-    maintainers = [ stdenv.lib.maintainers.viric ];
-    platforms = stdenv.lib.platforms.all;
+  passthru.tests = {
+    nixos-logrotate = nixosTests.logrotate;
   };
 
+  meta = with lib; {
+    homepage = "https://github.com/logrotate/logrotate";
+    description = "Rotates and compresses system logs";
+    license = licenses.gpl2Plus;
+    maintainers = [ maintainers.viric ];
+    platforms = platforms.all;
+    mainProgram = "logrotate";
+  };
 }

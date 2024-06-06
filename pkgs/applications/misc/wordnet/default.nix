@@ -1,14 +1,16 @@
-{stdenv, fetchurl, tcl, tk, xlibsWrapper, makeWrapper}:
+{ lib, stdenv, fetchurl, tcl, tk, Cocoa, makeWrapper }:
 
-let version = "3.0"; in
-stdenv.mkDerivation {
-  name = "wordnet-${version}";
+stdenv.mkDerivation rec {
+  version = "3.0";
+  pname = "wordnet";
   src = fetchurl {
     url = "http://wordnetcode.princeton.edu/${version}/WordNet-${version}.tar.bz2";
     sha256 = "08pgjvd2vvmqk3h641x63nxp7wqimb9r30889mkyfh2agc62sjbc";
   };
 
-  buildInputs = [tcl tk xlibsWrapper makeWrapper];
+  nativeBuildInputs = [ makeWrapper ];
+  buildInputs = [ tcl tk ]
+    ++ lib.optionals stdenv.isDarwin [ Cocoa ];
 
   hardeningDisable = [ "format" ];
 
@@ -16,12 +18,16 @@ stdenv.mkDerivation {
     sed "13i#define USE_INTERP_RESULT 1" -i src/stubs.c
   '';
 
+  # Fails the build on clang-16 and on upcoming gcc-14.
+  env.NIX_CFLAGS_COMPILE = "-Wno-error=implicit-int";
+
   # Needs the path to `tclConfig.sh' and `tkConfig.sh'.
-  configureFlags = "--with-tcl=" + tcl + "/lib " +
-                   "--with-tk="  + tk  + "/lib";
+  configureFlags = [
+    "--with-tcl=${tcl}/lib"
+    "--with-tk=${tk}/lib"
+  ];
 
   postInstall = ''
-    wrapProgram $out/bin/wishwn --set TK_LIBRARY "${tk}/lib/${tk.libPrefix}"
     wrapProgram $out/bin/wnb    --prefix PATH : "$out/bin"
   '';
 
@@ -39,9 +45,13 @@ stdenv.mkDerivation {
          for computational linguistics and natural language processing.
       '';
 
-    homepage = http://wordnet.princeton.edu/;
-
+    homepage = "https://wordnet.princeton.edu/";
+    license = {
+      fullName = "WordNet 3.0 license";
+      url = "https://wordnet.princeton.edu/license-and-commercial-use";
+    };
     maintainers = [ ];
-    platforms = stdenv.lib.platforms.gnu;  # arbitrary choice
+    platforms = with lib.platforms; linux ++ darwin;
+    mainProgram = "wn";
   };
 }

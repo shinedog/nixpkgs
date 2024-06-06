@@ -1,24 +1,53 @@
-{ stdenv, fetchgit, perl }:
+{ lib, stdenv, perl, fetchFromGitHub, fetchpatch, makeWrapper, nix-update-script, testers }:
 
-stdenv.mkDerivation {
-  name = "cowsay-3.03+dfsg1-16";
+stdenv.mkDerivation (finalAttrs: {
+  pname = "cowsay";
+  version = "3.7.0";
 
-  src = fetchgit {
-    url = https://anonscm.debian.org/git/collab-maint/cowsay.git;
-    rev = "acb946c166fa3b9526b9c471ef1330f9f89f9c8b";
-    sha256 = "1ji66nrdcc8sh79hwils3nbaj897s352r5wp7kzjwiym8bm2azk6";
+  outputs = [ "out" "man" ];
+
+  src = fetchFromGitHub {
+    owner = "cowsay-org";
+    repo = "cowsay";
+    rev = "v${finalAttrs.version}";
+    hash = "sha256-t1grmCPQhRgwS64RjEwkK61F2qxxMBKuv0/DzBTnL3s=";
   };
 
+  patches = [
+    # Install cowthink as a symlink, not a copy
+    # See https://github.com/cowsay-org/cowsay/pull/18
+    (fetchpatch {
+      url = "https://github.com/cowsay-org/cowsay/commit/9e129fa0933cf1837672c97f5ae5ad4a1a10ec11.patch";
+      hash = "sha256-zAYEUAM5MkyMONAl5BXj8hBHRalQVAOdpxgiM+Ewmlw=";
+    })
+  ];
+
+  nativeBuildInputs = [ makeWrapper ];
   buildInputs = [ perl ];
 
-  installPhase = ''
-    bash ./install.sh $out
+  postInstall = ''
+    wrapProgram $out/bin/cowsay \
+      --suffix COWPATH : $out/share/cowsay/cows
   '';
 
-  meta = {
-    description = "A program which generates ASCII pictures of a cow with a message";
-    homepage = http://www.nog.net/~tony/warez/cowsay.shtml;
-    platforms = stdenv.lib.platforms.all;
-    maintainers = [ stdenv.lib.maintainers.rob ];
+  makeFlags = [
+    "prefix=${placeholder "out"}"
+  ];
+
+  passthru = {
+    updateScript = nix-update-script { };
+    tests.version = testers.testVersion {
+      package = finalAttrs.finalPackage;
+      command = "cowsay --version";
+    };
   };
-}
+
+  meta = with lib; {
+    description = "A program which generates ASCII pictures of a cow with a message";
+    homepage = "https://cowsay.diamonds";
+    changelog = "https://github.com/cowsay-org/cowsay/releases/tag/v${finalAttrs.version}";
+    license = licenses.gpl3Only;
+    platforms = platforms.all;
+    maintainers = with maintainers; [ rob anthonyroussel ];
+  };
+})

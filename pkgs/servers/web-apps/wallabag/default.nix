@@ -1,43 +1,57 @@
-{ stdenv, fetchurl }:
+{ lib
+, stdenv
+, fetchurl
+}:
 
-stdenv.mkDerivation rec {
-  name = "wallabag-${version}";
-  version = "2.1.4";
+# Point the environment variable $WALLABAG_DATA to a data directory
+# that contains the folder `app` which must be a clone of
+# wallabag's configuration files with your customized `parameters.yml`.
+# In practice you need to copy `${pkgs.wallabag}/app` and the
+# customizzed `parameters.yml` to $WALLABAG_DATA.
+# These need to be updated every package upgrade.
+#
+# After a package upgrade, empty the `var/cache` folder or unexpected
+# error will occur.
 
-  # remember to rm -r var/cache/* after a rebuild or unexpected errors will occur
+let
+  pname = "wallabag";
+  version = "2.6.9";
+in
+stdenv.mkDerivation {
+  inherit pname version;
 
+  # Release tarball includes vendored files
   src = fetchurl {
-    url = "https://framabag.org/wallabag-release-${version}.tar.gz";
-    sha256 = "0s4p9jls7jqq9jbcac21ibz9k5yxx0ifv2yhxlkia5kw9md20r7b";
+    url = "https://github.com/wallabag/wallabag/releases/download/${version}/wallabag-${version}.tar.gz";
+    hash = "sha256-V4s5/y9fFAmZ+WnUxU03UyRivEihD1ZUKQOOq4TLEKw=";
   };
 
-  outputs = [ "out" "doc" ];
+  patches = [
+    ./wallabag-data.patch # exposes $WALLABAG_DATA
+  ];
 
-  patchPhase = ''
-    rm Makefile # use the "shared hosting" package with bundled dependencies
-    substituteInPlace app/AppKernel.php \
-      --replace "__DIR__" "getenv('WALLABAG_DATA')"
-    substituteInPlace var/bootstrap.php.cache \
-      --replace "\$this->rootDir = \$this->getRootDir()" "\$this->rootDir = getenv('WALLABAG_DATA')"
-  ''; # exposes $WALLABAG_DATA
+  dontBuild = true;
 
   installPhase = ''
-    mv docs $doc/
-    mkdir $out/
+    runHook preInstall
+
+    mkdir $out
     cp -R * $out/
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
-    description = "Web page archiver";
+  meta = with lib; {
+    description = "wallabag is a self hostable application for saving web pages";
     longDescription = ''
-      wallabag is a self hostable application for saving web pages.
-
-      To use, point the environment variable $WALLABAG_DATA to a directory called `app` that contains the folder `config` with wallabag's configuration files. These need to be updated every package upgrade. In `app`'s parent folder, a directory called `var` containing wallabag's data will be created.
-      After a package upgrade, empty the `var/cache` folder.
+      wallabag is a self-hostable PHP application allowing you to not
+      miss any content anymore. Click, save and read it when you can.
+      It extracts content so that you can read it when you have time.
     '';
     license = licenses.mit;
-    homepage = http://wallabag.org;
+    homepage = "http://wallabag.org";
+    changelog = "https://github.com/wallabag/wallabag/releases/tag/${version}";
+    maintainers = with maintainers; [ schneefux ];
     platforms = platforms.all;
   };
 }
-

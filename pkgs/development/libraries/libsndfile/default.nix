@@ -1,25 +1,40 @@
-{ stdenv, fetchurl, flac, libogg, libvorbis, pkgconfig
-, Carbon, AudioToolbox
+{ lib, stdenv, fetchFromGitHub, autoreconfHook, autogen, pkg-config, python3
+, flac, lame, libmpg123, libogg, libopus, libvorbis
+, alsa-lib, Carbon, AudioToolbox
+
+# for passthru.tests
+, audacity
+, freeswitch
+, gst_all_1
+, libsamplerate
+, moc
+, pipewire
+, pulseaudio
 }:
 
 stdenv.mkDerivation rec {
-  name = "libsndfile-1.0.27";
+  pname = "libsndfile";
+  version = "1.2.2";
 
-  src = fetchurl {
-    url = "http://www.mega-nerd.com/libsndfile/files/${name}.tar.gz";
-    sha256 = "1h7s61nhf7vklh9sdsbbqzb6x287q4x4j1jc5gmjragl4wprb4d3";
+  src = fetchFromGitHub {
+    owner = pname;
+    repo = pname;
+    rev = version;
+    hash = "sha256-MOOX/O0UaoeMaQPW9PvvE0izVp+6IoE5VbtTx0RvMkI=";
   };
 
-  buildInputs = [ pkgconfig flac libogg libvorbis ]
-    ++ stdenv.lib.optionals stdenv.isDarwin [ Carbon AudioToolbox ];
+  nativeBuildInputs = [ autoreconfHook autogen pkg-config python3 ];
+  buildInputs = [ flac lame libmpg123 libogg libopus libvorbis ]
+    ++ lib.optionals stdenv.isLinux [ alsa-lib ]
+    ++ lib.optionals stdenv.isDarwin [ Carbon AudioToolbox ];
 
   enableParallelBuilding = true;
 
-  outputs = [ "bin" "dev" "out" "doc" ];
+  outputs = [ "bin" "dev" "out" "man" "doc" ];
 
   # need headers from the Carbon.framework in /System/Library/Frameworks to
   # compile this on darwin -- not sure how to handle
-  preConfigure = stdenv.lib.optionalString stdenv.isDarwin
+  preConfigure = lib.optionalString stdenv.isDarwin
     ''
       NIX_CFLAGS_COMPILE+=" -I$SDKROOT/System/Library/Frameworks/Carbon.framework/Versions/A/Headers"
     '';
@@ -27,9 +42,33 @@ stdenv.mkDerivation rec {
   # Needed on Darwin.
   NIX_CFLAGS_LINK = "-logg -lvorbis";
 
-  meta = with stdenv.lib; {
+  doCheck = true;
+  preCheck = ''
+    patchShebangs tests/test_wrapper.sh tests/pedantic-header-test.sh
+
+    substituteInPlace tests/test_wrapper.sh \
+      --replace '/usr/bin/env' "$(type -P env)"
+  '';
+
+  passthru.tests = {
+    inherit
+      audacity
+      freeswitch
+      libsamplerate
+      moc
+      pipewire
+      pulseaudio;
+    inherit (python3.pkgs)
+      soundfile
+      wavefile;
+    inherit (gst_all_1) gst-plugins-bad;
+    lame = (lame.override { sndfileFileIOSupport = true; });
+  };
+
+  meta = with lib; {
     description = "A C library for reading and writing files containing sampled sound";
-    homepage    = http://www.mega-nerd.com/libsndfile/;
+    homepage    = "https://libsndfile.github.io/libsndfile/";
+    changelog   = "https://github.com/libsndfile/libsndfile/releases/tag/${version}";
     license     = licenses.lgpl2Plus;
     maintainers = with maintainers; [ lovek323 ];
     platforms   = platforms.unix;
@@ -41,7 +80,7 @@ stdenv.mkDerivation rec {
       code format under the GNU Lesser General Public License.
 
       The library was written to compile and run on a Linux system but
-      should compile and run on just about any Unix (including MacOS X).
+      should compile and run on just about any Unix (including macOS).
       There are also pre-compiled binaries available for 32 and 64 bit
       windows.
 

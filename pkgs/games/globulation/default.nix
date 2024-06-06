@@ -1,5 +1,6 @@
-{ stdenv, fetchurl, mesa, SDL, scons, SDL_ttf, SDL_image, zlib, SDL_net
+{ lib, stdenv, fetchurl, libGLU, libGL, SDL, scons, SDL_ttf, SDL_image, zlib, SDL_net
 , speex, libvorbis, libogg, boost, fribidi, bsdiff
+, fetchpatch
 }:
 let
   version = "0.9.4";
@@ -18,7 +19,28 @@ stdenv.mkDerivation rec {
     sha256 = "1f0l2cqp2g3llhr9jl6jj15k0wb5q8n29vqj99xy4p5hqs78jk8g";
   };
 
-  patches = [ ./header-order.patch ./public-buildproject.patch ];
+  patches = [ ./header-order.patch ./public-buildproject.patch
+    (fetchpatch {
+      url = "https://bitbucket.org/giszmo/glob2/commits/c9dc715624318e4fea4abb24e04f0ebdd9cd8d2a/raw";
+      sha256 = "0017xg5agj3dy0hx71ijdcrxb72bjqv7x6aq7c9zxzyyw0mkxj0k";
+    })
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/g/glob2/0.9.4.4-6/debian/patches/10_pthread_underlinkage.patch";
+      sha256 = "sha256-L9POADlkgQbUQEUmx4s3dxXG9tS0w2IefpRGuQNRMI0=";
+    })
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/g/glob2/0.9.4.4-6/debian/patches/link-boost-system.patch";
+      sha256 = "sha256-ne6F2ZowB+TUmg3ePuUoPNxXI0ZJC6HEol3oQQHJTy4=";
+    })
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/g/glob2/0.9.4.4-6/debian/patches/scons.patch";
+      sha256 = "sha256-Gah7SoVcd/Aljs0Nqo3YF0lZImUWtrGM4HbbQ4yrhHU=";
+    })
+    (fetchpatch {
+      url = "https://sources.debian.org/data/main/g/glob2/0.9.4.4-6/debian/patches/boost-1.69.patch";
+      sha256 = "sha256-D7agFR4uyIHxQz690Q8EHPF+rTEoiGUpgkm7r5cL5SI=";
+    })
+  ];
 
   postPatch = ''
     cp campaigns/tutorial-part4.map{,.orig}
@@ -26,25 +48,23 @@ stdenv.mkDerivation rec {
     sed -i -e "s@env = Environment()@env = Environment( ENV = os.environ )@" SConstruct
   '';
 
-  buildInputs = [ mesa SDL scons SDL_ttf SDL_image zlib SDL_net speex libvorbis libogg boost fribidi bsdiff ];
+  nativeBuildInputs = [ scons ];
+  buildInputs = [ libGLU libGL SDL SDL_ttf SDL_image zlib SDL_net speex libvorbis libogg boost fribidi bsdiff ];
 
-  buildPhase = ''
-    scons
+  postConfigure = ''
+    sconsFlags+=" BINDIR=$out/bin"
+    sconsFlags+=" INSTALLDIR=$out/share/globulation2"
+    sconsFlags+=" DATADIR=$out/share/globulation2/glob2"
   '';
 
-  installPhase = ''
-    scons install \
-      BINDIR=$out/bin \
-      INSTALLDIR=$out/share/globulation2 \
-      DATADIR=$out/share/globulation2/glob2
-  '';
-      
-  meta = with stdenv.lib; {
+  NIX_LDFLAGS = "-lboost_system";
+
+  meta = with lib; {
     description = "RTS without micromanagement";
+    mainProgram = "glob2";
     maintainers = with maintainers; [ raskin ];
     platforms = platforms.linux;
     license = licenses.gpl3;
   };
   passthru.updateInfo.downloadPage = "http://globulation2.org/wiki/Download_and_Install";
 }
-

@@ -1,48 +1,55 @@
-{ fetchurl, stdenv, makeDesktopItem, unzip, bash, jre8 }:
+{ fetchurl, lib, stdenv, makeDesktopItem, makeWrapper, unzip, jre, copyDesktopItems }:
 
 stdenv.mkDerivation rec {
-  name = "gpsprune-${version}";
-  version = "18.5";
+  pname = "gpsprune";
+  version = "24";
 
   src = fetchurl {
-    url = "http://activityworkshop.net/software/gpsprune/gpsprune_${version}.jar";
-    sha256 = "0xd97b7rs5i41hyih6zdbvls090903yfr1r9lflq93dyqhmzpdhn";
+    url = "https://activityworkshop.net/software/gpsprune/gpsprune_${version}.jar";
+    sha256 = "sha256-gMwTdwYjYJt1j5MpHw6UD1wqmF7q3ikzjVSOGakIP30=";
   };
 
-  phases = [ "installPhase" ];
+  dontUnpack = true;
 
-  buildInputs = [ jre8 ];
+  nativeBuildInputs = [ makeWrapper copyDesktopItems ];
+  buildInputs = [ jre ];
 
-  desktopItem = makeDesktopItem {
-    name = "gpsprune";
-    exec = "gpsprune";
-    icon = "gpsprune";
-    desktopName = "GpsPrune";
-    genericName = "GPS Data Editor";
-    comment = meta.description;
-    categories = "Education;Geoscience;";
-  };
+  desktopItems = [
+    (makeDesktopItem {
+      name = "gpsprune";
+      exec = "gpsprune %F";
+      icon = "gpsprune";
+      desktopName = "GpsPrune";
+      genericName = "GPS Data Editor";
+      comment = meta.description;
+      categories = [ "Education" "Geoscience" ];
+      mimeTypes = [
+        "application/gpx+xml"
+        "application/vnd.google-earth.kml+xml"
+        "application/vnd.google-earth.kmz"
+      ];
+    })
+  ];
 
   installPhase = ''
-    mkdir -p $out/bin $out/share/java
-    cp -v $src $out/share/java/gpsprune.jar
-    cat > $out/bin/gpsprune <<EOF
-    #!${bash}/bin/bash
-    exec ${jre8}/bin/java -jar $out/share/java/gpsprune.jar "\$@"
-    EOF
-    chmod 755 $out/bin/gpsprune
+    runHook preInstall
 
-    mkdir -p $out/share/applications
-    cp $desktopItem/share/applications"/"* $out/share/applications
+    install -Dm644 ${src} $out/share/java/gpsprune.jar
+    makeWrapper ${jre}/bin/java $out/bin/gpsprune \
+      --add-flags "-jar $out/share/java/gpsprune.jar"
     mkdir -p $out/share/pixmaps
     ${unzip}/bin/unzip -p $src tim/prune/gui/images/window_icon_64.png > $out/share/pixmaps/gpsprune.png
+
+    runHook postInstall
   '';
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "Application for viewing, editing and converting GPS coordinate data";
-    homepage = http://activityworkshop.net/software/gpsprune/;
+    homepage = "https://activityworkshop.net/software/gpsprune/";
+    sourceProvenance = with sourceTypes; [ binaryBytecode ];
     license = licenses.gpl2Plus;
-    maintainers = [ maintainers.rycee ];
+    maintainers = with maintainers; [ rycee ];
     platforms = platforms.all;
+    mainProgram = "gpsprune";
   };
 }

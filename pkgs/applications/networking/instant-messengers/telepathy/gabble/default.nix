@@ -1,26 +1,39 @@
-{ stdenv, fetchurl, pkgconfig, libxslt, telepathy_glib, libxml2, dbus_glib, dbus_daemon
-, sqlite, libsoup, libnice, gnutls}:
+{ lib, stdenv, fetchurl, pkg-config, libxslt, telepathy-glib, python3, libxml2, dbus-glib, dbus
+, sqlite, libsoup, libnice, gnutls
+, fetchpatch
+}:
 
 stdenv.mkDerivation rec {
-  name = "telepathy-gabble-0.18.2";
+  pname = "telepathy-gabble";
+  version = "0.18.4";
 
   src = fetchurl {
-    url = "${meta.homepage}/releases/telepathy-gabble/${name}.tar.gz";
-    sha256 = "00ag32ccbj0hmy41rb0fg9gp40m7zbq45r4yijnyslk2mpkvg7c9";
+    url = "https://telepathy.freedesktop.org/releases/telepathy-gabble/telepathy-gabble-${version}.tar.gz";
+    sha256 = "174nlkqm055vrhv11gy73m20jbsggcb0ddi51c7s9m3j5ibr2p0i";
   };
 
-  nativeBuildInputs = [ pkgconfig libxslt ];
-  buildInputs = [ libxml2 dbus_glib sqlite libsoup libnice telepathy_glib gnutls telepathy_glib.python ]
-    ++ stdenv.lib.optional doCheck dbus_daemon;
+  patches = [
+    (fetchpatch {
+      url = "https://github.com/archlinux/svntogit-packages/raw/edcf78c831894000f2fbfd3e5818e363911c746a/trunk/telepathy-gabble-0.18.4-python3.patch";
+      hash = "sha256-bvcZW6gbCNogqwPDaXHTbohe7c2GAYjXeHGyBEDVsB4=";
+    })
+  ];
 
-  configureFlags = "--with-ca-certificates=/etc/ssl/certs/ca-certificates.crt";
+  nativeBuildInputs = [ pkg-config libxslt python3 ];
+  buildInputs = [ libxml2 dbus-glib sqlite libsoup libnice telepathy-glib gnutls ];
+
+  nativeCheckInputs = [ dbus ];
+
+  configureFlags = [ "--with-ca-certificates=/etc/ssl/certs/ca-certificates.crt" ];
 
   enableParallelBuilding = true;
   doCheck = true;
 
-  meta = with stdenv.lib; {
-    homepage = http://telepathy.freedesktop.org;
+  meta = with lib; {
     description = "Jabber/XMPP connection manager for the Telepathy framework";
-    platforms = stdenv.lib.platforms.gnu;
+    mainProgram = "telepathy-gabble-xmpp-console";
+    homepage = "https://telepathy.freedesktop.org/components/telepathy-gabble/";
+    license = licenses.lgpl21Plus;
+    platforms = lib.platforms.unix;
   };
 }

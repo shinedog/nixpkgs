@@ -1,31 +1,43 @@
-{ stdenv, fetchurl, zlib, enableStatic ? false,
-sftpPath ? "/var/run/current-system/sw/libexec/sftp-server" }:
+{ lib, stdenv, fetchurl, zlib, libxcrypt
+, enableSCP ? false
+, sftpPath ? "/run/current-system/sw/libexec/sftp-server"
+}:
+
+let
+  # NOTE: DROPBEAR_PATH_SSH_PROGRAM is only necessary when enableSCP is true,
+  # but it is enabled here always anyways for consistency
+  dflags = {
+    SFTPSERVER_PATH = sftpPath;
+    DROPBEAR_PATH_SSH_PROGRAM = "${placeholder "out"}/bin/dbclient";
+  };
+
+in
 
 stdenv.mkDerivation rec {
-  name = "dropbear-2016.74";
+  pname = "dropbear";
+  version = "2022.83";
 
   src = fetchurl {
-    url = "http://matt.ucc.asn.au/dropbear/releases/${name}.tar.bz2";
-    sha256 = "14c8f4gzixf0j9fkx68jgl85q7b05852kk0vf09gi6h0xmafl817";
+    url = "https://matt.ucc.asn.au/dropbear/releases/dropbear-${version}.tar.bz2";
+    sha256 = "sha256-vFoSH/vJS1FxrV6+Ab5CdG1Qqnl8lUmkY5iUoWdJRDs=";
   };
 
-  dontDisableStatic = enableStatic;
+  CFLAGS = lib.pipe (lib.attrNames dflags) [
+    (builtins.map (name: "-D${name}=\\\"${dflags.${name}}\\\""))
+    (lib.concatStringsSep " ")
+  ];
 
-  configureFlags = stdenv.lib.optional enableStatic "LDFLAGS=-static";
-
-  CFLAGS = "-DSFTPSERVER_PATH=\\\"${sftpPath}\\\"";
-
-  # http://www.gnu.org/software/make/manual/html_node/Libraries_002fSearch.html
+  # https://www.gnu.org/software/make/manual/html_node/Libraries_002fSearch.html
   preConfigure = ''
-    makeFlags=VPATH=`cat $NIX_CC/nix-support/orig-libc`/lib
+    makeFlagsArray=(
+      VPATH=$(cat $NIX_CC/nix-support/orig-libc)/lib
+      PROGRAMS="${lib.concatStringsSep " " ([ "dropbear" "dbclient" "dropbearkey" "dropbearconvert" ] ++ lib.optionals enableSCP ["scp"])}"
+    )
   '';
 
-  crossAttrs = {
-    # This works for uclibc, at least.
-    preConfigure = ''
-      makeFlags=VPATH=`cat ${stdenv.ccCross}/nix-support/orig-libc`/lib
-    '';
-  };
+  postInstall = lib.optionalString enableSCP ''
+    ln -rs $out/bin/scp $out/bin/dbscp
+  '';
 
   patches = [
     # Allow sessions to inherit the PATH from the parent dropbear.
@@ -33,11 +45,12 @@ stdenv.mkDerivation rec {
     ./pass-path.patch
   ];
 
-  buildInputs = [ zlib ];
+  buildInputs = [ zlib libxcrypt ];
 
-  meta = with stdenv.lib; {
-    homepage = "http://matt.ucc.asn.au/dropbear/dropbear.html";
+  meta = with lib; {
     description = "A small footprint implementation of the SSH 2 protocol";
+    homepage = "https://matt.ucc.asn.au/dropbear/dropbear.html";
+    changelog = "https://github.com/mkj/dropbear/raw/DROPBEAR_${version}/CHANGES";
     license = licenses.mit;
     maintainers = with maintainers; [ abbradar ];
     platforms = platforms.linux;

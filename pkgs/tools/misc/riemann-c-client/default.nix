@@ -1,24 +1,44 @@
-{ stdenv, fetchFromGitHub, autoreconfHook, pkgconfig, file , protobufc }:
+{ lib, stdenv, fetchFromGitea, autoreconfHook, check, pkg-config, file, protobufc
+,withWolfSSL ? false, wolfssl
+,withGnuTLS ? false, gnutls
+,withJSON ? true, json_c
+}:
 
 stdenv.mkDerivation rec {
-  name = "riemann-c-client-${version}";
+  pname = "riemann-c-client";
+  version = "2.2.0";
 
-  version = "1.7.0";
-
-  src = fetchFromGitHub {
+  src = fetchFromGitea {
+    domain = "git.madhouse-project.org";
     owner = "algernon";
     repo = "riemann-c-client";
-    rev = "54f4a656793d6c5ca0bf1ff2388693fb6b2b82a7";
-    sha256 = "0jc2bbw7sp2gr4cswx78srs0p1kp81prcarq4ivqpfw4bmzg6xg4";
+    rev = "riemann-c-client-${version}";
+    hash = "sha256-GAinZtEetRAl04CjxNCTCkGbvdhSZei7gon3KxEqiIY=";
   };
 
-  buildInputs = [ autoreconfHook pkgconfig file protobufc ];
+  outputs = [ "bin" "dev" "out" ];
 
-  meta = with stdenv.lib; {
-    homepage = https://github.com/algernon/riemann-c-client;
+  nativeBuildInputs = [ autoreconfHook check pkg-config ];
+  buildInputs = [ file protobufc ]
+    ++ lib.optional withWolfSSL wolfssl
+    ++ lib.optional withGnuTLS gnutls
+    ++ lib.optional withJSON json_c
+  ;
+
+  configureFlags = []
+    ++ lib.optional withWolfSSL "--with-tls=wolfssl"
+    ++ lib.optional withGnuTLS "--with-tls=gnutls"
+  ;
+
+  doCheck = true;
+  enableParallelBuilding = true;
+
+  meta = with lib; {
+    homepage = "https://git.madhouse-project.org/algernon/riemann-c-client";
     description = "A C client library for the Riemann monitoring system";
-    license = licenses.gpl3;
-    maintainers = [ maintainers.rickynils ];
+    mainProgram = "riemann-client";
+    license = licenses.lgpl3Plus;
+    maintainers = with maintainers; [ pradeepchhetri ];
     platforms = platforms.linux;
   };
 }
