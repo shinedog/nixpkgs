@@ -7,9 +7,7 @@
 , overrideCC
 , makeWrapper
 , stdenv
-, nixosTests
 
-, pkgs
 , cmake
 , gcc12
 , clblast
@@ -19,8 +17,11 @@
 , linuxPackages
 , darwin
 
+, nixosTests
 , testers
 , ollama
+, ollama-rocm
+, ollama-cuda
 
 , config
   # one of `[ null false "rocm" "cuda" ]`
@@ -30,17 +31,17 @@
 let
   pname = "ollama";
   # don't forget to invalidate all hashes each update
-  version = "0.1.41";
+  version = "0.1.44";
 
   src = fetchFromGitHub {
     owner = "ollama";
     repo = "ollama";
     rev = "v${version}";
-    hash = "sha256-rwJf/DbqTOD2TIS0YHK8CaIEC93CfeDg08qV9ydaNe4=";
+    hash = "sha256-HM7xtVdhRwhsLEBLvCgjU1iwdaqowRdrxh/Z0BzTPn8=";
     fetchSubmodules = true;
   };
 
-  vendorHash = "sha256-bomHpEcoHG/xUGgzrFXB9D3np0ainTX066SCMY+NdnA=";
+  vendorHash = "sha256-LNH3mpxIrPMe5emfum1W10jvXIjKC6GkGcjq1HhpJQo=";
 
   # ollama's patches of llama.cpp's example server
   # `ollama/llm/generate/gen_common.sh` -> "apply temporary patches until fix is upstream"
@@ -51,6 +52,7 @@ let
     (preparePatch "03-load_exception.diff" "sha256-0XfMtMyg17oihqSFDBakBtAF0JwhsR188D+cOodgvDk=")
     (preparePatch "04-metal.diff" "sha256-Ne8J9R8NndUosSK0qoMvFfKNwqV5xhhce1nSoYrZo7Y=")
     (preparePatch "05-default-pretokenizer.diff" "sha256-NrQ0Fv5DAZYtRM0NBEeM2JLVTLFmb4Fs9RhwXhdMCC4=")
+    (preparePatch "06-qwen2.diff" "sha256-nMtoAQUsjYuJv45uTlz8r/K1oF5NUsc75SnhgfSkE30=")
   ];
 
   preparePatch = patch: hash: fetchpatch {
@@ -68,23 +70,22 @@ let
       "but they are mutually exclusive; falling back to cpu"
     ])
     (!(config.rocmSupport && config.cudaSupport));
-  validateLinux = api: (lib.warnIfNot stdenv.isLinux
-    "building ollama with `${api}` is only supported on linux; falling back to cpu"
-    stdenv.isLinux);
   shouldEnable = assert accelIsValid;
     mode: fallback:
-      ((acceleration == mode)
-      || (fallback && acceleration == null && validateFallback))
-      && (validateLinux mode);
+      (acceleration == mode)
+      || (fallback && acceleration == null && validateFallback);
 
-  enableRocm = shouldEnable "rocm" config.rocmSupport;
-  enableCuda = shouldEnable "cuda" config.cudaSupport;
+  rocmRequested = shouldEnable "rocm" config.rocmSupport;
+  cudaRequested = shouldEnable "cuda" config.cudaSupport;
+
+  enableRocm = rocmRequested && stdenv.isLinux;
+  enableCuda = cudaRequested && stdenv.isLinux;
 
 
   rocmLibs = [
     rocmPackages.clr
     rocmPackages.hipblas
-    (rocmPackages.rocblas.override { tensileSepArch = true; tensileLazyLib = true; })
+    rocmPackages.rocblas
     rocmPackages.rocsolver
     rocmPackages.rocsparse
     rocmPackages.rocm-device-libs
@@ -196,22 +197,27 @@ goBuild ((lib.optionalAttrs enableRocm {
   ];
 
   passthru.tests = {
+    inherit ollama;
     service = nixosTests.ollama;
-    rocm = pkgs.ollama.override { acceleration = "rocm"; };
-    cuda = pkgs.ollama.override { acceleration = "cuda"; };
     version = testers.testVersion {
       inherit version;
       package = ollama;
     };
+  } // lib.optionalAttrs stdenv.isLinux {
+    inherit ollama-rocm ollama-cuda;
   };
 
   meta = {
-    description = "Get up and running with large language models locally";
+    description = "Get up and running with large language models locally"
+      + lib.optionalString rocmRequested ", using ROCm for AMD GPU acceleration"
+      + lib.optionalString cudaRequested ", using CUDA for NVIDIA GPU acceleration";
     homepage = "https://github.com/ollama/ollama";
     changelog = "https://github.com/ollama/ollama/releases/tag/v${version}";
     license = licenses.mit;
-    platforms = platforms.unix;
+    platforms =
+      if (rocmRequested || cudaRequested) then platforms.linux
+      else platforms.unix;
     mainProgram = "ollama";
-    maintainers = with maintainers; [ abysssol dit7ya elohmeier ];
+    maintainers = with maintainers; [ abysssol dit7ya elohmeier roydubnium ];
   };
 })

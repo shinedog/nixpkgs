@@ -196,6 +196,7 @@
   ./programs/fzf.nix
   ./programs/gamemode.nix
   ./programs/gamescope.nix
+  ./programs/gdk-pixbuf.nix
   ./programs/geary.nix
   ./programs/git.nix
   ./programs/gnome-disks.nix
@@ -548,6 +549,7 @@
   ./services/games/xonotic.nix
   ./services/hardware/acpid.nix
   ./services/hardware/actkbd.nix
+  ./services/hardware/amdvlk.nix
   ./services/hardware/argonone.nix
   ./services/hardware/asusd.nix
   ./services/hardware/auto-cpufreq.nix
@@ -778,6 +780,7 @@
   ./services/misc/paperless.nix
   ./services/misc/parsoid.nix
   ./services/misc/persistent-evdev.nix
+  ./services/misc/pghero.nix
   ./services/misc/pinnwand.nix
   ./services/misc/plex.nix
   ./services/misc/plikd.nix
@@ -792,6 +795,7 @@
   ./services/misc/radarr.nix
   ./services/misc/readarr.nix
   ./services/misc/redmine.nix
+  ./services/misc/renovate.nix
   ./services/misc/ripple-data-api.nix
   ./services/misc/rippled.nix
   ./services/misc/rmfakecloud.nix
@@ -834,6 +838,7 @@
   ./services/misc/zoneminder.nix
   ./services/misc/zookeeper.nix
   ./services/monitoring/alerta.nix
+  ./services/monitoring/alloy.nix
   ./services/monitoring/apcupsd.nix
   ./services/monitoring/arbtt.nix
   ./services/monitoring/below.nix
@@ -1497,7 +1502,6 @@
   ./services/x11/display-managers/xpra.nix
   ./services/x11/extra-layouts.nix
   ./services/x11/fractalart.nix
-  ./services/x11/gdk-pixbuf.nix
   ./services/x11/hardware/cmt.nix
   ./services/x11/hardware/digimend.nix
   ./services/x11/hardware/synaptics.nix

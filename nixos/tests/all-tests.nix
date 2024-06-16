@@ -115,6 +115,7 @@ in {
   akkoma = handleTestOn [ "x86_64-linux" "aarch64-linux" ] ./akkoma.nix {};
   akkoma-confined = handleTestOn [ "x86_64-linux" "aarch64-linux" ] ./akkoma.nix { confined = true; };
   alice-lg = handleTest ./alice-lg.nix {};
+  alloy = handleTest ./alloy.nix {};
   allTerminfo = handleTest ./all-terminfo.nix {};
   alps = handleTest ./alps.nix {};
   amazon-init-shell = handleTest ./amazon-init-shell.nix {};
@@ -129,6 +130,7 @@ in {
   appliance-repart-image = runTest ./appliance-repart-image.nix;
   apparmor = handleTest ./apparmor.nix {};
   archi = handleTest ./archi.nix {};
+  aria2 = handleTest ./aria2.nix {};
   armagetronad = handleTest ./armagetronad.nix {};
   artalk = handleTest ./artalk.nix {};
   atd = handleTest ./atd.nix {};
@@ -379,6 +381,7 @@ in {
   grafana-agent = handleTest ./grafana-agent.nix {};
   graphite = handleTest ./graphite.nix {};
   graylog = handleTest ./graylog.nix {};
+  greetd-no-shadow = handleTest ./greetd-no-shadow.nix {};
   grocy = handleTest ./grocy.nix {};
   grow-partition = runTest ./grow-partition.nix;
   grub = handleTest ./grub.nix {};
@@ -516,6 +519,7 @@ in {
   lxd-image-server = handleTest ./lxd-image-server.nix {};
   #logstash = handleTest ./logstash.nix {};
   lomiri = handleTest ./lomiri.nix {};
+  lomiri-filemanager-app = runTest ./lomiri-filemanager-app.nix;
   lomiri-system-settings = handleTest ./lomiri-system-settings.nix {};
   lorri = handleTest ./lorri/default.nix {};
   maddy = discoverTests (import ./maddy { inherit handleTest; });
@@ -719,6 +723,7 @@ in {
   pg_anonymizer = handleTest ./pg_anonymizer.nix {};
   pgadmin4 = handleTest ./pgadmin4.nix {};
   pgbouncer = handleTest ./pgbouncer.nix {};
+  pghero = runTest ./pghero.nix;
   pgjwt = handleTest ./pgjwt.nix {};
   pgmanage = handleTest ./pgmanage.nix {};
   pgvecto-rs = handleTest ./pgvecto-rs.nix {};
@@ -799,6 +804,7 @@ in {
   redis = handleTest ./redis.nix {};
   redlib = handleTest ./redlib.nix {};
   redmine = handleTest ./redmine.nix {};
+  renovate = handleTest ./renovate.nix {};
   restartByActivationScript = handleTest ./restart-by-activation-script.nix {};
   restic-rest-server = handleTest ./restic-rest-server.nix {};
   restic = handleTest ./restic.nix {};
@@ -1013,7 +1019,7 @@ in {
   vault-agent = handleTest ./vault-agent.nix {};
   vault-dev = handleTest ./vault-dev.nix {};
   vault-postgresql = handleTest ./vault-postgresql.nix {};
-  vaultwarden = handleTest ./vaultwarden.nix {};
+  vaultwarden = discoverTests (import ./vaultwarden.nix);
   vector = handleTest ./vector {};
   vengi-tools = handleTest ./vengi-tools.nix {};
   victoriametrics = handleTest ./victoriametrics.nix {};

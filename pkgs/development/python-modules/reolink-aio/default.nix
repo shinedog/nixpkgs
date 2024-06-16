@@ -12,7 +12,7 @@
 
 buildPythonPackage rec {
   pname = "reolink-aio";
-  version = "0.9.0";
+  version = "0.9.2";
   pyproject = true;
 
   disabled = pythonOlder "3.9";
@@ -21,7 +21,7 @@ buildPythonPackage rec {
     owner = "starkillerOG";
     repo = "reolink_aio";
     rev = "refs/tags/${version}";
-    hash = "sha256-5rlPGmyBdEG9qjJPpEPr1oXLYlZiBtXzupPpVRrR9wA=";
+    hash = "sha256-wkOmwZ4pE5AqZkAUyxgBHywCcJlcMauzJ8OO3Po2u4s=";
   };
 
   build-system = [ setuptools ];
