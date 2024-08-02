@@ -406,8 +406,8 @@ GEM
     rex-text (0.2.58)
     rex-zip (0.1.5)
       rex-text
-    rexml (3.2.8)
-      strscan (>= 3.0.9)
+    rexml (3.3.3)
+      strscan
     rkelly-remix (0.0.7)
     ruby-macho (4.0.1)
     ruby-mysql (4.1.0)
