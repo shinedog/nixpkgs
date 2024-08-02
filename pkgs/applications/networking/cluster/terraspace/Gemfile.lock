@@ -45,18 +45,19 @@ GEM
       concurrent-ruby (~> 1.0)
     jmespath (1.6.2)
     memoist (0.16.2)
+    mini_portile2 (2.8.2)
     minitest (5.18.1)
     nokogiri (1.15.3)
-      racc (~> 1.4)
       mini_portile2 (~> 2.8.2)
+      racc (~> 1.4)
     racc (1.7.1)
-    mini_portile2 (2.8.2)
     rainbow (3.1.1)
     render_me_pretty (0.9.0)
       activesupport
       rainbow
       tilt
-    rexml (3.2.5)
+    rexml (3.3.3)
+      strscan
     rhcl (0.1.0)
       deep_merge
     rspec (3.12.0)
@@ -79,6 +80,7 @@ GEM
       rspec
       zeitwerk
     rubyzip (2.3.2)
+    strscan (3.1.0)
     terraspace (2.2.8)
       activesupport
       bundler
